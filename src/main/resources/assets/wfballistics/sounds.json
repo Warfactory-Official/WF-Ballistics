@@ -1,0 +1,33 @@
+{
+  "weapon.nuclear_explosion": {
+    "sounds": [
+      {
+        "name": "wfballistics:weapon/nuclear_explosion",
+        "stream": true
+      }
+    ]
+  },
+  "weapon.fire.disintegration": {
+    "sounds": [
+      "wfballistics:weapon/fire/disintegration"
+    ]
+  },
+  "weapon.explosion_small_near": {
+    "sounds": [
+      "wfballistics:weapon/explosion_small_near1",
+      "wfballistics:weapon/explosion_small_near2",
+      "wfballistics:weapon/explosion_small_near3"
+    ]
+  },
+  "weapon.explosion_small_far": {
+    "sounds": [
+      "wfballistics:weapon/explosion_small_far1",
+      "wfballistics:weapon/explosion_small_far2"
+    ]
+  },
+  "weapon.explosion_large_near": {
+    "sounds": [
+      "wfballistics:weapon/explosion_large_near"
+    ]
+  }
+}

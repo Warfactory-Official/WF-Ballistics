@@ -1,0 +1,17 @@
+{
+  "parent": "block/block",
+  "textures": {
+    "particle": "wfballistics:particle/particle_base",
+    "tex": "wfballistics:particle/particle_base"
+  },
+  "elements": [
+    {
+      "from": [0, 0, 7.9],
+      "to": [16, 16, 8.1],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#tex" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#tex" }
+      }
+    }
+  ]
+}

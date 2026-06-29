@@ -24,6 +24,18 @@ public class WFBallisticsClient {
         // (This makes it look like a flying snowball/item so you can see it without writing a custom model file yet!)
         event.registerEntityRenderer(ModEntities.MY_CUSTOM_ENTITY.get(), MissileRenderer::new);
 
+        // Mist clouds draw nothing themselves — they are pure particle effects (see MistClientFX).
+        event.registerEntityRenderer(ModEntities.MIST.get(),
+                ctx -> new net.minecraft.client.renderer.entity.NoopRenderer<>(ctx));
+
+        // The nuke explosion is server-side block destruction; nothing to draw.
+        event.registerEntityRenderer(ModEntities.NUKE_EXPLOSION.get(),
+                ctx -> new net.minecraft.client.renderer.entity.NoopRenderer<>(ctx));
+
+        // The Torex mushroom cloud has its own bespoke cloudlet renderer.
+        event.registerEntityRenderer(ModEntities.NUKE_TOREX.get(),
+                com.wf.wfballistics.client.render.EntityTorexRender::new);
+
         LOGGER.info("HELLO FROM CLIENT SETUP");
 
         ModModels.init();

@@ -1,0 +1,9 @@
+{
+  "loader": "forge:obj",
+  "model": "wfballistics:models/effect/bone_limb.obj",
+  "flip_v": true,
+  "textures": {
+    "bone": "wfballistics:particle/skeleton",
+    "particle": "wfballistics:particle/skeleton"
+  }
+}
