@@ -1,0 +1,10 @@
+{
+  "loader": "forge:obj",
+  "model": "wfballistics:raw_models/missile_stealth.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wfballistics:entity/missile_stealth.png",
+    "particle": "wfballistics:entity/missile_stealth.png",
+    "all": "wfballistics:entity/missile_stealth.png"
+  }
+}
