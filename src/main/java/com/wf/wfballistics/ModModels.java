@@ -9,7 +9,7 @@ import dev.engine_room.flywheel.lib.model.Models;
 public class ModModels {
     // Locate the physical .obj asset
     public static final PartialModel MY_OBJ_MODEL = PartialModel.of(
-            new ResourceLocation("wfballistics", "entity/missile_model")
+            new ResourceLocation(WFBallistics.MODID, "entity/missile_model")
     );
 
 
