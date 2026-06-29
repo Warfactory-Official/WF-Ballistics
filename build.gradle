@@ -201,7 +201,7 @@ tasks.named('jar', Jar).configure {
                 'Implementation-Vendor'   : mod_authors,
                 'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
 
-                "MixinConfigs": "examplemod.mixins.json"
+                "MixinConfigs": "wfballistics.mixins.json"
         ])
     }
 
