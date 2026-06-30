@@ -7,6 +7,8 @@ import dev.engine_room.flywheel.lib.instance.InstanceTypes;
 import dev.engine_room.flywheel.lib.instance.TransformedInstance;
 import dev.engine_room.flywheel.lib.model.Models;
 import dev.engine_room.flywheel.lib.visual.AbstractEntityVisual;
+import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.block.Blocks;
 import org.joml.Matrix4f;
@@ -43,6 +45,10 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> {
                 (float) entity.getZ()
         );
 
+        BlockPos entityPos = BlockPos.containing(entity.getX(), entity.getY(), entity.getZ());
+        int packedLight = LevelRenderer.getLightColor(entity.level(), entityPos);
+
+        this.modelInstance.light(packedLight);
         this.modelInstance.setTransform(matrix);
         this.modelInstance.setChanged(); // Tell Flywheel to upload the new position to the GPU
     }
