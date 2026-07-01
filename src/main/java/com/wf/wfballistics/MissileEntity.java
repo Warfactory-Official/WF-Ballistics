@@ -20,6 +20,37 @@ import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 
 public class MissileEntity extends Projectile {
+    public static final Detonation STANDARD = (missile, pos) -> {
+        var expl = new ExplosionAEF(missile.level(), pos.x, pos.y, pos.z, 250);
+        expl.makeStandard();
+        expl.explode();
+
+        EntityNukeTorex torex = ModEntities.NUKE_TOREX.get().create(missile.level());
+        if (torex != null) {
+            torex.moveTo(pos.x, pos.y, pos.z);
+            missile.level().addFreshEntity(torex);
+        }
+    };
+    //Why is this nophono here
+    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final EntityDataAccessor<BlockPos> TARGET_POS =
+            SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.BLOCK_POS);
+
+    private static final EntityDataAccessor<String> MODEL_ID =
+            SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.STRING);
+    private static final double TURN_AGILITY = 1.0; // radians * (model units) per tick
+    private Phase phase = Phase.ASCEND;
+    private CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
+    private double cruiseAltitude = 200.0;
+    private double terrainClearance = 24.0;
+    // Airburst fuze: while diving, detonate in the air once the missile is within this many
+    // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
+    private float explosionOffset = 0.0f;
+    private Detonation detonation = STANDARD;
+    // Max change in velocity direction per tick, in radians. Default scales from the model's length
+    // (longer airframe = less nimble); overridable via the Builder.
+    private double maxTurnRate = TURN_AGILITY / MissileModels.length(MissileModels.DEFAULT);
+
     public MissileEntity(EntityType<? extends Projectile> type, Level level) {
         super(type, level);
 
@@ -33,52 +64,31 @@ public class MissileEntity extends Projectile {
         return new Builder(type, level);
     }
 
-    //Why is this nophono here
-    private static final Logger LOGGER = LogUtils.getLogger();
-
-    private static final EntityDataAccessor<BlockPos> TARGET_POS =
-            SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.BLOCK_POS);
-
-    public enum Phase {
-        ASCEND,  // boost straight up until clear of surrounding terrain
-        CRUISE,  // fly toward the target while holding a terrain-safe altitude
-        ATTACK   // steep terminal dive onto the target
-    }
-
-    private Phase phase = Phase.ASCEND;
-
-    public enum CruiseMode {
-        TERRAIN_FOLLOW,
-        HIGH_ALTITUDE
-    }
-
-    private CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
-    private double cruiseAltitude = 200.0;
-    private double terrainClearance = 24.0;
-
-    // Airburst fuze: while diving, detonate in the air once the missile is within this many
-    // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
-    private float explosionOffset = 0.0f;
-
-
-    @FunctionalInterface
-    public interface Detonation {
-        void detonate(MissileEntity missile, Vec3 pos);
-    }
-
-    public static final Detonation STANDARD = (missile, pos) -> {
-        var expl = new ExplosionAEF(missile.level(), pos.x, pos.y, pos.z, 250);
-        expl.makeStandard();
-        expl.explode();
-
-        EntityNukeTorex torex = ModEntities.NUKE_TOREX.get().create(missile.level());
-        if (torex != null) {
-            torex.moveTo(pos.x, pos.y, pos.z);
-            missile.level().addFreshEntity(torex);
+    private static Vec3 constrainTurn(Vec3 current, Vec3 desired, double maxTurnRate) {
+        double desiredSpeed = desired.length();
+        if (desiredSpeed < 1.0E-6 || current.lengthSqr() < 1.0E-6 || maxTurnRate >= Math.PI) {
+            return desired;
         }
-    };
 
-    private Detonation detonation = STANDARD;
+        Vec3 curDir = current.normalize();
+        Vec3 desDir = desired.scale(1.0 / desiredSpeed);
+
+        double angle = Math.acos(Mth.clamp(curDir.dot(desDir), -1.0, 1.0));
+        if (angle <= maxTurnRate) {
+            return desDir.scale(desiredSpeed);
+        }
+
+        Vec3 axis = curDir.cross(desDir);
+        if (axis.lengthSqr() < 1.0E-12) {
+            Vec3 reference = Math.abs(curDir.y) < 0.99 ? new Vec3(0.0, 1.0, 0.0) : new Vec3(1.0, 0.0, 0.0);
+            axis = curDir.cross(reference);
+        }
+        axis = axis.normalize();
+
+        Vec3 newDir = curDir.scale(Math.cos(maxTurnRate))
+                .add(axis.cross(curDir).scale(Math.sin(maxTurnRate)));
+        return newDir.normalize().scale(desiredSpeed);
+    }
 
     @Override
     public void tick() {
@@ -146,8 +156,7 @@ public class MissileEntity extends Projectile {
         //State behavior
         Vec3 velocity = Vec3.ZERO;
         switch (this.phase) {
-            case ASCEND ->
-                velocity = new Vec3(0.0, ascentSpeed, 0.0);
+            case ASCEND -> velocity = new Vec3(0.0, ascentSpeed, 0.0);
             case CRUISE -> {
                 double desiredVy = (safeAltitude - this.getY()) / dampeningRange;
                 double vy = Mth.clamp(desiredVy, -maxCruiseSpeed, maxCruiseSpeed);
@@ -160,6 +169,9 @@ public class MissileEntity extends Projectile {
                 velocity = new Vec3(nx * horizontalSpeed, vy, nz * horizontalSpeed);
             }
         }
+
+        // Limit how far the heading can swing this tick so the missile arcs instead of snapping direction.
+        velocity = constrainTurn(this.getDeltaMovement(), velocity, this.maxTurnRate);
 
         this.setDeltaMovement(velocity);
 
@@ -208,6 +220,15 @@ public class MissileEntity extends Projectile {
     @Override
     protected void defineSynchedData() {
         this.entityData.define(TARGET_POS, BlockPos.ZERO);
+        this.entityData.define(MODEL_ID, MissileModels.DEFAULT);
+    }
+
+    public String getModelId() {
+        return this.entityData.get(MODEL_ID);
+    }
+
+    public void setModelId(String id) {
+        this.entityData.set(MODEL_ID, MissileModels.exists(id) ? id : MissileModels.DEFAULT);
     }
 
     public Vec3 getTarget() {
@@ -216,7 +237,7 @@ public class MissileEntity extends Projectile {
     }
 
     public void setTarget(Vec3 target) {
-        this.entityData.set(TARGET_POS, new BlockPos((int)target.x, (int)target.y, (int)target.z));
+        this.entityData.set(TARGET_POS, new BlockPos((int) target.x, (int) target.y, (int) target.z));
     }
 
     public Phase getPhase() {
@@ -243,6 +264,8 @@ public class MissileEntity extends Projectile {
         tag.putDouble("CruiseAltitude", this.cruiseAltitude);
         tag.putDouble("TerrainClearance", this.terrainClearance);
         tag.putFloat("ExplosionOffset", this.explosionOffset);
+        tag.putDouble("MaxTurnRate", this.maxTurnRate);
+        tag.putString("ModelId", this.getModelId());
     }
 
     @Override
@@ -281,16 +304,42 @@ public class MissileEntity extends Projectile {
         if (tag.contains("ExplosionOffset")) {
             this.explosionOffset = tag.getFloat("ExplosionOffset");
         }
+
+        if (tag.contains("MaxTurnRate")) {
+            this.maxTurnRate = tag.getDouble("MaxTurnRate");
+        }
+
+        if (tag.contains("ModelId")) {
+            this.setModelId(tag.getString("ModelId"));
+        }
     }
 
     private void onMissileImpact(HitResult hitResult) {
         this.detonate(hitResult.getLocation());
     }
 
-    /** Fires the configured warhead at the given position and removes the missile. */
+    /**
+     * Fires the configured warhead at the given position and removes the missile.
+     */
     private void detonate(Vec3 pos) {
         this.detonation.detonate(this, pos);
         this.discard();
+    }
+
+    public enum Phase {
+        ASCEND,  // boost straight up until clear of surrounding terrain
+        CRUISE,  // fly toward the target while holding a terrain-safe altitude
+        ATTACK   // steep terminal dive onto the target
+    }
+
+    public enum CruiseMode {
+        TERRAIN_FOLLOW,
+        HIGH_ALTITUDE
+    }
+
+    @FunctionalInterface
+    public interface Detonation {
+        void detonate(MissileEntity missile, Vec3 pos);
     }
 
     /**
@@ -314,6 +363,8 @@ public class MissileEntity extends Projectile {
         private double terrainClearance = 24.0;
         private float explosionOffset = 0.0f;
         private Detonation detonation = STANDARD;
+        private Double maxTurnRate = null; // null = keep the model-size default
+        private String modelId = MissileModels.DEFAULT;
 
         private Builder(EntityType<? extends Projectile> type, Level level) {
             this.type = type;
@@ -325,21 +376,27 @@ public class MissileEntity extends Projectile {
             return this;
         }
 
-        /** Fly at a fixed altitude, ignoring terrain. */
+        /**
+         * Fly at a fixed altitude, ignoring terrain.
+         */
         public Builder highAltitude(double cruiseAltitude) {
             this.cruiseMode = CruiseMode.HIGH_ALTITUDE;
             this.cruiseAltitude = cruiseAltitude;
             return this;
         }
 
-        /** Hug the ground, holding {@code terrainClearance} blocks above nearby terrain. */
+        /**
+         * Hug the ground, holding {@code terrainClearance} blocks above nearby terrain.
+         */
         public Builder terrainFollow(double terrainClearance) {
             this.cruiseMode = CruiseMode.TERRAIN_FOLLOW;
             this.terrainClearance = terrainClearance;
             return this;
         }
 
-        /** Airburst {@code offset} blocks above the target; 0 (default) is a contact detonation. */
+        /**
+         * Airburst {@code offset} blocks above the target; 0 (default) is a contact detonation.
+         */
         public Builder explosionOffset(float offset) {
             this.explosionOffset = offset;
             return this;
@@ -351,6 +408,22 @@ public class MissileEntity extends Projectile {
             return this;
         }
 
+        /**
+         * Override the max heading change per tick (radians); default scales from the model's length.
+         */
+        public Builder turnRate(double radiansPerTick) {
+            this.maxTurnRate = radiansPerTick;
+            return this;
+        }
+
+        /**
+         * Pick which missile model/skin to render and fly as (see {@link MissileModels}).
+         */
+        public Builder model(String modelId) {
+            this.modelId = modelId;
+            return this;
+        }
+
         public MissileEntity build() {
             MissileEntity missile = new MissileEntity(this.type, this.level);
             missile.cruiseMode = this.cruiseMode;
@@ -358,6 +431,11 @@ public class MissileEntity extends Projectile {
             missile.terrainClearance = this.terrainClearance;
             missile.explosionOffset = this.explosionOffset;
             missile.detonation = this.detonation;
+            missile.setModelId(this.modelId);
+            // Default the turn rate off the chosen model's length unless explicitly overridden.
+            missile.maxTurnRate = (this.maxTurnRate != null)
+                    ? this.maxTurnRate
+                    : TURN_AGILITY / MissileModels.length(missile.getModelId());
             if (this.target != null) {
                 missile.setTarget(this.target);
             }

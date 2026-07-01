@@ -22,7 +22,7 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
     public InstancedTrailEffect(Entity source) {
         this.level = source.level();
         this.source = source;
-        this.pool = new Flame[80];
+        this.pool = new Flame[192];
         for (int i = 0; i < pool.length; i++) {
             pool[i] = new Flame();
         }
@@ -76,7 +76,7 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
         void spawn(RandomSource r, double x, double y, double z, Vec3 motion) {
             this.active = true;
             this.age = 0;
-            this.life = 10 + r.nextInt(8);
+            this.life = 30 + r.nextInt(20);
             this.x = this.px = x;
             this.y = this.py = y;
             this.z = this.pz = z;
@@ -112,11 +112,11 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
 
         int argb(float pt) {
             float a = (age + pt) / life;
-            float dark = 1F - Math.min(a / 0.25F, 1F);
+            float dark = 1F - Math.min(a / 0.6F, 1F);
             int rr = (int) (Mth.clamp(dark + 0.1F, 0F, 1F) * 255F);
             int gg = (int) (Mth.clamp(0.6F * dark + 0.1F, 0F, 1F) * 255F);
             int bb = (int) (0.05F * 255F);
-            int alpha = (int) (Mth.clamp((float) Math.pow(1 - Math.min(a, 1F), 0.5), 0F, 1F) * 0.75F * 255F);
+            int alpha = (int) (Mth.clamp((float) Math.pow(1 - Math.min(a, 1F), 0.4), 0F, 1F) * 0.75F * 255F);
             return (alpha << 24) | (rr << 16) | (gg << 8) | bb;
         }
     }

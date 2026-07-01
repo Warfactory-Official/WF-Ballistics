@@ -74,7 +74,7 @@ public class InstancedParticleEffect implements WFFlywheelEffect {
             this.vz = r.nextGaussian() * speed;
             this.vy = r.nextDouble() * 0.05;
             this.baseScale = scale * 0.9F + r.nextFloat() * 0.2F;
-            this.life = 25 + r.nextInt(10);
+            this.life = 45 + r.nextInt(30);
             this.hue = 20F + r.nextFloat() * 20F;
         }
 

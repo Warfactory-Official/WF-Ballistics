@@ -1,13 +1,11 @@
 package com.wf.wfballistics.client.flywheel;
 
-import com.wf.wfballistics.ModModels;
 import dev.engine_room.flywheel.api.instance.Instancer;
 import dev.engine_room.flywheel.api.model.Model;
 import dev.engine_room.flywheel.api.visual.EffectVisual;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.instance.InstanceTypes;
 import dev.engine_room.flywheel.lib.instance.TransformedInstance;
-import dev.engine_room.flywheel.lib.model.Models;
 import dev.engine_room.flywheel.lib.visual.AbstractVisual;
 import dev.engine_room.flywheel.lib.visual.SimpleDynamicVisual;
 import net.minecraft.core.Vec3i;
@@ -17,7 +15,7 @@ import org.joml.Quaternionf;
 
 /**
  * The Flywheel visual for an {@link InstancedTrailEffect}: one billboarded {@link TransformedInstance} per
- * ring-buffer slot, sharing the {@link ModModels#INSTANCED_QUAD} model. Inactive slots collapse to zero
+ * ring-buffer slot, sharing the translucent {@link FlywheelModels#particleQuad()} model. Inactive slots collapse to zero
  * size, so the instance buffer is allocated once and only its contents change frame to frame.
  */
 public class InstancedTrailVisual extends AbstractVisual implements SimpleDynamicVisual, EffectVisual<InstancedTrailEffect> {
@@ -30,7 +28,7 @@ public class InstancedTrailVisual extends AbstractVisual implements SimpleDynami
         super(ctx, (Level) effect.level(), partialTick);
         this.effect = effect;
 
-        Model model = Models.partial(ModModels.INSTANCED_QUAD);
+        Model model = FlywheelModels.particleQuad();
         Instancer<TransformedInstance> instancer = instancerProvider().instancer(InstanceTypes.TRANSFORMED, model);
 
         this.instances = new TransformedInstance[effect.pool.length];

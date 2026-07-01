@@ -11,10 +11,13 @@ import dev.engine_room.flywheel.lib.model.Models;
 import dev.engine_room.flywheel.lib.visual.AbstractEntityVisual;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Vec3i;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.block.Blocks;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import org.slf4j.Logger;
 
 public class MissileVisual extends AbstractEntityVisual<Projectile> implements DynamicVisual {
@@ -34,10 +37,15 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
 
     private final TransformedInstance modelInstance;
 
+    private static final float ORIENTATION_SMOOTHING = 0.3f;
+    private final Quaternionf orientation = new Quaternionf();
+    private boolean orientationInit = false;
+
     public MissileVisual(VisualizationContext context, Projectile entity) {
         super(context, entity, 0.0f);
 
-        var flywheelModel = Models.partial(ModModels.MY_OBJ_MODEL);
+        String modelId = (entity instanceof MissileEntity missile) ? missile.getModelId() : MissileModels.DEFAULT;
+        var flywheelModel = Models.partial(ModModels.missile(modelId));
 
         //var testingState = Blocks.WHITE_CONCRETE.defaultBlockState();
         //var testingModel = dev.engine_room.flywheel.lib.model.Models.block(testingState);
@@ -70,22 +78,33 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
             lastPosTick = entity.tickCount;
         }
 
-        double moveX = entity.getDeltaMovement().x;
-        double moveY = entity.getDeltaMovement().y;
-        double moveZ = entity.getDeltaMovement().z;
+        Vec3i origin = renderOrigin();
+        float renderX = (float) (Mth.lerp(partialTick, prevX, curX) - origin.getX());
+        float renderY = (float) (Mth.lerp(partialTick, prevY, curY) - origin.getY());
+        float renderZ = (float) (Mth.lerp(partialTick, prevZ, curZ) - origin.getZ());
 
-        float yaw = (float) Math.atan2(moveZ, moveX);
-        // Subtract 90 degrees because missile model is pointing up in default rotation, so we need to rotate it to the right
-        float pitch = (float) Math.atan2(moveY, Math.sqrt(moveX * moveX + moveZ * moveZ)) - Mth.PI / 2;
 
-        float renderX = (float) Mth.lerp(partialTick, prevX, curX);
-        float renderY = (float) Mth.lerp(partialTick, prevY, curY);
-        float renderZ = (float) Mth.lerp(partialTick, prevZ, curZ);
+        double hx = curX - prevX, hy = curY - prevY, hz = curZ - prevZ;
+        if (hx * hx + hy * hy + hz * hz < 1.0E-8) {
+            hx = entity.getDeltaMovement().x;
+            hy = entity.getDeltaMovement().y;
+            hz = entity.getDeltaMovement().z;
+        }
+
+        if (hx * hx + hy * hy + hz * hz > 1.0E-8) {
+            Vector3f heading = new Vector3f((float) hx, (float) hy, (float) hz).normalize();
+            Quaternionf target = new Quaternionf().rotationTo(new Vector3f(0f, 1f, 0f), heading);
+            if (orientationInit) {
+                orientation.slerp(target, ORIENTATION_SMOOTHING);
+            } else {
+                orientation.set(target);
+                orientationInit = true;
+            }
+        }
 
         Matrix4f matrix = new Matrix4f()
                 .translate(renderX, renderY, renderZ)
-                .rotateY(-yaw)
-                .rotateZ(pitch);
+                .rotate(orientation);
 
         BlockPos entityPos = BlockPos.containing(curX, curY, curZ);
         int packedLight = LevelRenderer.getLightColor(entity.level(), entityPos);
@@ -105,7 +124,7 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
 
     @Override
     public Plan<Context> planFrame() {
-        return new Plan<Context>() {
+        return new Plan<>() {
             @Override
             public void execute(TaskExecutor taskExecutor, Context context, Runnable onCompletion) {
                 updatePosition(context.partialTick());

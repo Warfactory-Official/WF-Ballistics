@@ -1,0 +1,8 @@
+# missile_stealth material (auto-generated for WF-Ballistics)
+newmtl missile_texture
+Ka 1.000 1.000 1.000
+Kd 1.000 1.000 1.000
+Ks 0.000 0.000 0.000
+d 1.0
+illum 1
+map_Kd wfballistics:models/missiles/missile_stealth

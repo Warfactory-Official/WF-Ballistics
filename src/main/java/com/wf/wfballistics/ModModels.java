@@ -3,11 +3,22 @@ package com.wf.wfballistics;
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.minecraft.resources.ResourceLocation;
 
+import java.util.HashMap;
+import java.util.Map;
+
 public class ModModels {
-    // Locate the physical .obj asset
-    public static final PartialModel MY_OBJ_MODEL = PartialModel.of(
-            new ResourceLocation(WFBallistics.MODID, "entity/missile_model")
-    );
+
+    private static final Map<String, PartialModel> MISSILES = new HashMap<>();
+    static {
+        for (String id : MissileModels.ids()) {
+            MISSILES.put(id, PartialModel.of(MissileModels.model(id)));
+        }
+    }
+
+    /** @return the baked model for a missile id, falling back to {@link MissileModels#DEFAULT}. */
+    public static PartialModel missile(String id) {
+        return MISSILES.getOrDefault(id, MISSILES.get(MissileModels.DEFAULT));
+    }
 
     // Flat billboard quad instanced for GPU-batched particle clouds (see client.flywheel).
     public static final PartialModel INSTANCED_QUAD = PartialModel.of(

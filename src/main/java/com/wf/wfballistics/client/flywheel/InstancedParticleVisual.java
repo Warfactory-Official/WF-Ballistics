@@ -1,13 +1,11 @@
 package com.wf.wfballistics.client.flywheel;
 
-import com.wf.wfballistics.ModModels;
 import dev.engine_room.flywheel.api.instance.Instancer;
 import dev.engine_room.flywheel.api.model.Model;
 import dev.engine_room.flywheel.api.visual.EffectVisual;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.instance.InstanceTypes;
 import dev.engine_room.flywheel.lib.instance.TransformedInstance;
-import dev.engine_room.flywheel.lib.model.Models;
 import dev.engine_room.flywheel.lib.visual.AbstractVisual;
 import dev.engine_room.flywheel.lib.visual.SimpleDynamicVisual;
 import net.minecraft.core.Vec3i;
@@ -17,7 +15,7 @@ import org.joml.Quaternionf;
 
 /**
  * The Flywheel visual for an {@link InstancedParticleEffect}: one {@link TransformedInstance} per puff,
- * sharing a single instanced billboard-quad model ({@link ModModels#INSTANCED_QUAD}).
+ * sharing a single translucent instanced billboard-quad ({@link FlywheelModels#particleQuad()}).
  *
  * <p>Per frame ({@link #beginFrame}) each instance is billboarded toward the camera, scaled, and tinted —
  * just a transform + colour upload, no geometry rebuild. The quad is modelled in {@code [0,1]³} centred on
@@ -34,7 +32,7 @@ public class InstancedParticleVisual extends AbstractVisual implements SimpleDyn
         super(ctx, (Level) effect.level(), partialTick);
         this.effect = effect;
 
-        Model model = Models.partial(ModModels.INSTANCED_QUAD);
+        Model model = FlywheelModels.particleQuad();
         Instancer<TransformedInstance> instancer = instancerProvider().instancer(InstanceTypes.TRANSFORMED, model);
 
         this.instances = new TransformedInstance[effect.puffs.length];

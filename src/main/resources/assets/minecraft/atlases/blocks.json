@@ -2,7 +2,7 @@
   "sources": [
     {
       "type": "minecraft:single",
-      "resource": "wfballistics:entity/missile_stealth"
+      "resource": "wfballistics:block/missile_stealth"
     },
     {
       "type": "minecraft:single",
@@ -11,6 +11,11 @@
     {
       "type": "minecraft:single",
       "resource": "wfballistics:particle/particle_base"
+    },
+    {
+      "type": "minecraft:directory",
+      "source": "models/missiles",
+      "prefix": "models/missiles/"
     }
   ]
 }
