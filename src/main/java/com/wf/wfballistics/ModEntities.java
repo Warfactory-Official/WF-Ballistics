@@ -5,7 +5,6 @@ import com.wf.wfballistics.entity.EntityNukeTorex;
 import com.wf.wfballistics.entity.MistEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
-import net.minecraft.world.entity.LivingEntity; // Or your specific entity class
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
@@ -18,9 +17,10 @@ public class ModEntities {
 
     // 2. Register your specific entity
     // Replace 'YourEntityClass::new' with your actual custom entity class constructor later
-    public static final RegistryObject<EntityType<MissileEntity>> MY_CUSTOM_ENTITY =
+    public static final RegistryObject<EntityType<MissileEntity>> STEALTH_MISSILE =
             ENTITY_TYPES.register("missile", () -> EntityType.Builder.of(MissileEntity::new, MobCategory.MISC)
                     .sized(0.5F, 0.5F)
+                    .clientTrackingRange(16)
                     .build("missile")
             );
 

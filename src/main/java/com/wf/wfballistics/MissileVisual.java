@@ -47,8 +47,10 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
                 .createInstance();
 
         prevX = entity.getX();
-        prevY = entity.getX();
-        prevZ = entity.getX();
+        prevY = entity.getY();
+        prevZ = entity.getZ();
+
+        this.lastPosTick = entity.tickCount;
 
         updatePosition(0.0f);
 

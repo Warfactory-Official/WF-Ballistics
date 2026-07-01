@@ -22,7 +22,7 @@ public class WFBallisticsClient {
         // Tie your custom missile entity to a renderer
         // For a bare minimum test, we will temporarily use vanilla's ThrownItemRenderer
         // (This makes it look like a flying snowball/item so you can see it without writing a custom model file yet!)
-        event.registerEntityRenderer(ModEntities.MY_CUSTOM_ENTITY.get(), MissileRenderer::new);
+        event.registerEntityRenderer(ModEntities.STEALTH_MISSILE.get(), MissileRenderer::new);
 
         // Mist clouds draw nothing themselves — they are pure particle effects (see MistClientFX).
         event.registerEntityRenderer(ModEntities.MIST.get(),
@@ -57,7 +57,7 @@ public class WFBallisticsClient {
                 }
             };
 
-            VisualizerRegistry.setVisualizer(ModEntities.MY_CUSTOM_ENTITY.get(), visualizer);
+            VisualizerRegistry.setVisualizer(ModEntities.STEALTH_MISSILE.get(), visualizer);
         });
     }
 }
