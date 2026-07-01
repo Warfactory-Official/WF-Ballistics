@@ -1,0 +1,16 @@
+{
+  "sources": [
+    {
+      "type": "minecraft:single",
+      "resource": "wfballistics:entity/missile_stealth"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "wfballistics:particle/skeleton"
+    },
+    {
+      "type": "minecraft:single",
+      "resource": "wfballistics:particle/particle_base"
+    }
+  ]
+}

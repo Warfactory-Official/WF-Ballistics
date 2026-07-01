@@ -14,6 +14,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
@@ -25,6 +26,7 @@ public class MissileEntity extends Projectile {
         // Required for missile to move properly
         this.noPhysics = true;
         this.setNoGravity(true);
+        //Technically you can try doing with gravity... if you hate yourself o algo
     }
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -32,70 +34,109 @@ public class MissileEntity extends Projectile {
     private static final EntityDataAccessor<BlockPos> TARGET_POS =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.BLOCK_POS);
 
+    // True while the missile is still boosting straight up out of the launch site.
+    private boolean ascending = true;
+
     @Override
     public void tick() {
         super.tick();
 
-        if (!this.level().isClientSide) {
-            Vec3 currentPos = this.position();
-            Vec3 targetPos = this.getTarget();
+        if (this.level().isClientSide) {
+            return;
+        }
 
-            Vec3 direction = targetPos.subtract(currentPos);
-            double dx = direction.x;
-            double dz = direction.z;
-            double horizontalDist = Math.sqrt(dx * dx + dz * dz);
+        Vec3 currentPos = this.position();
+        Vec3 targetPos = this.getTarget();
 
-            if (horizontalDist < 0.5) {
-                this.setDeltaMovement(Vec3.ZERO);
+        double dx = targetPos.x - currentPos.x;
+        double dz = targetPos.z - currentPos.z;
+        double horizontalDist = Math.sqrt(dx * dx + dz * dz);
 
-                return;
+        double maxCruiseSpeed = 1.0;
+        double ascentSpeed = 1.25;        // vertical boost speed during launch
+        double terrainClearance = 24.0;   // altitude to hold above surrounding terrain
+        double terrainScanRadius = 24.0;  // how far around the missile we look for terrain
+        double lookAhead = 32.0;          // how far ahead (toward target) to scan while cruising
+        double dampeningRange = 50.0;     // smooths cruise altitude corrections
+        double brakingRange = 30.0;       // horizontal distance to target before the terminal dive
+        float terminalFallVelocity = -8;  // steep attack-dive speed (larger than cruise due to "gravity")
+
+
+        double scanCenterX = currentPos.x;
+        double scanCenterZ = currentPos.z;
+        if (!this.ascending && horizontalDist > 1.0E-3) {
+            scanCenterX += (dx / horizontalDist) * lookAhead;
+            scanCenterZ += (dz / horizontalDist) * lookAhead;
+        }
+        double safeAltitude = scanTerrainTop(scanCenterX, scanCenterZ, terrainScanRadius) + terrainClearance;
+
+        Vec3 velocity;
+
+        if (this.ascending && this.getY() < safeAltitude) {
+            //Vertical boost
+            velocity = new Vec3(0.0, ascentSpeed, 0.0);
+        } else {
+            this.ascending = false;
+
+            // --- Phase 2/3: cruise toward the target, then dive on it ---
+            boolean terminal = horizontalDist < brakingRange;
+
+            double horizontalSpeed = terminal
+                    ? maxCruiseSpeed * (horizontalDist / brakingRange)
+                    : maxCruiseSpeed;
+
+            double vx = 0.0;
+            double vz = 0.0;
+            if (horizontalDist > 1.0E-3) {
+                vx = (dx / horizontalDist) * horizontalSpeed;
+                vz = (dz / horizontalDist) * horizontalSpeed;
             }
-
-            double maxCruiseSpeed = 1;
-
-            double cruiseAltitude = 64;
-            double dampeningRange = 50.0;
-
-            double distanceToAltitude = cruiseAltitude - this.getY();
-            double desiredVy = distanceToAltitude / dampeningRange;
-
-            // The maximum x,z-distance before the missile begins descending and slowing down its horizontal speed
-            double brakingRange = 30.0;
-            double horizontalSpeed = maxCruiseSpeed;
-
-            if (horizontalDist < brakingRange) {
-                horizontalSpeed = maxCruiseSpeed * (horizontalDist / brakingRange);
-            }
-
-            double vx = (dx / horizontalDist) * horizontalSpeed;
-            double vz = (dz / horizontalDist) * horizontalSpeed;
 
             double vy;
-
-            // Should be larger than cruise velocity due to the influence of gravity
-            float terminalFallVelocity = -8;
-
-            if (horizontalDist < brakingRange) {
-                // Steep decline for attack
+            if (terminal) {
+                // Steep terminal dive onto the target.
                 double currentVy = this.getDeltaMovement().y;
                 vy = Mth.lerp(0.01f, (float) currentVy, terminalFallVelocity);
             } else {
+                // Terrain-following cruise: hold the safe altitude, climbing over rising terrain.
+                double desiredVy = (safeAltitude - this.getY()) / dampeningRange;
                 vy = Mth.clamp(desiredVy, -maxCruiseSpeed, maxCruiseSpeed);
             }
 
-            Vec3 velocity = new Vec3(vx, vy, vz);
+            velocity = new Vec3(vx, vy, vz);
+        }
 
-            this.setDeltaMovement(velocity);
+        this.setDeltaMovement(velocity);
 
-            this.hasImpulse = true;
-            this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
+        this.hasImpulse = true;
+        this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
 
-            HitResult hitResult = ProjectileUtil.getHitResultOnMoveVector(this, this::canHitEntity);
+        HitResult hitResult = ProjectileUtil.getHitResultOnMoveVector(this, this::canHitEntity);
 
-            if (hitResult.getType() != HitResult.Type.MISS) {
-                this.onMissileImpact(hitResult);
+        if (hitResult.getType() != HitResult.Type.MISS) {
+            this.onMissileImpact(hitResult);
+        }
+    }
+
+    /**
+     * Scans safe height based on mc heightmap
+     */
+    private double scanTerrainTop(double centerX, double centerZ, double radius) {
+        int r = (int) Math.ceil(radius);
+        int step = Math.max(2, r / 4);
+        int cx = Mth.floor(centerX);
+        int cz = Mth.floor(centerZ);
+
+        int maxTop = this.level().getMinBuildHeight();
+        for (int ox = -r; ox <= r; ox += step) {
+            for (int oz = -r; oz <= r; oz += step) {
+                int top = this.level().getHeight(Heightmap.Types.WORLD_SURFACE, cx + ox, cz + oz);
+                if (top > maxTop) {
+                    maxTop = top;
+                }
             }
         }
+        return maxTop;
     }
 
     protected boolean canHitEntity(Entity target) {
@@ -123,6 +164,7 @@ public class MissileEntity extends Projectile {
         tag.putDouble("TargetX", target.x);
         tag.putDouble("TargetY", target.y);
         tag.putDouble("TargetZ", target.z);
+        tag.putBoolean("Ascending", this.ascending);
     }
 
     @Override
@@ -134,6 +176,10 @@ public class MissileEntity extends Projectile {
             double y = tag.getDouble("TargetY");
             double z = tag.getDouble("TargetZ");
             this.setTarget(new Vec3(x, y, z));
+        }
+
+        if (tag.contains("Ascending")) {
+            this.ascending = tag.getBoolean("Ascending");
         }
     }
 
