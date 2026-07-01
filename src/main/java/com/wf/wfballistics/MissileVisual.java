@@ -68,11 +68,22 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
             lastPosTick = entity.tickCount;
         }
 
+        double moveX = entity.getDeltaMovement().x;
+        double moveY = entity.getDeltaMovement().y;
+        double moveZ = entity.getDeltaMovement().z;
+
+        float yaw = (float) Math.atan2(moveZ, moveX);
+        // Subtract 90 degrees because missile model is pointing up in default rotation, so we need to rotate it to the right
+        float pitch = (float) Math.atan2(moveY, Math.sqrt(moveX * moveX + moveZ * moveZ)) - Mth.PI / 2;
+
         float renderX = (float) Mth.lerp(partialTick, prevX, curX);
         float renderY = (float) Mth.lerp(partialTick, prevY, curY);
         float renderZ = (float) Mth.lerp(partialTick, prevZ, curZ);
 
-        Matrix4f matrix = new Matrix4f().translate(renderX, renderY, renderZ);
+        Matrix4f matrix = new Matrix4f()
+                .translate(renderX, renderY, renderZ)
+                .rotateY(-yaw)
+                .rotateZ(pitch);
 
         BlockPos entityPos = BlockPos.containing(curX, curY, curZ);
         int packedLight = LevelRenderer.getLightColor(entity.level(), entityPos);
