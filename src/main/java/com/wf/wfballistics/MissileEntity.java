@@ -1,6 +1,7 @@
 package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
+import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.entity.EntityNukeTorex;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -139,13 +140,9 @@ public class MissileEntity extends Projectile {
     private void onMissileImpact(HitResult hitResult) {
         Vec3 hitPos = hitResult.getLocation();
 
-        this.level().explode(
-                this,
-                hitPos.x, hitPos.y, hitPos.z,
-                100.0F,
-                true,
-                Level.ExplosionInteraction.TNT
-        );
+        var expl = new ExplosionAEF(this.level(), hitPos.x, hitPos.y, hitPos.z, 250);
+        expl.makeStandard();
+        expl.explode();
 
         EntityNukeTorex torex = ModEntities.NUKE_TOREX.get().create(this.level());
         if (torex != null) {
