@@ -29,13 +29,56 @@ public class MissileEntity extends Projectile {
         //Technically you can try doing with gravity... if you hate yourself o algo
     }
 
+    public static Builder builder(EntityType<? extends Projectile> type, Level level) {
+        return new Builder(type, level);
+    }
+
+    //Why is this nophono here
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private static final EntityDataAccessor<BlockPos> TARGET_POS =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.BLOCK_POS);
 
-    // True while the missile is still boosting straight up out of the launch site.
-    private boolean ascending = true;
+    public enum Phase {
+        ASCEND,  // boost straight up until clear of surrounding terrain
+        CRUISE,  // fly toward the target while holding a terrain-safe altitude
+        ATTACK   // steep terminal dive onto the target
+    }
+
+    private Phase phase = Phase.ASCEND;
+
+    public enum CruiseMode {
+        TERRAIN_FOLLOW,
+        HIGH_ALTITUDE
+    }
+
+    private CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
+    private double cruiseAltitude = 200.0;
+    private double terrainClearance = 24.0;
+
+    // Airburst fuze: while diving, detonate in the air once the missile is within this many
+    // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
+    private float explosionOffset = 0.0f;
+
+
+    @FunctionalInterface
+    public interface Detonation {
+        void detonate(MissileEntity missile, Vec3 pos);
+    }
+
+    public static final Detonation STANDARD = (missile, pos) -> {
+        var expl = new ExplosionAEF(missile.level(), pos.x, pos.y, pos.z, 250);
+        expl.makeStandard();
+        expl.explode();
+
+        EntityNukeTorex torex = ModEntities.NUKE_TOREX.get().create(missile.level());
+        if (torex != null) {
+            torex.moveTo(pos.x, pos.y, pos.z);
+            missile.level().addFreshEntity(torex);
+        }
+    };
+
+    private Detonation detonation = STANDARD;
 
     @Override
     public void tick() {
@@ -54,7 +97,6 @@ public class MissileEntity extends Projectile {
 
         double maxCruiseSpeed = 1.0;
         double ascentSpeed = 1.25;        // vertical boost speed during launch
-        double terrainClearance = 24.0;   // altitude to hold above surrounding terrain
         double terrainScanRadius = 24.0;  // how far around the missile we look for terrain
         double lookAhead = 32.0;          // how far ahead (toward target) to scan while cruising
         double dampeningRange = 50.0;     // smooths cruise altitude corrections
@@ -62,54 +104,74 @@ public class MissileEntity extends Projectile {
         float terminalFallVelocity = -8;  // steep attack-dive speed (larger than cruise due to "gravity")
 
 
-        double scanCenterX = currentPos.x;
-        double scanCenterZ = currentPos.z;
-        if (!this.ascending && horizontalDist > 1.0E-3) {
-            scanCenterX += (dx / horizontalDist) * lookAhead;
-            scanCenterZ += (dz / horizontalDist) * lookAhead;
-        }
-        double safeAltitude = scanTerrainTop(scanCenterX, scanCenterZ, terrainScanRadius) + terrainClearance;
-
-        Vec3 velocity;
-
-        if (this.ascending && this.getY() < safeAltitude) {
-            //Vertical boost
-            velocity = new Vec3(0.0, ascentSpeed, 0.0);
+        double safeAltitude;
+        if (this.cruiseMode == CruiseMode.HIGH_ALTITUDE) {
+            // Fixed high-altitude
+            safeAltitude = this.cruiseAltitude;
         } else {
-            this.ascending = false;
-
-            // --- Phase 2/3: cruise toward the target, then dive on it ---
-            boolean terminal = horizontalDist < brakingRange;
-
-            double horizontalSpeed = terminal
-                    ? maxCruiseSpeed * (horizontalDist / brakingRange)
-                    : maxCruiseSpeed;
-
-            double vx = 0.0;
-            double vz = 0.0;
-            if (horizontalDist > 1.0E-3) {
-                vx = (dx / horizontalDist) * horizontalSpeed;
-                vz = (dz / horizontalDist) * horizontalSpeed;
+            // Terrain-following
+            double scanCenterX = currentPos.x;
+            double scanCenterZ = currentPos.z;
+            if (this.phase != Phase.ASCEND && horizontalDist > 1.0E-3) {
+                scanCenterX += (dx / horizontalDist) * lookAhead;
+                scanCenterZ += (dz / horizontalDist) * lookAhead;
             }
+            safeAltitude = scanTerrainTop(scanCenterX, scanCenterZ, terrainScanRadius) + this.terrainClearance;
+        }
 
-            double vy;
-            if (terminal) {
-                // Steep terminal dive onto the target.
-                double currentVy = this.getDeltaMovement().y;
-                vy = Mth.lerp(0.01f, (float) currentVy, terminalFallVelocity);
-            } else {
-                // Terrain-following cruise: hold the safe altitude, climbing over rising terrain.
+        //State change rules
+        switch (this.phase) {
+            case ASCEND -> {
+                if (this.getY() >= safeAltitude) {
+                    this.phase = Phase.CRUISE;
+                }
+            }
+            case CRUISE -> {
+                if (horizontalDist < brakingRange) {
+                    this.phase = Phase.ATTACK;
+                }
+            }
+            case ATTACK -> {
+                //no exit, the flight ends on impact.
+            }
+        }
+
+        double nx = 0.0;
+        double nz = 0.0;
+        if (horizontalDist > 1.0E-3) {
+            nx = dx / horizontalDist;
+            nz = dz / horizontalDist;
+        }
+
+        //State behavior
+        Vec3 velocity = Vec3.ZERO;
+        switch (this.phase) {
+            case ASCEND ->
+                velocity = new Vec3(0.0, ascentSpeed, 0.0);
+            case CRUISE -> {
                 double desiredVy = (safeAltitude - this.getY()) / dampeningRange;
-                vy = Mth.clamp(desiredVy, -maxCruiseSpeed, maxCruiseSpeed);
+                double vy = Mth.clamp(desiredVy, -maxCruiseSpeed, maxCruiseSpeed);
+                velocity = new Vec3(nx * maxCruiseSpeed, vy, nz * maxCruiseSpeed);
             }
-
-            velocity = new Vec3(vx, vy, vz);
+            case ATTACK -> {
+                double horizontalSpeed = maxCruiseSpeed * (horizontalDist / brakingRange);
+                double currentVy = this.getDeltaMovement().y;
+                double vy = Mth.lerp(0.01f, (float) currentVy, terminalFallVelocity);
+                velocity = new Vec3(nx * horizontalSpeed, vy, nz * horizontalSpeed);
+            }
         }
 
         this.setDeltaMovement(velocity);
 
         this.hasImpulse = true;
         this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
+
+        // Airburst fuze
+        if (this.explosionOffset > 0.0f && this.phase == Phase.ATTACK
+                && this.getY() - targetPos.y <= this.explosionOffset) {
+            this.detonate(this.position());
+            return;
+        }
 
         HitResult hitResult = ProjectileUtil.getHitResultOnMoveVector(this, this::canHitEntity);
 
@@ -157,6 +219,18 @@ public class MissileEntity extends Projectile {
         this.entityData.set(TARGET_POS, new BlockPos((int)target.x, (int)target.y, (int)target.z));
     }
 
+    public Phase getPhase() {
+        return this.phase;
+    }
+
+    public CruiseMode getCruiseMode() {
+        return this.cruiseMode;
+    }
+
+    public float getExplosionOffset() {
+        return this.explosionOffset;
+    }
+
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
@@ -164,7 +238,11 @@ public class MissileEntity extends Projectile {
         tag.putDouble("TargetX", target.x);
         tag.putDouble("TargetY", target.y);
         tag.putDouble("TargetZ", target.z);
-        tag.putBoolean("Ascending", this.ascending);
+        tag.putString("Phase", this.phase.name());
+        tag.putString("CruiseMode", this.cruiseMode.name());
+        tag.putDouble("CruiseAltitude", this.cruiseAltitude);
+        tag.putDouble("TerrainClearance", this.terrainClearance);
+        tag.putFloat("ExplosionOffset", this.explosionOffset);
     }
 
     @Override
@@ -178,24 +256,112 @@ public class MissileEntity extends Projectile {
             this.setTarget(new Vec3(x, y, z));
         }
 
-        if (tag.contains("Ascending")) {
-            this.ascending = tag.getBoolean("Ascending");
+        if (tag.contains("Phase")) {
+            try {
+                this.phase = Phase.valueOf(tag.getString("Phase"));
+            } catch (IllegalArgumentException nignored) {
+            }
+        }
+
+        if (tag.contains("CruiseMode")) {
+            try {
+                this.cruiseMode = CruiseMode.valueOf(tag.getString("CruiseMode"));
+            } catch (IllegalArgumentException nignored) {
+            }
+        }
+
+        if (tag.contains("CruiseAltitude")) {
+            this.cruiseAltitude = tag.getDouble("CruiseAltitude");
+        }
+
+        if (tag.contains("TerrainClearance")) {
+            this.terrainClearance = tag.getDouble("TerrainClearance");
+        }
+
+        if (tag.contains("ExplosionOffset")) {
+            this.explosionOffset = tag.getFloat("ExplosionOffset");
         }
     }
 
     private void onMissileImpact(HitResult hitResult) {
-        Vec3 hitPos = hitResult.getLocation();
+        this.detonate(hitResult.getLocation());
+    }
 
-        var expl = new ExplosionAEF(this.level(), hitPos.x, hitPos.y, hitPos.z, 250);
-        expl.makeStandard();
-        expl.explode();
+    /** Fires the configured warhead at the given position and removes the missile. */
+    private void detonate(Vec3 pos) {
+        this.detonation.detonate(this, pos);
+        this.discard();
+    }
 
-        EntityNukeTorex torex = ModEntities.NUKE_TOREX.get().create(this.level());
-        if (torex != null) {
-            torex.moveTo(hitPos.x, hitPos.y, hitPos.z);
-            this.level().addFreshEntity(torex);
+    /**
+     * Example use:
+     * <pre>{@code
+     * MissileEntity m = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
+     *         .target(pos)
+     *         .highAltitude(250.0)   // or .terrainFollow(24.0)
+     *         .explosionOffset(30f)  // airburst 30 blocks above the target
+     *         .build();
+     * level.addFreshEntity(m);
+     * }</pre>
+     */
+    public static final class Builder {
+        private final EntityType<? extends Projectile> type;
+        private final Level level;
+
+        private Vec3 target;
+        private CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
+        private double cruiseAltitude = 200.0;
+        private double terrainClearance = 24.0;
+        private float explosionOffset = 0.0f;
+        private Detonation detonation = STANDARD;
+
+        private Builder(EntityType<? extends Projectile> type, Level level) {
+            this.type = type;
+            this.level = level;
         }
 
-        this.discard();
+        public Builder target(Vec3 target) {
+            this.target = target;
+            return this;
+        }
+
+        /** Fly at a fixed altitude, ignoring terrain. */
+        public Builder highAltitude(double cruiseAltitude) {
+            this.cruiseMode = CruiseMode.HIGH_ALTITUDE;
+            this.cruiseAltitude = cruiseAltitude;
+            return this;
+        }
+
+        /** Hug the ground, holding {@code terrainClearance} blocks above nearby terrain. */
+        public Builder terrainFollow(double terrainClearance) {
+            this.cruiseMode = CruiseMode.TERRAIN_FOLLOW;
+            this.terrainClearance = terrainClearance;
+            return this;
+        }
+
+        /** Airburst {@code offset} blocks above the target; 0 (default) is a contact detonation. */
+        public Builder explosionOffset(float offset) {
+            this.explosionOffset = offset;
+            return this;
+        }
+
+        // Swap the warhead behavior, defaults to {@link #STANDARD}.
+        public Builder detonation(Detonation detonation) {
+            this.detonation = detonation;
+            return this;
+        }
+
+        public MissileEntity build() {
+            MissileEntity missile = new MissileEntity(this.type, this.level);
+            missile.cruiseMode = this.cruiseMode;
+            missile.cruiseAltitude = this.cruiseAltitude;
+            missile.terrainClearance = this.terrainClearance;
+            missile.explosionOffset = this.explosionOffset;
+            missile.detonation = this.detonation;
+            if (this.target != null) {
+                missile.setTarget(this.target);
+            }
+            return missile;
+        }
     }
 }
