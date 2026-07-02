@@ -24,6 +24,8 @@ public class MixinEntityRenderDispatcher {
     private static void wfballistics$renderHitbox(PoseStack pMatrixStack, VertexConsumer pBuffer, Entity pEntity, float pPartialTicks, CallbackInfo ci) {
         if (pEntity instanceof OBBEntity obbEntity && !obbEntity.enableAABB()) {
             OBBRenderer.render(pEntity, obbEntity.getOBBs(), pMatrixStack, pBuffer, 0, 1, 0, 1, pPartialTicks);
+            // Swept-collision debug overlay: corridor + substep body ghosts (see OBBRenderer#renderSweep).
+            OBBRenderer.renderSweep(pEntity, obbEntity.getOBBs(), pMatrixStack, pBuffer);
         }
     }
 }

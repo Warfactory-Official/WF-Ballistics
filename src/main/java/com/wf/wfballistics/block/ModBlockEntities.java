@@ -1,6 +1,7 @@
 package com.wf.wfballistics.block;
 
 import com.wf.wfballistics.WFBallistics;
+import com.wf.wfballistics.block.entity.MissileDispenserBlockEntity;
 import com.wf.wfballistics.block.entity.MissileListenerDebugBlockEntity;
 import com.wf.wfballistics.block.entity.TurretCiwsBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -16,6 +17,10 @@ public class ModBlockEntities {
     public static final RegistryObject<BlockEntityType<MissileListenerDebugBlockEntity>> MISSILE_LISTENER_DEBUG =
             BLOCK_ENTITIES.register("missile_listener_debug", () -> BlockEntityType.Builder.of(
                     MissileListenerDebugBlockEntity::new, ModBlocks.MISSILE_LISTENER_DEBUG.get()).build(null));
+
+    public static final RegistryObject<BlockEntityType<MissileDispenserBlockEntity>> MISSILE_DISPENSER =
+            BLOCK_ENTITIES.register("missile_dispenser", () -> BlockEntityType.Builder.of(
+                    MissileDispenserBlockEntity::new, ModBlocks.MISSILE_DISPENSER.get()).build(null));
 
     public static final RegistryObject<BlockEntityType<TurretCiwsBlockEntity>> TURRET_CIWS =
             BLOCK_ENTITIES.register("turret_ciws", () -> BlockEntityType.Builder.of(

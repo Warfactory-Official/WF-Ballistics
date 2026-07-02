@@ -19,6 +19,7 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.phys.AABB;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.fml.DistExecutor;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -44,8 +45,16 @@ public class MistEntity extends Entity {
     private static final EntityDataAccessor<Float> RADIUS = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> HEIGHT = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<String> FLUID = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.STRING);
+    // Box mode (see spawnBox / GasCloud): when BOX_X > 0 the cloud is an exact cuboid whose min corner is the
+    // entity position, instead of a radius/height puff. Used by the volumetric gas fill so cells hug walls.
+    private static final EntityDataAccessor<Float> BOX_X = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> BOX_Y = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
+    private static final EntityDataAccessor<Float> BOX_Z = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
 
     private int maxAge = 150;
+    // Server-side effect throttle: entities in the cloud are processed every N ticks (>=1). A knob for
+    // many-celled volumetric clouds; see GasCloud (kept at 1 there so effect timing is unchanged).
+    private int effectInterval = 1;
 
     public MistEntity(EntityType<? extends MistEntity> type, Level level) {
         super(type, level);
@@ -72,11 +81,58 @@ public class MistEntity extends Entity {
         return mist;
     }
 
+    /**
+     * Spawns a single box-mode gas cell: an exact cuboid whose min corner is {@code (minX, minY, minZ)} and
+     * whose extents are {@code (sizeX, sizeY, sizeZ)} blocks. The bounds are taken as given (already
+     * wall-checked by {@link com.wf.wfballistics.entity.mist.GasCloud}), so no {@link #fitToBounds} pass.
+     *
+     * @param effectInterval process entities in this cell every N ticks (>=1) to bound cost across a cloud
+     */
+    public static MistEntity spawnBox(Level level, Fluid fluid, double minX, double minY, double minZ,
+                                      float sizeX, float sizeY, float sizeZ, int duration, int effectInterval) {
+        MistEntity gas = new MistEntity(ModEntities.MIST.get(), level);
+        gas.setFluid(fluid);
+        gas.setDuration(duration);
+        gas.effectInterval = Math.max(1, effectInterval);
+        gas.setPos(minX, minY, minZ);     // position = box min corner
+        gas.setBox(sizeX, sizeY, sizeZ);  // recomputes the exact bounding box from that corner
+        level.addFreshEntity(gas);
+        return gas;
+    }
+
     @Override
     protected void defineSynchedData() {
         this.entityData.define(RADIUS, 1F);
         this.entityData.define(HEIGHT, 1F);
         this.entityData.define(FLUID, "");
+        this.entityData.define(BOX_X, 0F);
+        this.entityData.define(BOX_Y, 0F);
+        this.entityData.define(BOX_Z, 0F);
+    }
+
+    /** @return true if this cloud is a box-mode gas cell rather than a radius/height puff. */
+    public boolean isBox() {
+        return this.entityData.get(BOX_X) > 0F;
+    }
+
+    /** Sets the exact cuboid extents (blocks) and refits the bounding box from the min-corner position. */
+    public MistEntity setBox(float sizeX, float sizeY, float sizeZ) {
+        this.entityData.set(BOX_X, sizeX);
+        this.entityData.set(BOX_Y, sizeY);
+        this.entityData.set(BOX_Z, sizeZ);
+        this.setBoundingBox(this.makeBoundingBox());
+        return this;
+    }
+
+    @Override
+    protected AABB makeBoundingBox() {
+        float bx = this.entityData.get(BOX_X);
+        if (bx > 0F) {
+            // Box mode: an exact cuboid growing in +x/+y/+z from the entity's (min-corner) position.
+            return new AABB(getX(), getY(), getZ(),
+                    getX() + bx, getY() + this.entityData.get(BOX_Y), getZ() + this.entityData.get(BOX_Z));
+        }
+        return super.makeBoundingBox();
     }
 
     @Override
@@ -92,12 +148,16 @@ public class MistEntity extends Entity {
             MistEffect effect = MistEffects.get(getFluid());
             if (effect == null) return;
 
-            double intensity = 1.0 - (double) this.tickCount / maxAge;
-            effect.areaTick(this, intensity);
+            // Throttle the (potentially many-celled) cloud's entity processing; the short-duration mob
+            // effects the agents apply comfortably outlast a few skipped ticks.
+            if (this.tickCount % this.effectInterval == 0) {
+                double intensity = 1.0 - (double) this.tickCount / maxAge;
+                effect.areaTick(this, intensity);
 
-            List<Entity> targets = level().getEntities(this, getBoundingBox(), MistEntity::isAffectable);
-            for (Entity target : targets) {
-                effect.affect(this, target, intensity);
+                List<Entity> targets = level().getEntities(this, getBoundingBox(), MistEntity::isAffectable);
+                for (Entity target : targets) {
+                    effect.affect(this, target, intensity);
+                }
             }
         } else {
             // Particles are spawned only on the client; routed through DistExecutor so the dedicated
@@ -182,6 +242,13 @@ public class MistEntity extends Entity {
     public EntityDimensions getDimensions(Pose pose) {
         float radius = 1F, height = 1F;
         try {
+            float bx = this.entityData.get(BOX_X);
+            if (bx > 0F) {
+                // Box mode: makeBoundingBox() is the authority; this is only a rough hull for culling.
+                float by = this.entityData.get(BOX_Y);
+                float bz = this.entityData.get(BOX_Z);
+                return EntityDimensions.scalable(Math.max(Math.max(bx, bz), 0.2F), Math.max(by, 0.2F));
+            }
             radius = this.entityData.get(RADIUS);
             height = this.entityData.get(HEIGHT);
         } catch (Exception ignored) {
@@ -192,7 +259,10 @@ public class MistEntity extends Entity {
 
     @Override
     public void onSyncedDataUpdated(EntityDataAccessor<?> key) {
-        if (RADIUS.equals(key) || HEIGHT.equals(key)) {
+        if (BOX_X.equals(key) || BOX_Y.equals(key) || BOX_Z.equals(key)) {
+            // Box extents changed (or arrived on the client): rebuild the exact cuboid bounding box.
+            this.setBoundingBox(this.makeBoundingBox());
+        } else if (RADIUS.equals(key) || HEIGHT.equals(key)) {
             refreshDimensions();
         }
         super.onSyncedDataUpdated(key);
@@ -208,6 +278,12 @@ public class MistEntity extends Entity {
         setFluid(ForgeRegistries.FLUIDS.getValue(new ResourceLocation(tag.getString("fluid"))));
         setArea(tag.getFloat("radius"), tag.getFloat("height"));
         this.maxAge = tag.getInt("maxAge");
+        if (tag.contains("effectInterval")) {
+            this.effectInterval = Math.max(1, tag.getInt("effectInterval"));
+        }
+        if (tag.contains("boxX")) {
+            setBox(tag.getFloat("boxX"), tag.getFloat("boxY"), tag.getFloat("boxZ"));
+        }
     }
 
     @Override
@@ -217,5 +293,9 @@ public class MistEntity extends Entity {
         tag.putFloat("radius", getRadius());
         tag.putFloat("height", getMistHeight());
         tag.putInt("maxAge", maxAge);
+        tag.putInt("effectInterval", effectInterval);
+        tag.putFloat("boxX", this.entityData.get(BOX_X));
+        tag.putFloat("boxY", this.entityData.get(BOX_Y));
+        tag.putFloat("boxZ", this.entityData.get(BOX_Z));
     }
 }

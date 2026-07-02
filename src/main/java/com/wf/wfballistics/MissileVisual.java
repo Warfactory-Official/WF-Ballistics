@@ -41,6 +41,14 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
     private final Quaternionf orientation = new Quaternionf();
     private boolean orientationInit = false;
 
+    // Banking: the missile rolls into horizontal turns so mid-flight looks dynamic instead of rigid.
+    private static final float BANK_GAIN = 7.0f;       // roll per (rad/tick) of heading yaw change
+    private static final float MAX_BANK = 0.6f;        // ~34 degrees of maximum roll
+    private static final float BANK_SMOOTHING = 0.12f; // eases the roll toward its per-tick target
+    private float prevHeadingYaw = Float.NaN;
+    private float targetBank = 0f;
+    private float bank = 0f;
+
     public MissileVisual(VisualizationContext context, Projectile entity) {
         super(context, entity, 0.0f);
 
@@ -76,6 +84,17 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
             curZ = entity.getZ();
 
             lastPosTick = entity.tickCount;
+
+            // Bank into turns: measure how far the heading yawed this tick and roll proportionally.
+            double thx = curX - prevX, thz = curZ - prevZ;
+            if (thx * thx + thz * thz > 1.0E-8) {
+                float yaw = (float) Mth.atan2(thx, thz);
+                if (!Float.isNaN(prevHeadingYaw)) {
+                    float dYaw = wrapRadians(yaw - prevHeadingYaw);
+                    targetBank = Mth.clamp(-dYaw * BANK_GAIN, -MAX_BANK, MAX_BANK);
+                }
+                prevHeadingYaw = yaw;
+            }
         }
 
         Vec3i origin = renderOrigin();
@@ -102,9 +121,13 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
             }
         }
 
+        // Ease the roll toward its per-tick target every frame so banking looks smooth.
+        bank += (targetBank - bank) * BANK_SMOOTHING;
+
         Matrix4f matrix = new Matrix4f()
                 .translate(renderX, renderY, renderZ)
-                .rotate(orientation);
+                .rotate(orientation)
+                .rotateY(bank); // roll about the model's nose/long axis (local +Y)
 
         BlockPos entityPos = BlockPos.containing(curX, curY, curZ);
         int packedLight = LevelRenderer.getLightColor(entity.level(), entityPos);
@@ -112,6 +135,18 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         this.modelInstance.light(packedLight);
         this.modelInstance.setTransform(matrix);
         this.modelInstance.setChanged();
+    }
+
+    /** Wraps an angle (radians) into [-PI, PI] so a yaw delta across the +/-PI seam stays small. */
+    private static float wrapRadians(float angle) {
+        float twoPi = (float) (Math.PI * 2.0);
+        angle %= twoPi;
+        if (angle >= (float) Math.PI) {
+            angle -= twoPi;
+        } else if (angle < (float) -Math.PI) {
+            angle += twoPi;
+        }
+        return angle;
     }
 
     @Override

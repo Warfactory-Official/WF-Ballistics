@@ -47,6 +47,8 @@ public final class WFNetwork {
                 ExplosionBlockFXPacket::encode, ExplosionBlockFXPacket::decode, ExplosionBlockFXPacket::handle);
         clientbound(AuxParticlePacket.class,
                 AuxParticlePacket::encode, AuxParticlePacket::decode, AuxParticlePacket::handle);
+        serverbound(SpawnMissilePacket.class,
+                SpawnMissilePacket::encode, SpawnMissilePacket::decode, SpawnMissilePacket::handle);
     }
 
     private static <MSG> void clientbound(Class<MSG> type,
@@ -54,6 +56,18 @@ public final class WFNetwork {
                                           java.util.function.Function<net.minecraft.network.FriendlyByteBuf, MSG> decoder,
                                           java.util.function.BiConsumer<MSG, java.util.function.Supplier<net.minecraftforge.network.NetworkEvent.Context>> handler) {
         CHANNEL.registerMessage(packetId++, type, encoder, decoder, handler, Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+    }
+
+    private static <MSG> void serverbound(Class<MSG> type,
+                                          java.util.function.BiConsumer<MSG, net.minecraft.network.FriendlyByteBuf> encoder,
+                                          java.util.function.Function<net.minecraft.network.FriendlyByteBuf, MSG> decoder,
+                                          java.util.function.BiConsumer<MSG, java.util.function.Supplier<net.minecraftforge.network.NetworkEvent.Context>> handler) {
+        CHANNEL.registerMessage(packetId++, type, encoder, decoder, handler, Optional.of(NetworkDirection.PLAY_TO_SERVER));
+    }
+
+    /** Sends a packet from the client to the server over the mod channel. */
+    public static void sendToServer(Object msg) {
+        CHANNEL.sendToServer(msg);
     }
 
     /**

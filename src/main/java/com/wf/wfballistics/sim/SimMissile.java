@@ -30,7 +30,13 @@ public final class SimMissile {
     public double maxTurnRate = 0.0;
     public String modelId = "";
     public String detonationId = "standard";
+    public String ascentStageId = null;
+    public String cruiseStageId = null;
+    public String attackStageId = null;
     public int fragmentCount = MissileEntity.DEFAULT_FRAGMENT_COUNT;
+    public int splitDepth = 0;
+    public long swarmId = 0L;
+    public UUID controlId = null;
 
     // Interception.
     public Role role = Role.NORMAL;
@@ -51,7 +57,13 @@ public final class SimMissile {
         sm.maxTurnRate = m.getMaxTurnRate();
         sm.modelId = m.getModelId();
         sm.detonationId = m.getDetonationId();
+        sm.ascentStageId = m.getAscentStageId();
+        sm.cruiseStageId = m.getCruiseStageId();
+        sm.attackStageId = m.getAttackStageId();
         sm.fragmentCount = m.getFragmentCount();
+        sm.splitDepth = m.getSplitDepth();
+        sm.swarmId = m.getSwarmId();
+        sm.controlId = m.getControlId();
         sm.role = Role.NORMAL;
         return sm;
     }
@@ -69,8 +81,15 @@ public final class SimMissile {
                 .cruiseSpeed(this.speed)
                 .model(this.modelId)
                 .detonation(this.detonationId)
+                .ascentStage(this.ascentStageId)
+                .cruiseStage(this.cruiseStageId)
+                .attackStage(this.attackStageId)
                 .fragmentCount(this.fragmentCount)
-                .startInCruise();
+                .splitDepth(this.splitDepth)
+                .swarmId(this.swarmId)
+                .controlId(this.controlId)
+                .startInCruise()
+                .startArmed(); // a simulated missile has already flown clear of its launcher
 
         MissileEntity m = b.build();
         m.setUUID(this.id);
@@ -93,7 +112,21 @@ public final class SimMissile {
         tag.putDouble("MaxTurnRate", maxTurnRate);
         tag.putString("ModelId", modelId);
         tag.putString("DetonationId", detonationId);
+        if (ascentStageId != null) {
+            tag.putString("AscentStage", ascentStageId);
+        }
+        if (cruiseStageId != null) {
+            tag.putString("CruiseStage", cruiseStageId);
+        }
+        if (attackStageId != null) {
+            tag.putString("AttackStage", attackStageId);
+        }
         tag.putInt("FragmentCount", fragmentCount);
+        tag.putInt("SplitDepth", splitDepth);
+        tag.putLong("SwarmId", swarmId);
+        if (controlId != null) {
+            tag.putUUID("ControlId", controlId);
+        }
         tag.putString("Role", role.name());
         if (interceptTarget != null) {
             tag.putUUID("InterceptTarget", interceptTarget);
@@ -121,8 +154,24 @@ public final class SimMissile {
         if (tag.contains("DetonationId")) {
             sm.detonationId = tag.getString("DetonationId");
         }
+        if (tag.contains("AscentStage")) {
+            sm.ascentStageId = tag.getString("AscentStage");
+        }
+        if (tag.contains("CruiseStage")) {
+            sm.cruiseStageId = tag.getString("CruiseStage");
+        }
+        if (tag.contains("AttackStage")) {
+            sm.attackStageId = tag.getString("AttackStage");
+        }
         if (tag.contains("FragmentCount")) {
             sm.fragmentCount = tag.getInt("FragmentCount");
+        }
+        if (tag.contains("SplitDepth")) {
+            sm.splitDepth = tag.getInt("SplitDepth");
+        }
+        sm.swarmId = tag.getLong("SwarmId");
+        if (tag.hasUUID("ControlId")) {
+            sm.controlId = tag.getUUID("ControlId");
         }
         try {
             sm.role = Role.valueOf(tag.getString("Role"));

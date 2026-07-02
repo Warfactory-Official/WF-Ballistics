@@ -65,4 +65,28 @@ public final class MissileSimConfig {
     public static final int INTERCEPT_LEAD_TICKS = 100;
     /** Distance back from the predicted collision point at which each missile is spawned. */
     public static final double INTERCEPT_SPAWN_DISTANCE = 64.0;
+
+    // --- Continuous collision (anti-tunneling) ---
+    /**
+     * Max length (blocks) of one collision sub-segment. The nose-extended sweep length is split into
+     * {@code ceil(sweepLen / this)} substeps, clamped by {@link #COLLISION_MAX_SUBSTEPS}. The block DDA
+     * ({@link net.minecraft.world.level.Level#clip}) is continuous regardless, so for {@code CENTER_RAY}
+     * this only bounds per-call setup; for {@code OBB_SWEEP} it is the box-sampling pitch.
+     */
+    public static final double COLLISION_MAX_SUBSTEP_DIST = 4.0;
+    /** Hard clamp on substeps/tick so a very fast or stuck missile cannot blow the ray budget. */
+    public static final int COLLISION_MAX_SUBSTEPS = 8;
+
+    /**
+     * Fidelity of the swept missile-vs-block collision.
+     */
+    public enum CollisionFidelity {
+        /** Nose-extended DDA center ray (cheapest, default). Fully stops head-on tunneling. */
+        CENTER_RAY,
+        /** Also samples the oriented body box per substep, catching oblique/edge clips a thin ray misses. */
+        OBB_SWEEP
+    }
+
+    /** Active collision fidelity. Left on the cheap ray by default; {@code OBB_SWEEP} is opt-in. */
+    public static CollisionFidelity COLLISION_FIDELITY = CollisionFidelity.CENTER_RAY;
 }

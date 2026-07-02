@@ -49,6 +49,10 @@ public class WFBallisticsClient {
         LOGGER.info("HELLO FROM ONCLIENTSETUP");
 
         event.enqueueWork(() -> {
+            net.minecraft.client.gui.screens.MenuScreens.register(
+                    com.wf.wfballistics.menu.ModMenus.MISSILE_DISPENSER.get(),
+                    com.wf.wfballistics.client.gui.MissileDispenserScreen::new);
+
             EntityVisualizer<MissileEntity> visualizer = new EntityVisualizer<MissileEntity>() {
                 @Override
                 public EntityVisual<? super MissileEntity> createVisual(VisualizationContext ctx, MissileEntity entity, float partialTick) {

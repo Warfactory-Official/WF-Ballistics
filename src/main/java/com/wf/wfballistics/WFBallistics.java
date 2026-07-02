@@ -47,6 +47,9 @@ public class WFBallistics
         ModEntities.register(modEventBus);
         com.wf.wfballistics.block.ModBlocks.register(modEventBus);
         com.wf.wfballistics.block.ModBlockEntities.register(modEventBus);
+        com.wf.wfballistics.item.ModItems.register(modEventBus);
+        com.wf.wfballistics.WFCreativeTabs.register(modEventBus);
+        com.wf.wfballistics.menu.ModMenus.register(modEventBus);
         com.wf.wfballistics.client.particle.WFParticles.register(modEventBus);
         com.wf.wfballistics.fluid.WFFluids.register(modEventBus);
         com.wf.wfballistics.WFSounds.register(modEventBus);

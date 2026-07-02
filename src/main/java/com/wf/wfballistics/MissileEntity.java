@@ -2,12 +2,19 @@ package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
-import com.wf.wfballistics.entity.EntityNukeExplosionMK5;
 import com.wf.wfballistics.entity.OBBEntity;
-import com.wf.wfballistics.fx.ExplosionCreator;
+import com.wf.wfballistics.flight.ArrivalEstimator;
+import com.wf.wfballistics.flight.FlightContext;
+import com.wf.wfballistics.flight.FlightProfile;
+import com.wf.wfballistics.flight.FlightStageRegistry;
+import com.wf.wfballistics.flight.LoiterStage;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.sim.SimMissileManager;
+import com.wf.wfballistics.swarm.SwarmManager;
 import com.wf.wfballistics.util.OBB;
+import com.wf.wfballistics.util.SweptCollision;
+import com.wf.wfballistics.warhead.RecursiveFrag;
+import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -19,7 +26,6 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.projectile.Projectile;
-import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
@@ -30,43 +36,13 @@ import org.joml.Vector3d;
 import org.slf4j.Logger;
 
 import java.util.List;
+import java.util.UUID;
 
 public class MissileEntity extends Projectile implements OBBEntity {
 
-    public static final int STANDARD_BLAST_RADIUS = 24;
-
-    public static final Detonation STANDARD = (missile, pos) -> {
-        Level level = missile.level();
-        if (level.isClientSide) {
-            return;
-        }
-
-        level.addFreshEntity(EntityNukeExplosionMK5.statFac(level, STANDARD_BLAST_RADIUS, pos));
-        ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
-    };
-
-    public static final Detonation MININUKE = (missile, pos) ->
-            com.wf.wfballistics.aef.nuke.MiniNuke.detonate(missile.level(), pos,
-                    com.wf.wfballistics.aef.nuke.MiniNuke.medium());
-
     public static final int DEFAULT_FRAGMENT_COUNT = 24;
-    public static final Detonation FRAGMENTATION = (missile, pos) -> {
-        Level level = missile.level();
-        if (level.isClientSide) {
-            return;
-        }
-        com.wf.wfballistics.util.FragmentationUtil.cone(level, pos, new Vec3(0.0, -1.0, 0.0),
-                Math.toRadians(60.0), missile.getFragmentCount(), 1.2, 0.4,
-                "standard", com.wf.wfballistics.entity.BombletEntity.STANDARD,
-                com.wf.wfballistics.entity.BombletEntity.DEFAULT_FUSE, null);
-        ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
-    };
-
-    public static final Detonation INERT = (missile, pos) -> {
-    };
 
     public static final double CRUISE_SPEED = 1.0;
-    private static final java.util.Map<String, Detonation> WARHEADS = new java.util.HashMap<>();
     //Why is this nophono here
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final EntityDataAccessor<BlockPos> TARGET_POS =
@@ -75,12 +51,22 @@ public class MissileEntity extends Projectile implements OBBEntity {
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.STRING);
     private static final double TURN_AGILITY = 1.0; // radians * (model units) per tick
 
-    static {
-        WARHEADS.put("standard", STANDARD);
-        WARHEADS.put("mininuke", MININUKE);
-        WARHEADS.put("fragmentation", FRAGMENTATION);
-        WARHEADS.put("inert", INERT);
-    }
+    // Predictive friendly deconfliction ("don't ram your own"): a missile looks AVOID_HORIZON ticks ahead
+    // for friendly missiles (same swarm or launcher) whose closest approach would fall within AVOID_MIN_SEP
+    // blocks, and if so applies a small course offset (perpendicular to the closing path, complementary
+    // between the pair, bounded by AVOID_STRENGTH blocks/tick) so they slip past instead of colliding.
+    // AVOID_RADIUS bounds the neighbour search. The offset only exists while a collision is predicted.
+    private static final double AVOID_RADIUS = 24.0;
+    private static final int AVOID_HORIZON = 20;
+    private static final double AVOID_MIN_SEP = 4.0;
+    private static final double AVOID_STRENGTH = 1.5;
+
+    // Safety/arming: the warhead is inert until the missile has flown this far from its launch point, so it
+    // can't fuze, impact-detonate, or be blown up by damage while still on/near the launcher.
+    public static final double ARMING_DISTANCE = 6.0;
+    private static final double ARMING_DISTANCE_SQ = ARMING_DISTANCE * ARMING_DISTANCE;
+    // Failsafe: arm anyway after this many ticks so a missile that somehow can't travel never stays a live dud.
+    private static final int ARMING_FAILSAFE_TICKS = 100;
 
     // Oriented bounding box that wraps the (elongated) missile model, giving projectiles an accurate,
     // rotation-aware hitbox instead of the coarse vanilla AABB. Kept live-updated in refreshObb().
@@ -93,9 +79,22 @@ public class MissileEntity extends Projectile implements OBBEntity {
     // Forces the chunks the missile needs while flying (own chunk ticking + non-ticking look-ahead fan).
     private final MissileChunkLoader chunkLoader = new MissileChunkLoader();
     private Phase phase = Phase.ASCEND;
+    // How this missile flies: one swappable stage per phase (ascent curve, cruise/loiter, attack run),
+    // each resolved from FlightStageRegistry by id and composed into the runtime profile. Selecting stages
+    // independently is what lets a missile become e.g. a loitering drone; the choice survives save/load.
+    // Declared before the profile so the field initialisers run in order.
+    private String ascentStageId = FlightStageRegistry.defaultId(Phase.ASCEND);
+    private String cruiseStageId = FlightStageRegistry.defaultId(Phase.CRUISE);
+    private String attackStageId = FlightStageRegistry.defaultId(Phase.ATTACK);
+    private FlightProfile flightProfile = FlightProfile.fromIds(this.ascentStageId, this.cruiseStageId, this.attackStageId);
+    // Loitering-munition timer: ticks spent orbiting on-station (see LoiterStage). Persisted.
+    private int loiterTicks = 0;
     private CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
     private double cruiseAltitude = 200.0;
     private double terrainClearance = 24.0;
+    // Smoothed terrain-follow altitude the missile actually flies toward (eased from the raw scan);
+    // NaN until the first cruise tick, then re-seeded from the current scan.
+    private double cruiseTargetY = Double.NaN;
     // Horizontal cruise speed (blocks/tick). The off-world simulation advances at this same rate so
     // simulated travel time matches an in-world flight.
     private double cruiseSpeed = CRUISE_SPEED;
@@ -105,7 +104,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
     private String detonationId = "standard";
     // Number of bomblets the FRAGMENTATION warhead scatters; per-missile, set via the Builder.
     private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
-    private Detonation detonation = STANDARD;
+    private WarheadRegistry.Detonation detonation = WarheadRegistry.STANDARD;
     // Max change in velocity direction per tick, in radians. Default scales from the model's length
     // (longer airframe = less nimble); overridable via the Builder.
     private double maxTurnRate = TURN_AGILITY / MissileModels.length(MissileModels.DEFAULT);
@@ -117,6 +116,19 @@ public class MissileEntity extends Projectile implements OBBEntity {
     // Guards against re-entrant detonation: the warhead's own blast can hurt() this still-present missile,
     // which would otherwise re-enter detonate() and recurse until the stack overflows.
     private boolean detonated = false;
+    // Arming state (see ARMING_DISTANCE): the launch point, captured on the first server tick, and whether
+    // the warhead has gone live. While unarmed all detonation triggers are suppressed.
+    private Vec3 launchPos = null;
+    private boolean armed = false;
+    // Recursive-fragmentation payload: how many more times this missile splits into child missiles before
+    // the leaf generation does a real blast (see RecursiveFrag). 0 = never splits (a normal missile).
+    private int splitDepth = 0;
+    // Groups a fragmentation family so its members never collide with one another (see canHitEntity).
+    // 0 = no family; the missile collides with every other missile normally.
+    private long swarmId = 0L;
+    // Launcher/control identity (see MissileDispenserBlockEntity): missiles sharing a non-null control id
+    // (fired from the same launcher, or one recursive family) are friendly and never collide with each other.
+    private UUID controlId = null;
 
     public MissileEntity(EntityType<? extends Projectile> type, Level level) {
         super(type, level);
@@ -125,14 +137,6 @@ public class MissileEntity extends Projectile implements OBBEntity {
         this.noPhysics = true;
         this.setNoGravity(true);
         //Technically you can try doing with gravity... if you hate yourself o algo
-    }
-
-    public static void registerWarhead(String id, Detonation detonation) {
-        WARHEADS.put(id, detonation);
-    }
-
-    private static Detonation warhead(String id) {
-        return WARHEADS.getOrDefault(id, STANDARD);
     }
 
     public static Builder builder(EntityType<? extends Projectile> type, Level level) {
@@ -178,6 +182,10 @@ public class MissileEntity extends Projectile implements OBBEntity {
 
         ServerLevel serverLevel = (ServerLevel) this.level();
 
+        if (this.launchPos == null) {
+            this.launchPos = this.position();
+        }
+
         Vec3 currentPos = this.position();
         Vec3 targetPos = this.getTarget();
 
@@ -191,71 +199,31 @@ public class MissileEntity extends Projectile implements OBBEntity {
                 || horizontalDist < MissileSimConfig.FAN_TERMINAL_RANGE;
         this.chunkLoader.update(this, serverLevel, currentPos, this.getDeltaMovement(), loadFan);
 
-        double maxCruiseSpeed = this.cruiseSpeed;
-        double ascentSpeed = 1.25;        // vertical boost speed during launch
-        double terrainScanRadius = 24.0;  // how far around the missile we look for terrain
-        double lookAhead = 32.0;          // how far ahead (toward target) to scan while cruising
-        double dampeningRange = 50.0;     // smooths cruise altitude corrections
-        double brakingRange = 30.0;       // horizontal distance to target before the terminal dive
-        float terminalFallVelocity = -8;  // steep attack-dive speed (larger than cruise due to "gravity")
-
-
-        double safeAltitude;
-        if (this.cruiseMode == CruiseMode.HIGH_ALTITUDE) {
-            // Fixed high-altitude
-            safeAltitude = this.cruiseAltitude;
-        } else {
-            // Terrain-following
-            double scanCenterX = currentPos.x;
-            double scanCenterZ = currentPos.z;
-            if (this.phase != Phase.ASCEND && horizontalDist > 1.0E-3) {
-                scanCenterX += (dx / horizontalDist) * lookAhead;
-                scanCenterZ += (dz / horizontalDist) * lookAhead;
-            }
-            safeAltitude = scanTerrainTop(scanCenterX, scanCenterZ, terrainScanRadius) + this.terrainClearance;
-        }
-
-        //State change rules
-        switch (this.phase) {
-            case ASCEND -> {
-                if (this.getY() >= safeAltitude) {
-                    this.phase = Phase.CRUISE;
-                }
-            }
-            case CRUISE -> {
-                if (horizontalDist < brakingRange) {
-                    this.phase = Phase.ATTACK;
-                }
-            }
-            case ATTACK -> {
-                //no exit, the flight ends on impact.
-            }
-        }
-
-        this.cruiseTicks = (this.phase == Phase.CRUISE) ? this.cruiseTicks + 1 : 0;
-
+        // Guidance: delegate "how it flies" to the active flight stage for this phase. Swapping a stage or the
+        // whole profile (a drone ascent curve, a different attack run) changes flight without touching this
+        // method — the stages live in the flight package and are resolved from FlightProfileRegistry.
         double nx = 0.0;
         double nz = 0.0;
         if (horizontalDist > 1.0E-3) {
             nx = dx / horizontalDist;
             nz = dz / horizontalDist;
         }
+        double safeAltitude = this.computeSafeAltitude(currentPos, dx, dz, horizontalDist);
+        FlightContext ctx = new FlightContext(currentPos, targetPos, horizontalDist, nx, nz, safeAltitude);
 
-        //State behavior
-        Vec3 velocity = Vec3.ZERO;
-        switch (this.phase) {
-            case ASCEND -> velocity = new Vec3(0.0, ascentSpeed, 0.0);
-            case CRUISE -> {
-                double desiredVy = (safeAltitude - this.getY()) / dampeningRange;
-                double vy = Mth.clamp(desiredVy, -maxCruiseSpeed, maxCruiseSpeed);
-                velocity = new Vec3(nx * maxCruiseSpeed, vy, nz * maxCruiseSpeed);
-            }
-            case ATTACK -> {
-                double horizontalSpeed = maxCruiseSpeed * (horizontalDist / brakingRange);
-                double currentVy = this.getDeltaMovement().y;
-                double vy = Mth.lerp(0.01f, (float) currentVy, terminalFallVelocity);
-                velocity = new Vec3(nx * horizontalSpeed, vy, nz * horizontalSpeed);
-            }
+        // Advance the phase (each stage decides when it is done), then fly the resulting phase's stage.
+        Phase next = this.flightProfile.stage(this.phase).next(this, ctx);
+        if (next != null) {
+            this.phase = next;
+        }
+        this.cruiseTicks = (this.phase == Phase.CRUISE) ? this.cruiseTicks + 1 : 0;
+
+        Vec3 velocity = this.flightProfile.stage(this.phase).guide(this, ctx);
+
+        // Coordinate with nearby friendly missiles: if their paths would cross, veer just enough to slip
+        // past instead of ramming. Folded into the desired velocity so the turn-rate limit smooths it in.
+        if (this.controlId != null || this.swarmId != 0L) {
+            velocity = velocity.add(this.avoidFriendlies());
         }
 
         // Limit how far the heading can swing this tick so the missile arcs instead of snapping direction.
@@ -278,18 +246,61 @@ public class MissileEntity extends Projectile implements OBBEntity {
             return;
         }
 
-        // Airburst fuze
-        if (this.explosionOffset > 0.0f && this.phase == Phase.ATTACK
-                && this.getY() - targetPos.y <= this.explosionOffset) {
-            this.detonate(this.position());
-            return;
-        }
+        // Detonation triggers are inert until the missile has armed clear of the launcher.
+        if (this.isArmed()) {
+            // Airburst fuze
+            if (this.explosionOffset > 0.0f && this.phase == Phase.ATTACK
+                    && this.getY() - targetPos.y <= this.explosionOffset) {
+                this.detonate(this.position());
+                return;
+            }
 
-        HitResult hitResult = ProjectileUtil.getHitResultOnMoveVector(this, this::canHitEntity);
+            // Swept collision over the segment actually traversed this tick (currentPos is the pre-move
+            // position), extended forward by the body length. Replaces the vanilla post-move look-ahead
+            // raycast, which let fast missiles tunnel through walls.
+            HitResult hitResult = this.sweepForImpact(currentPos, this.getDeltaMovement());
 
-        if (hitResult.getType() != HitResult.Type.MISS) {
-            this.onMissileImpact(hitResult);
+            if (hitResult.getType() != HitResult.Type.MISS) {
+                this.onMissileImpact(hitResult);
+            }
         }
+    }
+
+    /**
+     * Whether the warhead is live. Latches true once the missile has flown {@link #ARMING_DISTANCE} from its
+     * launch point (or after {@link #ARMING_FAILSAFE_TICKS} as a stuck-missile failsafe), preventing a
+     * detonation on or right next to the launcher.
+     */
+    private boolean isArmed() {
+        if (this.armed) {
+            return true;
+        }
+        boolean clearedLauncher = this.launchPos != null
+                && this.position().distanceToSqr(this.launchPos) >= ARMING_DISTANCE_SQ;
+        if (clearedLauncher || this.tickCount >= ARMING_FAILSAFE_TICKS) {
+            this.armed = true;
+        }
+        return this.armed;
+    }
+
+    /**
+     * The altitude the missile should hold this tick: the fixed cruise height in HIGH_ALTITUDE mode, or the
+     * scanned terrain top (looked ahead toward the target once past ascent) plus the terrain clearance.
+     * Shared by the flight stages via the {@link FlightContext}.
+     */
+    private double computeSafeAltitude(Vec3 pos, double dx, double dz, double horizontalDist) {
+        if (this.cruiseMode == CruiseMode.HIGH_ALTITUDE) {
+            return this.cruiseAltitude;
+        }
+        double terrainScanRadius = 24.0; // how far around the missile we look for terrain
+        double lookAhead = 32.0;         // how far ahead (toward target) to scan while cruising
+        double scanCenterX = pos.x;
+        double scanCenterZ = pos.z;
+        if (this.phase != Phase.ASCEND && horizontalDist > 1.0E-3) {
+            scanCenterX += (dx / horizontalDist) * lookAhead;
+            scanCenterZ += (dz / horizontalDist) * lookAhead;
+        }
+        return scanTerrainTop(scanCenterX, scanCenterZ, terrainScanRadius) + this.terrainClearance;
     }
 
     /**
@@ -314,7 +325,53 @@ public class MissileEntity extends Projectile implements OBBEntity {
     }
 
     protected boolean canHitEntity(Entity target) {
-        return !target.isSpectator() && target.isAlive() && target.isPickable();
+        if (target == this || target.isSpectator() || !target.isAlive()) {
+            return false;
+        }
+        // Missiles aren't pickable (Entity#isPickable is false), so the vanilla check below would drop them
+        // and they'd pass through one another. Allow missile-vs-missile explicitly so they collide/intercept
+        // midair; everything else keeps the pickable requirement (this also keeps arrows from killing them).
+        if (target instanceof MissileEntity other) {
+            // Friendlies never collide: same fragmentation family (swarm) or same launcher (control id).
+            // This stops a salvo self-detonating while still letting rival launchers' missiles intercept.
+            return !this.isFriendly(other);
+        }
+        return target.isPickable();
+    }
+
+    /** @return true if {@code other} is on the same side — same swarm (frag family) or launcher (control id). */
+    private boolean isFriendly(MissileEntity other) {
+        if (SwarmManager.sameSwarm(this, other)) {
+            return true;
+        }
+        return this.controlId != null && this.controlId.equals(other.controlId);
+    }
+
+    /**
+     * A non-zero pick radius so {@code MixinProjectileUtil} inflates the target OBB when another missile
+     * sweeps through it — makes fast crossing intercepts land reliably instead of needing a pixel-perfect
+     * centerline crossing. Also lets look-at / raytrace targeting see the missile.
+     */
+    @Override
+    public float getPickRadius() {
+        return 0.5f;
+    }
+
+    /**
+     * Swept, substepped block/entity collision over the traversed segment, extended forward by the body
+     * length so the nose (not the base origin) triggers the hit. Non-tunneling at any speed. Fidelity and
+     * substep budget are tuned via {@link MissileSimConfig}. See {@link SweptCollision}.
+     */
+    private HitResult sweepForImpact(Vec3 startPos, Vec3 delta) {
+        return SweptCollision.sweep(this, this.level(), startPos, delta, this.noseForward(),
+                this::canHitEntity,
+                MissileSimConfig.COLLISION_MAX_SUBSTEP_DIST, MissileSimConfig.COLLISION_MAX_SUBSTEPS);
+    }
+
+    /** Distance from the entity origin (mesh base) to the model's front face along the heading. */
+    private double noseForward() {
+        String id = this.getModelId();
+        return MissileModels.center(id).y + MissileModels.dimensions(id).y * 0.5;
     }
 
     @Override
@@ -444,12 +501,140 @@ public class MissileEntity extends Projectile implements OBBEntity {
         return this.cruiseSpeed;
     }
 
+    /** Cruise-altitude memory used by the cruise stage's altitude smoothing (NaN until the first cruise tick). */
+    public double getCruiseTargetY() {
+        return this.cruiseTargetY;
+    }
+
+    public void setCruiseTargetY(double cruiseTargetY) {
+        this.cruiseTargetY = cruiseTargetY;
+    }
+
+    public String getAscentStageId() {
+        return this.ascentStageId;
+    }
+
+    public String getCruiseStageId() {
+        return this.cruiseStageId;
+    }
+
+    public String getAttackStageId() {
+        return this.attackStageId;
+    }
+
+    public int getLoiterTicks() {
+        return this.loiterTicks;
+    }
+
+    public void setLoiterTicks(int loiterTicks) {
+        this.loiterTicks = loiterTicks;
+    }
+
+    /** Recompose the runtime flight profile from the current stage ids (call after any id changes). */
+    private void rebuildFlightProfile() {
+        this.flightProfile = FlightProfile.fromIds(this.ascentStageId, this.cruiseStageId, this.attackStageId);
+    }
+
+    /**
+     * Rough remaining time-to-impact (ticks) from the current position, target and speed, accounting for the
+     * climb, transit, terminal descent and any remaining loiter time. See {@link ArrivalEstimator}.
+     */
+    public int estimateArrivalTicks() {
+        double cruiseAltitudeY = (this.cruiseMode == CruiseMode.HIGH_ALTITUDE)
+                ? this.cruiseAltitude
+                : this.getY() + this.terrainClearance;
+        int loiterRemaining = LoiterStage.INSTANCE.id().equals(this.cruiseStageId)
+                ? Math.max(0, LoiterStage.LOITER_TICKS - this.loiterTicks)
+                : 0;
+        return ArrivalEstimator.estimateTicks(this.position(), this.getTarget(), this.cruiseSpeed,
+                cruiseAltitudeY, loiterRemaining);
+    }
+
     public String getDetonationId() {
         return this.detonationId;
     }
 
     public int getFragmentCount() {
         return this.fragmentCount;
+    }
+
+    public int getSplitDepth() {
+        return this.splitDepth;
+    }
+
+    public long getSwarmId() {
+        return this.swarmId;
+    }
+
+    public void setSwarmId(long swarmId) {
+        this.swarmId = swarmId;
+    }
+
+    public UUID getControlId() {
+        return this.controlId;
+    }
+
+    public void setControlId(UUID controlId) {
+        this.controlId = controlId;
+    }
+
+    /**
+     * Predictive deconfliction against nearby friendly missiles (same swarm or launcher). For each one whose
+     * closest approach over the next {@link #AVOID_HORIZON} ticks would fall within {@link #AVOID_MIN_SEP}
+     * blocks, adds a small offset away from where it will be — both missiles compute it, so the pair veers
+     * apart (a "slight course offset": climb or a lateral shift), bounded by {@link #AVOID_STRENGTH}. Returns
+     * {@link Vec3#ZERO} when nothing is actually on a collision course, so friendlies fly their normal path
+     * until the moment they would ram.
+     */
+    private Vec3 avoidFriendlies() {
+        AABB box = this.getBoundingBox().inflate(AVOID_RADIUS);
+        List<MissileEntity> others = this.level().getEntitiesOfClass(MissileEntity.class, box,
+                m -> m != this && m.isAlive() && this.isFriendly(m));
+        if (others.isEmpty()) {
+            return Vec3.ZERO;
+        }
+        Vec3 pos = this.position();
+        Vec3 vel = this.getDeltaMovement();
+        double ox = 0.0, oy = 0.0, oz = 0.0;
+        for (MissileEntity other : others) {
+            double rpx = other.getX() - pos.x, rpy = other.getY() - pos.y, rpz = other.getZ() - pos.z;
+            Vec3 ov = other.getDeltaMovement();
+            double rvx = ov.x - vel.x, rvy = ov.y - vel.y, rvz = ov.z - vel.z;
+            double rv2 = rvx * rvx + rvy * rvy + rvz * rvz;
+            // Time of closest approach (ticks); skip if already separating or too far in the future.
+            double t = rv2 < 1.0e-6 ? 0.0 : -(rpx * rvx + rpy * rvy + rpz * rvz) / rv2;
+            if (t < 0.0 || t > AVOID_HORIZON) {
+                continue;
+            }
+            double sx = rpx + rvx * t, sy = rpy + rvy * t, sz = rpz + rvz * t;
+            double miss = Math.sqrt(sx * sx + sy * sy + sz * sz);
+            if (miss > AVOID_MIN_SEP) {
+                continue; // they already clear each other — no course change
+            }
+            double urgency = (AVOID_MIN_SEP - miss) / AVOID_MIN_SEP; // 0..1, larger the tighter the miss
+            if (miss > 1.0e-3) {
+                // Veer away from the predicted closest-approach point (uses whichever axis separates them:
+                // a climb if stacked, a sideways shift if abreast).
+                double inv = urgency / miss;
+                ox -= sx * inv;
+                oy -= sy * inv;
+                oz -= sz * inv;
+            } else {
+                // Dead-on (no defined "away"): split sideways, deterministically by id — a shift in x/z.
+                double clen = Math.sqrt(rvx * rvx + rvz * rvz);
+                double perpx = clen > 1.0e-4 ? -rvz / clen : 1.0;
+                double perpz = clen > 1.0e-4 ? rvx / clen : 0.0;
+                double dir = this.getId() < other.getId() ? 1.0 : -1.0;
+                ox += perpx * dir * urgency;
+                oz += perpz * dir * urgency;
+            }
+        }
+        double len = Math.sqrt(ox * ox + oy * oy + oz * oz);
+        if (len < 1.0e-6) {
+            return Vec3.ZERO;
+        }
+        double scale = Math.min(AVOID_STRENGTH, len) / len;
+        return new Vec3(ox * scale, oy * scale, oz * scale);
     }
 
     @Override
@@ -479,8 +664,23 @@ public class MissileEntity extends Projectile implements OBBEntity {
         tag.putString("ModelId", this.getModelId());
         tag.putInt("CruiseTicks", this.cruiseTicks);
         tag.putString("DetonationId", this.detonationId);
+        tag.putString("AscentStage", this.ascentStageId);
+        tag.putString("CruiseStage", this.cruiseStageId);
+        tag.putString("AttackStage", this.attackStageId);
+        tag.putInt("LoiterTicks", this.loiterTicks);
         tag.putInt("FragmentCount", this.fragmentCount);
+        tag.putInt("SplitDepth", this.splitDepth);
+        tag.putLong("SwarmId", this.swarmId);
+        if (this.controlId != null) {
+            tag.putUUID("ControlId", this.controlId);
+        }
         tag.putFloat("Health", this.health);
+        tag.putBoolean("Armed", this.armed);
+        if (this.launchPos != null) {
+            tag.putDouble("LaunchX", this.launchPos.x);
+            tag.putDouble("LaunchY", this.launchPos.y);
+            tag.putDouble("LaunchZ", this.launchPos.z);
+        }
     }
 
     @Override
@@ -538,11 +738,36 @@ public class MissileEntity extends Projectile implements OBBEntity {
 
         if (tag.contains("DetonationId")) {
             this.detonationId = tag.getString("DetonationId");
-            this.detonation = warhead(this.detonationId);
+            this.detonation = WarheadRegistry.get(this.detonationId);
         }
+
+        if (tag.contains("AscentStage")) {
+            this.ascentStageId = tag.getString("AscentStage");
+        }
+        if (tag.contains("CruiseStage")) {
+            this.cruiseStageId = tag.getString("CruiseStage");
+        }
+        if (tag.contains("AttackStage")) {
+            this.attackStageId = tag.getString("AttackStage");
+        }
+        this.rebuildFlightProfile();
+        this.loiterTicks = tag.getInt("LoiterTicks");
 
         if (tag.contains("FragmentCount")) {
             this.fragmentCount = tag.getInt("FragmentCount");
+        }
+
+        if (tag.contains("SplitDepth")) {
+            this.splitDepth = tag.getInt("SplitDepth");
+        }
+        this.swarmId = tag.getLong("SwarmId");
+        if (tag.hasUUID("ControlId")) {
+            this.controlId = tag.getUUID("ControlId");
+        }
+
+        this.armed = tag.getBoolean("Armed");
+        if (tag.contains("LaunchX")) {
+            this.launchPos = new Vec3(tag.getDouble("LaunchX"), tag.getDouble("LaunchY"), tag.getDouble("LaunchZ"));
         }
 
         if (tag.contains("Health")) {
@@ -577,6 +802,10 @@ public class MissileEntity extends Projectile implements OBBEntity {
         if (this.level().isClientSide || this.isRemoved() || this.detonated || amount <= 0.0f) {
             return;
         }
+        // While unarmed, absorb damage without cooking off — a stray hit shouldn't blow it up on the launcher.
+        if (!this.isArmed()) {
+            return;
+        }
         this.health -= amount;
         if (this.health <= 0.0f) {
             this.detonate(this.position());
@@ -604,11 +833,6 @@ public class MissileEntity extends Projectile implements OBBEntity {
         HIGH_ALTITUDE
     }
 
-    @FunctionalInterface
-    public interface Detonation {
-        void detonate(MissileEntity missile, Vec3 pos);
-    }
-
     /**
      * Example use:
      * <pre>{@code
@@ -630,12 +854,20 @@ public class MissileEntity extends Projectile implements OBBEntity {
         private double terrainClearance = 24.0;
         private float explosionOffset = 0.0f;
         private String detonationId = "standard";
+        private String ascentStageId = null; // null = keep the phase's default stage
+        private String cruiseStageId = null;
+        private String attackStageId = null;
         private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
         private double cruiseSpeed = CRUISE_SPEED;
         private Double maxTurnRate = null; // null = keep the model-size default
         private String modelId = MissileModels.DEFAULT;
         private boolean startInCruise = false;
+        private boolean startInAttack = false;
+        private boolean startArmed = false;
         private float health = DEFAULT_HEALTH;
+        private Integer splitDepth = null; // null = default by warhead (recursive_frag gets a depth, others 0)
+        private long swarmId = 0L;
+        private UUID controlId = null;
 
         private Builder(EntityType<? extends Projectile> type, Level level) {
             this.type = type;
@@ -679,6 +911,24 @@ public class MissileEntity extends Projectile implements OBBEntity {
          */
         public Builder detonation(String detonationId) {
             this.detonationId = detonationId;
+            return this;
+        }
+
+        /** Pick the ascent-phase stage by its registered id (see {@link FlightStageRegistry}). */
+        public Builder ascentStage(String id) {
+            this.ascentStageId = id;
+            return this;
+        }
+
+        /** Pick the cruise-phase stage (e.g. {@code "cruise"} or {@code "loiter"}) by its registered id. */
+        public Builder cruiseStage(String id) {
+            this.cruiseStageId = id;
+            return this;
+        }
+
+        /** Pick the attack-phase stage (e.g. {@code "attack"} or {@code "dive"}) by its registered id. */
+        public Builder attackStage(String id) {
+            this.attackStageId = id;
             return this;
         }
 
@@ -726,6 +976,51 @@ public class MissileEntity extends Projectile implements OBBEntity {
         }
 
         /**
+         * Spawn already in the terminal ATTACK dive. Used by {@link RecursiveFrag} so split missilelets go
+         * straight into their attack run ("instant attack mode") instead of ascending/cruising first.
+         */
+        public Builder startInAttack() {
+            this.startInAttack = true;
+            return this;
+        }
+
+        /**
+         * Number of recursive split generations (see {@link RecursiveFrag}); leave unset to take the
+         * warhead default ({@link RecursiveFrag#DEFAULT_DEPTH} for {@code recursive_frag}, else none).
+         */
+        public Builder splitDepth(int splitDepth) {
+            this.splitDepth = splitDepth;
+            return this;
+        }
+
+        /**
+         * Group this missile into a fragmentation family (a non-zero id shared by all its descendants) so
+         * the family's members won't collide with each other (see {@link #canHitEntity}).
+         */
+        public Builder swarmId(long swarmId) {
+            this.swarmId = swarmId;
+            return this;
+        }
+
+        /**
+         * Stamp this missile with a launcher/control id (see {@link MissileDispenserBlockEntity}) so missiles
+         * fired from the same launcher treat each other as friendly and never collide.
+         */
+        public Builder controlId(UUID controlId) {
+            this.controlId = controlId;
+            return this;
+        }
+
+        /**
+         * Spawn with the warhead already armed (used when respawning a simulated missile that has long since
+         * flown clear of its launcher). A freshly launched missile leaves this off and arms by distance.
+         */
+        public Builder startArmed() {
+            this.startArmed = true;
+            return this;
+        }
+
+        /**
          * Set the interception damage pool (see {@link #DEFAULT_HEALTH}); higher = harder to shoot down.
          */
         public Builder health(float health) {
@@ -740,8 +1035,30 @@ public class MissileEntity extends Projectile implements OBBEntity {
             missile.terrainClearance = this.terrainClearance;
             missile.explosionOffset = this.explosionOffset;
             missile.detonationId = this.detonationId;
-            missile.detonation = warhead(this.detonationId);
+            missile.detonation = WarheadRegistry.get(this.detonationId);
+            if (this.ascentStageId != null) {
+                missile.ascentStageId = this.ascentStageId;
+            }
+            if (this.cruiseStageId != null) {
+                missile.cruiseStageId = this.cruiseStageId;
+            }
+            if (this.attackStageId != null) {
+                missile.attackStageId = this.attackStageId;
+            }
+            missile.rebuildFlightProfile();
             missile.fragmentCount = this.fragmentCount;
+            // Recursive-frag payload + defaults so a "recursive_frag" missile picked from the dispenser GUI
+            // just works: it gets a split depth and, unless the launcher set one, an airburst altitude to
+            // split at. Non-recursive missiles are unaffected (depth 0, swarm 0).
+            boolean recursive = RecursiveFrag.ID.equals(this.detonationId);
+            missile.splitDepth = (this.splitDepth != null)
+                    ? this.splitDepth
+                    : (recursive ? RecursiveFrag.DEFAULT_DEPTH : 0);
+            missile.swarmId = this.swarmId;
+            missile.controlId = this.controlId;
+            if (recursive && this.explosionOffset <= 0.0f) {
+                missile.explosionOffset = RecursiveFrag.splitAltitude(missile.splitDepth);
+            }
             missile.cruiseSpeed = this.cruiseSpeed;
             missile.health = this.health;
             missile.setModelId(this.modelId);
@@ -752,9 +1069,12 @@ public class MissileEntity extends Projectile implements OBBEntity {
             if (this.target != null) {
                 missile.setTarget(this.target);
             }
-            if (this.startInCruise) {
+            if (this.startInAttack) {
+                missile.phase = Phase.ATTACK;
+            } else if (this.startInCruise) {
                 missile.phase = Phase.CRUISE;
             }
+            missile.armed = this.startArmed;
             return missile;
         }
     }
