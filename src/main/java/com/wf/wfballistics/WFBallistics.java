@@ -45,12 +45,10 @@ public class WFBallistics
         modEventBus.addListener(this::commonSetup);
 
         ModEntities.register(modEventBus);
-        // Advanced Explosion Framework: particle types (provider binding happens client-side via
-        // WFParticleProviders). Damage, fire and packet handlers self-register through @EventBusSubscriber.
+        com.wf.wfballistics.block.ModBlocks.register(modEventBus);
+        com.wf.wfballistics.block.ModBlockEntities.register(modEventBus);
         com.wf.wfballistics.client.particle.WFParticles.register(modEventBus);
-        // Mist gases (phosgene, mustard gas, ...) as Forge fluids.
         com.wf.wfballistics.fluid.WFFluids.register(modEventBus);
-        // Sound events (nuclear detonation, ...).
         com.wf.wfballistics.WFSounds.register(modEventBus);
 
         // Register ourselves for server and other game events we are interested in
@@ -62,6 +60,8 @@ public class WFBallistics
         event.enqueueWork(() -> {
             com.wf.wfballistics.network.WFNetwork.register();
             com.wf.wfballistics.entity.mist.MistEffects.bootstrap();
+            net.minecraftforge.common.world.ForgeChunkManager.setForcedChunkLoadingCallback(
+                    MODID, com.wf.wfballistics.chunk.WFChunkValidation::validate);
         });
     }
 }

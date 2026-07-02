@@ -2,12 +2,16 @@ package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.aef.ExplosionAEF;
-import com.wf.wfballistics.entity.EntityNukeTorex;
+import com.wf.wfballistics.aef.standard.ExplosionEffectStandard;
+import com.wf.wfballistics.chunk.MissileChunkLoader;
+import com.wf.wfballistics.sim.MissileSimConfig;
+import com.wf.wfballistics.sim.SimMissileManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -23,33 +27,47 @@ public class MissileEntity extends Projectile {
     public static final Detonation STANDARD = (missile, pos) -> {
         var expl = new ExplosionAEF(missile.level(), pos.x, pos.y, pos.z, 250);
         expl.makeStandard();
+        expl.setSFX(new ExplosionEffectStandard());
         expl.explode();
-
-        EntityNukeTorex torex = ModEntities.NUKE_TOREX.get().create(missile.level());
-        if (torex != null) {
-            torex.moveTo(pos.x, pos.y, pos.z);
-            missile.level().addFreshEntity(torex);
-        }
     };
+
+    public static final Detonation INERT = (missile, pos) -> {
+    };
+
+    public static final double CRUISE_SPEED = 1.0;
+    private static final java.util.Map<String, Detonation> WARHEADS = new java.util.HashMap<>();
     //Why is this nophono here
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final EntityDataAccessor<BlockPos> TARGET_POS =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.BLOCK_POS);
-
     private static final EntityDataAccessor<String> MODEL_ID =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.STRING);
     private static final double TURN_AGILITY = 1.0; // radians * (model units) per tick
+
+    static {
+        WARHEADS.put("standard", STANDARD);
+        WARHEADS.put("inert", INERT);
+    }
+
+    // Forces the chunks the missile needs while flying (own chunk ticking + non-ticking look-ahead fan).
+    private final MissileChunkLoader chunkLoader = new MissileChunkLoader();
     private Phase phase = Phase.ASCEND;
     private CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
     private double cruiseAltitude = 200.0;
     private double terrainClearance = 24.0;
+    // Horizontal cruise speed (blocks/tick). The off-world simulation advances at this same rate so
+    // simulated travel time matches an in-world flight.
+    private double cruiseSpeed = CRUISE_SPEED;
     // Airburst fuze: while diving, detonate in the air once the missile is within this many
     // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
     private float explosionOffset = 0.0f;
+    private String detonationId = "standard";
     private Detonation detonation = STANDARD;
     // Max change in velocity direction per tick, in radians. Default scales from the model's length
     // (longer airframe = less nimble); overridable via the Builder.
     private double maxTurnRate = TURN_AGILITY / MissileModels.length(MissileModels.DEFAULT);
+    // Consecutive ticks spent in CRUISE; gates the offload-to-simulation transition.
+    private int cruiseTicks = 0;
 
     public MissileEntity(EntityType<? extends Projectile> type, Level level) {
         super(type, level);
@@ -58,6 +76,14 @@ public class MissileEntity extends Projectile {
         this.noPhysics = true;
         this.setNoGravity(true);
         //Technically you can try doing with gravity... if you hate yourself o algo
+    }
+
+    public static void registerWarhead(String id, Detonation detonation) {
+        WARHEADS.put(id, detonation);
+    }
+
+    private static Detonation warhead(String id) {
+        return WARHEADS.getOrDefault(id, STANDARD);
     }
 
     public static Builder builder(EntityType<? extends Projectile> type, Level level) {
@@ -98,6 +124,8 @@ public class MissileEntity extends Projectile {
             return;
         }
 
+        ServerLevel serverLevel = (ServerLevel) this.level();
+
         Vec3 currentPos = this.position();
         Vec3 targetPos = this.getTarget();
 
@@ -105,7 +133,13 @@ public class MissileEntity extends Projectile {
         double dz = targetPos.z - currentPos.z;
         double horizontalDist = Math.sqrt(dx * dx + dz * dz);
 
-        double maxCruiseSpeed = 1.0;
+
+        boolean loadFan = this.cruiseMode == CruiseMode.TERRAIN_FOLLOW
+                || this.phase == Phase.ATTACK
+                || horizontalDist < MissileSimConfig.FAN_TERMINAL_RANGE;
+        this.chunkLoader.update(this, serverLevel, currentPos, this.getDeltaMovement(), loadFan);
+
+        double maxCruiseSpeed = this.cruiseSpeed;
         double ascentSpeed = 1.25;        // vertical boost speed during launch
         double terrainScanRadius = 24.0;  // how far around the missile we look for terrain
         double lookAhead = 32.0;          // how far ahead (toward target) to scan while cruising
@@ -146,6 +180,8 @@ public class MissileEntity extends Projectile {
             }
         }
 
+        this.cruiseTicks = (this.phase == Phase.CRUISE) ? this.cruiseTicks + 1 : 0;
+
         double nx = 0.0;
         double nz = 0.0;
         if (horizontalDist > 1.0E-3) {
@@ -177,6 +213,15 @@ public class MissileEntity extends Projectile {
 
         this.hasImpulse = true;
         this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
+
+
+        if (this.phase == Phase.CRUISE
+                && this.cruiseTicks > MissileSimConfig.CRUISE_SIM_DELAY_TICKS
+                && horizontalDist > MissileSimConfig.DESTINATION_RANGE
+                && !SimMissileManager.nearAnyListener(serverLevel, this.position())) {
+            SimMissileManager.startSim(this);
+            return;
+        }
 
         // Airburst fuze
         if (this.explosionOffset > 0.0f && this.phase == Phase.ATTACK
@@ -252,6 +297,36 @@ public class MissileEntity extends Projectile {
         return this.explosionOffset;
     }
 
+    public double getCruiseAltitude() {
+        return this.cruiseAltitude;
+    }
+
+    public double getTerrainClearance() {
+        return this.terrainClearance;
+    }
+
+    public double getMaxTurnRate() {
+        return this.maxTurnRate;
+    }
+
+    public double getCruiseSpeed() {
+        return this.cruiseSpeed;
+    }
+
+    public String getDetonationId() {
+        return this.detonationId;
+    }
+
+    @Override
+    public void remove(RemovalReason reason) {
+        // Release forced chunks when the missile actually goes away (killed/discarded), but not on a
+        // plain chunk unload — those tickets persist so the missile resumes after a reload.
+        if (!this.level().isClientSide && reason.shouldDestroy() && this.level() instanceof ServerLevel sl) {
+            this.chunkLoader.releaseAll(this, sl);
+        }
+        super.remove(reason);
+    }
+
     @Override
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
@@ -265,7 +340,10 @@ public class MissileEntity extends Projectile {
         tag.putDouble("TerrainClearance", this.terrainClearance);
         tag.putFloat("ExplosionOffset", this.explosionOffset);
         tag.putDouble("MaxTurnRate", this.maxTurnRate);
+        tag.putDouble("CruiseSpeed", this.cruiseSpeed);
         tag.putString("ModelId", this.getModelId());
+        tag.putInt("CruiseTicks", this.cruiseTicks);
+        tag.putString("DetonationId", this.detonationId);
     }
 
     @Override
@@ -309,8 +387,21 @@ public class MissileEntity extends Projectile {
             this.maxTurnRate = tag.getDouble("MaxTurnRate");
         }
 
+        if (tag.contains("CruiseSpeed")) {
+            this.cruiseSpeed = tag.getDouble("CruiseSpeed");
+        }
+
         if (tag.contains("ModelId")) {
             this.setModelId(tag.getString("ModelId"));
+        }
+
+        if (tag.contains("CruiseTicks")) {
+            this.cruiseTicks = tag.getInt("CruiseTicks");
+        }
+
+        if (tag.contains("DetonationId")) {
+            this.detonationId = tag.getString("DetonationId");
+            this.detonation = warhead(this.detonationId);
         }
     }
 
@@ -322,6 +413,9 @@ public class MissileEntity extends Projectile {
      * Fires the configured warhead at the given position and removes the missile.
      */
     private void detonate(Vec3 pos) {
+        if (this.level() instanceof ServerLevel sl) {
+            this.chunkLoader.releaseAll(this, sl);
+        }
         this.detonation.detonate(this, pos);
         this.discard();
     }
@@ -362,9 +456,11 @@ public class MissileEntity extends Projectile {
         private double cruiseAltitude = 200.0;
         private double terrainClearance = 24.0;
         private float explosionOffset = 0.0f;
-        private Detonation detonation = STANDARD;
+        private String detonationId = "standard";
+        private double cruiseSpeed = CRUISE_SPEED;
         private Double maxTurnRate = null; // null = keep the model-size default
         private String modelId = MissileModels.DEFAULT;
+        private boolean startInCruise = false;
 
         private Builder(EntityType<? extends Projectile> type, Level level) {
             this.type = type;
@@ -402,9 +498,12 @@ public class MissileEntity extends Projectile {
             return this;
         }
 
-        // Swap the warhead behavior, defaults to {@link #STANDARD}.
-        public Builder detonation(Detonation detonation) {
-            this.detonation = detonation;
+        /**
+         * Pick the warhead by its registered id (see {@link #registerWarhead}); defaults to
+         * {@code "standard"}. Using an id (rather than a raw lambda) lets the warhead survive save/load.
+         */
+        public Builder detonation(String detonationId) {
+            this.detonationId = detonationId;
             return this;
         }
 
@@ -417,10 +516,28 @@ public class MissileEntity extends Projectile {
         }
 
         /**
+         * Set the horizontal cruise speed (blocks/tick); default {@link #CRUISE_SPEED}. The off-world
+         * simulation advances at this same rate, so travel time matches whether flown or simulated.
+         */
+        public Builder cruiseSpeed(double blocksPerTick) {
+            this.cruiseSpeed = blocksPerTick;
+            return this;
+        }
+
+        /**
          * Pick which missile model/skin to render and fly as (see {@link MissileModels}).
          */
         public Builder model(String modelId) {
             this.modelId = modelId;
+            return this;
+        }
+
+        /**
+         * Start the missile already in the CRUISE phase (used when respawning a simulated missile
+         * that had long since finished its ascent).
+         */
+        public Builder startInCruise() {
+            this.startInCruise = true;
             return this;
         }
 
@@ -430,7 +547,9 @@ public class MissileEntity extends Projectile {
             missile.cruiseAltitude = this.cruiseAltitude;
             missile.terrainClearance = this.terrainClearance;
             missile.explosionOffset = this.explosionOffset;
-            missile.detonation = this.detonation;
+            missile.detonationId = this.detonationId;
+            missile.detonation = warhead(this.detonationId);
+            missile.cruiseSpeed = this.cruiseSpeed;
             missile.setModelId(this.modelId);
             // Default the turn rate off the chosen model's length unless explicitly overridden.
             missile.maxTurnRate = (this.maxTurnRate != null)
@@ -438,6 +557,9 @@ public class MissileEntity extends Projectile {
                     : TURN_AGILITY / MissileModels.length(missile.getModelId());
             if (this.target != null) {
                 missile.setTarget(this.target);
+            }
+            if (this.startInCruise) {
+                missile.phase = Phase.CRUISE;
             }
             return missile;
         }

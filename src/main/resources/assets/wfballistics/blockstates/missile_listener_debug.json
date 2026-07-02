@@ -1,0 +1,5 @@
+{
+  "variants": {
+    "": { "model": "wfballistics:block/missile_listener_debug" }
+  }
+}
