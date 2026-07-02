@@ -5,9 +5,12 @@
   "compatibilityLevel": "JAVA_17",
   "refmap": "wfballistics.refmap.json",
   "mixins": [
+    "MixinLevel",
+    "MixinProjectileUtil"
   ],
   "client": [
-    "MixinBufferBuilder"
+    "MixinBufferBuilder",
+    "MixinEntityRenderDispatcher"
   ],
   "injectors": {
     "defaultRequire": 1

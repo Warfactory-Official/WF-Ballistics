@@ -17,9 +17,10 @@ public class ModEntities {
 
     // 2. Register your specific entity
     // Replace 'YourEntityClass::new' with your actual custom entity class constructor later
+    // Fallback size only: MissileEntity#makeBoundingBox fits the real AABB to the oriented model each tick.
     public static final RegistryObject<EntityType<MissileEntity>> STEALTH_MISSILE =
             ENTITY_TYPES.register("missile", () -> EntityType.Builder.of(MissileEntity::new, MobCategory.MISC)
-                    .sized(0.5F, 0.5F)
+                    .sized(2.0F, 2.0F)
                     .clientTrackingRange(16)
                     .build("missile")
             );

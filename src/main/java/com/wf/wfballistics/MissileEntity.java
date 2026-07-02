@@ -4,8 +4,10 @@ import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.aef.standard.ExplosionEffectStandard;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
+import com.wf.wfballistics.entity.OBBEntity;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.sim.SimMissileManager;
+import com.wf.wfballistics.util.OBB;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -19,11 +21,16 @@ import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Quaterniond;
+import org.joml.Vector3d;
 import org.slf4j.Logger;
 
-public class MissileEntity extends Projectile {
+import java.util.List;
+
+public class MissileEntity extends Projectile implements OBBEntity {
     public static final Detonation STANDARD = (missile, pos) -> {
         var expl = new ExplosionAEF(missile.level(), pos.x, pos.y, pos.z, 250);
         expl.makeStandard();
@@ -48,6 +55,11 @@ public class MissileEntity extends Projectile {
         WARHEADS.put("standard", STANDARD);
         WARHEADS.put("inert", INERT);
     }
+
+    // Oriented bounding box that wraps the (elongated) missile model, giving projectiles an accurate,
+    // rotation-aware hitbox instead of the coarse vanilla AABB. Kept live-updated in refreshObb().
+    private final OBB obb = new OBB(new Vector3d(), new Vector3d(), new Quaterniond(), OBB.Part.BODY);
+    private final List<OBB> obbList = List.of(this.obb);
 
     // Forces the chunks the missile needs while flying (own chunk ticking + non-ticking look-ahead fan).
     private final MissileChunkLoader chunkLoader = new MissileChunkLoader();
@@ -121,6 +133,9 @@ public class MissileEntity extends Projectile {
         super.tick();
 
         if (this.level().isClientSide) {
+            // Keep the AABB wrapping the oriented model each frame so culling / F3+B stay correct;
+            // the client doesn't run the flight logic below and never calls move().
+            this.setBoundingBox(this.makeBoundingBox());
             return;
         }
 
@@ -214,6 +229,9 @@ public class MissileEntity extends Projectile {
         this.hasImpulse = true;
         this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
 
+        // Position and heading just changed: re-fit the OBB and the vanilla AABB around the model.
+        this.setBoundingBox(this.makeBoundingBox());
+
 
         if (this.phase == Phase.CRUISE
                 && this.cruiseTicks > MissileSimConfig.CRUISE_SIM_DELAY_TICKS
@@ -260,6 +278,69 @@ public class MissileEntity extends Projectile {
 
     protected boolean canHitEntity(Entity target) {
         return !target.isSpectator() && target.isAlive() && target.isPickable();
+    }
+
+    @Override
+    public List<OBB> getOBBs() {
+        // Recompute on demand so the box is always current, whichever side/tick order queries it
+        // (e.g. another projectile's hit-check reaching this missile through the collision mixins).
+        this.refreshObb();
+        return this.obbList;
+    }
+
+    /**
+     * Rebuilds the body OBB (center, extents, rotation) from the current missile model and heading.
+     * The model's local +Y axis is its nose/long axis, so we map +Y onto the velocity direction, matching
+     * {@link MissileVisual}. Model units are rendered 1:1 with blocks, so mesh dimensions are used directly.
+     */
+    private void refreshObb() {
+        String modelId = this.getModelId();
+        Vec3 dims = MissileModels.dimensions(modelId);
+        Vec3 localCenter = MissileModels.center(modelId);
+
+        Vec3 move = this.getDeltaMovement();
+        double lenSq = move.lengthSqr();
+        Quaterniond rot = new Quaterniond();
+        if (lenSq > 1.0E-8) {
+            double inv = 1.0 / Math.sqrt(lenSq);
+            rot.rotationTo(0.0, 1.0, 0.0, move.x * inv, move.y * inv, move.z * inv);
+        }
+        // else: identity rotation (nose points straight up), which matches the ASCEND launch pose.
+
+        // Box center = entity position + the rotated model-center offset (meshes sit base-at-origin).
+        Vector3d worldCenter = new Vector3d(localCenter.x, localCenter.y, localCenter.z);
+        rot.transform(worldCenter);
+        worldCenter.add(this.getX(), this.getY(), this.getZ());
+
+        this.obb.setCenter(worldCenter);
+        this.obb.setExtents(new Vector3d(dims.x * 0.5, dims.y * 0.5, dims.z * 0.5));
+        this.obb.updateRotation(rot);
+    }
+
+    /**
+     * The vanilla AABB is fit tightly around the oriented model (the enclosing box of the OBB's corners),
+     * so both frustum culling and the F3+B hitbox reflect the actual missile rather than a fixed cube.
+     */
+    @Override
+    protected AABB makeBoundingBox() {
+        // Called from the Entity constructor before our fields exist; fall back until the OBB is ready.
+        if (this.obb == null) {
+            return super.makeBoundingBox();
+        }
+        this.refreshObb();
+        Vector3d ext = this.obb.extents();
+        if (ext.x < 1.0E-3 && ext.y < 1.0E-3 && ext.z < 1.0E-3) {
+            return super.makeBoundingBox();
+        }
+        Vector3d[] v = this.obb.getVertices();
+        double minX = v[0].x, minY = v[0].y, minZ = v[0].z;
+        double maxX = v[0].x, maxY = v[0].y, maxZ = v[0].z;
+        for (int i = 1; i < v.length; i++) {
+            minX = Math.min(minX, v[i].x); maxX = Math.max(maxX, v[i].x);
+            minY = Math.min(minY, v[i].y); maxY = Math.max(maxY, v[i].y);
+            minZ = Math.min(minZ, v[i].z); maxZ = Math.max(maxZ, v[i].z);
+        }
+        return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
     @Override

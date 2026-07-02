@@ -2,6 +2,7 @@ package com.wf.wfballistics;
 
 import com.wf.wfballistics.util.ObjBounds;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -24,6 +25,8 @@ public final class MissileModels {
 
     private static final Map<String, ResourceLocation> BY_ID = new LinkedHashMap<>();
     private static final Map<String, Double> LENGTHS = new ConcurrentHashMap<>();
+    private static final Map<String, Vec3> DIMENSIONS = new ConcurrentHashMap<>();
+    private static final Map<String, Vec3> CENTERS = new ConcurrentHashMap<>();
 
     static {
         reg("abm", "missile_abm");
@@ -73,6 +76,35 @@ public final class MissileModels {
                 return len > 1.0E-3 ? len : 1.0;
             } catch (Throwable t) {
                 return 1.0;
+            }
+        });
+    }
+
+    /**
+     * @return the mesh size (per-axis, model units) of the missile model, cached. Reads the model json +
+     *         obj off the jar so it works server-side. Falls back to a 1×1×1 box if the assets can't be read.
+     */
+    public static Vec3 dimensions(String id) {
+        return DIMENSIONS.computeIfAbsent(id, i -> {
+            try {
+                Vec3 d = ObjBounds.dimensionsFromModel(model(i));
+                return (d.x > 1.0E-3 || d.y > 1.0E-3 || d.z > 1.0E-3) ? d : new Vec3(1.0, 1.0, 1.0);
+            } catch (Throwable t) {
+                return new Vec3(1.0, 1.0, 1.0);
+            }
+        });
+    }
+
+    /**
+     * @return the geometric center offset (model units) of the missile model relative to its origin,
+     *         cached. Missile meshes sit base-at-origin, so this is roughly {@code (0, length/2, 0)}.
+     */
+    public static Vec3 center(String id) {
+        return CENTERS.computeIfAbsent(id, i -> {
+            try {
+                return ObjBounds.centerFromModel(model(i));
+            } catch (Throwable t) {
+                return Vec3.ZERO;
             }
         });
     }
