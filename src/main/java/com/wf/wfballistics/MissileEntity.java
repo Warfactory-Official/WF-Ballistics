@@ -49,6 +49,19 @@ public class MissileEntity extends Projectile implements OBBEntity {
             com.wf.wfballistics.aef.nuke.MiniNuke.detonate(missile.level(), pos,
                     com.wf.wfballistics.aef.nuke.MiniNuke.medium());
 
+    public static final int DEFAULT_FRAGMENT_COUNT = 24;
+    public static final Detonation FRAGMENTATION = (missile, pos) -> {
+        Level level = missile.level();
+        if (level.isClientSide) {
+            return;
+        }
+        com.wf.wfballistics.util.FragmentationUtil.cone(level, pos, new Vec3(0.0, -1.0, 0.0),
+                Math.toRadians(60.0), missile.getFragmentCount(), 1.2, 0.4,
+                "standard", com.wf.wfballistics.entity.BombletEntity.STANDARD,
+                com.wf.wfballistics.entity.BombletEntity.DEFAULT_FUSE, null);
+        ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
+    };
+
     public static final Detonation INERT = (missile, pos) -> {
     };
 
@@ -65,6 +78,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
     static {
         WARHEADS.put("standard", STANDARD);
         WARHEADS.put("mininuke", MININUKE);
+        WARHEADS.put("fragmentation", FRAGMENTATION);
         WARHEADS.put("inert", INERT);
     }
 
@@ -89,6 +103,8 @@ public class MissileEntity extends Projectile implements OBBEntity {
     // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
     private float explosionOffset = 0.0f;
     private String detonationId = "standard";
+    // Number of bomblets the FRAGMENTATION warhead scatters; per-missile, set via the Builder.
+    private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
     private Detonation detonation = STANDARD;
     // Max change in velocity direction per tick, in radians. Default scales from the model's length
     // (longer airframe = less nimble); overridable via the Builder.
@@ -432,6 +448,10 @@ public class MissileEntity extends Projectile implements OBBEntity {
         return this.detonationId;
     }
 
+    public int getFragmentCount() {
+        return this.fragmentCount;
+    }
+
     @Override
     public void remove(RemovalReason reason) {
         // Release forced chunks when the missile actually goes away (killed/discarded), but not on a
@@ -459,6 +479,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
         tag.putString("ModelId", this.getModelId());
         tag.putInt("CruiseTicks", this.cruiseTicks);
         tag.putString("DetonationId", this.detonationId);
+        tag.putInt("FragmentCount", this.fragmentCount);
         tag.putFloat("Health", this.health);
     }
 
@@ -518,6 +539,10 @@ public class MissileEntity extends Projectile implements OBBEntity {
         if (tag.contains("DetonationId")) {
             this.detonationId = tag.getString("DetonationId");
             this.detonation = warhead(this.detonationId);
+        }
+
+        if (tag.contains("FragmentCount")) {
+            this.fragmentCount = tag.getInt("FragmentCount");
         }
 
         if (tag.contains("Health")) {
@@ -605,6 +630,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
         private double terrainClearance = 24.0;
         private float explosionOffset = 0.0f;
         private String detonationId = "standard";
+        private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
         private double cruiseSpeed = CRUISE_SPEED;
         private Double maxTurnRate = null; // null = keep the model-size default
         private String modelId = MissileModels.DEFAULT;
@@ -653,6 +679,15 @@ public class MissileEntity extends Projectile implements OBBEntity {
          */
         public Builder detonation(String detonationId) {
             this.detonationId = detonationId;
+            return this;
+        }
+
+        /**
+         * Number of bomblets the {@code "fragmentation"} warhead scatters; defaults to
+         * {@link #DEFAULT_FRAGMENT_COUNT}. No effect for other warheads.
+         */
+        public Builder fragmentCount(int fragmentCount) {
+            this.fragmentCount = fragmentCount;
             return this;
         }
 
@@ -706,6 +741,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
             missile.explosionOffset = this.explosionOffset;
             missile.detonationId = this.detonationId;
             missile.detonation = warhead(this.detonationId);
+            missile.fragmentCount = this.fragmentCount;
             missile.cruiseSpeed = this.cruiseSpeed;
             missile.health = this.health;
             missile.setModelId(this.modelId);

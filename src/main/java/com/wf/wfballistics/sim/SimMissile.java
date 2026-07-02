@@ -30,6 +30,7 @@ public final class SimMissile {
     public double maxTurnRate = 0.0;
     public String modelId = "";
     public String detonationId = "standard";
+    public int fragmentCount = MissileEntity.DEFAULT_FRAGMENT_COUNT;
 
     // Interception.
     public Role role = Role.NORMAL;
@@ -50,6 +51,7 @@ public final class SimMissile {
         sm.maxTurnRate = m.getMaxTurnRate();
         sm.modelId = m.getModelId();
         sm.detonationId = m.getDetonationId();
+        sm.fragmentCount = m.getFragmentCount();
         sm.role = Role.NORMAL;
         return sm;
     }
@@ -67,6 +69,7 @@ public final class SimMissile {
                 .cruiseSpeed(this.speed)
                 .model(this.modelId)
                 .detonation(this.detonationId)
+                .fragmentCount(this.fragmentCount)
                 .startInCruise();
 
         MissileEntity m = b.build();
@@ -90,6 +93,7 @@ public final class SimMissile {
         tag.putDouble("MaxTurnRate", maxTurnRate);
         tag.putString("ModelId", modelId);
         tag.putString("DetonationId", detonationId);
+        tag.putInt("FragmentCount", fragmentCount);
         tag.putString("Role", role.name());
         if (interceptTarget != null) {
             tag.putUUID("InterceptTarget", interceptTarget);
@@ -116,6 +120,9 @@ public final class SimMissile {
         sm.modelId = tag.getString("ModelId");
         if (tag.contains("DetonationId")) {
             sm.detonationId = tag.getString("DetonationId");
+        }
+        if (tag.contains("FragmentCount")) {
+            sm.fragmentCount = tag.getInt("FragmentCount");
         }
         try {
             sm.role = Role.valueOf(tag.getString("Role"));

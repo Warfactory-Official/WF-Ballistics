@@ -1,5 +1,6 @@
 package com.wf.wfballistics;
 
+import com.wf.wfballistics.entity.BombletEntity;
 import com.wf.wfballistics.entity.EntityNukeExplosionMK5;
 import com.wf.wfballistics.entity.EntityNukeTorex;
 import com.wf.wfballistics.entity.MistEntity;
@@ -23,6 +24,15 @@ public class ModEntities {
                     .sized(2.0F, 2.0F)
                     .clientTrackingRange(16)
                     .build("missile")
+            );
+
+    public static final RegistryObject<EntityType<BombletEntity>> BOMBLET =
+            ENTITY_TYPES.register("bomblet", () -> EntityType.Builder.<BombletEntity>of(BombletEntity::new, MobCategory.MISC)
+                    .sized(0.3F, 0.3F)
+                    .clientTrackingRange(6)
+                    .updateInterval(1)
+                    .fireImmune()
+                    .build("bomblet")
             );
 
     // Mist effect cloud: a stationary, fluid-imbued area entity.
