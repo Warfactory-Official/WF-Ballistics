@@ -4,6 +4,9 @@ import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.WFSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -17,6 +20,8 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.entity.IEntityAdditionalSpawnData;
+import net.minecraftforge.network.NetworkHooks;
 
 import java.util.ArrayList;
 
@@ -24,7 +29,7 @@ import java.util.ArrayList;
  * Toroidial Convection Simulation Explosion Effect
  * Tor                             Ex
  */
-public class EntityNukeTorex extends Entity {
+public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnData {
 
     public static final EntityDataAccessor<Float> DATA_SCALE = SynchedEntityData.defineId(EntityNukeTorex.class, EntityDataSerializers.FLOAT);
     public static final EntityDataAccessor<Byte> DATA_TYPE = SynchedEntityData.defineId(EntityNukeTorex.class, EntityDataSerializers.BYTE);
@@ -61,6 +66,15 @@ public class EntityNukeTorex extends Entity {
     public boolean didPlaySound = false;
     public boolean didShake = false;
 
+    // Effective simulation age (client), decoupled from the client-local tickCount so a player who starts
+    // tracking this entity late resumes at the correct point rather than replaying the effect from t=0.
+    private static final int CATCHUP_TARGET_TICKS = 20; // spread a late-join catch-up over ~this many ticks
+    private static final int CATCHUP_MAX_BUDGET = 200;  // ...but never simulate more than this per tick
+    private int spawnAge = 0;    // server age when this client began tracking (from the spawn packet)
+    private int simAge = 0;      // simulation steps executed on this client so far
+    private int localAge = 0;    // client ticks since this client began tracking
+    public int effectiveAge = 0; // = simAge; used by the sim and renderer for all age-based timing
+
     public EntityNukeTorex(EntityType<?> entityType, Level level) {
         super(entityType, level);
         this.noCulling = true;
@@ -91,114 +105,140 @@ public class EntityNukeTorex extends Entity {
         super.tick();
 
         if (level().isClientSide) {
-            double posX = getX();
-            double posY = getY();
-            double posZ = getZ();
-            double scale = getScale();
-            double cloudScale = 1.5D;
-
-            if (tickCount == 1) {
-                this.setScale((float) scale);
-            }
-
-            if (humidity == -1F) {
-                humidity = level().getBiome(blockPosition()).value().getModifiedClimateSettings().downfall();
-            }
-
-            if (lastSpawnY == -1D) {
-                lastSpawnY = posY - 3D;
-            }
-
-            int spawnTarget = Math.max(level().getHeight(Heightmap.Types.WORLD_SURFACE, Mth.floor(posX), Mth.floor(posZ)) - 3, 1);
-            double moveSpeed = 0.5D;
-
-            if (Math.abs(spawnTarget - lastSpawnY) < moveSpeed) {
-                lastSpawnY = spawnTarget;
+            // Advance the client simulation, catching a late-joining player up to the true age (synced in
+            // the spawn packet) rather than replaying the whole effect from t=0. Catch-up is amortized over
+            // a short window and its steps don't fire the one-shot boom / sky-flash (those are in the past).
+            this.localAge++;
+            long target = (long) this.spawnAge + this.localAge;
+            int budget;
+            if (this.simAge < this.spawnAge) {
+                int behind = this.spawnAge - this.simAge;
+                budget = Mth.clamp((behind + CATCHUP_TARGET_TICKS - 1) / CATCHUP_TARGET_TICKS, 1, CATCHUP_MAX_BUDGET) + 1;
             } else {
-                lastSpawnY += moveSpeed * Math.signum(spawnTarget - lastSpawnY);
+                budget = (int) Math.max(1L, target - this.simAge);
+            }
+            int steps = (int) Math.min((long) budget, target - this.simAge);
+            for (int s = 0; s < steps; s++) {
+                this.simAge++;
+                simulateStep(this.simAge, this.simAge > this.spawnAge);
+            }
+            this.effectiveAge = this.simAge;
+        } else if (tickCount > maxAge) {
+            discard();
+        }
+    }
+
+    /**
+     * Runs one tick of the client-side convection simulation at the given effective {@code age}. When
+     * {@code live} is false the step is part of a late-join catch-up (the elapsed-before-join portion), so
+     * one-shot effects (the boom, the sky flash) are suppressed.
+     */
+    private void simulateStep(int age, boolean live) {
+        this.effectiveAge = age;
+
+        double posX = getX();
+        double posY = getY();
+        double posZ = getZ();
+        double scale = getScale();
+        double cloudScale = 1.5D;
+
+        if (age == 1) {
+            this.setScale((float) scale);
+        }
+
+        if (humidity == -1F) {
+            humidity = level().getBiome(blockPosition()).value().getModifiedClimateSettings().downfall();
+        }
+
+        if (lastSpawnY == -1D) {
+            lastSpawnY = posY - 3D;
+        }
+
+        int spawnTarget = Math.max(level().getHeight(Heightmap.Types.WORLD_SURFACE, Mth.floor(posX), Mth.floor(posZ)) - 3, 1);
+        double moveSpeed = 0.5D;
+
+        if (Math.abs(spawnTarget - lastSpawnY) < moveSpeed) {
+            lastSpawnY = spawnTarget;
+        } else {
+            lastSpawnY += moveSpeed * Math.signum(spawnTarget - lastSpawnY);
+        }
+
+        double range = (torusWidth - rollerSize) * 0.5D;
+        double simSpeed = getSimulationSpeed();
+        int lifetime = Math.min((age * age) + 200, maxAge - age + 200);
+        int toSpawn = (int) (0.6D * Math.min(Math.max(0, MAX_CLOUDLETS - cloudlets.size()),
+                Math.ceil(10D * simSpeed * simSpeed * Math.min(1D, 1200D / (double) lifetime))));
+
+        for (int i = 0; i < toSpawn; i++) {
+            double x = posX + random.nextGaussian() * range;
+            double z = posZ + random.nextGaussian() * range;
+            Cloudlet cloud = new Cloudlet(x, lastSpawnY, z, (float) (random.nextDouble() * Math.PI * 2D), 0, lifetime);
+            float start = (float) (Math.sqrt(scale) * 3D + age * 0.0025D * scale);
+            float grow = (float) (Math.sqrt(scale) * 3D + age * 0.0025D * 6D * cloudScale * scale);
+            cloud.setScale(start, grow);
+            cloudlets.add(cloud);
+        }
+
+        if (live && age < 120D * scale) {
+            level().setSkyFlashTime(2);
+        }
+
+        if (age < 150) {
+            int cloudCount = Math.min(age * 2, 100);
+            int shockLife = Math.max(400 - age * 20, 50);
+
+            for (int i = 0; i < cloudCount; i++) {
+                Vec3 vec = new Vec3((age + random.nextDouble() * 2D) * 1.5D, 0D, 0D);
+                float rot = (float) (Math.PI * 2D * random.nextDouble());
+                vec = vec.yRot(rot);
+                cloudlets.add(new Cloudlet(
+                        vec.x + posX,
+                        level().getHeight(Heightmap.Types.WORLD_SURFACE, (int) (vec.x + posX) + 1, (int) (vec.z + posZ)),
+                        vec.z + posZ,
+                        rot,
+                        0,
+                        shockLife,
+                        TorexType.SHOCK
+                ).setScale((float) scale * 5F, (float) scale * 2F).setMotion(Mth.clamp(0.25D * age - 5D, 0D, 1D)));
             }
 
-            double range = (torusWidth - rollerSize) * 0.5D;
-            double simSpeed = getSimulationSpeed();
-            int lifetime = Math.min((tickCount * tickCount) + 200, maxAge - tickCount + 200);
-            int toSpawn = (int) (0.6D * Math.min(Math.max(0, MAX_CLOUDLETS - cloudlets.size()),
-                    Math.ceil(10D * simSpeed * simSpeed * Math.min(1D, 1200D / (double) lifetime))));
+            if (live && !didPlaySound) {
+                tryPlayClientSound(posX, posY, posZ, age);
+            }
+        }
 
-            for (int i = 0; i < toSpawn; i++) {
-                double x = posX + random.nextGaussian() * range;
-                double z = posZ + random.nextGaussian() * range;
-                Cloudlet cloud = new Cloudlet(x, lastSpawnY, z, (float) (random.nextDouble() * Math.PI * 2D), 0, lifetime);
-                float start = (float) (Math.sqrt(scale) * 3D + tickCount * 0.0025D * scale);
-                float grow = (float) (Math.sqrt(scale) * 3D + tickCount * 0.0025D * 6D * cloudScale * scale);
+        if (age < 200) {
+            lifetime = (int) (lifetime * scale);
+            for (int i = 0; i < 2; i++) {
+                Cloudlet cloud = new Cloudlet(posX, posY + coreHeight, posZ, (float) (random.nextDouble() * Math.PI * 2D), 0, lifetime, TorexType.RING);
+                float start = (float) (Math.sqrt(scale) * cloudScale + age * 0.0015D * scale);
+                float grow = (float) (Math.sqrt(scale) * cloudScale + age * 0.0015D * 6D * cloudScale * scale);
                 cloud.setScale(start, grow);
                 cloudlets.add(cloud);
             }
-
-            if (tickCount < 120D * scale) {
-                level().setSkyFlashTime(2);
-            }
-
-            if (tickCount < 150) {
-                int cloudCount = Math.min(tickCount * 2, 100);
-                int shockLife = Math.max(400 - tickCount * 20, 50);
-
-                for (int i = 0; i < cloudCount; i++) {
-                    Vec3 vec = new Vec3((tickCount + random.nextDouble() * 2D) * 1.5D, 0D, 0D);
-                    float rot = (float) (Math.PI * 2D * random.nextDouble());
-                    vec = vec.yRot(rot);
-                    cloudlets.add(new Cloudlet(
-                            vec.x + posX,
-                            level().getHeight(Heightmap.Types.WORLD_SURFACE, (int) (vec.x + posX) + 1, (int) (vec.z + posZ)),
-                            vec.z + posZ,
-                            rot,
-                            0,
-                            shockLife,
-                            TorexType.SHOCK
-                    ).setScale((float) scale * 5F, (float) scale * 2F).setMotion(Mth.clamp(0.25D * tickCount - 5D, 0D, 1D)));
-                }
-
-                if (!didPlaySound) {
-                    tryPlayClientSound(posX, posY, posZ);
-                }
-            }
-
-            if (tickCount < 200) {
-                lifetime = (int) (lifetime * scale);
-                for (int i = 0; i < 2; i++) {
-                    Cloudlet cloud = new Cloudlet(posX, posY + coreHeight, posZ, (float) (random.nextDouble() * Math.PI * 2D), 0, lifetime, TorexType.RING);
-                    float start = (float) (Math.sqrt(scale) * cloudScale + tickCount * 0.0015D * scale);
-                    float grow = (float) (Math.sqrt(scale) * cloudScale + tickCount * 0.0015D * 6D * cloudScale * scale);
-                    cloud.setScale(start, grow);
-                    cloudlets.add(cloud);
-                }
-            }
-
-            if (humidity > 0F && tickCount < 220) {
-                spawnCondensationClouds(tickCount, humidity, FIRST_CONDENSE_HEIGHT, 80, 4, scale, cloudScale);
-                spawnCondensationClouds(tickCount, humidity, SECOND_CONDENSE_HEIGHT, 80, 2, scale, cloudScale);
-            }
-
-            for (int i = cloudlets.size() - 1; i >= 0; i--) {
-                Cloudlet cloud = cloudlets.get(i);
-                if (cloud.isDead) {
-                    cloudlets.remove(i);
-                    continue;
-                }
-                cloud.update();
-            }
-
-            coreHeight += 0.15D;
-            torusWidth += 0.05D;
-            rollerSize = torusWidth * 0.35D;
-            convectionHeight = coreHeight + rollerSize;
-
-            int maxHeat = (int) (50D * scale * scale);
-            heat = maxHeat - Math.pow((maxHeat * (double) tickCount) / maxAge, 0.6D);
         }
 
-        if (!level().isClientSide && tickCount > maxAge) {
-            discard();
+        if (humidity > 0F && age < 220) {
+            spawnCondensationClouds(age, humidity, FIRST_CONDENSE_HEIGHT, 80, 4, scale, cloudScale);
+            spawnCondensationClouds(age, humidity, SECOND_CONDENSE_HEIGHT, 80, 2, scale, cloudScale);
         }
+
+        for (int i = cloudlets.size() - 1; i >= 0; i--) {
+            Cloudlet cloud = cloudlets.get(i);
+            if (cloud.isDead) {
+                cloudlets.remove(i);
+                continue;
+            }
+            cloud.update();
+        }
+
+        coreHeight += 0.15D;
+        torusWidth += 0.05D;
+        rollerSize = torusWidth * 0.35D;
+        convectionHeight = coreHeight + rollerSize;
+
+        int maxHeat = (int) (50D * scale * scale);
+        heat = maxHeat - Math.pow((maxHeat * (double) age) / maxAge, 0.6D);
     }
 
     public void spawnCondensationClouds(int age, float humidity, int height, int count, int spreadAngle, double scale, double cloudScale) {
@@ -253,7 +293,7 @@ public class EntityNukeTorex extends Entity {
 
     public double getSimulationSpeed() {
         int simSlow = maxAge / 4;
-        int life = tickCount;
+        int life = effectiveAge;
 
         if (life > maxAge) {
             return 0D;
@@ -268,7 +308,7 @@ public class EntityNukeTorex extends Entity {
 
     public float getAlpha() {
         int fadeOut = maxAge * 3 / 4;
-        int life = tickCount;
+        int life = effectiveAge;
 
         if (life > fadeOut) {
             float factor = (float) (life - fadeOut) / (float) (maxAge - fadeOut);
@@ -279,13 +319,13 @@ public class EntityNukeTorex extends Entity {
     }
 
     @OnlyIn(Dist.CLIENT)
-    private void tryPlayClientSound(double posX, double posY, double posZ) {
+    private void tryPlayClientSound(double posX, double posY, double posZ, int age) {
         Player player = Minecraft.getInstance().player;
         if (player == null) {
             return;
         }
 
-        double soundRange = (tickCount * 1.5D + 1D) * 1.5D;
+        double soundRange = (age * 1.5D + 1D) * 1.5D;
         if (player.distanceToSqr(posX, posY, posZ) < soundRange * soundRange) {
             level().playLocalSound(posX, posY, posZ, WFSounds.NUCLEAR_EXPLOSION.get(), SoundSource.HOSTILE, 10_000F, 1F, false);
             didPlaySound = true;
@@ -302,6 +342,23 @@ public class EntityNukeTorex extends Entity {
     protected void defineSynchedData() {
         this.entityData.define(DATA_SCALE, 1F);
         this.entityData.define(DATA_TYPE, (byte) 0);
+    }
+
+    @Override
+    public Packet<ClientGamePacketListener> getAddEntityPacket() {
+        // Forge spawn packet so writeSpawnData/readSpawnData carry the elapsed age to each new tracker.
+        return NetworkHooks.getEntitySpawningPacket(this);
+    }
+
+    @Override
+    public void writeSpawnData(FriendlyByteBuf buffer) {
+        // The server's current age at the moment this client begins tracking (0 for present-from-start).
+        buffer.writeVarInt(this.tickCount);
+    }
+
+    @Override
+    public void readSpawnData(FriendlyByteBuf additionalData) {
+        this.spawnAge = additionalData.readVarInt();
     }
 
     @Override

@@ -7,8 +7,10 @@ import com.wf.wfballistics.aef.interfaces.IExplosionSFX;
 import com.wf.wfballistics.aef.interfaces.IPlayerProcessor;
 import com.wf.wfballistics.aef.standard.BlockAllocatorStandard;
 import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
+import com.wf.wfballistics.aef.standard.CustomDamageHandlerAmat;
 import com.wf.wfballistics.aef.standard.EntityProcessorCross;
-import com.wf.wfballistics.aef.standard.ExplosionEffectStandard;
+import com.wf.wfballistics.aef.standard.ExplosionEffectAmat;
+import com.wf.wfballistics.aef.standard.ExplosionEffectLarge;
 import com.wf.wfballistics.aef.standard.PlayerProcessorStandard;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
@@ -148,16 +150,25 @@ public class ExplosionAEF {
         return this;
     }
 
-    /**
-     * Preset matching a vanilla TNT-style blast: spherical block destruction with drops, cross-model
-     * entity damage and knockback, and the standard bang + smoke + debris effect.
-     */
+
     public ExplosionAEF makeStandard() {
         this.setBlockAllocator(new BlockAllocatorStandard());
         this.setBlockProcessor(new BlockProcessorStandard());
         this.setEntityProcessor(new EntityProcessorCross());
         this.setPlayerProcessor(new PlayerProcessorStandard());
-        this.setSFX(new ExplosionEffectStandard());
+        this.setSFX(new ExplosionEffectLarge());
+        return this;
+    }
+
+
+    public ExplosionAEF makeAmat() {
+        this.setBlockAllocator(new BlockAllocatorStandard(this.size < 15 ? 16 : 32));
+        this.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
+        this.setEntityProcessor(new EntityProcessorCross()
+                .withRangeMod(2F)
+                .withDamageMod(new CustomDamageHandlerAmat(50F)));
+        this.setPlayerProcessor(new PlayerProcessorStandard());
+        this.setSFX(new ExplosionEffectAmat());
         return this;
     }
 }

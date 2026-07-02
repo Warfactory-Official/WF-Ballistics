@@ -12,9 +12,6 @@ import java.util.List;
  * Marks an entity that carries one or more oriented bounding boxes ({@link OBB}) used for precise,
  * rotation-aware hit detection in place of the coarse vanilla AABB.
  *
- * <p>Ported from SuperbWarfare's {@code OBBEntity}. The collision mixins ({@code MixinLevel},
- * {@code MixinProjectileUtil}) route projectile hit-testing through these boxes for any entity that
- * implements this interface and returns a non-empty list.
  */
 public interface OBBEntity {
 

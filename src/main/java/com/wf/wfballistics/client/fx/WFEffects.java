@@ -3,7 +3,12 @@ package com.wf.wfballistics.client.fx;
 import com.wf.wfballistics.WFSounds;
 import com.wf.wfballistics.client.particle.AshParticle;
 import com.wf.wfballistics.client.particle.ExplosionSmallParticle;
+import com.wf.wfballistics.client.particle.RocketFlameParticle;
+import com.wf.wfballistics.client.particle.ShockwaveParticle;
 import com.wf.wfballistics.client.particle.WFParticleSprites;
+import com.wf.wfballistics.client.wiaj.Debris;
+import com.wf.wfballistics.client.wiaj.DebrisManager;
+import com.wf.wfballistics.client.wiaj.WorldInAJar;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.Particle;
@@ -15,6 +20,7 @@ import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -31,6 +37,7 @@ public final class WFEffects {
     public static void dispatch(String effect, ClientLevel level, double x, double y, double z, CompoundTag data) {
         switch (effect) {
             case "explosion_small" -> explosionSmall(level, x, y, z, data);
+            case "explosion_large" -> explosionLarge(level, x, y, z, data);
             case "instanced_smoke" -> instancedSmoke(level, x, y, z, data);
             case "ashes" -> ashes(level, x, y, z, data);
             case "skeleton" -> skeleton(level, x, y, z, data);
@@ -75,6 +82,70 @@ public final class WFEffects {
         spawnDebrisAndSound(level, x, y, z, data);
     }
 
+
+    private static void explosionLarge(ClientLevel level, double x, double y, double z, CompoundTag data) {
+        int cloudCount = data.getInt("cloudCount");
+        float cloudScale = data.contains("cloudScale") ? data.getFloat("cloudScale") : 5F;
+        float cloudSpeed = data.contains("cloudSpeed") ? data.getFloat("cloudSpeed") : 1F;
+        float waveScale = data.contains("waveScale") ? data.getFloat("waveScale") : 45F;
+        int debrisCount = data.getInt("debrisCount");
+        float debrisVelocity = data.contains("debrisVelocity") ? data.getFloat("debrisVelocity") : 1F;
+        float debrisHDev = data.contains("debrisHDev") ? data.getFloat("debrisHDev") : 3F;
+        float debrisVOff = data.contains("debrisVOff") ? data.getFloat("debrisVOff") : -2F;
+        float soundRange = data.contains("soundRange") ? data.getFloat("soundRange") : 300F;
+
+        ParticleEngine engine = Minecraft.getInstance().particleEngine;
+        RandomSource rand = level.random;
+
+        if (waveScale > 0F) {
+            int waveAge = Math.max(1, (int) (25F * waveScale / 45F));
+            engine.add(new ShockwaveParticle(level, x, y + 2, z, waveScale, waveAge));
+        }
+
+        if (WFParticleSprites.rocketFlame != null) {
+            for (int i = 0; i < cloudCount; i++) {
+                RocketFlameParticle p = new RocketFlameParticle(level, x, y, z, cloudScale);
+                p.setLifetime(70 + rand.nextInt(20));
+                p.setCollision(false);
+                p.setParticleSpeed(rand.nextGaussian() * 0.5 * cloudSpeed,
+                        rand.nextDouble() * 3.0 * cloudSpeed,
+                        rand.nextGaussian() * 0.5 * cloudSpeed);
+                p.pickSprite(WFParticleSprites.rocketFlame);
+                engine.add(p);
+            }
+        }
+
+        int debrisSize = data.contains("debrisSize") ? data.getInt("debrisSize") : 8;
+        int debrisRetry = data.contains("debrisRetry") ? data.getInt("debrisRetry") : 20;
+        for (int i = 0; i < debrisCount; i++) {
+            int cX = (int) Math.floor(x + rand.nextGaussian() * debrisHDev + 0.5);
+            int cY = (int) Math.floor(y + debrisVOff + 0.5);
+            int cZ = (int) Math.floor(z + rand.nextGaussian() * debrisHDev + 0.5);
+
+            double elev = Math.toRadians(45.0 + rand.nextDouble() * 25.0);
+            double az = rand.nextDouble() * Math.PI * 2.0;
+            double horiz = debrisVelocity * Math.cos(elev);
+            double vx = horiz * Math.cos(az);
+            double vy = debrisVelocity * Math.sin(elev);
+            double vz = -horiz * Math.sin(az);
+
+            WorldInAJar jar = WorldInAJar.fromLevel(level, cX, cY, cZ, debrisSize, debrisRetry, rand);
+            DebrisManager.add(new Debris(rand, x, y, z, vx, vy, vz, jar));
+        }
+
+        Player player = Minecraft.getInstance().player;
+        if (player != null) {
+            double dist = Math.sqrt(player.distanceToSqr(x, y, z));
+            if (dist <= soundRange) {
+                boolean near = dist <= soundRange * 0.4;
+                SoundEvent sound = (near ? WFSounds.EXPLOSION_LARGE_NEAR : WFSounds.EXPLOSION_LARGE_FAR).get();
+                float pitch = 0.9F + rand.nextFloat() * 0.2F;
+                ClientSoundScheduler.playDelayed(x, y, z, sound, SoundSource.BLOCKS,
+                        near ? 8.0F : 16.0F, pitch, ClientSoundScheduler.soundDelay(dist));
+            }
+        }
+    }
+
     /**
      * The cremation skeleton: a biped bone pile rendered as Flywheel instances ({@link SkeletonBoneEffect}).
      * Instanced-only — if the Flywheel backend is off there is no bone render (the ash burst still plays).
@@ -103,12 +174,16 @@ public final class WFEffects {
             }
         }
 
-        // Distinct "near" (punchy) vs "far" (rumble) recording, chosen client-side by listener distance.
+
         Player player = Minecraft.getInstance().player;
         if (player != null) {
-            boolean near = player.distanceToSqr(x, y, z) < 80 * 80;
-            SoundEvent sound = (near ? WFSounds.EXPLOSION_SMALL_NEAR : WFSounds.EXPLOSION_SMALL_FAR).get();
-            level.playLocalSound(x, y, z, sound, SoundSource.BLOCKS, near ? 1.0F : 4.0F, 1.0F, false);
+            double dist = Math.sqrt(player.distanceToSqr(x, y, z));
+            if (dist <= 200) {
+                boolean near = dist < 80;
+                SoundEvent sound = (near ? WFSounds.EXPLOSION_SMALL_NEAR : WFSounds.EXPLOSION_SMALL_FAR).get();
+                ClientSoundScheduler.playDelayed(x, y, z, sound, SoundSource.BLOCKS,
+                        near ? 1.0F : 4.0F, 1.0F, ClientSoundScheduler.soundDelay(dist));
+            }
         }
     }
 

@@ -1,10 +1,10 @@
 package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
-import com.wf.wfballistics.aef.ExplosionAEF;
-import com.wf.wfballistics.aef.standard.ExplosionEffectStandard;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
+import com.wf.wfballistics.entity.EntityNukeExplosionMK5;
 import com.wf.wfballistics.entity.OBBEntity;
+import com.wf.wfballistics.fx.ExplosionCreator;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.sim.SimMissileManager;
 import com.wf.wfballistics.util.OBB;
@@ -15,6 +15,7 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
+import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -31,12 +32,22 @@ import org.slf4j.Logger;
 import java.util.List;
 
 public class MissileEntity extends Projectile implements OBBEntity {
+
+    public static final int STANDARD_BLAST_RADIUS = 24;
+
     public static final Detonation STANDARD = (missile, pos) -> {
-        var expl = new ExplosionAEF(missile.level(), pos.x, pos.y, pos.z, 250);
-        expl.makeStandard();
-        expl.setSFX(new ExplosionEffectStandard());
-        expl.explode();
+        Level level = missile.level();
+        if (level.isClientSide) {
+            return;
+        }
+
+        level.addFreshEntity(EntityNukeExplosionMK5.statFac(level, STANDARD_BLAST_RADIUS, pos));
+        ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
     };
+
+    public static final Detonation MININUKE = (missile, pos) ->
+            com.wf.wfballistics.aef.nuke.MiniNuke.detonate(missile.level(), pos,
+                    com.wf.wfballistics.aef.nuke.MiniNuke.medium());
 
     public static final Detonation INERT = (missile, pos) -> {
     };
@@ -53,6 +64,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
 
     static {
         WARHEADS.put("standard", STANDARD);
+        WARHEADS.put("mininuke", MININUKE);
         WARHEADS.put("inert", INERT);
     }
 
@@ -60,6 +72,9 @@ public class MissileEntity extends Projectile implements OBBEntity {
     // rotation-aware hitbox instead of the coarse vanilla AABB. Kept live-updated in refreshObb().
     private final OBB obb = new OBB(new Vector3d(), new Vector3d(), new Quaterniond(), OBB.Part.BODY);
     private final List<OBB> obbList = List.of(this.obb);
+    // Transform (position + heading) the OBB was last built for; refreshObb() skips recomputation while
+    // these are unchanged, so the repeated getOBBs() calls during a hit-check don't rebuild it each time.
+    private double obbX = Double.NaN, obbY, obbZ, obbDx, obbDy, obbDz;
 
     // Forces the chunks the missile needs while flying (own chunk ticking + non-ticking look-ahead fan).
     private final MissileChunkLoader chunkLoader = new MissileChunkLoader();
@@ -80,6 +95,12 @@ public class MissileEntity extends Projectile implements OBBEntity {
     private double maxTurnRate = TURN_AGILITY / MissileModels.length(MissileModels.DEFAULT);
     // Consecutive ticks spent in CRUISE; gates the offload-to-simulation transition.
     private int cruiseTicks = 0;
+    // Interception damage pool: CIWS fire / interceptors chip this down; at <= 0 the missile is destroyed.
+    public static final float DEFAULT_HEALTH = 50.0f;
+    private float health = DEFAULT_HEALTH;
+    // Guards against re-entrant detonation: the warhead's own blast can hurt() this still-present missile,
+    // which would otherwise re-enter detonate() and recurse until the stack overflows.
+    private boolean detonated = false;
 
     public MissileEntity(EntityType<? extends Projectile> type, Level level) {
         super(type, level);
@@ -281,24 +302,38 @@ public class MissileEntity extends Projectile implements OBBEntity {
     }
 
     @Override
+    public boolean enableAABB() {
+        // Missiles always carry their body OBB, so skip the getOBBs()/isEmpty() default this would otherwise run.
+        return false;
+    }
+
+    @Override
     public List<OBB> getOBBs() {
-        // Recompute on demand so the box is always current, whichever side/tick order queries it
-        // (e.g. another projectile's hit-check reaching this missile through the collision mixins).
+        // Kept current on demand so the box is right whichever side/tick order queries it (e.g. another
+        // projectile's hit-check). refreshObb() is a no-op while the transform is unchanged, so the repeated
+        // calls a single hit-check makes don't each rebuild it.
         this.refreshObb();
         return this.obbList;
     }
 
     /**
-     * Rebuilds the body OBB (center, extents, rotation) from the current missile model and heading.
+     * Rebuilds the body OBB (center, extents, rotation) from the current missile model and heading, unless
+     * the position and heading are unchanged since the last build (then it's a no-op).
      * The model's local +Y axis is its nose/long axis, so we map +Y onto the velocity direction, matching
      * {@link MissileVisual}. Model units are rendered 1:1 with blocks, so mesh dimensions are used directly.
      */
     private void refreshObb() {
+        double x = this.getX(), y = this.getY(), z = this.getZ();
+        Vec3 move = this.getDeltaMovement();
+        if (x == obbX && y == obbY && z == obbZ && move.x == obbDx && move.y == obbDy && move.z == obbDz) {
+            return;
+        }
+        obbX = x; obbY = y; obbZ = z; obbDx = move.x; obbDy = move.y; obbDz = move.z;
+
         String modelId = this.getModelId();
         Vec3 dims = MissileModels.dimensions(modelId);
         Vec3 localCenter = MissileModels.center(modelId);
 
-        Vec3 move = this.getDeltaMovement();
         double lenSq = move.lengthSqr();
         Quaterniond rot = new Quaterniond();
         if (lenSq > 1.0E-8) {
@@ -310,7 +345,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
         // Box center = entity position + the rotated model-center offset (meshes sit base-at-origin).
         Vector3d worldCenter = new Vector3d(localCenter.x, localCenter.y, localCenter.z);
         rot.transform(worldCenter);
-        worldCenter.add(this.getX(), this.getY(), this.getZ());
+        worldCenter.add(x, y, z);
 
         this.obb.setCenter(worldCenter);
         this.obb.setExtents(new Vector3d(dims.x * 0.5, dims.y * 0.5, dims.z * 0.5));
@@ -332,15 +367,14 @@ public class MissileEntity extends Projectile implements OBBEntity {
         if (ext.x < 1.0E-3 && ext.y < 1.0E-3 && ext.z < 1.0E-3) {
             return super.makeBoundingBox();
         }
-        Vector3d[] v = this.obb.getVertices();
-        double minX = v[0].x, minY = v[0].y, minZ = v[0].z;
-        double maxX = v[0].x, maxY = v[0].y, maxZ = v[0].z;
-        for (int i = 1; i < v.length; i++) {
-            minX = Math.min(minX, v[i].x); maxX = Math.max(maxX, v[i].x);
-            minY = Math.min(minY, v[i].y); maxY = Math.max(maxY, v[i].y);
-            minZ = Math.min(minZ, v[i].z); maxZ = Math.max(maxZ, v[i].z);
-        }
-        return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
+        // Enclosing AABB of the rotated box without allocating its 8 corners: the world half-size along
+        // each axis is the sum of |axis component| * extent over the box's three (rotated) local axes.
+        Vector3d c = this.obb.center();
+        Vector3d[] ax = this.obb.getAxes();
+        double hx = ext.x * Math.abs(ax[0].x) + ext.y * Math.abs(ax[1].x) + ext.z * Math.abs(ax[2].x);
+        double hy = ext.x * Math.abs(ax[0].y) + ext.y * Math.abs(ax[1].y) + ext.z * Math.abs(ax[2].y);
+        double hz = ext.x * Math.abs(ax[0].z) + ext.y * Math.abs(ax[1].z) + ext.z * Math.abs(ax[2].z);
+        return new AABB(c.x - hx, c.y - hy, c.z - hz, c.x + hx, c.y + hy, c.z + hz);
     }
 
     @Override
@@ -425,6 +459,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
         tag.putString("ModelId", this.getModelId());
         tag.putInt("CruiseTicks", this.cruiseTicks);
         tag.putString("DetonationId", this.detonationId);
+        tag.putFloat("Health", this.health);
     }
 
     @Override
@@ -484,6 +519,10 @@ public class MissileEntity extends Projectile implements OBBEntity {
             this.detonationId = tag.getString("DetonationId");
             this.detonation = warhead(this.detonationId);
         }
+
+        if (tag.contains("Health")) {
+            this.health = tag.getFloat("Health");
+        }
     }
 
     private void onMissileImpact(HitResult hitResult) {
@@ -494,11 +533,39 @@ public class MissileEntity extends Projectile implements OBBEntity {
      * Fires the configured warhead at the given position and removes the missile.
      */
     private void detonate(Vec3 pos) {
+        if (this.detonated) {
+            return;
+        }
+        this.detonated = true; // set before the blast: it can hurt() this missile before discard() runs
         if (this.level() instanceof ServerLevel sl) {
             this.chunkLoader.releaseAll(this, sl);
         }
         this.detonation.detonate(this, pos);
         this.discard();
+    }
+
+    public float getHealth() {
+        return this.health;
+    }
+
+    public void damageMissile(float amount) {
+        if (this.level().isClientSide || this.isRemoved() || this.detonated || amount <= 0.0f) {
+            return;
+        }
+        this.health -= amount;
+        if (this.health <= 0.0f) {
+            this.detonate(this.position());
+        }
+    }
+
+    @Override
+    public boolean hurt(DamageSource source, float amount) {
+        //TODO: Make this not get killed by arrows or something
+        if (this.level().isClientSide || this.isRemoved()) {
+            return false;
+        }
+        this.damageMissile(amount);
+        return true;
     }
 
     public enum Phase {
@@ -542,6 +609,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
         private Double maxTurnRate = null; // null = keep the model-size default
         private String modelId = MissileModels.DEFAULT;
         private boolean startInCruise = false;
+        private float health = DEFAULT_HEALTH;
 
         private Builder(EntityType<? extends Projectile> type, Level level) {
             this.type = type;
@@ -622,6 +690,14 @@ public class MissileEntity extends Projectile implements OBBEntity {
             return this;
         }
 
+        /**
+         * Set the interception damage pool (see {@link #DEFAULT_HEALTH}); higher = harder to shoot down.
+         */
+        public Builder health(float health) {
+            this.health = health;
+            return this;
+        }
+
         public MissileEntity build() {
             MissileEntity missile = new MissileEntity(this.type, this.level);
             missile.cruiseMode = this.cruiseMode;
@@ -631,6 +707,7 @@ public class MissileEntity extends Projectile implements OBBEntity {
             missile.detonationId = this.detonationId;
             missile.detonation = warhead(this.detonationId);
             missile.cruiseSpeed = this.cruiseSpeed;
+            missile.health = this.health;
             missile.setModelId(this.modelId);
             // Default the turn rate off the chosen model's length unless explicitly overridden.
             missile.maxTurnRate = (this.maxTurnRate != null)

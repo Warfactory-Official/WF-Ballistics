@@ -30,6 +30,14 @@ public class ModBlocks {
             ITEMS.register("missile_listener_debug", () ->
                     new BlockItem(MISSILE_LISTENER_DEBUG.get(), new Item.Properties()));
 
+    public static final RegistryObject<Block> TURRET_CIWS =
+            BLOCKS.register("turret_ciws", () -> new TurretCiwsBlock(
+                    BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).requiresCorrectToolForDrops()));
+
+    public static final RegistryObject<Item> TURRET_CIWS_ITEM =
+            ITEMS.register("turret_ciws", () ->
+                    new BlockItem(TURRET_CIWS.get(), new Item.Properties()));
+
     public static void register(IEventBus bus) {
         BLOCKS.register(bus);
         ITEMS.register(bus);
@@ -39,6 +47,7 @@ public class ModBlocks {
     public static void addToCreativeTab(BuildCreativeModeTabContentsEvent event) {
         if (event.getTabKey() == CreativeModeTabs.REDSTONE_BLOCKS) {
             event.accept(MISSILE_LISTENER_DEBUG_ITEM.get());
+            event.accept(TURRET_CIWS_ITEM.get());
         }
     }
 }

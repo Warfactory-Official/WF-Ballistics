@@ -20,6 +20,14 @@ public class RocketFlameParticle extends TextureSheetParticle {
         this.hasPhysics = false;
     }
 
+    public void setLifetime(int lifetime) {
+        this.lifetime = Math.max(1, lifetime);
+    }
+
+    public void setCollision(boolean collision) {
+        this.hasPhysics = collision;
+    }
+
     @Override
     public void tick() {
         this.xo = this.x;
@@ -36,7 +44,6 @@ public class RocketFlameParticle extends TextureSheetParticle {
         this.zd *= 0.91D;
         this.move(this.xd, this.yd, this.zd);
 
-        // Bright yellow-white at spawn, cooling to a dim red ember over the first quarter of life.
         float dark = 1 - Math.min((float) this.age / (this.lifetime * 0.25F), 1F);
         this.rCol = Mth.clamp(dark + 0.1F, 0F, 1F);
         this.gCol = Mth.clamp(0.6F * dark + 0.1F, 0F, 1F);

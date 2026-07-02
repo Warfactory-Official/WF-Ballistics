@@ -29,5 +29,10 @@
     "sounds": [
       "wfballistics:weapon/explosion_large_near"
     ]
+  },
+  "weapon.explosion_large_far": {
+    "sounds": [
+      "wfballistics:weapon/explosion_large_far"
+    ]
   }
 }

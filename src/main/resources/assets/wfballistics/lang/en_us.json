@@ -1,3 +1,4 @@
 {
-  "block.wfballistics.missile_listener_debug": "Missile Listener (Debug)"
+  "block.wfballistics.missile_listener_debug": "Missile Listener (Debug)",
+  "block.wfballistics.turret_ciws": "CIWS Turret"
 }

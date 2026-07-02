@@ -63,7 +63,7 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
     private static float getCloudAlphaBase(EntityNukeTorex cloud) {
         int maxAge = cloud.getEntityMaxAge();
         int fadeOut = maxAge * 3 / 4;
-        int life = cloud.tickCount;
+        int life = cloud.effectiveAge;
         if (life > fadeOut) {
             return 1F - (float) (life - fadeOut) / (float) (maxAge - fadeOut);
         }
@@ -135,11 +135,11 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
             cloudletWrapper(cloud, pPoseStack, pBuffer, pPartialTick);
         }
 
-        if (cloud.tickCount < flareDuration + 1) {
+        if (cloud.effectiveAge < flareDuration + 1) {
             flareWrapper(cloud, pPoseStack, pPartialTick, flareDuration);
         }
 
-        if (cloud.tickCount < flashDuration + 1) {
+        if (cloud.effectiveAge < flashDuration + 1) {
             flashWrapper(cloud, pPoseStack, pPartialTick, flashDuration);
         }
 
@@ -387,7 +387,7 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         Vector3f right = new Vector3f(1, 0, 0).rotate(rotation);
         Vector3f up = new Vector3f(0, 1, 0).rotate(rotation);
 
-        double age = Math.min(cloud.tickCount + partialTick, flareDuration);
+        double age = Math.min(cloud.effectiveAge + partialTick, flareDuration);
         float alpha = (float) Math.min(1, (flareDuration - age) / flareDuration);
 
         Random rand = new Random(cloud.getId());
@@ -435,8 +435,8 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
     // --- Flash rendering ---
 
     private void flashWrapper(EntityNukeTorex cloud, PoseStack pPoseStack, float partialTick, float flashDuration) {
-        if (cloud.tickCount < flashDuration) {
-            double intensity = (cloud.tickCount + partialTick) / flashDuration;
+        if (cloud.effectiveAge < flashDuration) {
+            double intensity = (cloud.effectiveAge + partialTick) / flashDuration;
             intensity = intensity * Math.pow(Math.E, -intensity) * 2.717391304D;
 
             renderFlash(pPoseStack, 50F * flashDuration / (float) FLASH_BASE_DURATION, intensity, cloud.coreHeight);
