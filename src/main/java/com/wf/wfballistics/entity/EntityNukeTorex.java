@@ -51,29 +51,26 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
     public static final double BR2 = 0.1D;
     public static final double BG2 = 0.1D;
     public static final double BB2 = 0.1D;
-
+    // Effective simulation age (client), decoupled from the client-local tickCount so a player who starts
+    // tracking this entity late resumes at the correct point rather than replaying the effect from t=0.
+    private static final int CATCHUP_TARGET_TICKS = 20; // spread a late-join catch-up over ~this many ticks
+    private static final int CATCHUP_MAX_BUDGET = 200;  // ...but never simulate more than this per tick
+    public final ArrayList<Cloudlet> cloudlets = new ArrayList<>();
     public double coreHeight = 3D;
     public double convectionHeight = 3D;
     public double torusWidth = 3D;
     public double rollerSize = 1D;
     public double heat = 1D;
     public double lastSpawnY = -1D;
-    public final ArrayList<Cloudlet> cloudlets = new ArrayList<>();
     public int lastRenderSortTick = Integer.MIN_VALUE;
     public int maxAge = 1000;
     public float humidity = -1F;
-
     public boolean didPlaySound = false;
     public boolean didShake = false;
-
-    // Effective simulation age (client), decoupled from the client-local tickCount so a player who starts
-    // tracking this entity late resumes at the correct point rather than replaying the effect from t=0.
-    private static final int CATCHUP_TARGET_TICKS = 20; // spread a late-join catch-up over ~this many ticks
-    private static final int CATCHUP_MAX_BUDGET = 200;  // ...but never simulate more than this per tick
+    public int effectiveAge = 0; // = simAge; used by the sim and renderer for all age-based timing
     private int spawnAge = 0;    // server age when this client began tracking (from the spawn packet)
     private int simAge = 0;      // simulation steps executed on this client so far
     private int localAge = 0;    // client ticks since this client began tracking
-    public int effectiveAge = 0; // = simAge; used by the sim and renderer for all age-based timing
 
     public EntityNukeTorex(EntityType<?> entityType, Level level) {
         super(entityType, level);
@@ -100,6 +97,18 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
         }
     }
 
+    public static void statFac(Level level, double x, double y, double z, float scale) {
+        EntityNukeTorex torex = new EntityNukeTorex(level).setScale(Mth.clamp(scale * 0.01F, 0.25F, 5F));
+        torex.setPos(x, y, z);
+        level.addFreshEntity(torex);
+    }
+
+    public static void statFacBale(Level level, double x, double y, double z, float scale) {
+        EntityNukeTorex torex = new EntityNukeTorex(level).setScale(Mth.clamp(scale * 0.01F, 0.25F, 5F)).setType(1);
+        torex.setPos(x, y, z);
+        level.addFreshEntity(torex);
+    }
+
     @Override
     public void tick() {
         super.tick();
@@ -117,7 +126,7 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
             } else {
                 budget = (int) Math.max(1L, target - this.simAge);
             }
-            int steps = (int) Math.min((long) budget, target - this.simAge);
+            int steps = (int) Math.min(budget, target - this.simAge);
             for (int s = 0; s < steps; s++) {
                 this.simAge++;
                 simulateStep(this.simAge, this.simAge > this.spawnAge);
@@ -258,18 +267,6 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
         }
     }
 
-    public EntityNukeTorex setScale(float scale) {
-        if (!level().isClientSide) {
-            this.entityData.set(DATA_SCALE, scale);
-        }
-        this.coreHeight = this.coreHeight * scale;
-        this.convectionHeight = this.convectionHeight * scale;
-        this.torusWidth = this.torusWidth * scale;
-        this.rollerSize = this.rollerSize * scale;
-        this.maxAge = (int) (45 * 20 * scale);
-        return this;
-    }
-
     public EntityNukeTorex setType(int type) {
         this.entityData.set(DATA_TYPE, (byte) type);
         return this;
@@ -285,6 +282,18 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
 
     public double getScale() {
         return entityData.get(DATA_SCALE);
+    }
+
+    public EntityNukeTorex setScale(float scale) {
+        if (!level().isClientSide) {
+            this.entityData.set(DATA_SCALE, scale);
+        }
+        this.coreHeight = this.coreHeight * scale;
+        this.convectionHeight = this.convectionHeight * scale;
+        this.torusWidth = this.torusWidth * scale;
+        this.rollerSize = this.rollerSize * scale;
+        this.maxAge = (int) (45 * 20 * scale);
+        return this;
     }
 
     public byte getCloudType() {
@@ -389,18 +398,6 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
         SHOCK
     }
 
-    public static void statFac(Level level, double x, double y, double z, float scale) {
-        EntityNukeTorex torex = new EntityNukeTorex(level).setScale(Mth.clamp(scale * 0.01F, 0.25F, 5F));
-        torex.setPos(x, y, z);
-        level.addFreshEntity(torex);
-    }
-
-    public static void statFacBale(Level level, double x, double y, double z, float scale) {
-        EntityNukeTorex torex = new EntityNukeTorex(level).setScale(Mth.clamp(scale * 0.01F, 0.25F, 5F)).setType(1);
-        torex.setPos(x, y, z);
-        level.addFreshEntity(torex);
-    }
-
     public class Cloudlet {
 
         public double posX;
@@ -416,7 +413,6 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
         public int cloudletLife;
         public float angle;
         public boolean isDead = false;
-        float rangeMod = 1F;
         public float colorMod = 1F;
         public double colorR;
         public double colorG;
@@ -426,6 +422,7 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
         public double prevColorB;
         public double renderSortDistanceSq;
         public TorexType type;
+        float rangeMod = 1F;
         private float startingScale = 3F;
         private float growingScale = 5F;
         private double computedMotionX;
@@ -433,11 +430,11 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
         private double computedMotionZ;
 
         private double motionMult = 1D;
-        private double motionConvectionMult = 0.5D;
-        private double motionLiftMult = 0.625D;
-        private double motionRingMult = 0.5D;
-        private double motionCondensationMult = 1D;
-        private double motionShockwaveMult = 1D;
+        private final double motionConvectionMult = 0.5D;
+        private final double motionLiftMult = 0.625D;
+        private final double motionRingMult = 0.5D;
+        private final double motionCondensationMult = 1D;
+        private final double motionShockwaveMult = 1D;
 
         public Cloudlet(double posX, double posY, double posZ, float angle, int age, int maxAge) {
             this(posX, posY, posZ, angle, age, maxAge, TorexType.STANDARD);

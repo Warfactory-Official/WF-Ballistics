@@ -1,13 +1,8 @@
 package com.wf.wfballistics;
 
-import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
 import com.wf.wfballistics.entity.OBBEntity;
-import com.wf.wfballistics.flight.ArrivalEstimator;
-import com.wf.wfballistics.flight.FlightContext;
-import com.wf.wfballistics.flight.FlightProfile;
-import com.wf.wfballistics.flight.FlightStageRegistry;
-import com.wf.wfballistics.flight.LoiterStage;
+import com.wf.wfballistics.flight.*;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.sim.SimMissileManager;
 import com.wf.wfballistics.swarm.SwarmManager;
@@ -33,7 +28,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
-import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.UUID;
@@ -43,14 +37,16 @@ public class MissileEntity extends Projectile implements OBBEntity {
     public static final int DEFAULT_FRAGMENT_COUNT = 24;
 
     public static final double CRUISE_SPEED = 1.0;
-    //Why is this nophono here
-    private static final Logger LOGGER = LogUtils.getLogger();
+    // Safety/arming: the warhead is inert until the missile has flown this far from its launch point, so it
+    // can't fuze, impact-detonate, or be blown up by damage while still on/near the launcher.
+    public static final double ARMING_DISTANCE = 6.0;
+    // Interception damage pool: CIWS fire / interceptors chip this down; at <= 0 the missile is destroyed.
+    public static final float DEFAULT_HEALTH = 50.0f;
     private static final EntityDataAccessor<BlockPos> TARGET_POS =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.BLOCK_POS);
     private static final EntityDataAccessor<String> MODEL_ID =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.STRING);
     private static final double TURN_AGILITY = 1.0; // radians * (model units) per tick
-
     // Predictive friendly deconfliction ("don't ram your own"): a missile looks AVOID_HORIZON ticks ahead
     // for friendly missiles (same swarm or launcher) whose closest approach would fall within AVOID_MIN_SEP
     // blocks, and if so applies a small course offset (perpendicular to the closing path, complementary
@@ -60,24 +56,18 @@ public class MissileEntity extends Projectile implements OBBEntity {
     private static final int AVOID_HORIZON = 20;
     private static final double AVOID_MIN_SEP = 4.0;
     private static final double AVOID_STRENGTH = 1.5;
-
-    // Safety/arming: the warhead is inert until the missile has flown this far from its launch point, so it
-    // can't fuze, impact-detonate, or be blown up by damage while still on/near the launcher.
-    public static final double ARMING_DISTANCE = 6.0;
     private static final double ARMING_DISTANCE_SQ = ARMING_DISTANCE * ARMING_DISTANCE;
     // Failsafe: arm anyway after this many ticks so a missile that somehow can't travel never stays a live dud.
     private static final int ARMING_FAILSAFE_TICKS = 100;
-
     // Oriented bounding box that wraps the (elongated) missile model, giving projectiles an accurate,
     // rotation-aware hitbox instead of the coarse vanilla AABB. Kept live-updated in refreshObb().
     private final OBB obb = new OBB(new Vector3d(), new Vector3d(), new Quaterniond(), OBB.Part.BODY);
     private final List<OBB> obbList = List.of(this.obb);
+    // Forces the chunks the missile needs while flying (own chunk ticking + non-ticking look-ahead fan).
+    private final MissileChunkLoader chunkLoader = new MissileChunkLoader();
     // Transform (position + heading) the OBB was last built for; refreshObb() skips recomputation while
     // these are unchanged, so the repeated getOBBs() calls during a hit-check don't rebuild it each time.
     private double obbX = Double.NaN, obbY, obbZ, obbDx, obbDy, obbDz;
-
-    // Forces the chunks the missile needs while flying (own chunk ticking + non-ticking look-ahead fan).
-    private final MissileChunkLoader chunkLoader = new MissileChunkLoader();
     private Phase phase = Phase.ASCEND;
     // How this missile flies: one swappable stage per phase (ascent curve, cruise/loiter, attack run),
     // each resolved from FlightStageRegistry by id and composed into the runtime profile. Selecting stages
@@ -110,8 +100,6 @@ public class MissileEntity extends Projectile implements OBBEntity {
     private double maxTurnRate = TURN_AGILITY / MissileModels.length(MissileModels.DEFAULT);
     // Consecutive ticks spent in CRUISE; gates the offload-to-simulation transition.
     private int cruiseTicks = 0;
-    // Interception damage pool: CIWS fire / interceptors chip this down; at <= 0 the missile is destroyed.
-    public static final float DEFAULT_HEALTH = 50.0f;
     private float health = DEFAULT_HEALTH;
     // Guards against re-entrant detonation: the warhead's own blast can hurt() this still-present missile,
     // which would otherwise re-enter detonate() and recurse until the stack overflows.
@@ -339,7 +327,9 @@ public class MissileEntity extends Projectile implements OBBEntity {
         return target.isPickable();
     }
 
-    /** @return true if {@code other} is on the same side — same swarm (frag family) or launcher (control id). */
+    /**
+     * @return true if {@code other} is on the same side — same swarm (frag family) or launcher (control id).
+     */
     private boolean isFriendly(MissileEntity other) {
         if (SwarmManager.sameSwarm(this, other)) {
             return true;
@@ -368,7 +358,9 @@ public class MissileEntity extends Projectile implements OBBEntity {
                 MissileSimConfig.COLLISION_MAX_SUBSTEP_DIST, MissileSimConfig.COLLISION_MAX_SUBSTEPS);
     }
 
-    /** Distance from the entity origin (mesh base) to the model's front face along the heading. */
+    /**
+     * Distance from the entity origin (mesh base) to the model's front face along the heading.
+     */
     private double noseForward() {
         String id = this.getModelId();
         return MissileModels.center(id).y + MissileModels.dimensions(id).y * 0.5;
@@ -401,7 +393,12 @@ public class MissileEntity extends Projectile implements OBBEntity {
         if (x == obbX && y == obbY && z == obbZ && move.x == obbDx && move.y == obbDy && move.z == obbDz) {
             return;
         }
-        obbX = x; obbY = y; obbZ = z; obbDx = move.x; obbDy = move.y; obbDz = move.z;
+        obbX = x;
+        obbY = y;
+        obbZ = z;
+        obbDx = move.x;
+        obbDy = move.y;
+        obbDz = move.z;
 
         String modelId = this.getModelId();
         Vec3 dims = MissileModels.dimensions(modelId);
@@ -501,7 +498,9 @@ public class MissileEntity extends Projectile implements OBBEntity {
         return this.cruiseSpeed;
     }
 
-    /** Cruise-altitude memory used by the cruise stage's altitude smoothing (NaN until the first cruise tick). */
+    /**
+     * Cruise-altitude memory used by the cruise stage's altitude smoothing (NaN until the first cruise tick).
+     */
     public double getCruiseTargetY() {
         return this.cruiseTargetY;
     }
@@ -530,7 +529,9 @@ public class MissileEntity extends Projectile implements OBBEntity {
         this.loiterTicks = loiterTicks;
     }
 
-    /** Recompose the runtime flight profile from the current stage ids (call after any id changes). */
+    /**
+     * Recompose the runtime flight profile from the current stage ids (call after any id changes).
+     */
     private void rebuildFlightProfile() {
         this.flightProfile = FlightProfile.fromIds(this.ascentStageId, this.cruiseStageId, this.attackStageId);
     }
@@ -914,19 +915,25 @@ public class MissileEntity extends Projectile implements OBBEntity {
             return this;
         }
 
-        /** Pick the ascent-phase stage by its registered id (see {@link FlightStageRegistry}). */
+        /**
+         * Pick the ascent-phase stage by its registered id (see {@link FlightStageRegistry}).
+         */
         public Builder ascentStage(String id) {
             this.ascentStageId = id;
             return this;
         }
 
-        /** Pick the cruise-phase stage (e.g. {@code "cruise"} or {@code "loiter"}) by its registered id. */
+        /**
+         * Pick the cruise-phase stage (e.g. {@code "cruise"} or {@code "loiter"}) by its registered id.
+         */
         public Builder cruiseStage(String id) {
             this.cruiseStageId = id;
             return this;
         }
 
-        /** Pick the attack-phase stage (e.g. {@code "attack"} or {@code "dive"}) by its registered id. */
+        /**
+         * Pick the attack-phase stage (e.g. {@code "attack"} or {@code "dive"}) by its registered id.
+         */
         public Builder attackStage(String id) {
             this.attackStageId = id;
             return this;

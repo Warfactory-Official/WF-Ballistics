@@ -10,11 +10,7 @@ import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.EntityHitResult;
-import net.minecraft.world.phys.HitResult;
-import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.*;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.joml.Vector3d;
 
@@ -44,16 +40,16 @@ public final class SweptCollision {
     }
 
     /**
-     * @param self          the projectile (excluded from its own hit test)
-     * @param level         the level to trace in
-     * @param startPos      pre-move position of the projectile origin
-     * @param delta         this tick's movement vector
-     * @param noseForward   distance from the origin to the body's front face along the heading (0 for a
-     *                      point-like projectile); folded into the ray length so the nose, not the base,
-     *                      triggers the hit
-     * @param filter        entity hit predicate
+     * @param self           the projectile (excluded from its own hit test)
+     * @param level          the level to trace in
+     * @param startPos       pre-move position of the projectile origin
+     * @param delta          this tick's movement vector
+     * @param noseForward    distance from the origin to the body's front face along the heading (0 for a
+     *                       point-like projectile); folded into the ray length so the nose, not the base,
+     *                       triggers the hit
+     * @param filter         entity hit predicate
      * @param maxSubstepDist max length of one sub-segment (blocks)
-     * @param maxSubsteps   hard clamp on sub-segments per call
+     * @param maxSubsteps    hard clamp on sub-segments per call
      * @return the first block/entity hit along the corridor, or a {@code MISS} at the corridor end
      */
     public static HitResult sweep(Entity self, Level level,
@@ -156,16 +152,21 @@ public final class SweptCollision {
         return null;
     }
 
-    /** Axis-aligned box enclosing the oriented box (from its 8 world-space corners). */
+    /**
+     * Axis-aligned box enclosing the oriented box (from its 8 world-space corners).
+     */
     private static AABB enclosingAABB(OBB obb) {
         Vector3d[] v = obb.getVertices();
         double minX = v[0].x, minY = v[0].y, minZ = v[0].z;
         double maxX = minX, maxY = minY, maxZ = minZ;
         for (int i = 1; i < v.length; i++) {
             Vector3d p = v[i];
-            if (p.x < minX) minX = p.x; else if (p.x > maxX) maxX = p.x;
-            if (p.y < minY) minY = p.y; else if (p.y > maxY) maxY = p.y;
-            if (p.z < minZ) minZ = p.z; else if (p.z > maxZ) maxZ = p.z;
+            if (p.x < minX) minX = p.x;
+            else if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y;
+            else if (p.y > maxY) maxY = p.y;
+            if (p.z < minZ) minZ = p.z;
+            else if (p.z > maxZ) maxZ = p.z;
         }
         return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
     }

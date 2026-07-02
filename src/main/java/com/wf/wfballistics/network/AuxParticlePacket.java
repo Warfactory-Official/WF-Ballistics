@@ -1,6 +1,7 @@
 package com.wf.wfballistics.network;
 
 import com.wf.wfballistics.client.ClientPacketHandler;
+import com.wf.wfballistics.client.fx.WFEffects;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;
@@ -13,23 +14,11 @@ import java.util.function.Supplier;
  * A generic "play this named particle effect here" packet.
  *
  * <p>Rather than one packet class per effect, the effect is identified by a string key registered in
- * {@link com.wf.wfballistics.client.fx.WFEffects}; arbitrary parameters (scale, colour, counts, a target
+ * {@link WFEffects}; arbitrary parameters (scale, colour, counts, a target
  * entity id, ...) ride along in the {@link CompoundTag}. This keeps adding a new effect to a single
  * registration call instead of a new packet + wiring.
  */
-public class AuxParticlePacket {
-
-    public final String effect;
-    public final double x, y, z;
-    public final CompoundTag data;
-
-    public AuxParticlePacket(String effect, double x, double y, double z, CompoundTag data) {
-        this.effect = effect;
-        this.x = x;
-        this.y = y;
-        this.z = z;
-        this.data = data;
-    }
+public record AuxParticlePacket(String effect, double x, double y, double z, CompoundTag data) {
 
     public static void encode(AuxParticlePacket pkt, FriendlyByteBuf buf) {
         buf.writeUtf(pkt.effect);

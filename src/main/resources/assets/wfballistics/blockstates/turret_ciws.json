@@ -1,5 +1,7 @@
 {
   "variants": {
-    "": { "model": "wfballistics:block/turret_ciws" }
+    "": {
+      "model": "wfballistics:block/turret_ciws"
+    }
   }
 }

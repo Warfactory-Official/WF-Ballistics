@@ -7,7 +7,9 @@ import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
-/** Registered {@link SoundEvent}s. */
+/**
+ * Registered {@link SoundEvent}s.
+ */
 public final class WFSounds {
 
     public static final DeferredRegister<SoundEvent> SOUND_EVENTS =
@@ -20,7 +22,8 @@ public final class WFSounds {
     public static final RegistryObject<SoundEvent> EXPLOSION_LARGE_NEAR = register("weapon.explosion_large_near");
     public static final RegistryObject<SoundEvent> EXPLOSION_LARGE_FAR = register("weapon.explosion_large_far");
 
-    private WFSounds() { }
+    private WFSounds() {
+    }
 
     private static RegistryObject<SoundEvent> register(String name) {
         return SOUND_EVENTS.register(name,

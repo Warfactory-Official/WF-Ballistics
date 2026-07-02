@@ -26,28 +26,6 @@ public class BombletRenderer extends EntityRenderer<BombletEntity> {
         super(context);
     }
 
-    @Override
-    public ResourceLocation getTextureLocation(BombletEntity entity) {
-        return TEXTURE;
-    }
-
-    @Override
-    public void render(BombletEntity entity, float entityYaw, float partialTicks, PoseStack poseStack,
-                       MultiBufferSource buffer, int packedLight) {
-        poseStack.pushPose();
-
-        float spin = (entity.tickCount + partialTicks) * 12.0f;
-        poseStack.mulPose(Axis.YP.rotationDegrees(spin));
-        poseStack.mulPose(Axis.XP.rotationDegrees(spin * 0.7f));
-
-        VertexConsumer consumer = buffer.getBuffer(RenderType.entityCutoutNoCull(TEXTURE));
-        PoseStack.Pose pose = poseStack.last();
-        cube(pose.pose(), pose.normal(), consumer, HALF, LightTexture.FULL_BRIGHT);
-
-        poseStack.popPose();
-        super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
-    }
-
     private static void cube(Matrix4f m, Matrix3f n, VertexConsumer c, float h, int light) {
         face(m, n, c, light, -h, h, -h, -h, h, h, h, h, h, h, h, -h, 0, 1, 0);   // +Y top
         face(m, n, c, light, -h, -h, h, -h, -h, -h, h, -h, -h, h, -h, h, 0, -1, 0); // -Y bottom
@@ -76,5 +54,27 @@ public class BombletRenderer extends EntityRenderer<BombletEntity> {
                 .uv2(light)
                 .normal(n, nx, ny, nz)
                 .endVertex();
+    }
+
+    @Override
+    public ResourceLocation getTextureLocation(BombletEntity entity) {
+        return TEXTURE;
+    }
+
+    @Override
+    public void render(BombletEntity entity, float entityYaw, float partialTicks, PoseStack poseStack,
+                       MultiBufferSource buffer, int packedLight) {
+        poseStack.pushPose();
+
+        float spin = (entity.tickCount + partialTicks) * 12.0f;
+        poseStack.mulPose(Axis.YP.rotationDegrees(spin));
+        poseStack.mulPose(Axis.XP.rotationDegrees(spin * 0.7f));
+
+        VertexConsumer consumer = buffer.getBuffer(RenderType.entityCutoutNoCull(TEXTURE));
+        PoseStack.Pose pose = poseStack.last();
+        cube(pose.pose(), pose.normal(), consumer, HALF, LightTexture.FULL_BRIGHT);
+
+        poseStack.popPose();
+        super.render(entity, entityYaw, partialTicks, poseStack, buffer, packedLight);
     }
 }

@@ -15,7 +15,8 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class MissileTrailHandler {
 
-    private MissileTrailHandler() { }
+    private MissileTrailHandler() {
+    }
 
     @SubscribeEvent
     public static void onEntityJoin(EntityJoinLevelEvent event) {

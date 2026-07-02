@@ -1,17 +1,14 @@
 {
   "itemGroup.wfballistics": "WF Ballistics",
-
   "block.wfballistics.missile_listener_debug": "Missile Listener (Debug)",
   "block.wfballistics.missile_dispenser": "Missile Dispenser (Debug)",
   "block.wfballistics.turret_ciws": "CIWS Turret",
-
   "item.wfballistics.missile_cruise": "Cruise Missile",
   "item.wfballistics.missile_ballistic": "Ballistic Missile",
   "item.wfballistics.missile_nuclear": "Nuclear Missile",
   "item.wfballistics.missile_fragmentation": "Fragmentation Missile",
   "item.wfballistics.missile_cluster": "Cluster Missile",
   "item.wfballistics.missile_chemical": "Chemical Missile",
-
   "item.wfballistics.missile.model": "Airframe: %s",
   "item.wfballistics.missile.warhead": "Warhead: %s"
 }

@@ -15,12 +15,13 @@ import net.minecraft.client.player.LocalPlayer;
  */
 public final class ClientPacketHandler {
 
-    private ClientPacketHandler() { }
+    private ClientPacketHandler() {
+    }
 
     public static void handleKnockback(ExplosionKnockbackPacket pkt) {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player != null) {
-            player.setDeltaMovement(player.getDeltaMovement().add(pkt.x, pkt.y, pkt.z));
+            player.setDeltaMovement(player.getDeltaMovement().add(pkt.x(), pkt.y(), pkt.z()));
             player.hurtMarked = true; // makes the client push the new velocity back to the server
         }
     }
@@ -28,14 +29,14 @@ public final class ClientPacketHandler {
     public static void handleBlockFX(ExplosionBlockFXPacket pkt) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level != null) {
-            ExplosionEffectStandard.performClient(level, pkt.x, pkt.y, pkt.z, pkt.size, pkt.blocks);
+            ExplosionEffectStandard.performClient(level, pkt.x(), pkt.y(), pkt.z(), pkt.size(), pkt.blocks());
         }
     }
 
     public static void handleAuxParticle(AuxParticlePacket pkt) {
         ClientLevel level = Minecraft.getInstance().level;
         if (level != null) {
-            WFEffects.dispatch(pkt.effect, level, pkt.x, pkt.y, pkt.z, pkt.data);
+            WFEffects.dispatch(pkt.effect(), level, pkt.x(), pkt.y(), pkt.z(), pkt.data());
         }
     }
 }

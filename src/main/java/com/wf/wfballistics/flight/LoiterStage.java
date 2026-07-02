@@ -14,12 +14,17 @@ import org.jetbrains.annotations.Nullable;
 public final class LoiterStage implements FlightStage {
 
     public static final LoiterStage INSTANCE = new LoiterStage();
-
-    /** Horizontal radius (blocks) the drone orbits the target at. */
-    private static final double ORBIT_RADIUS = 24.0;
-    /** How long (ticks) to loiter on-station before diving (~10s at 20 TPS). */
+    /**
+     * How long (ticks) to loiter on-station before diving (~10s at 20 TPS).
+     */
     public static final int LOITER_TICKS = 200;
-    /** Altitude-hold gain toward the safe altitude. */
+    /**
+     * Horizontal radius (blocks) the drone orbits the target at.
+     */
+    private static final double ORBIT_RADIUS = 24.0;
+    /**
+     * Altitude-hold gain toward the safe altitude.
+     */
     private static final double ALTITUDE_GAIN = 0.1;
 
     private LoiterStage() {

@@ -43,6 +43,10 @@ public final class MissilePreset {
         this.splitDepth = b.splitDepth;
     }
 
+    public static Builder builder(String id, String modelId, String warheadId) {
+        return new Builder(id, modelId, warheadId);
+    }
+
     public String id() {
         return id;
     }
@@ -55,7 +59,9 @@ public final class MissilePreset {
         return warheadId;
     }
 
-    /** Builds (but does not spawn) a live missile aimed at {@code target}. */
+    /**
+     * Builds (but does not spawn) a live missile aimed at {@code target}.
+     */
     public MissileEntity build(Level level, Vec3 target) {
         MissileEntity.Builder b = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
                 .model(modelId)
@@ -79,10 +85,6 @@ public final class MissilePreset {
         return b.build();
     }
 
-    public static Builder builder(String id, String modelId, String warheadId) {
-        return new Builder(id, modelId, warheadId);
-    }
-
     public static final class Builder {
         private final String id;
         private final String modelId;
@@ -102,14 +104,18 @@ public final class MissilePreset {
             this.warheadId = WarheadRegistry.exists(warheadId) ? warheadId : WarheadRegistry.defaultId();
         }
 
-        /** Fly at a fixed altitude, ignoring terrain. */
+        /**
+         * Fly at a fixed altitude, ignoring terrain.
+         */
         public Builder highAltitude(double cruiseAltitude) {
             this.highAltitude = true;
             this.altitudeParam = cruiseAltitude;
             return this;
         }
 
-        /** Hug the ground at the given clearance (the default). */
+        /**
+         * Hug the ground at the given clearance (the default).
+         */
         public Builder terrainFollow(double clearance) {
             this.highAltitude = false;
             this.altitudeParam = clearance;
@@ -136,13 +142,17 @@ public final class MissilePreset {
             return this;
         }
 
-        /** Airburst this many blocks above the target (0 = contact). */
+        /**
+         * Airburst this many blocks above the target (0 = contact).
+         */
         public Builder explosionOffset(float offset) {
             this.explosionOffset = offset;
             return this;
         }
 
-        /** Recursive-fragmentation generations (see the {@code recursive_frag} warhead). */
+        /**
+         * Recursive-fragmentation generations (see the {@code recursive_frag} warhead).
+         */
         public Builder splitDepth(int splitDepth) {
             this.splitDepth = splitDepth;
             return this;

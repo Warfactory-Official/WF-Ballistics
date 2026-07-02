@@ -1,0 +1,9 @@
+{
+  "loader": "forge:obj",
+  "model": "wfballistics:raw_models/missiles/missile_strong.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wfballistics:models/missiles/missile_strong_bu",
+    "particle": "wfballistics:models/missiles/missile_strong_bu"
+  }
+}

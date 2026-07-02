@@ -1,11 +1,7 @@
 package com.wf.wfballistics.client.wiaj;
 
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferBuilder;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexBuffer;
-import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.*;
 import com.mojang.math.Axis;
 import com.wf.wfballistics.client.particle.RocketFlameParticle;
 import com.wf.wfballistics.client.particle.WFParticleSprites;
@@ -31,14 +27,14 @@ public class Debris {
     private static final int MAX_AGE = 100;
 
     private final WorldInAJar jar;
-
-    private double x, y, z, prevX, prevY, prevZ;
-    private double vx, vy, vz;
-    private float pitch, yaw, prevPitch, prevYaw;
     private final float pitchSpeed, yawSpeed;
     private final boolean trail;
     private final float trailScale;
-
+    private double x, y, z, prevX, prevY, prevZ;
+    private final double vx;
+    private double vy;
+    private final double vz;
+    private float pitch, yaw, prevPitch, prevYaw;
     private int age = 0;
     private boolean canCollide = false;
     private boolean expired = false;

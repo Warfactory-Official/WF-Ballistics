@@ -48,9 +48,26 @@ public class EntityProcessorCross implements IEntityProcessor {
         this(0);
     }
 
-    /** @param nodeDist spacing of the six line-of-sight sample nodes; {@code 0} samples the centre only */
+    /**
+     * @param nodeDist spacing of the six line-of-sight sample nodes; {@code 0} samples the centre only
+     */
     public EntityProcessorCross(double nodeDist) {
         this.nodeDist = nodeDist;
+    }
+
+    /**
+     * Distance from the blast centre to the nearest point of the entity's box, as a fraction of {@code size}.
+     */
+    protected static double nearestSurfaceDistanceScaled(Entity entity, double x, double y, double z, float size) {
+        AABB box = entity.getBoundingBox();
+        double xDist = (box.minX <= x && box.maxX >= x) ? 0 : Math.min(Math.abs(box.minX - x), Math.abs(box.maxX - x));
+        double yDist = (box.minY <= y && box.maxY >= y) ? 0 : Math.min(Math.abs(box.minY - y), Math.abs(box.maxY - y));
+        double zDist = (box.minZ <= z && box.maxZ >= z) ? 0 : Math.min(Math.abs(box.minZ - z), Math.abs(box.maxZ - z));
+        return Math.sqrt(xDist * xDist + yDist * yDist + zDist * zDist) / size;
+    }
+
+    protected static DamageSource explosionDamage(ExplosionAEF explosion) {
+        return explosion.level.damageSources().explosion(explosion.compat);
     }
 
     public EntityProcessorCross setAllowSelfDamage() {
@@ -134,7 +151,7 @@ public class EntityProcessorCross implements IEntityProcessor {
 
     private Vec3[] buildNodes(double x, double y, double z) {
         if (nodeDist <= 0) {
-            return new Vec3[]{ new Vec3(x, y, z) };
+            return new Vec3[]{new Vec3(x, y, z)};
         }
         Vec3[] nodes = new Vec3[7];
         Direction[] dirs = Direction.values();
@@ -146,15 +163,6 @@ public class EntityProcessorCross implements IEntityProcessor {
         return nodes;
     }
 
-    /** Distance from the blast centre to the nearest point of the entity's box, as a fraction of {@code size}. */
-    protected static double nearestSurfaceDistanceScaled(Entity entity, double x, double y, double z, float size) {
-        AABB box = entity.getBoundingBox();
-        double xDist = (box.minX <= x && box.maxX >= x) ? 0 : Math.min(Math.abs(box.minX - x), Math.abs(box.maxX - x));
-        double yDist = (box.minY <= y && box.maxY >= y) ? 0 : Math.min(Math.abs(box.minY - y), Math.abs(box.maxY - y));
-        double zDist = (box.minZ <= z && box.maxZ >= z) ? 0 : Math.min(Math.abs(box.minZ - z), Math.abs(box.maxZ - z));
-        return Math.sqrt(xDist * xDist + yDist * yDist + zDist * zDist) / size;
-    }
-
     /**
      * Deals the blast damage. Override to change the damage source or to route through a custom damage
      * pipeline (see {@link EntityProcessorCrossSmooth}).
@@ -163,18 +171,18 @@ public class EntityProcessorCross implements IEntityProcessor {
         entity.hurt(explosionDamage(explosion), amount);
     }
 
-    /** Vanilla-style scaling damage. Override for flat or otherwise-shaped falloff. */
+    /**
+     * Vanilla-style scaling damage. Override for flat or otherwise-shaped falloff.
+     */
     public float calculateDamage(double distanceScaled, double density, double knockback, float size) {
         return (int) ((knockback * knockback + knockback) / 2.0D * 8.0D * size + 1.0D);
     }
 
-    /** Whether a given entity should receive knockback at all; override to exempt e.g. projectiles. */
+    /**
+     * Whether a given entity should receive knockback at all; override to exempt e.g. projectiles.
+     */
     protected boolean shouldDealKnockback(Entity entity) {
         return true;
-    }
-
-    protected static DamageSource explosionDamage(ExplosionAEF explosion) {
-        return explosion.level.damageSources().explosion(explosion.compat);
     }
 
     public EntityProcessorCross withRangeMod(float mod) {

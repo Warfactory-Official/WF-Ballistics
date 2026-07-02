@@ -13,5 +13,6 @@ public final class WFParticleSprites {
     public static SpriteSet ash;
     public static SpriteSet mist;
 
-    private WFParticleSprites() { }
+    private WFParticleSprites() {
+    }
 }

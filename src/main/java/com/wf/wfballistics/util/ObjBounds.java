@@ -19,28 +19,12 @@ import java.nio.charset.StandardCharsets;
  */
 public final class ObjBounds {
 
-    private ObjBounds() { }
-
-    /**
-     * Axis-aligned min/max of a mesh, in model units. {@code any} is false when no vertices were read.
-     */
-    public record Bounds(double minX, double minY, double minZ,
-                         double maxX, double maxY, double maxZ, boolean any) {
-
-        public static final Bounds EMPTY = new Bounds(0, 0, 0, 0, 0, 0, false);
-
-        /** @return per-axis size (max - min). */
-        public Vec3 size() {
-            return any ? new Vec3(maxX - minX, maxY - minY, maxZ - minZ) : Vec3.ZERO;
-        }
-
-        /** @return geometric center (midpoint of min/max) in model space. */
-        public Vec3 center() {
-            return any ? new Vec3((minX + maxX) / 2.0, (minY + maxY) / 2.0, (minZ + maxZ) / 2.0) : Vec3.ZERO;
-        }
+    private ObjBounds() {
     }
 
-    /** Scans the obj at the given jar resource path for its axis-aligned bounds. */
+    /**
+     * Scans the obj at the given jar resource path for its axis-aligned bounds.
+     */
     public static Bounds bounds(String jarResourcePath) {
         double minX = Double.POSITIVE_INFINITY, minY = Double.POSITIVE_INFINITY, minZ = Double.POSITIVE_INFINITY;
         double maxX = Double.NEGATIVE_INFINITY, maxY = Double.NEGATIVE_INFINITY, maxZ = Double.NEGATIVE_INFINITY;
@@ -59,9 +43,12 @@ public final class ObjBounds {
                     double x = Double.parseDouble(tok[1]);
                     double y = Double.parseDouble(tok[2]);
                     double z = Double.parseDouble(tok[3]);
-                    minX = Math.min(minX, x); maxX = Math.max(maxX, x);
-                    minY = Math.min(minY, y); maxY = Math.max(maxY, y);
-                    minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+                    minX = Math.min(minX, x);
+                    maxX = Math.max(maxX, x);
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                    minZ = Math.min(minZ, z);
+                    maxZ = Math.max(maxZ, z);
                     any = true;
                 } catch (NumberFormatException ignored) {
                     // malformed vertex line - skip it
@@ -79,7 +66,9 @@ public final class ObjBounds {
         return bounds(jarResourcePath).size();
     }
 
-    /** @return the geometric center offset of the mesh (midpoint of its bounds), in model units. */
+    /**
+     * @return the geometric center offset of the mesh (midpoint of its bounds), in model units.
+     */
     public static Vec3 center(String jarResourcePath) {
         return bounds(jarResourcePath).center();
     }
@@ -89,7 +78,9 @@ public final class ObjBounds {
         return Math.max(d.x, Math.max(d.y, d.z));
     }
 
-    /** Resolves a model json's referenced obj to its jar resource path, or null if unavailable. */
+    /**
+     * Resolves a model json's referenced obj to its jar resource path, or null if unavailable.
+     */
     private static String objResourcePath(ResourceLocation modelId) {
         String jsonPath = "/assets/" + modelId.getNamespace() + "/models/" + modelId.getPath() + ".json";
         try (InputStream in = ObjBounds.class.getResourceAsStream(jsonPath)) {
@@ -104,7 +95,9 @@ public final class ObjBounds {
         }
     }
 
-    /** @return the mesh bounds for a model json's referenced obj, in model units. */
+    /**
+     * @return the mesh bounds for a model json's referenced obj, in model units.
+     */
     public static Bounds boundsFromModel(ResourceLocation modelId) {
         String path = objResourcePath(modelId);
         return path == null ? Bounds.EMPTY : bounds(path);
@@ -114,7 +107,9 @@ public final class ObjBounds {
         return boundsFromModel(modelId).size();
     }
 
-    /** @return the geometric center offset for a model json's referenced obj, in model units. */
+    /**
+     * @return the geometric center offset for a model json's referenced obj, in model units.
+     */
     public static Vec3 centerFromModel(ResourceLocation modelId) {
         return boundsFromModel(modelId).center();
     }
@@ -122,5 +117,28 @@ public final class ObjBounds {
     public static double longestAxisFromModel(ResourceLocation modelId) {
         Vec3 d = dimensionsFromModel(modelId);
         return Math.max(d.x, Math.max(d.y, d.z));
+    }
+
+    /**
+     * Axis-aligned min/max of a mesh, in model units. {@code any} is false when no vertices were read.
+     */
+    public record Bounds(double minX, double minY, double minZ,
+                         double maxX, double maxY, double maxZ, boolean any) {
+
+        public static final Bounds EMPTY = new Bounds(0, 0, 0, 0, 0, 0, false);
+
+        /**
+         * @return per-axis size (max - min).
+         */
+        public Vec3 size() {
+            return any ? new Vec3(maxX - minX, maxY - minY, maxZ - minZ) : Vec3.ZERO;
+        }
+
+        /**
+         * @return geometric center (midpoint of min/max) in model space.
+         */
+        public Vec3 center() {
+            return any ? new Vec3((minX + maxX) / 2.0, (minY + maxY) / 2.0, (minZ + maxZ) / 2.0) : Vec3.ZERO;
+        }
     }
 }

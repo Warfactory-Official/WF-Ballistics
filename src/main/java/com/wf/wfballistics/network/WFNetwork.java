@@ -29,16 +29,16 @@ import java.util.Optional;
 public final class WFNetwork {
 
     private static final int PROTOCOL = 1;
-    private static int packetId = 0;
-
     public static final SimpleChannel CHANNEL = NetworkRegistry.ChannelBuilder
             .named(new ResourceLocation(WFBallistics.MODID, "main"))
             .networkProtocolVersion(() -> Integer.toString(PROTOCOL))
             .clientAcceptedVersions(Integer.toString(PROTOCOL)::equals)
             .serverAcceptedVersions(Integer.toString(PROTOCOL)::equals)
             .simpleChannel();
+    private static int packetId = 0;
 
-    private WFNetwork() { }
+    private WFNetwork() {
+    }
 
     public static void register() {
         clientbound(ExplosionKnockbackPacket.class,
@@ -65,7 +65,9 @@ public final class WFNetwork {
         CHANNEL.registerMessage(packetId++, type, encoder, decoder, handler, Optional.of(NetworkDirection.PLAY_TO_SERVER));
     }
 
-    /** Sends a packet from the client to the server over the mod channel. */
+    /**
+     * Sends a packet from the client to the server over the mod channel.
+     */
     public static void sendToServer(Object msg) {
         CHANNEL.sendToServer(msg);
     }
@@ -81,12 +83,16 @@ public final class WFNetwork {
         CHANNEL.send(PacketDistributor.TRACKING_CHUNK.with(() -> chunk), msg);
     }
 
-    /** Sends to a specific {@link net.minecraft.server.level.ServerPlayer} via the player distributor. */
+    /**
+     * Sends to a specific {@link net.minecraft.server.level.ServerPlayer} via the player distributor.
+     */
     public static void sendToPlayer(net.minecraft.server.level.ServerPlayer player, Object msg) {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), msg);
     }
 
-    /** Radius-based fallback when an explicit cutoff (rather than view distance) is wanted. */
+    /**
+     * Radius-based fallback when an explicit cutoff (rather than view distance) is wanted.
+     */
     public static void sendToAllAround(Level level, double x, double y, double z, double radius, Object msg) {
         ResourceKey<Level> dim = level.dimension();
         CHANNEL.send(PacketDistributor.NEAR.with(() -> new PacketDistributor.TargetPoint(x, y, z, radius, dim)), msg);

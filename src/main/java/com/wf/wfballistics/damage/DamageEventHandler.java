@@ -22,7 +22,8 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = WFBallistics.MODID)
 public final class DamageEventHandler {
 
-    private DamageEventHandler() { }
+    private DamageEventHandler() {
+    }
 
     @SubscribeEvent
     public static void onLivingHurt(LivingHurtEvent event) {

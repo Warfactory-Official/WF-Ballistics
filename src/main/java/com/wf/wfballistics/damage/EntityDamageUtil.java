@@ -8,7 +8,8 @@ import net.minecraft.world.entity.LivingEntity;
  */
 public final class EntityDamageUtil {
 
-    private EntityDamageUtil() { }
+    private EntityDamageUtil() {
+    }
 
     /**
      * @param ignoreIFrame clear the victim's invulnerability window first, so rapid/multi-hit sources land
@@ -30,7 +31,9 @@ public final class EntityDamageUtil {
         }
     }
 
-    /** Convenience overload with no piercing. */
+    /**
+     * Convenience overload with no piercing.
+     */
     public static boolean dealDamage(LivingEntity victim, DamageSource source, float amount, boolean ignoreIFrame) {
         return dealDamage(victim, source, amount, ignoreIFrame, 0F, 0F);
     }

@@ -32,7 +32,9 @@ public final class MissilePresetRegistry {
         return Collections.unmodifiableCollection(PRESETS.values());
     }
 
-    /** Registers the built-in presets. Idempotent; call before {@link ModItems} enumerates them. */
+    /**
+     * Registers the built-in presets. Idempotent; call before {@link ModItems} enumerates them.
+     */
     public static void bootstrap() {
         if (bootstrapped) {
             return;

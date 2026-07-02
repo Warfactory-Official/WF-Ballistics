@@ -4,7 +4,9 @@ import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.aef.interfaces.IDropChanceMutator;
 import net.minecraft.world.level.block.state.BlockState;
 
-/** Forces a fixed drop chance for every block, ignoring the processor's distance-based default. */
+/**
+ * Forces a fixed drop chance for every block, ignoring the processor's distance-based default.
+ */
 public class DropChanceMutatorStandard implements IDropChanceMutator {
 
     private final float chance;

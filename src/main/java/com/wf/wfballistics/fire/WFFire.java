@@ -20,22 +20,28 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = WFBallistics.MODID, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class WFFire {
 
-    public static final Capability<WFFireData> CAPABILITY = CapabilityManager.get(new CapabilityToken<>() { });
+    public static final Capability<WFFireData> CAPABILITY = CapabilityManager.get(new CapabilityToken<>() {
+    });
     public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "fire");
 
-    private WFFire() { }
+    private WFFire() {
+    }
 
     @SubscribeEvent
     public static void onRegisterCapabilities(RegisterCapabilitiesEvent event) {
         event.register(WFFireData.class);
     }
 
-    /** @return the entity's fire state, or {@code null} if the capability is absent (e.g. wrong side) */
+    /**
+     * @return the entity's fire state, or {@code null} if the capability is absent (e.g. wrong side)
+     */
     public static WFFireData get(LivingEntity entity) {
         return entity.getCapability(CAPABILITY).orElse(null);
     }
 
-    /** Sets an entity alight with custom fire. Server-side; no-op if the capability is missing. */
+    /**
+     * Sets an entity alight with custom fire. Server-side; no-op if the capability is missing.
+     */
     public static void ignite(LivingEntity entity, FireType type, int ticks) {
         WFFireData data = get(entity);
         if (data != null) {

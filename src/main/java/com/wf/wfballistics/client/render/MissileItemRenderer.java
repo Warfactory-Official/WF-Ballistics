@@ -29,16 +29,16 @@ public class MissileItemRenderer extends BlockEntityWithoutLevelRenderer {
 
     private static MissileItemRenderer instance;
 
+    public MissileItemRenderer() {
+        super(Minecraft.getInstance().getBlockEntityRenderDispatcher(),
+                Minecraft.getInstance().getEntityModels());
+    }
+
     public static MissileItemRenderer instance() {
         if (instance == null) {
             instance = new MissileItemRenderer();
         }
         return instance;
-    }
-
-    public MissileItemRenderer() {
-        super(Minecraft.getInstance().getBlockEntityRenderDispatcher(),
-                Minecraft.getInstance().getEntityModels());
     }
 
     @Override

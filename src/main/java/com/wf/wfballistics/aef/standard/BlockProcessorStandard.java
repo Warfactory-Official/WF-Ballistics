@@ -37,7 +37,8 @@ public class BlockProcessorStandard implements IBlockProcessor {
     protected IFortuneMutator fortune;
     protected IBlockMutator convert;
 
-    public BlockProcessorStandard() { }
+    public BlockProcessorStandard() {
+    }
 
     public BlockProcessorStandard withChance(IDropChanceMutator chance) {
         this.chance = chance;
@@ -102,13 +103,17 @@ public class BlockProcessorStandard implements IBlockProcessor {
         }
     }
 
-    /** No block ever drops items (clean vaporising blast). */
+    /**
+     * No block ever drops items (clean vaporising blast).
+     */
     public BlockProcessorStandard setNoDrop() {
         this.chance = new DropChanceMutatorStandard(0F);
         return this;
     }
 
-    /** Every block drops its items (loot-friendly mining charge). */
+    /**
+     * Every block drops its items (loot-friendly mining charge).
+     */
     public BlockProcessorStandard setAllDrop() {
         this.chance = new DropChanceMutatorStandard(1F);
         return this;

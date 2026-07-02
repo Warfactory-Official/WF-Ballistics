@@ -33,19 +33,25 @@ public final class SwarmManager {
     private SwarmManager() {
     }
 
-    /** @return a fresh, non-zero swarm id. */
+    /**
+     * @return a fresh, non-zero swarm id.
+     */
     public static long newId(Level level) {
         long id = level.random.nextLong();
         return id != 0L ? id : 1L;
     }
 
-    /** @return true if both missiles are in the same (non-zero) swarm. */
+    /**
+     * @return true if both missiles are in the same (non-zero) swarm.
+     */
     public static boolean sameSwarm(MissileEntity a, MissileEntity b) {
         long id = a.getSwarmId();
         return id != 0L && id == b.getSwarmId();
     }
 
-    /** @return the live members of {@code swarmId} in {@code level} (empty for id 0 / unknown). */
+    /**
+     * @return the live members of {@code swarmId} in {@code level} (empty for id 0 / unknown).
+     */
     public static Set<MissileEntity> members(Level level, long swarmId) {
         if (swarmId == 0L) {
             return Set.of();
@@ -58,14 +64,16 @@ public final class SwarmManager {
         return set != null ? set : Set.of();
     }
 
-    /** @return how many live members {@code swarmId} has in {@code level}. */
+    /**
+     * @return how many live members {@code swarmId} has in {@code level}.
+     */
     public static int count(Level level, long swarmId) {
         return members(level, swarmId).size();
     }
 
     /**
      * @return same-swarm members within {@code radius} of {@code missile} (excluding itself). Allocates a
-     *         small list, so call it at most once per member per tick.
+     * small list, so call it at most once per member per tick.
      */
     public static List<MissileEntity> nearby(MissileEntity missile, double radius) {
         Set<MissileEntity> set = members(missile.level(), missile.getSwarmId());

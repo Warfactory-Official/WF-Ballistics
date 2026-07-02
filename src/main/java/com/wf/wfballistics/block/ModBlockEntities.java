@@ -14,7 +14,9 @@ public class ModBlockEntities {
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES =
             DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, WFBallistics.MODID);
 
-    public static final RegistryObject<BlockEntityType<MissileListenerDebugBlockEntity>> MISSILE_LISTENER_DEBUG =
+    public static void register(IEventBus bus) {
+        BLOCK_ENTITIES.register(bus);
+    }    public static final RegistryObject<BlockEntityType<MissileListenerDebugBlockEntity>> MISSILE_LISTENER_DEBUG =
             BLOCK_ENTITIES.register("missile_listener_debug", () -> BlockEntityType.Builder.of(
                     MissileListenerDebugBlockEntity::new, ModBlocks.MISSILE_LISTENER_DEBUG.get()).build(null));
 
@@ -26,7 +28,5 @@ public class ModBlockEntities {
             BLOCK_ENTITIES.register("turret_ciws", () -> BlockEntityType.Builder.of(
                     TurretCiwsBlockEntity::new, ModBlocks.TURRET_CIWS.get()).build(null));
 
-    public static void register(IEventBus bus) {
-        BLOCK_ENTITIES.register(bus);
-    }
+
 }

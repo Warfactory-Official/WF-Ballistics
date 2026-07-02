@@ -20,7 +20,7 @@ public interface IEntityProcessor {
 
     /**
      * @return for every {@link Player} caught in the blast, the knockback impulse (world-space velocity
-     *         delta) that should be forwarded to its client. Never {@code null}.
+     * delta) that should be forwarded to its client. Never {@code null}.
      */
     Map<Player, Vec3> process(ExplosionAEF explosion, Level level, double x, double y, double z, float size);
 }

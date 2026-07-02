@@ -7,7 +7,9 @@ package com.wf.wfballistics.client.render;
  */
 public interface DirectBufferAccess {
 
-    /** Native address of the backing ByteBuffer's storage. Refreshed on buffer growth. */
+    /**
+     * Native address of the backing ByteBuffer's storage. Refreshed on buffer growth.
+     */
     long hbm$bufferAddress();
 
     int hbm$nextElementByte();
@@ -18,6 +20,8 @@ public interface DirectBufferAccess {
 
     void hbm$setVertices(int value);
 
-    /** Ensure at least {@code bytes} additional bytes are available, growing if needed. */
+    /**
+     * Ensure at least {@code bytes} additional bytes are available, growing if needed.
+     */
     void hbm$ensureCapacity(int bytes);
 }

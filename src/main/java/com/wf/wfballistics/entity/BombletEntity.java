@@ -32,11 +32,9 @@ public class BombletEntity extends Projectile {
     public static final float MAX_DAMAGE = 40.0f;
     // Ticks an airborne bomblet flies before self-detonating, so a cluster still goes off over a gap/void.
     public static final int DEFAULT_FUSE = 60;
-
-    private static final double GRAVITY = 0.05;
-    private static final double DRAG = 0.99;
-
-    /** Default sub-munition: a small radius kill plus a compact fireball puff. */
+    /**
+     * Default sub-munition: a small radius kill plus a compact fireball puff.
+     */
     public static final Detonation STANDARD = (bomblet, pos) -> {
         Level level = bomblet.level();
         if (level.isClientSide) {
@@ -45,11 +43,13 @@ public class BombletEntity extends Projectile {
         ExplosionNukeGeneric.dealDamage(level, pos, BLAST_RADIUS, MAX_DAMAGE);
         ExplosionSmallCreator.composeEffect(level, pos.x, pos.y, pos.z, 3, 1.0f, 0.6f);
     };
-
-    /** A dud: falls and vanishes without a bang (useful for tracer-only or test bursts). */
+    /**
+     * A dud: falls and vanishes without a bang (useful for tracer-only or test bursts).
+     */
     public static final Detonation INERT = (bomblet, pos) -> {
     };
-
+    private static final double GRAVITY = 0.05;
+    private static final double DRAG = 0.99;
     private static final Map<String, Detonation> WARHEADS = new HashMap<>();
 
     static {
@@ -149,7 +149,9 @@ public class BombletEntity extends Projectile {
         return super.canHitEntity(entity);
     }
 
-    /** Fires the configured warhead at {@code pos} and removes the bomblet. */
+    /**
+     * Fires the configured warhead at {@code pos} and removes the bomblet.
+     */
     private void detonate(Vec3 pos) {
         if (this.detonated) {
             return;

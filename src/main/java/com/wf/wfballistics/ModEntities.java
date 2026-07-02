@@ -6,10 +6,10 @@ import com.wf.wfballistics.entity.EntityNukeTorex;
 import com.wf.wfballistics.entity.MistEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
+import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
-import net.minecraftforge.eventbus.api.IEventBus;
 
 public class ModEntities {
     // 1. Create the DeferredRegister for Entity Types
@@ -37,7 +37,7 @@ public class ModEntities {
 
     // Mist effect cloud: a stationary, fluid-imbued area entity.
     public static final RegistryObject<EntityType<MistEntity>> MIST =
-            ENTITY_TYPES.register("mist", () -> EntityType.Builder.<MistEntity>of(MistEntity::new, MobCategory.MISC)
+            ENTITY_TYPES.register("mist", () -> EntityType.Builder.of(MistEntity::new, MobCategory.MISC)
                     .sized(1.0F, 1.0F)
                     .clientTrackingRange(10)
                     .updateInterval(Integer.MAX_VALUE)

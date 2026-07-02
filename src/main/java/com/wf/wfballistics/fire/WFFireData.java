@@ -37,7 +37,9 @@ public class WFFireData implements INBTSerializable<CompoundTag> {
         return type;
     }
 
-    /** Advances the burn by one tick. Call once per entity tick on the server. */
+    /**
+     * Advances the burn by one tick. Call once per entity tick on the server.
+     */
     public void tick() {
         if (ticks > 0 && --ticks <= 0) {
             type = FireType.NORMAL;

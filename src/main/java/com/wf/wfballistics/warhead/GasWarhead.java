@@ -17,18 +17,24 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class GasWarhead {
 
+    /**
+     * Registered warhead id (also selectable from the dispenser GUI).
+     */
+    public static final String ID = "gas";
+
     private GasWarhead() {
     }
 
-    /** Registered warhead id (also selectable from the dispenser GUI). */
-    public static final String ID = "gas";
-
-    /** The agent released. Mustard gas: a persistent, blistering, area-denial cloud. */
+    /**
+     * The agent released. Mustard gas: a persistent, blistering, area-denial cloud.
+     */
     private static Fluid agent() {
         return WFFluids.MUSTARD_GAS.get();
     }
 
-    /** Warhead entry point (registered as {@link #ID}). */
+    /**
+     * Warhead entry point (registered as {@link #ID}).
+     */
     public static void detonate(MissileEntity missile, Vec3 pos) {
         Level level = missile.level();
         if (level.isClientSide) {

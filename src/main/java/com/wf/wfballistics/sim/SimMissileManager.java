@@ -12,13 +12,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.world.ForgeChunkManager;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * Drives all off-world missiles for one level each server tick: advances their positions from
@@ -127,7 +121,9 @@ public final class SimMissileManager {
         }
     }
 
-    /** CHANCE_ROLL: when the two tracks are within intercept distance, roll for the kill. */
+    /**
+     * CHANCE_ROLL: when the two tracks are within intercept distance, roll for the kill.
+     */
     private static void resolveByChance(ServerLevel level, SimMissile interceptor, SimMissile target, Set<SimMissile> dead) {
         double d = MissileSimConfig.INTERCEPT_DISTANCE;
         if (interceptor.pos.distanceToSqr(target.pos) <= d * d) {
@@ -146,14 +142,13 @@ public final class SimMissileManager {
      * IN_WORLD: predict the collision area and, once it is imminent, spawn both missiles as real
      * entities a short distance back from it and let them play out in the loaded world.
      * TODO: Interception mechanics
-
      */
     private static void resolveInWorld(ServerLevel level, SimMissile interceptor, SimMissile target, Set<SimMissile> dead) {
         CollisionPredictor.Result p = CollisionPredictor.predict(interceptor, target);
-        if (p == null || p.ticks > MissileSimConfig.INTERCEPT_LEAD_TICKS) {
+        if (p == null || p.ticks() > MissileSimConfig.INTERCEPT_LEAD_TICKS) {
             return; // no imminent collision yet; keep simulating
         }
-        Vec3 c = p.point;
+        Vec3 c = p.point();
         double dist = MissileSimConfig.INTERCEPT_SPAWN_DISTANCE;
 
         Vec3 tHeading = horizontalUnit(target.pos, target.target);
@@ -169,7 +164,7 @@ public final class SimMissileManager {
 
         dead.add(interceptor);
         dead.add(target);
-        LOGGER.debug("[wfballistics] in-world interception staged around {} ({} ticks out)", c, p.ticks);
+        LOGGER.debug("[wfballistics] in-world interception staged around {} ({} ticks out)", c, p.ticks());
     }
 
     private static void spawnInertInterceptor(ServerLevel level, SimMissile interceptor, Vec3 spawnPos, Vec3 aim) {

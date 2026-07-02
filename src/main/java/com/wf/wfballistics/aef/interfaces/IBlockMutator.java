@@ -19,9 +19,13 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public interface IBlockMutator {
 
-    /** Called with the block's pre-blast state, before the block is removed. */
+    /**
+     * Called with the block's pre-blast state, before the block is removed.
+     */
     void mutatePre(ExplosionAEF explosion, BlockState state, BlockPos pos);
 
-    /** Called after blocks have been cleared; {@code pos} is typically air at this point. */
+    /**
+     * Called after blocks have been cleared; {@code pos} is typically air at this point.
+     */
     void mutatePost(ExplosionAEF explosion, BlockPos pos);
 }

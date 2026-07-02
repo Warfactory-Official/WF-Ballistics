@@ -81,7 +81,9 @@ public class BlockAllocatorStandard implements IBlockAllocator {
         return affectedBlocks;
     }
 
-    /** Resistance the exploder sees for this block (lets a custom exploder override per-block resistance). */
+    /**
+     * Resistance the exploder sees for this block (lets a custom exploder override per-block resistance).
+     */
     protected float blockResistance(ExplosionAEF explosion, Level level, BlockPos pos, BlockState state, float power) {
         FluidState fluid = state.getFluidState();
         return explosion.exploder != null

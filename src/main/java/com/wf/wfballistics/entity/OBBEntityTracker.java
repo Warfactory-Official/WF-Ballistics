@@ -18,7 +18,8 @@ public final class OBBEntityTracker {
 
     private static final Map<Level, Set<Entity>> BY_LEVEL = new ConcurrentHashMap<>();
 
-    private OBBEntityTracker() { }
+    private OBBEntityTracker() {
+    }
 
     @SubscribeEvent
     public static void onJoin(EntityJoinLevelEvent event) {

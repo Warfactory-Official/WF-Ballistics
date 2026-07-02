@@ -70,7 +70,9 @@ public final class WFServerEvents {
                                                 DoubleArgumentType.getDouble(ctx, "speed")))))));
     }
 
-    /** Scatters a spherical burst of bomblets from the player's eye position. */
+    /**
+     * Scatters a spherical burst of bomblets from the player's eye position.
+     */
     private static int spawnFrag(CommandSourceStack src, int count, double speed) throws CommandSyntaxException {
         ServerPlayer player = src.getPlayerOrException();
         Vec3 origin = player.getEyePosition();

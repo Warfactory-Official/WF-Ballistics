@@ -23,7 +23,7 @@ public interface IBlockAllocator {
      *                  {@link ExplosionAEF#compat} for resistance / destroy checks
      * @param size      the explosion radius (same meaning as a vanilla explosion's power)
      * @return the positions the blast can reach. May be empty, never {@code null}. The returned set is
-     *         owned by the caller and may be mutated by later pipeline stages.
+     * owned by the caller and may be mutated by later pipeline stages.
      */
     Set<BlockPos> allocate(ExplosionAEF explosion, Level level, double x, double y, double z, float size);
 }

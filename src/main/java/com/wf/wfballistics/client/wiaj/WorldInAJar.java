@@ -36,27 +36,6 @@ public class WorldInAJar implements BlockAndTintGetter {
         this.blocks = new BlockState[x][y][z];
     }
 
-    public void setBlock(int x, int y, int z, BlockState state) {
-        if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ) {
-            return;
-        }
-        this.blocks[x][y][z] = state;
-    }
-
-    public BlockState getBlockState(int x, int y, int z) {
-        if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ) {
-            return air;
-        }
-        BlockState s = this.blocks[x][y][z];
-        return s != null ? s : air;
-    }
-
-    public void setLight(Level level, BlockPos pos) {
-        this.skyLight = level.getBrightness(LightLayer.SKY, pos);
-        this.blockLight = level.getBrightness(LightLayer.BLOCK, pos);
-    }
-
-
     public static WorldInAJar fromLevel(Level level, int cX, int cY, int cZ, int size, int retry, RandomSource rand) {
         WorldInAJar jar = new WorldInAJar(size, size, size);
         if (size <= 0) {
@@ -87,6 +66,26 @@ public class WorldInAJar implements BlockAndTintGetter {
 
         jar.tint = level.getBlockTint(new BlockPos(cX, cY, cZ), BiomeColors.GRASS_COLOR_RESOLVER);
         return jar;
+    }
+
+    public void setBlock(int x, int y, int z, BlockState state) {
+        if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ) {
+            return;
+        }
+        this.blocks[x][y][z] = state;
+    }
+
+    public BlockState getBlockState(int x, int y, int z) {
+        if (x < 0 || x >= sizeX || y < 0 || y >= sizeY || z < 0 || z >= sizeZ) {
+            return air;
+        }
+        BlockState s = this.blocks[x][y][z];
+        return s != null ? s : air;
+    }
+
+    public void setLight(Level level, BlockPos pos) {
+        this.skyLight = level.getBrightness(LightLayer.SKY, pos);
+        this.blockLight = level.getBrightness(LightLayer.BLOCK, pos);
     }
 
     private boolean neighborNonAir(int x, int y, int z) {

@@ -22,17 +22,6 @@ import java.util.List;
  */
 public class ExplosionEffectStandard implements IExplosionSFX {
 
-    @Override
-    public void doEffect(ExplosionAEF explosion, Level level, double x, double y, double z, float size) {
-        if (level.isClientSide) return;
-
-        float pitch = (1.0F + (level.random.nextFloat() - level.random.nextFloat()) * 0.2F) * 0.7F;
-        level.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 4.0F, pitch);
-
-        WFNetwork.sendToTracking(level, x, z,
-                new ExplosionBlockFXPacket(x, y, z, explosion.size, explosion.compat.getToBlow()));
-    }
-
     /**
      * Spawns the explosion particles on the client. Each broken block emits a small explosion puff and a
      * puff of smoke, kicked outward from the epicentre with a speed that falls off with distance — the
@@ -67,5 +56,16 @@ public class ExplosionEffectStandard implements IExplosionSFX {
             level.addParticle(ParticleTypes.POOF, (ox + x) / 2.0D, (oy + y) / 2.0D, (oz + z) / 2.0D, dx, dy, dz);
             level.addParticle(ParticleTypes.SMOKE, ox, oy, oz, dx, dy, dz);
         }
+    }
+
+    @Override
+    public void doEffect(ExplosionAEF explosion, Level level, double x, double y, double z, float size) {
+        if (level.isClientSide) return;
+
+        float pitch = (1.0F + (level.random.nextFloat() - level.random.nextFloat()) * 0.2F) * 0.7F;
+        level.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 4.0F, pitch);
+
+        WFNetwork.sendToTracking(level, x, z,
+                new ExplosionBlockFXPacket(x, y, z, explosion.size, explosion.compat.getToBlow()));
     }
 }

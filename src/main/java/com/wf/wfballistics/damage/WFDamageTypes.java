@@ -19,7 +19,8 @@ public final class WFDamageTypes {
     public static final ResourceKey<DamageType> ELECTRIC = key("electric");
     public static final ResourceKey<DamageType> LASER = key("laser");
 
-    private WFDamageTypes() { }
+    private WFDamageTypes() {
+    }
 
     private static ResourceKey<DamageType> key(String name) {
         return ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(WFBallistics.MODID, name));

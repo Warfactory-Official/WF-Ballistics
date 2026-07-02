@@ -3,7 +3,7 @@
   "model": "wfballistics:raw_models/missiles/missiletaint.obj",
   "flip_v": true,
   "textures": {
-    "missile_texture": "wfballistics:models/missiles/missileTaint",
-    "particle": "wfballistics:models/missiles/missileTaint"
+    "missile_texture": "wfballistics:models/missiles/missiletaint",
+    "particle": "wfballistics:models/missiles/missiletaint"
   }
 }

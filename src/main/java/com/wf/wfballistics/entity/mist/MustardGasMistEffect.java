@@ -25,7 +25,8 @@ public class MustardGasMistEffect implements MistEffect {
             // Blistering corrodes whatever the victim is wearing.
             for (ItemStack stack : living.getArmorSlots()) {
                 if (!stack.isEmpty() && stack.isDamageableItem()) {
-                    stack.hurtAndBreak(1, living, e -> { });
+                    stack.hurtAndBreak(1, living, e -> {
+                    });
                 }
             }
         }

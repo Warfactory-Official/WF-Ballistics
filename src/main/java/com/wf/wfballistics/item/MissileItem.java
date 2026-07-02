@@ -36,6 +36,17 @@ public class MissileItem extends Item {
         this.preset = preset;
     }
 
+    /**
+     * Ray-traces the player's aim to a block; on a miss, a point downrange at eye level.
+     */
+    private static Vec3 aimTarget(Level level, Player player) {
+        Vec3 eye = player.getEyePosition();
+        Vec3 end = eye.add(player.getLookAngle().scale(AIM_RANGE));
+        BlockHitResult hit = level.clip(new ClipContext(eye, end,
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
+        return hit.getType() == HitResult.Type.BLOCK ? hit.getLocation() : end;
+    }
+
     public MissilePreset preset() {
         return this.preset;
     }
@@ -60,15 +71,6 @@ public class MissileItem extends Item {
             player.getCooldowns().addCooldown(this, LAUNCH_COOLDOWN);
         }
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
-    }
-
-    /** Ray-traces the player's aim to a block; on a miss, a point downrange at eye level. */
-    private static Vec3 aimTarget(Level level, Player player) {
-        Vec3 eye = player.getEyePosition();
-        Vec3 end = eye.add(player.getLookAngle().scale(AIM_RANGE));
-        BlockHitResult hit = level.clip(new ClipContext(eye, end,
-                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
-        return hit.getType() == HitResult.Type.BLOCK ? hit.getLocation() : end;
     }
 
     @Override

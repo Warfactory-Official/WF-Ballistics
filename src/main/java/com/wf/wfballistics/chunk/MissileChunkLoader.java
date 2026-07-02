@@ -16,6 +16,39 @@ public final class MissileChunkLoader {
     private LongOpenHashSet ticking = new LongOpenHashSet();
     private LongOpenHashSet nonTicking = new LongOpenHashSet();
 
+    private static void force(ServerLevel level, MissileEntity missile, long chunkKey, boolean add, boolean ticking) {
+        ForgeChunkManager.forceChunk(level, WFBallistics.MODID, missile,
+                ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey), add, ticking);
+    }
+
+    private static void collectFan(LongOpenHashSet out, Vec3 pos, Vec3 vel) {
+        double dirX = 0.0;
+        double dirZ = 0.0;
+        double horiz = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        if (horiz > 1.0E-4) {
+            dirX = vel.x / horiz;
+            dirZ = vel.z / horiz;
+        }
+
+        double aheadX = pos.x + dirX * MissileSimConfig.FAN_LOOKAHEAD;
+        double aheadZ = pos.z + dirZ * MissileSimConfig.FAN_LOOKAHEAD;
+
+        double minX = Math.min(pos.x, aheadX) - MissileSimConfig.FAN_LATERAL;
+        double maxX = Math.max(pos.x, aheadX) + MissileSimConfig.FAN_LATERAL;
+        double minZ = Math.min(pos.z, aheadZ) - MissileSimConfig.FAN_LATERAL;
+        double maxZ = Math.max(pos.z, aheadZ) + MissileSimConfig.FAN_LATERAL;
+
+        int minCX = SectionPos.blockToSectionCoord(minX) - 1;
+        int maxCX = SectionPos.blockToSectionCoord(maxX) + 1;
+        int minCZ = SectionPos.blockToSectionCoord(minZ) - 1;
+        int maxCZ = SectionPos.blockToSectionCoord(maxZ) + 1;
+
+        for (int cx = minCX; cx <= maxCX; cx++) {
+            for (int cz = minCZ; cz <= maxCZ; cz++) {
+                out.add(ChunkPos.asLong(cx, cz));
+            }
+        }
+    }
 
     public void update(MissileEntity missile, ServerLevel level, Vec3 pos, Vec3 vel, boolean loadFan) {
         long ownChunk = missile.chunkPosition().toLong();
@@ -66,40 +99,5 @@ public final class MissileChunkLoader {
         }
         ticking.clear();
         nonTicking.clear();
-    }
-
-    private static void force(ServerLevel level, MissileEntity missile, long chunkKey, boolean add, boolean ticking) {
-        ForgeChunkManager.forceChunk(level, WFBallistics.MODID, missile,
-                ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey), add, ticking);
-    }
-
-
-    private static void collectFan(LongOpenHashSet out, Vec3 pos, Vec3 vel) {
-        double dirX = 0.0;
-        double dirZ = 0.0;
-        double horiz = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
-        if (horiz > 1.0E-4) {
-            dirX = vel.x / horiz;
-            dirZ = vel.z / horiz;
-        }
-
-        double aheadX = pos.x + dirX * MissileSimConfig.FAN_LOOKAHEAD;
-        double aheadZ = pos.z + dirZ * MissileSimConfig.FAN_LOOKAHEAD;
-
-        double minX = Math.min(pos.x, aheadX) - MissileSimConfig.FAN_LATERAL;
-        double maxX = Math.max(pos.x, aheadX) + MissileSimConfig.FAN_LATERAL;
-        double minZ = Math.min(pos.z, aheadZ) - MissileSimConfig.FAN_LATERAL;
-        double maxZ = Math.max(pos.z, aheadZ) + MissileSimConfig.FAN_LATERAL;
-
-        int minCX = SectionPos.blockToSectionCoord(minX) - 1;
-        int maxCX = SectionPos.blockToSectionCoord(maxX) + 1;
-        int minCZ = SectionPos.blockToSectionCoord(minZ) - 1;
-        int maxCZ = SectionPos.blockToSectionCoord(maxZ) + 1;
-
-        for (int cx = minCX; cx <= maxCX; cx++) {
-            for (int cz = minCZ; cz <= maxCZ; cz++) {
-                out.add(ChunkPos.asLong(cx, cz));
-            }
-        }
     }
 }

@@ -1,8 +1,8 @@
 package com.wf.wfballistics.mixin;
 
-import com.wf.wfballistics.unsafe.UnsafeHolder;
-import com.wf.wfballistics.client.render.DirectBufferAccess;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.wf.wfballistics.client.render.DirectBufferAccess;
+import com.wf.wfballistics.unsafe.UnsafeHolder;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -19,13 +19,17 @@ public abstract class MixinBufferBuilder implements DirectBufferAccess {
     @Unique
     private static final long HBM$BUF_ADDR_OFFSET = UnsafeHolder.fieldOffset(Buffer.class, "address");
 
-    @Shadow private ByteBuffer buffer;
-    @Shadow private int nextElementByte;
-    @Shadow private int vertices;
+    @Shadow
+    private ByteBuffer buffer;
+    @Shadow
+    private int nextElementByte;
+    @Shadow
+    private int vertices;
+    @Unique
+    private long hbm$address;
 
-    @Shadow protected abstract void ensureCapacity(int pIncreaseAmount);
-
-    @Unique private long hbm$address;
+    @Shadow
+    protected abstract void ensureCapacity(int pIncreaseAmount);
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void hbm$afterInit(int pCapacity, CallbackInfo ci) {

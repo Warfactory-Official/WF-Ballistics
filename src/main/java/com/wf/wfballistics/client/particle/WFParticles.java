@@ -21,15 +21,20 @@ public final class WFParticles {
             DeferredRegister.create(ForgeRegistries.PARTICLE_TYPES, WFBallistics.MODID);
 
     public static final RegistryObject<SimpleParticleType> EXPLOSION_SMALL =
-            PARTICLE_TYPES.register("explosion_small", () -> new SimpleParticleType(true) { });
+            PARTICLE_TYPES.register("explosion_small", () -> new SimpleParticleType(true) {
+            });
     public static final RegistryObject<SimpleParticleType> ROCKET_FLAME =
-            PARTICLE_TYPES.register("rocket_flame", () -> new SimpleParticleType(true) { });
+            PARTICLE_TYPES.register("rocket_flame", () -> new SimpleParticleType(true) {
+            });
     public static final RegistryObject<SimpleParticleType> ASH =
-            PARTICLE_TYPES.register("ash", () -> new SimpleParticleType(false) { });
+            PARTICLE_TYPES.register("ash", () -> new SimpleParticleType(false) {
+            });
     public static final RegistryObject<SimpleParticleType> MIST =
-            PARTICLE_TYPES.register("mist", () -> new SimpleParticleType(false) { });
+            PARTICLE_TYPES.register("mist", () -> new SimpleParticleType(false) {
+            });
 
-    private WFParticles() { }
+    private WFParticles() {
+    }
 
     public static void register(IEventBus modBus) {
         PARTICLE_TYPES.register(modBus);

@@ -23,7 +23,8 @@ public final class FlywheelModels {
                     .materialFunc((renderType, shaded) -> PARTICLE)
                     .build());
 
-    private FlywheelModels() { }
+    private FlywheelModels() {
+    }
 
     public static Model particleQuad() {
         return PARTICLE_MODEL.get(ModModels.INSTANCED_QUAD);

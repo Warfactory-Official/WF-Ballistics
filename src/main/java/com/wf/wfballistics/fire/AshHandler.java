@@ -22,16 +22,21 @@ import net.minecraft.world.level.Level;
  */
 public final class AshHandler {
 
-    private AshHandler() { }
+    private AshHandler() {
+    }
 
-    /** Cremates the entity if it was killed by fire (custom or vanilla) or was burning when it died. */
+    /**
+     * Cremates the entity if it was killed by fire (custom or vanilla) or was burning when it died.
+     */
     public static void decideGore(LivingEntity entity, DamageSource source) {
         if (source.is(DamageTypeTags.IS_FIRE) || entity.isOnFire()) {
             cremate(entity);
         }
     }
 
-    /** Spawns the ash burst + sound. The particle count scales with the entity's volume. */
+    /**
+     * Spawns the ash burst + sound. The particle count scales with the entity's volume.
+     */
     public static void cremate(LivingEntity entity) {
         Level level = entity.level();
         if (level.isClientSide) return;

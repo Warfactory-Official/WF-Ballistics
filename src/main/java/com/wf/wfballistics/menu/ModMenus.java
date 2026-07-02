@@ -12,11 +12,10 @@ public class ModMenus {
     public static final DeferredRegister<MenuType<?>> MENUS =
             DeferredRegister.create(ForgeRegistries.MENU_TYPES, WFBallistics.MODID);
 
-
-    public static final RegistryObject<MenuType<MissileDispenserMenu>> MISSILE_DISPENSER =
-            MENUS.register("missile_dispenser", () -> IForgeMenuType.create(MissileDispenserMenu::new));
-
     public static void register(IEventBus bus) {
         MENUS.register(bus);
-    }
+    }    public static final RegistryObject<MenuType<MissileDispenserMenu>> MISSILE_DISPENSER =
+            MENUS.register("missile_dispenser", () -> IForgeMenuType.create(MissileDispenserMenu::new));
+
+
 }

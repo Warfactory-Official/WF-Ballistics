@@ -13,18 +13,22 @@ import org.jetbrains.annotations.Nullable;
  */
 public interface FlightStage {
 
-    /** @return the desired velocity (blocks/tick) for this tick. Turn-rate limiting is applied by the caller. */
+    /**
+     * @return the desired velocity (blocks/tick) for this tick. Turn-rate limiting is applied by the caller.
+     */
     Vec3 guide(MissileEntity missile, FlightContext ctx);
 
     /**
      * @return the phase to transition into this tick, or {@code null} to remain in this stage. Evaluated
-     *         before {@link #guide}, so the returned phase's stage produces this tick's velocity.
+     * before {@link #guide}, so the returned phase's stage produces this tick's velocity.
      */
     @Nullable
     default MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
         return null;
     }
 
-    /** @return a short stable id (for debugging / logging). */
+    /**
+     * @return a short stable id (for debugging / logging).
+     */
     String id();
 }

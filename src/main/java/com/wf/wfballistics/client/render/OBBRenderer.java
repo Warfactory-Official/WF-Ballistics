@@ -24,7 +24,8 @@ import java.util.List;
  */
 public final class OBBRenderer {
 
-    private OBBRenderer() { }
+    private OBBRenderer() {
+    }
 
     public static void render(Entity entity, List<OBB> obbList, PoseStack poseStack, VertexConsumer buffer,
                               float red, float green, float blue, float alpha, float partialTicks) {
@@ -144,7 +145,9 @@ public final class OBBRenderer {
         };
     }
 
-    /** Distance from the entity origin to the model's front face along the heading (0 for non-missiles). */
+    /**
+     * Distance from the entity origin to the model's front face along the heading (0 for non-missiles).
+     */
     private static double noseForward(Entity entity) {
         if (entity instanceof MissileEntity missile) {
             String id = missile.getModelId();
@@ -153,7 +156,9 @@ public final class OBBRenderer {
         return 0.0;
     }
 
-    /** Emits a single debug line into the {@code RenderType.lines()} buffer. */
+    /**
+     * Emits a single debug line into the {@code RenderType.lines()} buffer.
+     */
     private static void line(PoseStack poseStack, VertexConsumer buffer,
                              double x0, double y0, double z0, double x1, double y1, double z1,
                              float r, float g, float b, float a) {

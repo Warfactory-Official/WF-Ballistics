@@ -100,6 +100,11 @@ public class MistEntity extends Entity {
         return gas;
     }
 
+    private static boolean isAffectable(Entity entity) {
+        if (entity instanceof MistEntity) return false;
+        return !(entity instanceof Player player) || (!player.isSpectator() && !player.isCreative());
+    }
+
     @Override
     protected void defineSynchedData() {
         this.entityData.define(RADIUS, 1F);
@@ -110,12 +115,16 @@ public class MistEntity extends Entity {
         this.entityData.define(BOX_Z, 0F);
     }
 
-    /** @return true if this cloud is a box-mode gas cell rather than a radius/height puff. */
+    /**
+     * @return true if this cloud is a box-mode gas cell rather than a radius/height puff.
+     */
     public boolean isBox() {
         return this.entityData.get(BOX_X) > 0F;
     }
 
-    /** Sets the exact cuboid extents (blocks) and refits the bounding box from the min-corner position. */
+    /**
+     * Sets the exact cuboid extents (blocks) and refits the bounding box from the min-corner position.
+     */
     public MistEntity setBox(float sizeX, float sizeY, float sizeZ) {
         this.entityData.set(BOX_X, sizeX);
         this.entityData.set(BOX_Y, sizeY);
@@ -166,11 +175,6 @@ public class MistEntity extends Entity {
         }
     }
 
-    private static boolean isAffectable(Entity entity) {
-        if (entity instanceof MistEntity) return false;
-        return !(entity instanceof Player player) || (!player.isSpectator() && !player.isCreative());
-    }
-
     /**
      * Shrinks the cloud's radius so it doesn't poke through walls. Steps outward along each horizontal axis
      * from the cloud's centre and clamps the radius to the nearest solid block. Cheap by design — four short
@@ -211,17 +215,17 @@ public class MistEntity extends Entity {
         return this;
     }
 
-    public MistEntity setFluid(Fluid fluid) {
-        ResourceLocation key = ForgeRegistries.FLUIDS.getKey(fluid);
-        this.entityData.set(FLUID, key == null ? "" : key.toString());
-        return this;
-    }
-
     public Fluid getFluid() {
         String id = this.entityData.get(FLUID);
         if (id.isEmpty()) return Fluids.EMPTY;
         Fluid fluid = ForgeRegistries.FLUIDS.getValue(new ResourceLocation(id));
         return fluid == null ? Fluids.EMPTY : fluid;
+    }
+
+    public MistEntity setFluid(Fluid fluid) {
+        ResourceLocation key = ForgeRegistries.FLUIDS.getKey(fluid);
+        this.entityData.set(FLUID, key == null ? "" : key.toString());
+        return this;
     }
 
     public float getRadius() {

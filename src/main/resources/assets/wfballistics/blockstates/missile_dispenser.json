@@ -1,5 +1,7 @@
 {
   "variants": {
-    "": { "model": "wfballistics:block/missile_dispenser" }
+    "": {
+      "model": "wfballistics:block/missile_dispenser"
+    }
   }
 }

@@ -31,7 +31,9 @@ public class WFFireProvider implements ICapabilitySerializable<CompoundTag> {
         data.deserializeNBT(nbt);
     }
 
-    /** Releases the lazy optional when the host entity is invalidated, preventing capability leaks. */
+    /**
+     * Releases the lazy optional when the host entity is invalidated, preventing capability leaks.
+     */
     public void invalidate() {
         optional.invalidate();
     }

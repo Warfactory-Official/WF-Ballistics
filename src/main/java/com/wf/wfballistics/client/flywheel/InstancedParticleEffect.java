@@ -20,10 +20,10 @@ import net.minecraft.world.level.LevelAccessor;
  */
 public class InstancedParticleEffect implements WFFlywheelEffect {
 
-    private final Level level;
     final Puff[] puffs;
-    int age = 0;
     final int maxAge;
+    private final Level level;
+    int age = 0;
 
     public InstancedParticleEffect(Level level, double x, double y, double z, int count, float scale, float speed) {
         this.level = level;
@@ -61,10 +61,10 @@ public class InstancedParticleEffect implements WFFlywheelEffect {
     }
 
     static final class Puff {
-        double x, y, z, px, py, pz, vx, vy, vz;
-        int age, life;
         final float baseScale;
         final float hue;
+        double x, y, z, px, py, pz, vx, vy, vz;
+        int age, life;
 
         Puff(RandomSource r, double x, double y, double z, float scale, float speed) {
             this.x = this.px = x;
@@ -91,11 +91,17 @@ public class InstancedParticleEffect implements WFFlywheelEffect {
             age++;
         }
 
-        double ix(float pt) { return px + (x - px) * pt; }
+        double ix(float pt) {
+            return px + (x - px) * pt;
+        }
 
-        double iy(float pt) { return py + (y - py) * pt; }
+        double iy(float pt) {
+            return py + (y - py) * pt;
+        }
 
-        double iz(float pt) { return pz + (z - pz) * pt; }
+        double iz(float pt) {
+            return pz + (z - pz) * pt;
+        }
 
         float scale(float pt) {
             double a = (age + pt) / life;

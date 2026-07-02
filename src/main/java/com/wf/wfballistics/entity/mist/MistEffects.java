@@ -29,7 +29,8 @@ public final class MistEffects {
     private static final List<Map.Entry<TagKey<Fluid>, MistEffect>> BY_TAG = new ArrayList<>();
     private static boolean bootstrapped = false;
 
-    private MistEffects() { }
+    private MistEffects() {
+    }
 
     public static void register(Fluid fluid, MistEffect effect) {
         BY_FLUID.put(fluid, effect);
@@ -39,7 +40,9 @@ public final class MistEffects {
         BY_TAG.add(Map.entry(tag, effect));
     }
 
-    /** @return the effect for this fluid, or {@code null} if the fluid is inert as mist */
+    /**
+     * @return the effect for this fluid, or {@code null} if the fluid is inert as mist
+     */
     @Nullable
     public static MistEffect get(@Nullable Fluid fluid) {
         if (fluid == null || fluid == Fluids.EMPTY) return null;
@@ -51,7 +54,9 @@ public final class MistEffects {
         return null;
     }
 
-    /** Registers the built-in chemical agents. Idempotent. */
+    /**
+     * Registers the built-in chemical agents. Idempotent.
+     */
     public static void bootstrap() {
         if (bootstrapped) return;
         bootstrapped = true;

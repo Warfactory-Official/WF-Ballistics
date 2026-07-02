@@ -41,7 +41,7 @@ public interface OBBEntity {
 
     /**
      * @return true if any of this entity's OBBs (offset by {@code vec3}) overlaps the given entity,
-     *         using OBB-vs-OBB when the other entity is also an {@link OBBEntity}.
+     * using OBB-vs-OBB when the other entity is also an {@link OBBEntity}.
      */
     default boolean isInObb(Entity entity, Vec3 vec3) {
         List<OBB> obbList = this.getOBBs();

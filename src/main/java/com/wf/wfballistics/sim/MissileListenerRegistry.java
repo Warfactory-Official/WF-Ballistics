@@ -4,11 +4,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 
 public final class MissileListenerRegistry {
@@ -21,7 +17,9 @@ public final class MissileListenerRegistry {
         return BY_LEVEL.computeIfAbsent(level.dimension(), k -> new MissileListenerRegistry());
     }
 
-    /** Drop a level's registry. */
+    /**
+     * Drop a level's registry.
+     */
     public static void clear(ServerLevel level) {
         BY_LEVEL.remove(level.dimension());
     }
@@ -34,7 +32,9 @@ public final class MissileListenerRegistry {
         listeners.remove(key);
     }
 
-    /** Snapshot of currently-valid listeners; purges any that have gone invalid. */
+    /**
+     * Snapshot of currently-valid listeners; purges any that have gone invalid.
+     */
     public List<IMissileListener> valid() {
         List<IMissileListener> out = new ArrayList<>();
         Iterator<Map.Entry<Object, IMissileListener>> it = listeners.entrySet().iterator();

@@ -10,18 +10,12 @@ import java.util.UUID;
 
 
 public final class SimMissile {
-    public enum Role {
-        NORMAL,
-        INTERCEPTOR
-    }
-
     public UUID id;
     public Vec3 pos;
     public Vec3 target;
     public double simY;
     public double speed;
     public long lastGameTime;
-
     // Reconstruction parameters (mirror MissileEntity flight state).
     public MissileEntity.CruiseMode cruiseMode = MissileEntity.CruiseMode.TERRAIN_FOLLOW;
     public double cruiseAltitude = 200.0;
@@ -37,7 +31,6 @@ public final class SimMissile {
     public int splitDepth = 0;
     public long swarmId = 0L;
     public UUID controlId = null;
-
     // Interception.
     public Role role = Role.NORMAL;
     public UUID interceptTarget = null;
@@ -66,6 +59,65 @@ public final class SimMissile {
         sm.controlId = m.getControlId();
         sm.role = Role.NORMAL;
         return sm;
+    }
+
+    public static SimMissile load(CompoundTag tag) {
+        SimMissile sm = new SimMissile();
+        sm.id = tag.getUUID("Id");
+        sm.pos = getVec(tag, "Pos");
+        sm.target = getVec(tag, "Target");
+        sm.simY = tag.getDouble("SimY");
+        sm.speed = tag.getDouble("Speed");
+        sm.lastGameTime = tag.getLong("LastGameTime");
+        try {
+            sm.cruiseMode = MissileEntity.CruiseMode.valueOf(tag.getString("CruiseMode"));
+        } catch (IllegalArgumentException ignored) {
+        }
+        sm.cruiseAltitude = tag.getDouble("CruiseAltitude");
+        sm.terrainClearance = tag.getDouble("TerrainClearance");
+        sm.explosionOffset = tag.getFloat("ExplosionOffset");
+        sm.maxTurnRate = tag.getDouble("MaxTurnRate");
+        sm.modelId = tag.getString("ModelId");
+        if (tag.contains("DetonationId")) {
+            sm.detonationId = tag.getString("DetonationId");
+        }
+        if (tag.contains("AscentStage")) {
+            sm.ascentStageId = tag.getString("AscentStage");
+        }
+        if (tag.contains("CruiseStage")) {
+            sm.cruiseStageId = tag.getString("CruiseStage");
+        }
+        if (tag.contains("AttackStage")) {
+            sm.attackStageId = tag.getString("AttackStage");
+        }
+        if (tag.contains("FragmentCount")) {
+            sm.fragmentCount = tag.getInt("FragmentCount");
+        }
+        if (tag.contains("SplitDepth")) {
+            sm.splitDepth = tag.getInt("SplitDepth");
+        }
+        sm.swarmId = tag.getLong("SwarmId");
+        if (tag.hasUUID("ControlId")) {
+            sm.controlId = tag.getUUID("ControlId");
+        }
+        try {
+            sm.role = Role.valueOf(tag.getString("Role"));
+        } catch (IllegalArgumentException ignored) {
+        }
+        if (tag.hasUUID("InterceptTarget")) {
+            sm.interceptTarget = tag.getUUID("InterceptTarget");
+        }
+        return sm;
+    }
+
+    private static void putVec(CompoundTag tag, String key, Vec3 v) {
+        tag.putDouble(key + "X", v.x);
+        tag.putDouble(key + "Y", v.y);
+        tag.putDouble(key + "Z", v.z);
+    }
+
+    private static Vec3 getVec(CompoundTag tag, String key) {
+        return new Vec3(tag.getDouble(key + "X"), tag.getDouble(key + "Y"), tag.getDouble(key + "Z"));
     }
 
     public MissileEntity toEntity(ServerLevel level, Vec3 spawnPos) {
@@ -134,62 +186,8 @@ public final class SimMissile {
         return tag;
     }
 
-    public static SimMissile load(CompoundTag tag) {
-        SimMissile sm = new SimMissile();
-        sm.id = tag.getUUID("Id");
-        sm.pos = getVec(tag, "Pos");
-        sm.target = getVec(tag, "Target");
-        sm.simY = tag.getDouble("SimY");
-        sm.speed = tag.getDouble("Speed");
-        sm.lastGameTime = tag.getLong("LastGameTime");
-        try {
-            sm.cruiseMode = MissileEntity.CruiseMode.valueOf(tag.getString("CruiseMode"));
-        } catch (IllegalArgumentException ignored) {
-        }
-        sm.cruiseAltitude = tag.getDouble("CruiseAltitude");
-        sm.terrainClearance = tag.getDouble("TerrainClearance");
-        sm.explosionOffset = tag.getFloat("ExplosionOffset");
-        sm.maxTurnRate = tag.getDouble("MaxTurnRate");
-        sm.modelId = tag.getString("ModelId");
-        if (tag.contains("DetonationId")) {
-            sm.detonationId = tag.getString("DetonationId");
-        }
-        if (tag.contains("AscentStage")) {
-            sm.ascentStageId = tag.getString("AscentStage");
-        }
-        if (tag.contains("CruiseStage")) {
-            sm.cruiseStageId = tag.getString("CruiseStage");
-        }
-        if (tag.contains("AttackStage")) {
-            sm.attackStageId = tag.getString("AttackStage");
-        }
-        if (tag.contains("FragmentCount")) {
-            sm.fragmentCount = tag.getInt("FragmentCount");
-        }
-        if (tag.contains("SplitDepth")) {
-            sm.splitDepth = tag.getInt("SplitDepth");
-        }
-        sm.swarmId = tag.getLong("SwarmId");
-        if (tag.hasUUID("ControlId")) {
-            sm.controlId = tag.getUUID("ControlId");
-        }
-        try {
-            sm.role = Role.valueOf(tag.getString("Role"));
-        } catch (IllegalArgumentException ignored) {
-        }
-        if (tag.hasUUID("InterceptTarget")) {
-            sm.interceptTarget = tag.getUUID("InterceptTarget");
-        }
-        return sm;
-    }
-
-    private static void putVec(CompoundTag tag, String key, Vec3 v) {
-        tag.putDouble(key + "X", v.x);
-        tag.putDouble(key + "Y", v.y);
-        tag.putDouble(key + "Z", v.z);
-    }
-
-    private static Vec3 getVec(CompoundTag tag, String key) {
-        return new Vec3(tag.getDouble(key + "X"), tag.getDouble(key + "Y"), tag.getDouble(key + "Z"));
+    public enum Role {
+        NORMAL,
+        INTERCEPTOR
     }
 }

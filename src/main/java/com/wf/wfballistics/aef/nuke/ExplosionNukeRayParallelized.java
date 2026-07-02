@@ -1,36 +1,26 @@
 package com.wf.wfballistics.aef.nuke;
 
-import com.wf.wfballistics.aef.nuke.NukeConfig;
+import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.aef.nuke.util.ConcurrentBitSet;
 import com.wf.wfballistics.aef.nuke.util.SubChunkKey;
 import com.wf.wfballistics.aef.nuke.util.SubChunkSnapshot;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import org.slf4j.Logger;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.EnumSet;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.DoubleAdder;
-
-import com.mojang.logging.LogUtils;
-import org.slf4j.Logger;
 
 /**
  * Fast raytracing explosion for mk5

@@ -4,7 +4,9 @@ import com.wf.wfballistics.MissileEntity;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-/** Steep terminal dive: bleed horizontal speed as the target nears while accelerating straight down. */
+/**
+ * Steep terminal dive: bleed horizontal speed as the target nears while accelerating straight down.
+ */
 public final class AttackStage implements FlightStage {
 
     public static final AttackStage INSTANCE = new AttackStage();

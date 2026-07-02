@@ -22,7 +22,8 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class MiniNuke {
 
-    private MiniNuke() { }
+    private MiniNuke() {
+    }
 
     public static void detonate(Level level, Vec3 center, MukeParams p) {
         if (level.isClientSide) {
@@ -61,7 +62,9 @@ public final class MiniNuke {
 
     // --- HBM MukeParams presets (radiation + shrapnel dropped; resolution lowered for the synchronous pass) ---
 
-    /** Tiny "tots" charge. */
+    /**
+     * Tiny "tots" charge.
+     */
     public static MukeParams tots() {
         MukeParams p = new MukeParams();
         p.blastRadius = 10F;
@@ -70,7 +73,9 @@ public final class MiniNuke {
         return p;
     }
 
-    /** Low-yield mini nuke. */
+    /**
+     * Low-yield mini nuke.
+     */
     public static MukeParams low() {
         MukeParams p = new MukeParams();
         p.blastRadius = 15F;
@@ -78,7 +83,9 @@ public final class MiniNuke {
         return p;
     }
 
-    /** Medium-yield mini nuke (the default missile warhead uses this). */
+    /**
+     * Medium-yield mini nuke (the default missile warhead uses this).
+     */
     public static MukeParams medium() {
         MukeParams p = new MukeParams();
         p.blastRadius = 20F;
@@ -86,7 +93,9 @@ public final class MiniNuke {
         return p;
     }
 
-    /** Damage + visual only, no terrain damage. */
+    /**
+     * Damage + visual only, no terrain damage.
+     */
     public static MukeParams safe() {
         MukeParams p = new MukeParams();
         p.safe = true;
@@ -94,7 +103,9 @@ public final class MiniNuke {
         return p;
     }
 
-    /** Full-size "fatman": delegates to the threaded {@link Nuke} + Torex. */
+    /**
+     * Full-size "fatman": delegates to the threaded {@link Nuke} + Torex.
+     */
     public static MukeParams fatman() {
         MukeParams p = new MukeParams();
         p.miniNuke = false;
@@ -102,19 +113,33 @@ public final class MiniNuke {
         return p;
     }
 
-    /** Tunables for a mini-nuke blast (WF port of HBM's {@code MukeParams}). */
+    /**
+     * Tunables for a mini-nuke blast (WF port of HBM's {@code MukeParams}).
+     */
     public static class MukeParams {
-        /** {@code false} = full-size "fatman" nuke (delegates to {@link Nuke#detonate}). */
+        /**
+         * {@code false} = full-size "fatman" nuke (delegates to {@link Nuke#detonate}).
+         */
         public boolean miniNuke = true;
-        /** {@code true} = no terrain destruction (kill radius + visual only). */
+        /**
+         * {@code true} = no terrain destruction (kill radius + visual only).
+         */
         public boolean safe = false;
-        /** Crater power, in vanilla explosion units. */
+        /**
+         * Crater power, in vanilla explosion units.
+         */
         public float blastRadius = 15F;
-        /** Entity kill radius, in blocks. */
+        /**
+         * Entity kill radius, in blocks.
+         */
         public float killRadius = 45F;
-        /** Leave fire in the cleared crater. */
+        /**
+         * Leave fire in the cleared crater.
+         */
         public boolean fire = true;
-        /** Block-allocator ray resolution; higher = smoother sphere but a heavier synchronous pass. */
+        /**
+         * Block-allocator ray resolution; higher = smoother sphere but a heavier synchronous pass.
+         */
         public int resolution = 32;
     }
 }

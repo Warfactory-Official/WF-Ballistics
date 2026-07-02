@@ -22,16 +22,21 @@ import java.util.List;
 @Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class DebrisManager {
 
-    /** Safety cap so a barrage of explosions can't pile up unbounded debris. */
+    /**
+     * Safety cap so a barrage of explosions can't pile up unbounded debris.
+     */
     private static final int MAX_ACTIVE = 256;
 
-    /** Max chunks to tessellate per frame — spreads a burst of debris over a few frames instead of one hitch. */
+    /**
+     * Max chunks to tessellate per frame — spreads a burst of debris over a few frames instead of one hitch.
+     */
     private static final int BAKE_BUDGET_PER_FRAME = 4;
 
     private static final List<Debris> ACTIVE = new ArrayList<>();
     private static final List<Debris> PENDING_CLOSE = new ArrayList<>();
 
-    private DebrisManager() { }
+    private DebrisManager() {
+    }
 
     public static void add(Debris debris) {
         if (ACTIVE.size() < MAX_ACTIVE) {

@@ -16,7 +16,8 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class Nuke {
 
-    private Nuke() { }
+    private Nuke() {
+    }
 
     /**
      * @param radius nuke radius parameter (drives strength/speed/crater size, and the cloud scale); the

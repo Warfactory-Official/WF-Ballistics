@@ -81,6 +81,22 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         this.warheadIndex = Math.max(0, WARHEADS.indexOf(WarheadRegistry.defaultId()));
     }
 
+    private static String prev(EditBox box, String fallback) {
+        return box != null ? box.getValue() : fallback;
+    }
+
+    private static String stageAt(List<String> stages, int index) {
+        return stages.isEmpty() ? "" : stages.get(Math.floorMod(index, stages.size()));
+    }
+
+    private static double parseDouble(String s, double fallback) {
+        try {
+            return Double.parseDouble(s.trim());
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
     @Override
     protected void init() {
         super.init();
@@ -172,10 +188,6 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         refreshButtonLabels();
     }
 
-    private static String prev(EditBox box, String fallback) {
-        return box != null ? box.getValue() : fallback;
-    }
-
     private EditBox makeBox(int x, int y, int width, String value, String hint) {
         EditBox box = new EditBox(this.font, x, y, width, BOX_H, Component.literal(hint));
         box.setMaxLength(24);
@@ -217,11 +229,9 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
                 stageAt(ATTACK_STAGES, attackStageIndex)));
     }
 
-    private static String stageAt(List<String> stages, int index) {
-        return stages.isEmpty() ? "" : stages.get(Math.floorMod(index, stages.size()));
-    }
-
-    /** Estimated flight time from this dispenser to the entered target with the current speed/altitude/stages. */
+    /**
+     * Estimated flight time from this dispenser to the entered target with the current speed/altitude/stages.
+     */
     private String etaText() {
         if (targetX == null) {
             return "";
@@ -238,14 +248,6 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         int ticks = ArrivalEstimator.estimateTicks(Vec3.atCenterOf(menu.pos()),
                 new Vec3(tx, ty, tz), speed, cruiseAltitudeY, loiterTicks);
         return String.format("ETA ~%.1fs", ticks / 20.0);
-    }
-
-    private static double parseDouble(String s, double fallback) {
-        try {
-            return Double.parseDouble(s.trim());
-        } catch (NumberFormatException e) {
-            return fallback;
-        }
     }
 
     @Override

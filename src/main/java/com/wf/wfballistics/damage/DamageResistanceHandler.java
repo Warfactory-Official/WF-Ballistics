@@ -53,7 +53,8 @@ public final class DamageResistanceHandler {
     private static final Map<Item, ResistanceProfile> ARMOR = new HashMap<>();
     private static final Map<EntityType<?>, ResistanceProfile> INNATE = new HashMap<>();
 
-    private DamageResistanceHandler() { }
+    private DamageResistanceHandler() {
+    }
 
     // --- piercing context -------------------------------------------------------------------------------
 
@@ -69,25 +70,35 @@ public final class DamageResistanceHandler {
         p[1] = 0F;
     }
 
-    public static float currentPierceDT() { return PIERCE.get()[0]; }
+    public static float currentPierceDT() {
+        return PIERCE.get()[0];
+    }
 
-    public static float currentPierceDR() { return PIERCE.get()[1]; }
+    public static float currentPierceDR() {
+        return PIERCE.get()[1];
+    }
 
     // registration
 
-    /** Registers the DT/DR an armour item contributes while worn. Worn pieces' values are summed. */
+    /**
+     * Registers the DT/DR an armour item contributes while worn. Worn pieces' values are summed.
+     */
     public static void registerArmor(Item item, ResistanceProfile profile) {
         ARMOR.put(item, profile);
     }
 
-    /** Registers resistance innate to an entity type (e.g. a creeper shrugging off explosions). */
+    /**
+     * Registers resistance innate to an entity type (e.g. a creeper shrugging off explosions).
+     */
     public static void registerEntity(EntityType<?> type, ResistanceProfile profile) {
         INNATE.put(type, profile);
     }
 
     // queries
 
-    /** @return {@code [totalDT, totalDR]} for {@code entity} against {@code category}; DR clamped to ≤ 1. */
+    /**
+     * @return {@code [totalDT, totalDR]} for {@code entity} against {@code category}; DR clamped to ≤ 1.
+     */
     public static float[] getDTDR(LivingEntity entity, String category) {
         float dt = 0F;
         float dr = 0F;
@@ -111,7 +122,9 @@ public final class DamageResistanceHandler {
         return new float[]{dt, Math.min(dr, 1F)};
     }
 
-    /** Applies the DT/DR formula. {@code pierceDT}/{@code pierceDR} default to 0 for un-pierced hits. */
+    /**
+     * Applies the DT/DR formula. {@code pierceDT}/{@code pierceDR} default to 0 for un-pierced hits.
+     */
     public static float calculateDamage(LivingEntity entity, String category, float amount, float pierceDT, float pierceDR) {
         float[] vals = getDTDR(entity, category);
         float dt = vals[0];
@@ -129,7 +142,9 @@ public final class DamageResistanceHandler {
         return clazz.category;
     }
 
-    /** Picks a resistance category for a damage source — by this mod's classes first, then vanilla tags. */
+    /**
+     * Picks a resistance category for a damage source — by this mod's classes first, then vanilla tags.
+     */
     public static String categoryFor(DamageSource source) {
         Optional<ResourceKey<DamageType>> key = source.typeHolder().unwrapKey();
         if (key.isPresent()) {
@@ -143,18 +158,15 @@ public final class DamageResistanceHandler {
     }
 
 
-    /** A flat threshold (DT) and a fractional resistance (DR, 0..1) for one category. */
-    public static final class Resistance {
-        public final float threshold;
-        public final float resistance;
-
-        public Resistance(float threshold, float resistance) {
-            this.threshold = threshold;
-            this.resistance = resistance;
-        }
+    /**
+         * A flat threshold (DT) and a fractional resistance (DR, 0..1) for one category.
+         */
+        public record Resistance(float threshold, float resistance) {
     }
 
-    /** A per-category resistance table with a fallback used for any category not explicitly listed. */
+    /**
+     * A per-category resistance table with a fallback used for any category not explicitly listed.
+     */
     public static final class ResistanceProfile {
         private final Map<String, Resistance> categories = new HashMap<>();
         private Resistance other = new Resistance(0F, 0F);
@@ -164,7 +176,9 @@ public final class DamageResistanceHandler {
             return this;
         }
 
-        /** The value used for categories with no explicit entry. */
+        /**
+         * The value used for categories with no explicit entry.
+         */
         public ResistanceProfile setOther(float threshold, float resistance) {
             this.other = new Resistance(threshold, resistance);
             return this;

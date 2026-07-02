@@ -20,9 +20,9 @@ import net.minecraft.resources.ResourceLocation;
  */
 public final class WFParticleRenderTypes {
 
-    private WFParticleRenderTypes() { }
-
-    /** Translucent particle sheet with additive blending and no depth write. */
+    /**
+     * Translucent particle sheet with additive blending and no depth write.
+     */
     public static final ParticleRenderType ADDITIVE = new ParticleRenderType() {
         @Override
         public void begin(BufferBuilder buffer, TextureManager textureManager) {
@@ -44,10 +44,8 @@ public final class WFParticleRenderTypes {
             return "wfballistics:additive";
         }
     };
-
     public static final ResourceLocation SHOCKWAVE_TEXTURE =
             new ResourceLocation(WFBallistics.MODID, "textures/particle/shockwave.png");
-
     public static final ParticleRenderType SHOCKWAVE = new ParticleRenderType() {
         @Override
         public void begin(BufferBuilder buffer, TextureManager textureManager) {
@@ -71,4 +69,7 @@ public final class WFParticleRenderTypes {
             return "wfballistics:shockwave";
         }
     };
+
+    private WFParticleRenderTypes() {
+    }
 }

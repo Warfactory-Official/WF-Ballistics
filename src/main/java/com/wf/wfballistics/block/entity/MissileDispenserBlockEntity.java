@@ -27,7 +27,9 @@ public class MissileDispenserBlockEntity extends BlockEntity implements MenuProv
         super(ModBlockEntities.MISSILE_DISPENSER.get(), pos, state);
     }
 
-    /** @return this launcher's control id, generated (and persisted) on first use. */
+    /**
+     * @return this launcher's control id, generated (and persisted) on first use.
+     */
     public UUID getControlId() {
         if (this.controlId == null) {
             this.controlId = UUID.randomUUID();

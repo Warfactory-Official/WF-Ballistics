@@ -23,7 +23,7 @@ import java.util.List;
  *
  * <p>{@link #isAvailable} lets callers fall back to vanilla rendering when the Flywheel backend is off
  * (e.g. the user selected the off/batched backend), since instanced effects only draw under it.
-*/
+ */
 @Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class FlywheelEffectManager {
 
@@ -32,14 +32,19 @@ public final class FlywheelEffectManager {
 
     private static boolean reregisterPending = false;
 
-    private FlywheelEffectManager() { }
+    private FlywheelEffectManager() {
+    }
 
-    /** @return whether Flywheel can render instances for this level right now */
+    /**
+     * @return whether Flywheel can render instances for this level right now
+     */
     public static boolean isAvailable(Level level) {
         return VisualizationManager.supportsVisualization(level);
     }
 
-    /** Adds an effect to Flywheel and starts ticking it. Assumes {@link #isAvailable} was checked. */
+    /**
+     * Adds an effect to Flywheel and starts ticking it. Assumes {@link #isAvailable} was checked.
+     */
     public static void spawn(WFFlywheelEffect effect) {
         VisualizationHelper.queueAdd(effect);
         ACTIVE.add(effect);

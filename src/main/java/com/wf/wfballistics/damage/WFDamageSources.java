@@ -15,7 +15,8 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class WFDamageSources {
 
-    private WFDamageSources() { }
+    private WFDamageSources() {
+    }
 
     /**
      * @param attacker the entity ultimately responsible (the shooter / the placer of the charge), or null

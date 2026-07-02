@@ -1,6 +1,5 @@
 package com.wf.wfballistics;
 
-import com.mojang.logging.LogUtils;
 import dev.engine_room.flywheel.api.task.Plan;
 import dev.engine_room.flywheel.api.task.TaskExecutor;
 import dev.engine_room.flywheel.api.visual.DynamicVisual;
@@ -14,37 +13,36 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.projectile.Projectile;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
-import org.slf4j.Logger;
+
+import java.util.List;
 
 public class MissileVisual extends AbstractEntityVisual<Projectile> implements DynamicVisual {
-    private static final Logger LOGGER = LogUtils.getLogger();
 
+    private static final float ORIENTATION_SMOOTHING = 0.3f;
+    // Banking: the missile rolls into horizontal turns so mid-flight looks dynamic instead of rigid.
+    private static final float BANK_GAIN = 7.0f;       // roll per (rad/tick) of heading yaw change
+    private static final float MAX_BANK = 0.6f;        // ~34 degrees of maximum roll
+    private static final float BANK_SMOOTHING = 0.12f; // eases the roll toward its per-tick target
+    private final TransformedInstance modelInstance;
+    // Spinning parts (propellers/rotors), one instance each, spun continuously in updatePosition.
+    private final TransformedInstance[] rotorInstances;
+    private final MissileModels.Rotor[] rotorSpecs;
+    private final Vector3f[] rotorPivots;
+    private final Quaternionf orientation = new Quaternionf();
     // Because minecraft's oldPos values and deltaMovement values are both inaccurate for some fucking reason,
     // we use our own position tracking for rendering smoothing on partial ticks
     private double prevX;
     private double prevY;
     private double prevZ;
-
     private double curX;
     private double curY;
     private double curZ;
-
     private int lastPosTick = -1;
-
-    private final TransformedInstance modelInstance;
-
-    private static final float ORIENTATION_SMOOTHING = 0.3f;
-    private final Quaternionf orientation = new Quaternionf();
     private boolean orientationInit = false;
-
-    // Banking: the missile rolls into horizontal turns so mid-flight looks dynamic instead of rigid.
-    private static final float BANK_GAIN = 7.0f;       // roll per (rad/tick) of heading yaw change
-    private static final float MAX_BANK = 0.6f;        // ~34 degrees of maximum roll
-    private static final float BANK_SMOOTHING = 0.12f; // eases the roll toward its per-tick target
     private float prevHeadingYaw = Float.NaN;
     private float targetBank = 0f;
     private float bank = 0f;
@@ -62,6 +60,26 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
                 .instancer(InstanceTypes.TRANSFORMED, flywheelModel)
                 .createInstance();
 
+        // Spinning parts: each rotor is a separate mesh drawn as its own instance and spun in updatePosition.
+        // Data-driven from MissileModels#rotors; the pivot is the rotor mesh's own centre. No per-model code.
+        List<MissileModels.Rotor> rotors = MissileModels.rotors(modelId);
+        this.rotorInstances = new TransformedInstance[rotors.size()];
+        this.rotorSpecs = new MissileModels.Rotor[rotors.size()];
+        this.rotorPivots = new Vector3f[rotors.size()];
+        for (int i = 0; i < rotors.size(); i++) {
+            MissileModels.Rotor rotor = rotors.get(i);
+            var rotorModel = ModModels.rotor(rotor.model());
+            if (rotorModel == null) {
+                continue;
+            }
+            this.rotorSpecs[i] = rotor;
+            Vec3 pivot = MissileModels.rotorPivot(rotor.model());
+            this.rotorPivots[i] = new Vector3f((float) pivot.x, (float) pivot.y, (float) pivot.z);
+            this.rotorInstances[i] = context.instancerProvider()
+                    .instancer(InstanceTypes.TRANSFORMED, Models.partial(rotorModel))
+                    .createInstance();
+        }
+
         prevX = entity.getX();
         prevY = entity.getY();
         prevZ = entity.getZ();
@@ -71,6 +89,20 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         updatePosition(0.0f);
 
         this.modelInstance.setChanged();
+    }
+
+    /**
+     * Wraps an angle (radians) into [-PI, PI] so a yaw delta across the +/-PI seam stays small.
+     */
+    private static float wrapRadians(float angle) {
+        float twoPi = (float) (Math.PI * 2.0);
+        angle %= twoPi;
+        if (angle >= (float) Math.PI) {
+            angle -= twoPi;
+        } else if (angle < (float) -Math.PI) {
+            angle += twoPi;
+        }
+        return angle;
     }
 
     private void updatePosition(float partialTick) {
@@ -135,18 +167,24 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         this.modelInstance.light(packedLight);
         this.modelInstance.setTransform(matrix);
         this.modelInstance.setChanged();
-    }
 
-    /** Wraps an angle (radians) into [-PI, PI] so a yaw delta across the +/-PI seam stays small. */
-    private static float wrapRadians(float angle) {
-        float twoPi = (float) (Math.PI * 2.0);
-        angle %= twoPi;
-        if (angle >= (float) Math.PI) {
-            angle -= twoPi;
-        } else if (angle < (float) -Math.PI) {
-            angle += twoPi;
+        // Constant rotor spin: same body transform, with an extra rotation about the rotor's own pivot/axis.
+        for (int i = 0; i < rotorInstances.length; i++) {
+            TransformedInstance rotorInstance = rotorInstances[i];
+            if (rotorInstance == null) {
+                continue;
+            }
+            MissileModels.Rotor rotor = rotorSpecs[i];
+            Vector3f pivot = rotorPivots[i];
+            float angle = (float) Math.toRadians((entity.tickCount + partialTick) * rotor.degreesPerTick() % 360.0f);
+            Matrix4f rotorMatrix = new Matrix4f(matrix)
+                    .translate(pivot.x, pivot.y, pivot.z)
+                    .rotate(angle, rotor.axis().x, rotor.axis().y, rotor.axis().z)
+                    .translate(-pivot.x, -pivot.y, -pivot.z);
+            rotorInstance.light(packedLight);
+            rotorInstance.setTransform(rotorMatrix);
+            rotorInstance.setChanged();
         }
-        return angle;
     }
 
     @Override
@@ -154,6 +192,11 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         // Clean up the instance when the entity despawns or explodes
         if (this.modelInstance != null) {
             this.modelInstance.delete();
+        }
+        for (TransformedInstance rotorInstance : rotorInstances) {
+            if (rotorInstance != null) {
+                rotorInstance.delete();
+            }
         }
     }
 

@@ -1,0 +1,9 @@
+{
+  "loader": "forge:obj",
+  "model": "wfballistics:raw_models/missiles/shahedjarty_prop.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wfballistics:models/missiles/shahedtxtjarty",
+    "particle": "wfballistics:models/missiles/shahedtxtjarty"
+  }
+}

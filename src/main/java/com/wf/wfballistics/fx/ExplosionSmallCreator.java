@@ -10,7 +10,8 @@ public final class ExplosionSmallCreator {
 
     private static final int DEBRIS = 15;
 
-    private ExplosionSmallCreator() { }
+    private ExplosionSmallCreator() {
+    }
 
     /**
      * @param cloudCount     number of fireball puffs

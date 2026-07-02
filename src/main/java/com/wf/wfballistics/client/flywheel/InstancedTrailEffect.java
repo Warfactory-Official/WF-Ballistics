@@ -12,10 +12,9 @@ import net.minecraft.world.phys.Vec3;
 public class InstancedTrailEffect implements WFFlywheelEffect {
 
     private static final int EMIT_PER_TICK = 3;
-
+    final Flame[] pool;
     private final Level level;
     private final Entity source;
-    final Flame[] pool;
     private int cursor = 0;
     private boolean sourceGone = false;
 
@@ -100,11 +99,17 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
             if (++age >= life) active = false;
         }
 
-        double ix(float pt) { return px + (x - px) * pt; }
+        double ix(float pt) {
+            return px + (x - px) * pt;
+        }
 
-        double iy(float pt) { return py + (y - py) * pt; }
+        double iy(float pt) {
+            return py + (y - py) * pt;
+        }
 
-        double iz(float pt) { return pz + (z - pz) * pt; }
+        double iz(float pt) {
+            return pz + (z - pz) * pt;
+        }
 
         float scale(float pt) {
             return baseScale * (0.5F + (age + pt) / life * 1.5F);

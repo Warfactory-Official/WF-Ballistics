@@ -30,7 +30,8 @@ public final class MistClientFX {
     private static final double PARTICLE_DENSITY = 0.06;
     private static final int MAX_PARTICLES = 120;
 
-    private MistClientFX() { }
+    private MistClientFX() {
+    }
 
     public static void spawn(MistEntity mist) {
         if (WFParticleSprites.mist == null) return;

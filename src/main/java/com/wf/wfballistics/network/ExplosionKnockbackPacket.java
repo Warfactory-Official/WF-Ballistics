@@ -1,5 +1,6 @@
 package com.wf.wfballistics.network;
 
+import com.wf.wfballistics.aef.standard.PlayerProcessorStandard;
 import com.wf.wfballistics.client.ClientPacketHandler;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.phys.Vec3;
@@ -14,20 +15,12 @@ import java.util.function.Supplier;
  * player around directly (the client owns its position), so the entity processor records the impulse and
  * this packet asks the client to apply it locally and report the new velocity back.
  *
- * @see com.wf.wfballistics.aef.standard.PlayerProcessorStandard
+ * @see PlayerProcessorStandard
  */
-public class ExplosionKnockbackPacket {
-
-    public final double x, y, z;
+public record ExplosionKnockbackPacket(double x, double y, double z) {
 
     public ExplosionKnockbackPacket(Vec3 motion) {
         this(motion.x, motion.y, motion.z);
-    }
-
-    public ExplosionKnockbackPacket(double x, double y, double z) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
     }
 
     public static void encode(ExplosionKnockbackPacket pkt, FriendlyByteBuf buf) {

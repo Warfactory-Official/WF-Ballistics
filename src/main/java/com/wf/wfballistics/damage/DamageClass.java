@@ -25,7 +25,9 @@ public enum DamageClass {
         this.category = category;
     }
 
-    /** Reverse lookup from a damage type key to the class that produced it, or {@code null} if foreign. */
+    /**
+     * Reverse lookup from a damage type key to the class that produced it, or {@code null} if foreign.
+     */
     public static DamageClass byType(ResourceKey<DamageType> type) {
         for (DamageClass dc : values()) {
             if (dc.type == type) return dc;

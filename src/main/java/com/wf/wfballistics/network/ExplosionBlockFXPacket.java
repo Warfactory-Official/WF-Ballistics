@@ -19,19 +19,7 @@ import java.util.function.Supplier;
  * are clustered around the centre, so each coordinate offset is small and varints cost ~1–2 bytes instead of
  * the 8 bytes a raw {@code long} position takes — a large saving for big block sets.
  */
-public class ExplosionBlockFXPacket {
-
-    public final double x, y, z;
-    public final float size;
-    public final List<BlockPos> blocks;
-
-    public ExplosionBlockFXPacket(double x, double y, double z, float size, List<BlockPos> blocks) {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-        this.size = size;
-        this.blocks = blocks;
-    }
+public record ExplosionBlockFXPacket(double x, double y, double z, float size, List<BlockPos> blocks) {
 
     public static void encode(ExplosionBlockFXPacket pkt, FriendlyByteBuf buf) {
         buf.writeDouble(pkt.x);

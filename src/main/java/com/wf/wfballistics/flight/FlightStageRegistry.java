@@ -2,11 +2,7 @@ package com.wf.wfballistics.flight;
 
 import com.wf.wfballistics.MissileEntity.Phase;
 
-import java.util.Collections;
-import java.util.EnumMap;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Registry of {@link FlightStage}s, grouped by the {@link Phase} they fly. A missile stores one stage id per
@@ -30,13 +26,17 @@ public final class FlightStageRegistry {
     private FlightStageRegistry() {
     }
 
-    /** Register a stage for a phase; the first one registered for a phase becomes that phase's default. */
+    /**
+     * Register a stage for a phase; the first one registered for a phase becomes that phase's default.
+     */
     public static void register(Phase phase, FlightStage stage) {
         BY_PHASE.computeIfAbsent(phase, p -> new LinkedHashMap<>()).put(stage.id(), stage);
         DEFAULT_ID.putIfAbsent(phase, stage.id());
     }
 
-    /** @return the stage for {@code (phase, id)}, falling back to the phase's default when unknown. */
+    /**
+     * @return the stage for {@code (phase, id)}, falling back to the phase's default when unknown.
+     */
     public static FlightStage get(Phase phase, String id) {
         Map<String, FlightStage> byId = BY_PHASE.get(phase);
         if (byId == null) {
@@ -55,7 +55,9 @@ public final class FlightStageRegistry {
         return DEFAULT_ID.get(phase);
     }
 
-    /** @return all stage ids registered for a phase, in registration order. */
+    /**
+     * @return all stage ids registered for a phase, in registration order.
+     */
     public static Set<String> ids(Phase phase) {
         Map<String, FlightStage> byId = BY_PHASE.get(phase);
         return byId != null ? Collections.unmodifiableSet(byId.keySet()) : Set.of();

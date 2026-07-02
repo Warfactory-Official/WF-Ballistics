@@ -12,7 +12,10 @@ import org.jetbrains.annotations.Nullable;
 public final class CruiseStage implements FlightStage {
 
     public static final CruiseStage INSTANCE = new CruiseStage();
-
+    /**
+     * Horizontal distance to the target at which cruise hands off to the terminal attack.
+     */
+    public static final double BRAKING_RANGE = 30.0;
     // Low-pass factor easing the guidance altitude toward the raw heightmap scan each tick.
     private static final double TERRAIN_TARGET_SMOOTHING = 0.12;
     // Height error (blocks) tolerated before correcting; kills flat-ground jitter.
@@ -21,8 +24,6 @@ public final class CruiseStage implements FlightStage {
     private static final double VERTICAL_SMOOTHING = 0.15;
     // Proportional-control range for altitude corrections.
     private static final double DAMPENING_RANGE = 50.0;
-    /** Horizontal distance to the target at which cruise hands off to the terminal attack. */
-    public static final double BRAKING_RANGE = 30.0;
 
     private CruiseStage() {
     }

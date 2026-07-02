@@ -22,6 +22,10 @@ public class ShockwaveParticle extends Particle {
         this.xd = this.yd = this.zd = 0.0;
     }
 
+    private static void emit(VertexConsumer buffer, double x, double y, double z, float u, float v, float a, int light) {
+        buffer.vertex(x, y, z).uv(u, v).color(1.0F, 1.0F, 1.0F, a).uv2(light).endVertex();
+    }
+
     @Override
     public void render(VertexConsumer buffer, Camera camera, float partialTicks) {
         float t = this.age + partialTicks;
@@ -41,10 +45,6 @@ public class ShockwaveParticle extends Particle {
         emit(buffer, px - growth, py, pz + growth, 0.0F, 1.0F, a, light);
         emit(buffer, px + growth, py, pz + growth, 1.0F, 1.0F, a, light);
         emit(buffer, px + growth, py, pz - growth, 1.0F, 0.0F, a, light);
-    }
-
-    private static void emit(VertexConsumer buffer, double x, double y, double z, float u, float v, float a, int light) {
-        buffer.vertex(x, y, z).uv(u, v).color(1.0F, 1.0F, 1.0F, a).uv2(light).endVertex();
     }
 
     @Override

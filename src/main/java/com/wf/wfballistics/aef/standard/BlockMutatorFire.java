@@ -18,7 +18,8 @@ import net.minecraft.world.level.block.state.BlockState;
 public class BlockMutatorFire implements IBlockMutator {
 
     @Override
-    public void mutatePre(ExplosionAEF explosion, BlockState state, BlockPos pos) { }
+    public void mutatePre(ExplosionAEF explosion, BlockState state, BlockPos pos) {
+    }
 
     @Override
     public void mutatePost(ExplosionAEF explosion, BlockPos pos) {

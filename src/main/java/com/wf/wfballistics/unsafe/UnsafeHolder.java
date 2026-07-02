@@ -16,17 +16,6 @@ import java.lang.reflect.Field;
  */
 public final class UnsafeHolder {
     public static final Unsafe U = getUnsafe();
-
-    private static Unsafe getUnsafe() {
-        try {
-            Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-            theUnsafe.setAccessible(true);
-            return (Unsafe) theUnsafe.get(null);
-        } catch (ReflectiveOperationException e) {
-            throw new RuntimeException("Could not obtain sun.misc.Unsafe", e);
-        }
-    }
-
     public static final long IA_BASE = U.arrayBaseOffset(int[].class);
     public static final int IA_SHIFT = Integer.numberOfTrailingZeros(U.arrayIndexScale(int[].class));
     public static final long JA_BASE = U.arrayBaseOffset(long[].class);
@@ -45,8 +34,17 @@ public final class UnsafeHolder {
     public static final int DA_SHIFT = Integer.numberOfTrailingZeros(U.arrayIndexScale(double[].class));
     public static final long RA_BASE = U.arrayBaseOffset(Object[].class);
     public static final int RA_SHIFT = Integer.numberOfTrailingZeros(U.arrayIndexScale(Object[].class));
-
     private UnsafeHolder() {
+    }
+
+    private static Unsafe getUnsafe() {
+        try {
+            Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+            theUnsafe.setAccessible(true);
+            return (Unsafe) theUnsafe.get(null);
+        } catch (ReflectiveOperationException e) {
+            throw new RuntimeException("Could not obtain sun.misc.Unsafe", e);
+        }
     }
 
     public static long offInt(int i) {

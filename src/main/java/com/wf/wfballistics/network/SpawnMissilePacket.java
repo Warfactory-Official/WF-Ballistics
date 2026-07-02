@@ -1,9 +1,9 @@
 package com.wf.wfballistics.network;
 
 import com.wf.wfballistics.MissileEntity;
+import com.wf.wfballistics.MissileEntity.Phase;
 import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.ModEntities;
-import com.wf.wfballistics.MissileEntity.Phase;
 import com.wf.wfballistics.block.entity.MissileDispenserBlockEntity;
 import com.wf.wfballistics.flight.FlightStageRegistry;
 import com.wf.wfballistics.warhead.WarheadRegistry;
@@ -42,10 +42,10 @@ public class SpawnMissilePacket {
     private final String attackStageId;
 
     public SpawnMissilePacket(BlockPos pos, String modelId, String warheadId, boolean highAltitude,
-                             double targetX, double targetY, double targetZ, float explosionOffset,
-                             double altitudeParam, int fragmentCount, double cruiseSpeed, double turnRate,
-                             float health, boolean startInCruise, boolean startArmed,
-                             String ascentStageId, String cruiseStageId, String attackStageId) {
+                              double targetX, double targetY, double targetZ, float explosionOffset,
+                              double altitudeParam, int fragmentCount, double cruiseSpeed, double turnRate,
+                              float health, boolean startInCruise, boolean startArmed,
+                              String ascentStageId, String cruiseStageId, String attackStageId) {
         this.pos = pos;
         this.modelId = modelId;
         this.warheadId = warheadId;

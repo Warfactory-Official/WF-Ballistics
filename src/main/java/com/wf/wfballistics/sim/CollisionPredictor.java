@@ -7,21 +7,9 @@ public final class CollisionPredictor {
     private CollisionPredictor() {
     }
 
-    public static final class Result {
-        public final Vec3 point;
-        public final int ticks;
-        public final double minDist;
-
-        public Result(Vec3 point, int ticks, double minDist) {
-            this.point = point;
-            this.ticks = ticks;
-            this.minDist = minDist;
-        }
-    }
-
     /**
      * @return the predicted collision area if the two tracks close to within
-     *         {@link MissileSimConfig#INTERCEPT_DISTANCE} inside the horizon, else null.
+     * {@link MissileSimConfig#INTERCEPT_DISTANCE} inside the horizon, else null.
      */
     public static Result predict(SimMissile interceptor, SimMissile target) {
         Vec3 iPos = interceptor.pos;
@@ -52,5 +40,8 @@ public final class CollisionPredictor {
             }
         }
         return null;
+    }
+
+    public record Result(Vec3 point, int ticks, double minDist) {
     }
 }

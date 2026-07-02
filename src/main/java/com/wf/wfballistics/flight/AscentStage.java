@@ -4,12 +4,16 @@ import com.wf.wfballistics.MissileEntity;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/** Vertical boost straight up until the missile clears its safe altitude, then hands off to cruise. */
+/**
+ * Vertical boost straight up until the missile clears its safe altitude, then hands off to cruise.
+ */
 public final class AscentStage implements FlightStage {
 
     public static final AscentStage INSTANCE = new AscentStage();
 
-    /** Vertical boost speed during launch (blocks/tick). */
+    /**
+     * Vertical boost speed during launch (blocks/tick).
+     */
     private static final double ASCENT_SPEED = 1.25;
 
     private AscentStage() {

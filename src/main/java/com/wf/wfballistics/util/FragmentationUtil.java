@@ -15,7 +15,9 @@ public final class FragmentationUtil {
     private FragmentationUtil() {
     }
 
-    /** All-round spherical burst with the default (small-explosion) warhead. */
+    /**
+     * All-round spherical burst with the default (small-explosion) warhead.
+     */
     public static List<BombletEntity> burst(Level level, Vec3 origin, int count, double speed) {
         return burst(level, origin, count, speed, speed * 0.25,
                 "standard", BombletEntity.STANDARD, BombletEntity.DEFAULT_FUSE, null);

@@ -1,17 +1,7 @@
 package com.wf.wfballistics.aef;
 
-import com.wf.wfballistics.aef.interfaces.IBlockAllocator;
-import com.wf.wfballistics.aef.interfaces.IBlockProcessor;
-import com.wf.wfballistics.aef.interfaces.IEntityProcessor;
-import com.wf.wfballistics.aef.interfaces.IExplosionSFX;
-import com.wf.wfballistics.aef.interfaces.IPlayerProcessor;
-import com.wf.wfballistics.aef.standard.BlockAllocatorStandard;
-import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
-import com.wf.wfballistics.aef.standard.CustomDamageHandlerAmat;
-import com.wf.wfballistics.aef.standard.EntityProcessorCross;
-import com.wf.wfballistics.aef.standard.ExplosionEffectAmat;
-import com.wf.wfballistics.aef.standard.ExplosionEffectLarge;
-import com.wf.wfballistics.aef.standard.PlayerProcessorStandard;
+import com.wf.wfballistics.aef.interfaces.*;
+import com.wf.wfballistics.aef.standard.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -51,6 +41,22 @@ import java.util.Set;
  */
 public class ExplosionAEF {
 
+    public final Level level;
+    public final double posX;
+    public final double posY;
+    public final double posZ;
+    public final float size;
+    /**
+     * The entity that caused the blast, or {@code null} for an unattributed/world explosion.
+     */
+    public final Entity exploder;
+    /**
+     * A throwaway vanilla {@link Explosion} carrying this blast's parameters. It exists purely so the
+     * framework can reuse vanilla / Forge hooks that require an {@code Explosion} argument — block
+     * explosion resistance, {@code Entity#shouldBlockExplode}, the {@code ExplosionEvent.Detonate} Forge
+     * event, and explosion {@link net.minecraft.world.damagesource.DamageSource}s.
+     */
+    public final Explosion compat;
     // One of each gameplay strategy is enough; chain-load via a wrapper if you ever need to combine them.
     private IBlockAllocator blockAllocator;
     private IEntityProcessor entityProcessor;
@@ -59,27 +65,13 @@ public class ExplosionAEF {
     // SFX are deliberately plural and granular (bang, smoke, flash, ...) so they can be mixed per blast.
     private IExplosionSFX[] sfx;
 
-    public final Level level;
-    public final double posX;
-    public final double posY;
-    public final double posZ;
-    public final float size;
-    /** The entity that caused the blast, or {@code null} for an unattributed/world explosion. */
-    public final Entity exploder;
-
-    /**
-     * A throwaway vanilla {@link Explosion} carrying this blast's parameters. It exists purely so the
-     * framework can reuse vanilla / Forge hooks that require an {@code Explosion} argument — block
-     * explosion resistance, {@code Entity#shouldBlockExplode}, the {@code ExplosionEvent.Detonate} Forge
-     * event, and explosion {@link net.minecraft.world.damagesource.DamageSource}s.
-     */
-    public final Explosion compat;
-
     public ExplosionAEF(Level level, double x, double y, double z, float size) {
         this(level, x, y, z, size, null);
     }
 
-    /** Convenience: detonate at the centre of a block. */
+    /**
+     * Convenience: detonate at the centre of a block.
+     */
     public ExplosionAEF(Level level, BlockPos pos, float size) {
         this(level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, size, null);
     }

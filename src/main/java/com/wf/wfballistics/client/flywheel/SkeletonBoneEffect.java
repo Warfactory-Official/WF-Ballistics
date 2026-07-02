@@ -23,20 +23,19 @@ import java.util.List;
  */
 public class SkeletonBoneEffect implements WFFlywheelEffect {
 
-    public enum BonePart { SKULL, TORSO, LIMB }
-
-    private final Level level;
     final List<Bone> bones;
     final float brightness;
+    private final Level level;
     private boolean playedClatter = false;
-
     public SkeletonBoneEffect(Level level, List<Bone> bones, float brightness) {
         this.level = level;
         this.bones = bones;
         this.brightness = brightness;
     }
 
-    /** Generic upright-biped skeleton at {@code (x,y,z)}, sized to {@code height} (1.8 ≈ a player). */
+    /**
+     * Generic upright-biped skeleton at {@code (x,y,z)}, sized to {@code height} (1.8 ≈ a player).
+     */
     public static SkeletonBoneEffect biped(Level level, double x, double y, double z,
                                            float bodyYaw, float headYaw, float height, float brightness) {
         float h = Math.max(0.25F, height / 1.8F);
@@ -85,13 +84,17 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
         return true;
     }
 
-    /** One bone: position, fall/settle state, and a free-axis tumble while airborne. */
+    public enum BonePart {SKULL, TORSO, LIMB}
+
+    /**
+     * One bone: position, fall/settle state, and a free-axis tumble while airborne.
+     */
     static final class Bone {
         final BonePart part;
         final float scale;
-        double x, y, z, px, py, pz, vx, vy, vz;
         final float yaw;
         final float tax, tay, taz; // tumble axis (unit)
+        double x, y, z, px, py, pz, vx, vy, vz;
         float tumble, tumbleVel;
         int age, life;
         boolean onGround;
@@ -117,7 +120,9 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
             this.tumbleVel = (level.random.nextFloat() - 0.5F) * 0.6F;
         }
 
-        /** @return true if the bone landed this tick */
+        /**
+         * @return true if the bone landed this tick
+         */
         boolean tick(Level level) {
             px = x;
             py = y;
@@ -144,11 +149,17 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
             return false;
         }
 
-        double ix(float pt) { return px + (x - px) * pt; }
+        double ix(float pt) {
+            return px + (x - px) * pt;
+        }
 
-        double iy(float pt) { return py + (y - py) * pt; }
+        double iy(float pt) {
+            return py + (y - py) * pt;
+        }
 
-        double iz(float pt) { return pz + (z - pz) * pt; }
+        double iz(float pt) {
+            return pz + (z - pz) * pt;
+        }
 
         float alpha(float pt) {
             float left = life - (age + pt);

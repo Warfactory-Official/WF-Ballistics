@@ -30,27 +30,37 @@ import java.util.UUID;
  */
 public final class RecursiveFrag {
 
-    private RecursiveFrag() {
-    }
-
-    /** Registered warhead id (also selectable from the dispenser GUI). */
+    /**
+     * Registered warhead id (also selectable from the dispenser GUI).
+     */
     public static final String ID = "recursive_frag";
-    /** Default generations for a GUI-launched recursive missile: splits, those split, then a blast. */
+    /**
+     * Default generations for a GUI-launched recursive missile: splits, those split, then a blast.
+     */
     public static final int DEFAULT_DEPTH = 2;
-
-    /** Missilelets spawned per split, clamped from the missile's fragment count. */
+    /**
+     * Missilelets spawned per split, clamped from the missile's fragment count.
+     */
     private static final int MIN_CHILDREN = 2;
     private static final int MAX_CHILDREN = 5;
-    /** Small, agile fragmentation-style airframe the missilelets fly as. */
+    /**
+     * Small, agile fragmentation-style airframe the missilelets fly as.
+     */
     private static final String CHILD_MODEL = "micro";
-    /** Missilelet cruise/dive speed (blocks/tick) and the outward burst speed at the moment of splitting. */
+    /**
+     * Missilelet cruise/dive speed (blocks/tick) and the outward burst speed at the moment of splitting.
+     */
     private static final double CHILD_SPEED = 2.0;
     private static final double SPREAD_SPEED = 3.0;
     // Outward-vs-downward bias of the split burst: higher = the missilelets fan out flatter before diving.
     private static final double SPREAD_LATERAL = 1.3;
     private static final float CHILD_HEALTH = 10.0f;
-    /** Leaf (final generation) blast radius — kept small; a full cluster is many of these. */
+    /**
+     * Leaf (final generation) blast radius — kept small; a full cluster is many of these.
+     */
     private static final float LEAF_BLAST_RADIUS = 4.0f;
+    private RecursiveFrag() {
+    }
 
     /**
      * Airburst altitude (blocks above the target's Y) at which a missile of the given remaining split depth
@@ -61,12 +71,16 @@ public final class RecursiveFrag {
         return depth > 0 ? depth * 6.0f + 4.0f : 0.0f; // depth2 -> 16, depth1 -> 10, leaf -> 0 (contact)
     }
 
-    /** Horizontal radius the child aimpoints are scattered over (wider for the earlier, higher splits). */
+    /**
+     * Horizontal radius the child aimpoints are scattered over (wider for the earlier, higher splits).
+     */
     private static double scatterRadius(int childDepth) {
         return (childDepth + 1) * 12.0; // depth1 children ~24, depth0 grandchildren ~12
     }
 
-    /** Warhead entry point (registered as {@link #ID}). */
+    /**
+     * Warhead entry point (registered as {@link #ID}).
+     */
     public static void detonate(MissileEntity missile, Vec3 pos) {
         Level level = missile.level();
         if (level.isClientSide) {

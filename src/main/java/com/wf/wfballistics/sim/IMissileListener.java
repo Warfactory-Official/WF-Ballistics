@@ -9,12 +9,18 @@ import net.minecraft.world.phys.Vec3;
  * {@link MissileListenerRegistry} (block entities on their server tick, deregister on removal).
  */
 public interface IMissileListener {
-    /** World-space center of the detection sphere. */
+    /**
+     * World-space center of the detection sphere.
+     */
     Vec3 listenerCenter();
 
-    /** Detection radius, in blocks. */
+    /**
+     * Detection radius, in blocks.
+     */
     double listenerRange();
 
-    /** Whether this listener is still active (e.g. loaded and not removed). Invalid ones are purged. */
+    /**
+     * Whether this listener is still active (e.g. loaded and not removed). Invalid ones are purged.
+     */
     boolean listenerValid();
 }

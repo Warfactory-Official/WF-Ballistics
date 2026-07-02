@@ -21,7 +21,8 @@ public class BlockProcessorNoDamage implements IBlockProcessor {
 
     protected IBlockMutator convert;
 
-    public BlockProcessorNoDamage() { }
+    public BlockProcessorNoDamage() {
+    }
 
     public BlockProcessorNoDamage withBlockEffect(IBlockMutator convert) {
         this.convert = convert;

@@ -23,10 +23,13 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = WFBallistics.MODID)
 public final class FireHandler {
 
-    /** Ticks between fire-damage applications (1 second). */
+    /**
+     * Ticks between fire-damage applications (1 second).
+     */
     private static final int DAMAGE_INTERVAL = 20;
 
-    private FireHandler() { }
+    private FireHandler() {
+    }
 
     @SubscribeEvent
     public static void attach(AttachCapabilitiesEvent<Entity> event) {

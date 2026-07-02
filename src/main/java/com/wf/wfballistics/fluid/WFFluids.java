@@ -32,29 +32,19 @@ public final class WFFluids {
     //Phosgene
     public static final RegistryObject<FluidType> PHOSGENE_TYPE =
             FLUID_TYPES.register("phosgene", () -> new GasFluidType(0xCFE0C0));
-    public static final RegistryObject<ForgeFlowingFluid> PHOSGENE =
-            FLUIDS.register("phosgene", () -> new ForgeFlowingFluid.Source(WFFluids.PHOSGENE_PROPS));
-    public static final RegistryObject<ForgeFlowingFluid> FLOWING_PHOSGENE =
-            FLUIDS.register("flowing_phosgene", () -> new ForgeFlowingFluid.Flowing(WFFluids.PHOSGENE_PROPS));
-    public static final ForgeFlowingFluid.Properties PHOSGENE_PROPS =
-            new ForgeFlowingFluid.Properties(PHOSGENE_TYPE, PHOSGENE, FLOWING_PHOSGENE);
-
     // Mustard gas
     public static final RegistryObject<FluidType> MUSTARD_GAS_TYPE =
-            FLUID_TYPES.register("mustard_gas", () -> new GasFluidType(0xB8A038));
-    public static final RegistryObject<ForgeFlowingFluid> MUSTARD_GAS =
-            FLUIDS.register("mustard_gas", () -> new ForgeFlowingFluid.Source(WFFluids.MUSTARD_GAS_PROPS));
-    public static final RegistryObject<ForgeFlowingFluid> FLOWING_MUSTARD_GAS =
-            FLUIDS.register("flowing_mustard_gas", () -> new ForgeFlowingFluid.Flowing(WFFluids.MUSTARD_GAS_PROPS));
-    public static final ForgeFlowingFluid.Properties MUSTARD_GAS_PROPS =
-            new ForgeFlowingFluid.Properties(MUSTARD_GAS_TYPE, MUSTARD_GAS, FLOWING_MUSTARD_GAS);
-
-    private WFFluids() { }
+            FLUID_TYPES.register("mustard_gas", () -> new GasFluidType(0xB8A038));    public static final RegistryObject<ForgeFlowingFluid> PHOSGENE =
+            FLUIDS.register("phosgene", () -> new ForgeFlowingFluid.Source(WFFluids.PHOSGENE_PROPS));
+    private WFFluids() {
+    }    public static final RegistryObject<ForgeFlowingFluid> FLOWING_PHOSGENE =
+            FLUIDS.register("flowing_phosgene", () -> new ForgeFlowingFluid.Flowing(WFFluids.PHOSGENE_PROPS));
 
     public static void register(IEventBus modBus) {
         FLUID_TYPES.register(modBus);
         FLUIDS.register(modBus);
-    }
+    }    public static final ForgeFlowingFluid.Properties PHOSGENE_PROPS =
+            new ForgeFlowingFluid.Properties(PHOSGENE_TYPE, PHOSGENE, FLOWING_PHOSGENE);
 
     public static class GasFluidType extends FluidType {
 
@@ -98,4 +88,16 @@ public final class WFFluids {
             });
         }
     }
+    public static final RegistryObject<ForgeFlowingFluid> MUSTARD_GAS =
+            FLUIDS.register("mustard_gas", () -> new ForgeFlowingFluid.Source(WFFluids.MUSTARD_GAS_PROPS));
+    public static final RegistryObject<ForgeFlowingFluid> FLOWING_MUSTARD_GAS =
+            FLUIDS.register("flowing_mustard_gas", () -> new ForgeFlowingFluid.Flowing(WFFluids.MUSTARD_GAS_PROPS));
+    public static final ForgeFlowingFluid.Properties MUSTARD_GAS_PROPS =
+            new ForgeFlowingFluid.Properties(MUSTARD_GAS_TYPE, MUSTARD_GAS, FLOWING_MUSTARD_GAS);
+
+
+
+
+
+
 }

@@ -8,7 +8,8 @@ import net.minecraft.world.level.Level;
 
 public final class ExplosionCreator {
 
-    private ExplosionCreator() { }
+    private ExplosionCreator() {
+    }
 
     /**
      * @param cloudCount                number of smoke-plume puffs
@@ -47,17 +48,23 @@ public final class ExplosionCreator {
         WFNetwork.sendToAllAround(level, x, y, z, range, new AuxParticlePacket("explosion_large", x, y, z, data));
     }
 
-    /** Compact large-explosion preset (HBM {@code composeEffectSmall}). */
+    /**
+     * Compact large-explosion preset (HBM {@code composeEffectSmall}).
+     */
     public static void composeEffectSmall(Level level, double x, double y, double z) {
         composeEffect(level, x, y, z, 10, 2F, 0.5F, 25F, 5, 8, 20, 0.75F, 1F, -2F, 150F);
     }
 
-    /** Standard large-explosion preset (HBM {@code composeEffectStandard}). */
+    /**
+     * Standard large-explosion preset (HBM {@code composeEffectStandard}).
+     */
     public static void composeEffectStandard(Level level, double x, double y, double z) {
         composeEffect(level, x, y, z, 15, 5F, 1F, 45F, 10, 16, 50, 1F, 3F, -2F, 200F);
     }
 
-    /** Big large-explosion preset (HBM {@code composeEffectLarge}). */
+    /**
+     * Big large-explosion preset (HBM {@code composeEffectLarge}).
+     */
     public static void composeEffectLarge(Level level, double x, double y, double z) {
         composeEffect(level, x, y, z, 30, 6.5F, 2F, 65F, 25, 16, 50, 1.25F, 3F, -2F, 350F);
     }

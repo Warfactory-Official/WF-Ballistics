@@ -14,31 +14,33 @@ public abstract class EntityExplosionChunkLoading extends Entity {
 
     public EntityExplosionChunkLoading(EntityType<?> pEntityType, Level pLevel) {
         super(pEntityType, pLevel);
-        if(pLevel instanceof ServerLevel){
+        if (pLevel instanceof ServerLevel) {
             serverLevel = (ServerLevel) pLevel;
         }
     }
 
-    public void init(ServerLevel level){
+    public void init(ServerLevel level) {
         serverLevel = level;
     }
 
-    public void loadChunk(){
+    public void loadChunk() {
         this.loadChunk(this.chunkPosition());
     }
-    public void loadChunk(ChunkPos chunkPos){
-        this.loadChunk(chunkPos.x,chunkPos.z);
+
+    public void loadChunk(ChunkPos chunkPos) {
+        this.loadChunk(chunkPos.x, chunkPos.z);
     }
-    public void loadChunk(int x, int z){
-        if (this.chunkPos == null){
-            chunkPos = new ChunkPos(x,z);
-            ForgeChunkManager.forceChunk(serverLevel, WFBallistics.MODID,this,x,z,true,true);
+
+    public void loadChunk(int x, int z) {
+        if (this.chunkPos == null) {
+            chunkPos = new ChunkPos(x, z);
+            ForgeChunkManager.forceChunk(serverLevel, WFBallistics.MODID, this, x, z, true, true);
         }
     }
 
-    public void clearChunkLoader(){
-        if (!level().isClientSide && serverLevel != null && chunkPos != null){
-            ForgeChunkManager.forceChunk(serverLevel, WFBallistics.MODID,this,chunkPos.x,chunkPos.z,false,false);
+    public void clearChunkLoader() {
+        if (!level().isClientSide && serverLevel != null && chunkPos != null) {
+            ForgeChunkManager.forceChunk(serverLevel, WFBallistics.MODID, this, chunkPos.x, chunkPos.z, false, false);
         }
     }
 }

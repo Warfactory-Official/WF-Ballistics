@@ -1,14 +1,13 @@
 package com.wf.wfballistics.client.render;
 
-import com.wf.wfballistics.WFBallistics;
-import com.wf.wfballistics.entity.EntityNukeTorex;
-import com.wf.wfballistics.entity.EntityNukeTorex.Cloudlet;
-import com.wf.wfballistics.entity.EntityNukeTorex.TorexType;
-import com.wf.wfballistics.client.render.DirectBufferAccess;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.*;
 import com.mojang.math.Axis;
+import com.wf.wfballistics.WFBallistics;
+import com.wf.wfballistics.entity.EntityNukeTorex;
+import com.wf.wfballistics.entity.EntityNukeTorex.Cloudlet;
+import com.wf.wfballistics.entity.EntityNukeTorex.TorexType;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
@@ -53,13 +52,6 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         super(pContext);
     }
 
-    @Override
-    public ResourceLocation getTextureLocation(EntityNukeTorex pEntity) {
-        return TEXTURE_PARTICLE;
-    }
-
-    // --- CE static helpers ---
-
     private static float getCloudAlphaBase(EntityNukeTorex cloud) {
         int maxAge = cloud.getEntityMaxAge();
         int fadeOut = maxAge * 3 / 4;
@@ -69,6 +61,8 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         }
         return 1F;
     }
+
+    // --- CE static helpers ---
 
     private static float getCloudletLifeFrac(Cloudlet cloudlet) {
         return (float) cloudlet.age / (float) cloudlet.cloudletLife;
@@ -121,7 +115,32 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         return br < 48 ? 48 : br;
     }
 
+    private static float getCloudletRenderPos(double prevPos, double pos, double cloudPos, float partialTick) {
+        return (float) (Mth.lerp(partialTick, prevPos, pos) - cloudPos);
+    }
+
     // --- Main render entry ---
+
+    private static void writeVertex(long a, float x, float y, float z,
+                                    int color, float u, float v,
+                                    int overlay, int lightmap, int normal) {
+        U.putFloat(a, x);
+        U.putFloat(a + 4, y);
+        U.putFloat(a + 8, z);
+        U.putInt(a + 12, color);
+        U.putFloat(a + 16, u);
+        U.putFloat(a + 20, v);
+        U.putInt(a + 24, overlay);
+        U.putInt(a + 28, lightmap);
+        U.putInt(a + 32, normal);
+    }
+
+    // --- Cloudlet rendering ---
+
+    @Override
+    public ResourceLocation getTextureLocation(EntityNukeTorex pEntity) {
+        return TEXTURE_PARTICLE;
+    }
 
     @Override
     public void render(EntityNukeTorex cloud, float pEntityYaw, float pPartialTick, PoseStack pPoseStack, MultiBufferSource pBuffer, int pPackedLight) {
@@ -149,8 +168,6 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
 
         super.render(cloud, pEntityYaw, pPartialTick, pPoseStack, pBuffer, pPackedLight);
     }
-
-    // --- Cloudlet rendering ---
 
     private void cloudletWrapper(EntityNukeTorex cloud, PoseStack pPoseStack, MultiBufferSource pBuffer, float partialTick) {
         Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
@@ -212,10 +229,6 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         cloud.lastRenderSortTick = clientTick;
     }
 
-    private static float getCloudletRenderPos(double prevPos, double pos, double cloudPos, float partialTick) {
-        return (float) (Mth.lerp((double) partialTick, prevPos, pos) - cloudPos);
-    }
-
     private void tessellateAllUnsafe(BufferBuilder bb, EntityNukeTorex entity, Matrix4f pose, Matrix3f normal, float partialTick) {
         DirectBufferAccess dba = (DirectBufferAccess) bb;
         int quadCount = entity.cloudlets.size();
@@ -245,9 +258,9 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         float p30 = pose.m30(), p31 = pose.m31(), p32 = pose.m32();
 
         float cloudAlphaBase = getCloudAlphaBase(entity);
-        double cloudOriginX = Mth.lerp((double) partialTick, entity.xOld, entity.getX());
-        double cloudOriginY = Mth.lerp((double) partialTick, entity.yOld, entity.getY());
-        double cloudOriginZ = Mth.lerp((double) partialTick, entity.zOld, entity.getZ());
+        double cloudOriginX = Mth.lerp(partialTick, entity.xOld, entity.getX());
+        double cloudOriginY = Mth.lerp(partialTick, entity.yOld, entity.getY());
+        double cloudOriginZ = Mth.lerp(partialTick, entity.zOld, entity.getZ());
 
         long addr = baseAddr;
         int written = 0;
@@ -316,20 +329,6 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         dba.hbm$setVertices(dba.hbm$vertices() + written * 4);
     }
 
-    private static void writeVertex(long a, float x, float y, float z,
-                                    int color, float u, float v,
-                                    int overlay, int lightmap, int normal) {
-        U.putFloat(a, x);
-        U.putFloat(a + 4, y);
-        U.putFloat(a + 8, z);
-        U.putInt(a + 12, color);
-        U.putFloat(a + 16, u);
-        U.putFloat(a + 20, v);
-        U.putInt(a + 24, overlay);
-        U.putInt(a + 28, lightmap);
-        U.putInt(a + 32, normal);
-    }
-
     private void tessellateCloudlet(VertexConsumer buffer, Matrix4f pose, Matrix3f normal,
                                     EntityNukeTorex cloud, Cloudlet cloudlet, float partialTick, float cloudAlphaBase) {
         float lifeFrac = getCloudletLifeFrac(cloudlet);
@@ -355,9 +354,9 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         float upY = cameraUp.y() * scale;
         float upZ = cameraUp.z() * scale;
 
-        double cloudOriginX = Mth.lerp((double) partialTick, cloud.xOld, cloud.getX());
-        double cloudOriginY = Mth.lerp((double) partialTick, cloud.yOld, cloud.getY());
-        double cloudOriginZ = Mth.lerp((double) partialTick, cloud.zOld, cloud.getZ());
+        double cloudOriginX = Mth.lerp(partialTick, cloud.xOld, cloud.getX());
+        double cloudOriginY = Mth.lerp(partialTick, cloud.yOld, cloud.getY());
+        double cloudOriginZ = Mth.lerp(partialTick, cloud.zOld, cloud.getZ());
         float x = getCloudletRenderPos(cloudlet.prevPosX, cloudlet.posX, cloudOriginX, partialTick);
         float y = getCloudletRenderPos(cloudlet.prevPosY, cloudlet.posY, cloudOriginY, partialTick);
         float z = getCloudletRenderPos(cloudlet.prevPosZ, cloudlet.posZ, cloudOriginZ, partialTick);

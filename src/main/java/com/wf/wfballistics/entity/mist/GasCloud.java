@@ -33,9 +33,9 @@ import java.util.List;
  */
 public final class GasCloud {
 
-    private static final Logger LOGGER = LogUtils.getLogger();
-
-    /** Flood-fill reach (blocks) from the origin along each axis; the cloud is at most a (2r+1) cube. */
+    /**
+     * Flood-fill reach (blocks) from the origin along each axis; the cloud is at most a (2r+1) cube.
+     */
     public static final int DEFAULT_RADIUS = 6;
     /**
      * Safety cap only. The fill is normally bounded by the radius cube; this is kept well above
@@ -43,7 +43,9 @@ public final class GasCloud {
      * instead of a budget-carved ball (whose stepped surface needs dozens of boxes).
      */
     public static final int DEFAULT_MAX_CELLS = 8192;
-    /** Cloud lifetime in ticks (~15s). */
+    /**
+     * Cloud lifetime in ticks (~15s).
+     */
     public static final int DEFAULT_DURATION = 300;
     /**
      * Each spawned cell processes entities every N ticks. Kept at 1: the sustain cost is the per-tick entity
@@ -51,8 +53,10 @@ public final class GasCloud {
      * agents gate their damage on the victim's own tick count.
      */
     public static final int DEFAULT_EFFECT_INTERVAL = 1;
-
-    /** Hard cap on spawned box entities; excess filled volume is left uncovered (and logged). */
+    private static final Logger LOGGER = LogUtils.getLogger();
+    /**
+     * Hard cap on spawned box entities; excess filled volume is left uncovered (and logged).
+     */
     private static final int MAX_BOXES = 220;
 
     private static final int[] DX = {1, -1, 0, 0, 0, 0};
@@ -62,7 +66,9 @@ public final class GasCloud {
     private GasCloud() {
     }
 
-    /** Convenience: fill and spawn with the default tuning. */
+    /**
+     * Convenience: fill and spawn with the default tuning.
+     */
     public static int spawn(Level level, Fluid fluid, Vec3 center) {
         return spawn(level, fluid, center, DEFAULT_RADIUS, DEFAULT_MAX_CELLS, DEFAULT_DURATION);
     }
@@ -102,33 +108,6 @@ public final class GasCloud {
     }
 
     // --- flood fill -----------------------------------------------------------------------------------
-
-    /** Result of a fill: the world min corner, the buffer dims, and the per-cell occupancy grid. */
-    private static final class Fill {
-        final int minX;
-        final int minY;
-        final int minZ;
-        final int sx;
-        final int sy;
-        final int sz;
-        final byte[] cell; // 0 = unknown, 1 = open/filled, 2 = wall
-        final int count;
-
-        Fill(int minX, int minY, int minZ, int sx, int sy, int sz, byte[] cell, int count) {
-            this.minX = minX;
-            this.minY = minY;
-            this.minZ = minZ;
-            this.sx = sx;
-            this.sy = sy;
-            this.sz = sz;
-            this.cell = cell;
-            this.count = count;
-        }
-
-        int index(int x, int y, int z) {
-            return (x * sy + y) * sz + z;
-        }
-    }
 
     private static Fill floodFill(Level level, BlockPos origin, int radius, int maxCells) {
         int minX = origin.getX() - radius;
@@ -203,8 +182,6 @@ public final class GasCloud {
         return new Fill(minX, minY, minZ, sx, sy, sz, cell, count);
     }
 
-    // --- box decomposition ----------------------------------------------------------------------------
-
     /**
      * Covers the filled cells with axis-aligned boxes, then fuses adjacent ones. Per unused seed it grows a
      * maximal box (+x run, widen +z over the run, raise +y over the x-z rectangle), consumes it, and moves on;
@@ -256,11 +233,15 @@ public final class GasCloud {
         return boxes;
     }
 
+    // --- box decomposition ----------------------------------------------------------------------------
+
     private static boolean free(byte[] cell, boolean[] used, int idx) {
         return cell[idx] == 1 && !used[idx];
     }
 
-    /** All cells in x-span [x0,x1] at (y, z) free? */
+    /**
+     * All cells in x-span [x0,x1] at (y, z) free?
+     */
     private static boolean rowFree(byte[] cell, boolean[] used, Fill f, int x0, int x1, int y, int z) {
         for (int x = x0; x <= x1; x++) {
             if (!free(cell, used, f.index(x, y, z))) {
@@ -270,7 +251,9 @@ public final class GasCloud {
         return true;
     }
 
-    /** All cells in rectangle [x0,x1]×[z0,z1] at height y free? */
+    /**
+     * All cells in rectangle [x0,x1]×[z0,z1] at height y free?
+     */
     private static boolean rectFree(byte[] cell, boolean[] used, Fill f, int x0, int x1, int z0, int z1, int y) {
         for (int x = x0; x <= x1; x++) {
             for (int z = z0; z <= z1; z++) {
@@ -282,7 +265,9 @@ public final class GasCloud {
         return true;
     }
 
-    /** Repeatedly fuses face-adjacent boxes that share an identical cross-section, until none remain. */
+    /**
+     * Repeatedly fuses face-adjacent boxes that share an identical cross-section, until none remain.
+     */
     private static void mergeBoxes(List<int[]> boxes) {
         boolean changed = true;
         while (changed) {
@@ -307,7 +292,9 @@ public final class GasCloud {
         }
     }
 
-    /** True if the two boxes touch along one axis and match exactly on the other two — so their union is a box. */
+    /**
+     * True if the two boxes touch along one axis and match exactly on the other two — so their union is a box.
+     */
     private static boolean canMerge(int[] a, int[] b) {
         // Adjacent in x, identical y and z spans.
         if (a[1] == b[1] && a[4] == b[4] && a[2] == b[2] && a[5] == b[5]
@@ -327,6 +314,18 @@ public final class GasCloud {
     private static long volume(int[] b) {
         return (long) (b[3] - b[0] + 1) * (b[4] - b[1] + 1) * (b[5] - b[2] + 1);
     }
+
+    /**
+     * Result of a fill: the world min corner, the buffer dims, and the per-cell occupancy grid.
+     *
+     * @param cell 0 = unknown, 1 = open/filled, 2 = wall
+     */
+        private record Fill(int minX, int minY, int minZ, int sx, int sy, int sz, byte[] cell, int count) {
+
+        int index(int x, int y, int z) {
+                return (x * sy + y) * sz + z;
+            }
+        }
 
     // --- cached chunk access --------------------------------------------------------------------------
 

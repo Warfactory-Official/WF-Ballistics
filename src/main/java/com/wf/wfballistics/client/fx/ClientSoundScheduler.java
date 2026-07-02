@@ -21,7 +21,8 @@ public final class ClientSoundScheduler {
 
     private static final List<Pending> PENDING = new ArrayList<>();
 
-    private ClientSoundScheduler() { }
+    private ClientSoundScheduler() {
+    }
 
     public static int soundDelay(double distance) {
         return (int) (distance / SPEED_OF_SOUND);
@@ -63,11 +64,11 @@ public final class ClientSoundScheduler {
     }
 
     private static final class Pending {
-        int ticksLeft;
         final double x, y, z;
         final SoundEvent sound;
         final SoundSource source;
         final float volume, pitch;
+        int ticksLeft;
 
         Pending(int ticksLeft, double x, double y, double z, SoundEvent sound, SoundSource source,
                 float volume, float pitch) {

@@ -1,17 +1,12 @@
 package com.wf.wfballistics.client.fx;
 
 import com.wf.wfballistics.WFSounds;
-import com.wf.wfballistics.client.particle.AshParticle;
-import com.wf.wfballistics.client.particle.ExplosionSmallParticle;
-import com.wf.wfballistics.client.particle.RocketFlameParticle;
-import com.wf.wfballistics.client.particle.ShockwaveParticle;
-import com.wf.wfballistics.client.particle.WFParticleSprites;
+import com.wf.wfballistics.client.particle.*;
 import com.wf.wfballistics.client.wiaj.Debris;
 import com.wf.wfballistics.client.wiaj.DebrisManager;
 import com.wf.wfballistics.client.wiaj.WorldInAJar;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.client.particle.Particle;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -32,7 +27,8 @@ import net.minecraft.world.level.block.state.BlockState;
  */
 public final class WFEffects {
 
-    private WFEffects() { }
+    private WFEffects() {
+    }
 
     public static void dispatch(String effect, ClientLevel level, double x, double y, double z, CompoundTag data) {
         switch (effect) {
@@ -64,7 +60,9 @@ public final class WFEffects {
         }
     }
 
-    /** A compact blast: a cluster of hot puffs plus a spray of block debris from a nearby surface. */
+    /**
+     * A compact blast: a cluster of hot puffs plus a spray of block debris from a nearby surface.
+     */
     private static void explosionSmall(ClientLevel level, double x, double y, double z, CompoundTag data) {
         int count = data.getInt("count");
         float scale = data.contains("scale") ? data.getFloat("scale") : 2F;
@@ -160,7 +158,9 @@ public final class WFEffects {
                 com.wf.wfballistics.client.flywheel.SkeletonBoneEffect.biped(level, x, y, z, bodyYaw, headYaw, height, brightness));
     }
 
-    /** Block-shrapnel particles from a nearby surface plus the distance-picked explosion crack. */
+    /**
+     * Block-shrapnel particles from a nearby surface plus the distance-picked explosion crack.
+     */
     private static void spawnDebrisAndSound(ClientLevel level, double x, double y, double z, CompoundTag data) {
         BlockState surface = adjacentSurface(level, x, y, z);
         if (surface != null) {
@@ -187,7 +187,9 @@ public final class WFEffects {
         }
     }
 
-    /** The cremation burst: a sphere of settling ash flakes laced with vanilla flame. */
+    /**
+     * The cremation burst: a sphere of settling ash flakes laced with vanilla flame.
+     */
     private static void ashes(ClientLevel level, double x, double y, double z, CompoundTag data) {
         int count = data.getInt("count");
         float scale = data.contains("scale") ? data.getFloat("scale") : 0.125F;
@@ -215,7 +217,9 @@ public final class WFEffects {
         }
     }
 
-    /** First non-air block touching the point, used to texture explosion debris. */
+    /**
+     * First non-air block touching the point, used to texture explosion debris.
+     */
     private static BlockState adjacentSurface(ClientLevel level, double x, double y, double z) {
         BlockPos base = BlockPos.containing(x, y, z);
         for (Direction dir : Direction.values()) {
