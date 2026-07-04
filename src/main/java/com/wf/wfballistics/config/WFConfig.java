@@ -40,6 +40,8 @@ public final class WFConfig {
     public static final ForgeConfigSpec.IntValue BATTERY_RELOAD_TICKS;
     // --- Fuel ---
     public static final ForgeConfigSpec.IntValue DEFAULT_FUEL_TICKS;
+    // --- Incendiary ---
+    public static final ForgeConfigSpec.BooleanValue FIRE_BOMBLETS_AS_FIREBALLS;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -116,6 +118,12 @@ public final class WFConfig {
                 .defineInRange("defaultFuelTicks", 1200, 1, 1_000_000);
         b.pop();
 
+        b.comment("Incendiary submunitions.").push("incendiary");
+        FIRE_BOMBLETS_AS_FIREBALLS = b
+                .comment("If true, the fire cluster warhead scatters flying fireballs instead of fire bomblets.")
+                .define("fireBombletsAsFireballs", false);
+        b.pop();
+
         SPEC = b.build();
     }
 
@@ -147,5 +155,6 @@ public final class WFConfig {
         MissileSimConfig.BATTERY_MAGAZINE = BATTERY_MAGAZINE.get();
         MissileSimConfig.BATTERY_RELOAD_TICKS = BATTERY_RELOAD_TICKS.get();
         MissileEntity.DEFAULT_FUEL_TICKS = DEFAULT_FUEL_TICKS.get();
+        com.wf.wfballistics.warhead.FireCluster.asFireballs = FIRE_BOMBLETS_AS_FIREBALLS.get();
     }
 }

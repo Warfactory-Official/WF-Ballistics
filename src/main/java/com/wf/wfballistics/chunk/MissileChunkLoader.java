@@ -21,6 +21,20 @@ public final class MissileChunkLoader {
                 ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey), add, ticking);
     }
 
+    private static void collectSweptTicking(LongOpenHashSet out, Vec3 pos, Vec3 vel) {
+        double nextX = pos.x + vel.x;
+        double nextZ = pos.z + vel.z;
+        int minCX = SectionPos.blockToSectionCoord(Math.min(pos.x, nextX)) - 1;
+        int maxCX = SectionPos.blockToSectionCoord(Math.max(pos.x, nextX)) + 1;
+        int minCZ = SectionPos.blockToSectionCoord(Math.min(pos.z, nextZ)) - 1;
+        int maxCZ = SectionPos.blockToSectionCoord(Math.max(pos.z, nextZ)) + 1;
+        for (int cx = minCX; cx <= maxCX; cx++) {
+            for (int cz = minCZ; cz <= maxCZ; cz++) {
+                out.add(ChunkPos.asLong(cx, cz));
+            }
+        }
+    }
+
     private static void collectFan(LongOpenHashSet out, Vec3 pos, Vec3 vel) {
         double dirX = 0.0;
         double dirZ = 0.0;
@@ -55,12 +69,13 @@ public final class MissileChunkLoader {
 
         LongOpenHashSet desiredTicking = new LongOpenHashSet();
         desiredTicking.add(ownChunk);
+        collectSweptTicking(desiredTicking, pos, vel);
 
 
         LongOpenHashSet desiredNonTicking = new LongOpenHashSet();
         if (loadFan) {
             collectFan(desiredNonTicking, pos, vel);
-            desiredNonTicking.remove(ownChunk);
+            desiredNonTicking.removeAll(desiredTicking);
         }
 
         for (long key : desiredTicking) {

@@ -10,6 +10,7 @@ public final class WFParticleSprites {
 
     public static SpriteSet explosionSmall;
     public static SpriteSet rocketFlame;
+    public static SpriteSet flame;
     public static SpriteSet ash;
     public static SpriteSet mist;
 

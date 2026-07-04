@@ -95,7 +95,7 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
         final float yaw;
         final float tax, tay, taz; // tumble axis (unit)
         double x, y, z, px, py, pz, vx, vy, vz;
-        float tumble, tumbleVel;
+        float tumble, ptumble, tumbleVel;
         int age, life;
         boolean onGround;
 
@@ -127,6 +127,7 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
             px = x;
             py = y;
             pz = z;
+            ptumble = tumble;
             age++;
 
             if (onGround) return false;
@@ -159,6 +160,10 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
 
         double iz(float pt) {
             return pz + (z - pz) * pt;
+        }
+
+        float itumble(float pt) {
+            return ptumble + (tumble - ptumble) * pt;
         }
 
         float alpha(float pt) {

@@ -12,7 +12,7 @@ import net.minecraftforge.fml.common.Mod;
 
 /**
  * Public entry point for the custom-fire system: the capability token plus the convenience methods other
- * systems use to set things alight ({@code WFFire.ignite(entity, FireType.BALEFIRE, 200)}).
+ * systems use to set things alight ({@code WFFire.ignite(entity, FireType.PHOSPHORUS, 200)}).
  *
  * <p>Registered on the mod event bus to declare the capability during startup. The per-entity attachment
  * and the burning logic live in {@link FireHandler}.

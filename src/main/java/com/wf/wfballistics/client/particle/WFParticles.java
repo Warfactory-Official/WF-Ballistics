@@ -26,6 +26,9 @@ public final class WFParticles {
     public static final RegistryObject<SimpleParticleType> ROCKET_FLAME =
             PARTICLE_TYPES.register("rocket_flame", () -> new SimpleParticleType(true) {
             });
+    public static final RegistryObject<SimpleParticleType> FLAME =
+            PARTICLE_TYPES.register("flame", () -> new SimpleParticleType(true) {
+            });
     public static final RegistryObject<SimpleParticleType> ASH =
             PARTICLE_TYPES.register("ash", () -> new SimpleParticleType(false) {
             });

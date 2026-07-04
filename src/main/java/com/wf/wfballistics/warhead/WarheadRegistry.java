@@ -84,6 +84,7 @@ public final class WarheadRegistry {
         register(RecursiveFrag.ID, RecursiveFrag::detonate);
         register(GasWarhead.ID, GasWarhead::detonate);
         register(FireWarhead.ID, FireWarhead::detonate);
+        register(FireCluster.ID, FireCluster::detonate);
         register("interceptor", INTERCEPTOR, INTERCEPTOR::detonate);
         register("inert", INERT);
     }

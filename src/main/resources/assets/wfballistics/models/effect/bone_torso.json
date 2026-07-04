@@ -1,5 +1,6 @@
 {
   "loader": "forge:obj",
+  "emissive_ambient": false,
   "model": "wfballistics:models/effect/bone_torso.obj",
   "flip_v": true,
   "textures": {

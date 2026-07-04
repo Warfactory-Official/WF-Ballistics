@@ -32,6 +32,9 @@ public class WFBallisticsClient {
         event.registerEntityRenderer(ModEntities.MIST.get(),
                 ctx -> new net.minecraft.client.renderer.entity.NoopRenderer<>(ctx));
 
+        event.registerEntityRenderer(ModEntities.FIRE_LINGERING.get(),
+                ctx -> new net.minecraft.client.renderer.entity.NoopRenderer<>(ctx));
+
         // The nuke explosion is server-side block destruction; nothing to draw.
         event.registerEntityRenderer(ModEntities.NUKE_EXPLOSION.get(),
                 ctx -> new net.minecraft.client.renderer.entity.NoopRenderer<>(ctx));

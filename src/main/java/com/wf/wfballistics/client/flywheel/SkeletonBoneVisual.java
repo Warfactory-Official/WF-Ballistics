@@ -67,7 +67,7 @@ public class SkeletonBoneVisual extends AbstractVisual implements SimpleDynamicV
                             (float) (bone.iy(pt) - origin.getY()),
                             (float) (bone.iz(pt) - origin.getZ()))
                     .rotateY((float) Math.toRadians(bone.yaw))
-                    .rotate(bone.tumble, bone.tax, bone.tay, bone.taz)
+                    .rotate(bone.itumble(pt), bone.tax, bone.tay, bone.taz)
                     .scale(bone.scale);
 
             instance.setTransform(scratch);

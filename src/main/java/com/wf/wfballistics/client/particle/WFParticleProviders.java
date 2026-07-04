@@ -17,6 +17,7 @@ public final class WFParticleProviders {
     public static void registerProviders(RegisterParticleProvidersEvent event) {
         event.registerSpriteSet(WFParticles.EXPLOSION_SMALL.get(), ExplosionSmallParticle.Provider::new);
         event.registerSpriteSet(WFParticles.ROCKET_FLAME.get(), RocketFlameParticle.Provider::new);
+        event.registerSpriteSet(WFParticles.FLAME.get(), FlameParticle.Provider::new);
         event.registerSpriteSet(WFParticles.ASH.get(), AshParticle.Provider::new);
         event.registerSpriteSet(WFParticles.MIST.get(), MistParticle.Provider::new);
     }

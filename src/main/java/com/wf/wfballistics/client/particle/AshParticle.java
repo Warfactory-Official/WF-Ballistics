@@ -38,8 +38,8 @@ public class AshParticle extends TextureSheetParticle {
         this.yd *= 0.99D;
         this.zd *= 0.95D;
 
+        this.oRoll = this.roll;
         if (!this.onGround) {
-            this.oRoll = this.roll;
             this.roll += 0.1F;
         }
         this.move(this.xd, this.yd, this.zd);

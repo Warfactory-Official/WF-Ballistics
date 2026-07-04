@@ -48,6 +48,15 @@ public class BombletEntity extends Projectile {
      */
     public static final Detonation INERT = (bomblet, pos) -> {
     };
+    public static final Detonation FIRE = (bomblet, pos) -> {
+        Level level = bomblet.level();
+        if (level.isClientSide) {
+            return;
+        }
+        ExplosionNukeGeneric.dealDamage(level, pos, BLAST_RADIUS, MAX_DAMAGE * 0.5f);
+        FireLingeringEntity.spawn(level, pos.x, pos.y, pos.z, 3.0f, 2.0f, 120, FireLingeringEntity.TYPE_DIESEL);
+        ExplosionSmallCreator.composeEffect(level, pos.x, pos.y, pos.z, 3, 1.0f, 0.6f);
+    };
     private static final double GRAVITY = 0.05;
     private static final double DRAG = 0.99;
     private static final Map<String, Detonation> WARHEADS = new HashMap<>();
@@ -55,6 +64,7 @@ public class BombletEntity extends Projectile {
     static {
         WARHEADS.put("standard", STANDARD);
         WARHEADS.put("inert", INERT);
+        WARHEADS.put("fire", FIRE);
     }
 
     private String detonationId = "standard";

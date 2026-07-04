@@ -3,6 +3,7 @@ package com.wf.wfballistics;
 import com.wf.wfballistics.entity.BombletEntity;
 import com.wf.wfballistics.entity.EntityNukeExplosionMK5;
 import com.wf.wfballistics.entity.EntityNukeTorex;
+import com.wf.wfballistics.entity.FireLingeringEntity;
 import com.wf.wfballistics.entity.MistEntity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -43,6 +44,17 @@ public class ModEntities {
                     .updateInterval(Integer.MAX_VALUE)
                     .noSummon()
                     .build("mist")
+            );
+
+    public static final RegistryObject<EntityType<FireLingeringEntity>> FIRE_LINGERING =
+            ENTITY_TYPES.register("fire_lingering", () -> EntityType.Builder.<FireLingeringEntity>of(FireLingeringEntity::new, MobCategory.MISC)
+                    .sized(1.0F, 1.0F)
+                    .clientTrackingRange(10)
+                    .updateInterval(Integer.MAX_VALUE)
+                    .fireImmune()
+                    .noSave()
+                    .noSummon()
+                    .build("fire_lingering")
             );
 
     // Nuclear detonation driver: a server-side, multi-tick ray explosion. Renders nothing.

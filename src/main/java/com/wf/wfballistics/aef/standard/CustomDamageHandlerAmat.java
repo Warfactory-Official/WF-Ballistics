@@ -25,7 +25,7 @@ public class CustomDamageHandlerAmat implements ICustomDamageHandler {
         if (entity instanceof LivingEntity living) {
             int ticks = (int) Mth.clamp(this.strength * (1.0 - distanceScaled), 0.0, this.strength);
             if (ticks > 0) {
-                WFFire.ignite(living, FireType.BALEFIRE, ticks);
+                WFFire.ignite(living, FireType.PHOSPHORUS, ticks);
             }
         }
     }

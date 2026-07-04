@@ -85,7 +85,7 @@ public final class FragmentationUtil {
         return new Vec3(s * Math.cos(phi), u, s * Math.sin(phi));
     }
 
-    private static Vec3 randomConeVector(RandomSource random, Vec3 axis, double halfAngleRad) {
+    public static Vec3 randomConeVector(RandomSource random, Vec3 axis, double halfAngleRad) {
         double cosTheta = Mth.lerp(random.nextDouble(), Math.cos(halfAngleRad), 1.0);
         double sinTheta = Math.sqrt(Math.max(0.0, 1.0 - cosTheta * cosTheta));
         double phi = random.nextDouble() * Math.PI * 2.0;

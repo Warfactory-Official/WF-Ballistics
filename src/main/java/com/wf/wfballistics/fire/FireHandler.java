@@ -55,6 +55,12 @@ public final class FireHandler {
             entity.hurt(source, fire.getType().damage);
         }
 
+        float width = entity.getBbWidth();
+        double px = entity.getX() + (entity.getRandom().nextDouble() - 0.5) * width;
+        double py = entity.getY() + entity.getRandom().nextDouble() * entity.getBbHeight();
+        double pz = entity.getZ() + (entity.getRandom().nextDouble() - 0.5) * width;
+        FlameCreator.compose(entity.level(), px, py, pz, fire.getType());
+
         fire.tick();
     }
 
