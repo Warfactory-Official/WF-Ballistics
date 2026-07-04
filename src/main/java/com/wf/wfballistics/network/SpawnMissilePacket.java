@@ -24,7 +24,7 @@ public class SpawnMissilePacket {
     private static final double MAX_USE_DISTANCE_SQR = 64.0 * 64.0;
 
     private final BlockPos pos;
-    private final String modelId;
+    private final ResourceLocation modelId;
     private final ResourceLocation warheadId;
     private final boolean highAltitude;
     private final double targetX;
@@ -42,7 +42,7 @@ public class SpawnMissilePacket {
     private final ResourceLocation cruiseStageId;
     private final ResourceLocation attackStageId;
 
-    public SpawnMissilePacket(BlockPos pos, String modelId, ResourceLocation warheadId, boolean highAltitude,
+    public SpawnMissilePacket(BlockPos pos, ResourceLocation modelId, ResourceLocation warheadId, boolean highAltitude,
                               double targetX, double targetY, double targetZ, float explosionOffset,
                               double altitudeParam, int fragmentCount, double cruiseSpeed, double turnRate,
                               float health, boolean startInCruise, boolean startArmed,
@@ -70,7 +70,7 @@ public class SpawnMissilePacket {
 
     public static void encode(SpawnMissilePacket m, FriendlyByteBuf b) {
         b.writeBlockPos(m.pos);
-        b.writeUtf(m.modelId);
+        b.writeResourceLocation(m.modelId);
         b.writeResourceLocation(m.warheadId);
         b.writeBoolean(m.highAltitude);
         b.writeDouble(m.targetX);
@@ -92,7 +92,7 @@ public class SpawnMissilePacket {
     public static SpawnMissilePacket decode(FriendlyByteBuf b) {
         return new SpawnMissilePacket(
                 b.readBlockPos(),
-                b.readUtf(),
+                b.readResourceLocation(),
                 b.readResourceLocation(),
                 b.readBoolean(),
                 b.readDouble(),
@@ -135,7 +135,7 @@ public class SpawnMissilePacket {
                 return;
             }
 
-            String model = MissileModels.exists(m.modelId) ? m.modelId : MissileModels.DEFAULT;
+            ResourceLocation model = MissileModels.exists(m.modelId) ? m.modelId : MissileModels.defaultId();
             ResourceLocation warhead = WarheadRegistry.exists(m.warheadId) ? m.warheadId : WarheadRegistry.defaultId();
             double speed = m.cruiseSpeed > 1.0E-3 ? m.cruiseSpeed : MissileEntity.CRUISE_SPEED;
             int frags = Math.max(0, m.fragmentCount);

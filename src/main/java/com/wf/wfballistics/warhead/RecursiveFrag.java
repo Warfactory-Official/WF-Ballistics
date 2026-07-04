@@ -1,6 +1,7 @@
 package com.wf.wfballistics.warhead;
 
 import com.wf.wfballistics.MissileEntity;
+import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.aef.ExplosionAEF;
@@ -48,7 +49,7 @@ public final class RecursiveFrag {
     /**
      * Small, agile fragmentation-style airframe the missilelets fly as.
      */
-    private static final String CHILD_MODEL = "micro";
+    private static final ResourceLocation CHILD_MODEL = MissileModels.rl("micro");
     /**
      * Missilelet cruise/dive speed (blocks/tick) and the outward burst speed at the moment of splitting.
      */

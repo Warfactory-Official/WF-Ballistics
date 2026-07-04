@@ -25,12 +25,12 @@ public class ModModels {
     public static final PartialModel BONE_LIMB = PartialModel.of(
             new ResourceLocation(WFBallistics.MODID, "effect/bone_limb")
     );
-    private static final Map<String, PartialModel> MISSILES = new HashMap<>();
+    private static final Map<ResourceLocation, PartialModel> MISSILES = new HashMap<>();
     // Baked models for spinning parts, keyed by the rotor mesh's model location (see MissileModels.Rotor).
     private static final Map<ResourceLocation, PartialModel> ROTORS = new HashMap<>();
 
     static {
-        for (String id : MissileModels.ids()) {
+        for (ResourceLocation id : MissileModels.ids()) {
             MISSILES.put(id, PartialModel.of(MissileModels.model(id)));
             for (MissileModels.Rotor rotor : MissileModels.rotors(id)) {
                 ROTORS.computeIfAbsent(rotor.model(), PartialModel::of);
@@ -42,14 +42,14 @@ public class ModModels {
      * @return the baked model for a missile id, falling back to {@link MissileModels#DEFAULT} when the id is
      * unknown or its own model failed to bake (missing/unbaked).
      */
-    public static PartialModel missile(String id) {
+    public static PartialModel missile(ResourceLocation id) {
         PartialModel partial = MISSILES.get(id);
         return usableBaked(partial) != null ? partial : MISSILES.get(MissileModels.DEFAULT);
     }
 
-    public static RenderModel render(String id) {
+    public static RenderModel render(ResourceLocation id) {
         BakedModel baked = usableBaked(MISSILES.get(id));
-        String key = id;
+        ResourceLocation key = id;
         if (baked == null) {
             key = MissileModels.DEFAULT;
             baked = usableBaked(MISSILES.get(MissileModels.DEFAULT));

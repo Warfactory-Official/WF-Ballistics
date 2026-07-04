@@ -88,6 +88,7 @@ public final class WarheadRegistry {
         register(FireCluster.ID, FireCluster::detonate);
         register(rl("interceptor"), INTERCEPTOR, INTERCEPTOR::detonate);
         register(rl("inert"), INERT);
+        register(rl("emp"), EMPWarhead::detonate);
 
         BLAST_SIZE.put(DEFAULT_ID, STANDARD_BLAST_SIZE);
         BLAST_SIZE.put(FireWarhead.ID, 8F);

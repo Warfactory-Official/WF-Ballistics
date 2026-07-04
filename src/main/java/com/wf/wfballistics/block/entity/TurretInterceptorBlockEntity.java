@@ -11,6 +11,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -50,7 +51,7 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
     public static final double WARN_RADIUS = 160.0;
 
     // The interceptor preset this battery fires.
-    private final String presetId;
+    private final ResourceLocation presetId;
     // Stable per-battery identity, stamped onto every interceptor it fires (its "control id").
     private UUID controlId;
     private int cooldown = 0;
@@ -67,7 +68,7 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
     protected TurretInterceptorBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state,
                                            String presetId) {
         super(type, pos, state);
-        this.presetId = presetId;
+        this.presetId = MissilePresetRegistry.parse(presetId);
     }
 
     private UUID controlId() {

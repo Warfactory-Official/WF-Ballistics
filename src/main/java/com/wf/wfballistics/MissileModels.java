@@ -9,8 +9,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registry of the missile models a {@link MissileEntity} can render with, keyed by a short stable id
- * (persisted/synced on the entity so the model is chosen at runtime, HBM-style, rather than compiled in).
+ * Registry of the missile models a {@link MissileEntity} can render with, keyed by a stable
+ * {@link ResourceLocation} (persisted/synced on the entity so the model is chosen at runtime, HBM-style,
+ * rather than compiled in).
  *
  * <p>Server-safe: it only holds {@link ResourceLocation}s and reads model geometry off the jar via
  * {@link ObjBounds}, so the flight code can look up a model's length without touching client render classes.
@@ -21,20 +22,20 @@ public final class MissileModels {
     /**
      * Id used when a requested one is unknown or unset.
      */
-    public static final String DEFAULT = "v2";
+    public static final ResourceLocation DEFAULT = new ResourceLocation(WFBallistics.MODID, "v2");
     // Per-model orientation style ("attitude") id — how the model rotates to its heading (missile vs drone).
     // Resolved to a strategy client-side (see client.render.MissileAttitudeRegistry). Default = "missile".
     public static final String DEFAULT_ATTITUDE = "missile";
     // Continuous spin speed for the Shahed pusher propeller (degrees per tick). Purely visual.
     private static final float SHAHED_ROTOR_SPEED = 45.0f;
-    private static final Map<String, ResourceLocation> BY_ID = new LinkedHashMap<>();
-    private static final Map<String, Double> LENGTHS = new ConcurrentHashMap<>();
-    private static final Map<String, Vec3> DIMENSIONS = new ConcurrentHashMap<>();
-    private static final Map<String, Vec3> CENTERS = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, ResourceLocation> BY_ID = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, Double> LENGTHS = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, Vec3> DIMENSIONS = new ConcurrentHashMap<>();
+    private static final Map<ResourceLocation, Vec3> CENTERS = new ConcurrentHashMap<>();
     // Spinning parts ("rotors") per model id, and a cache of each rotor mesh's centre (its spin pivot).
-    private static final Map<String, List<Rotor>> ROTORS = new HashMap<>();
+    private static final Map<ResourceLocation, List<Rotor>> ROTORS = new HashMap<>();
     private static final Map<ResourceLocation, Vec3> ROTOR_PIVOTS = new ConcurrentHashMap<>();
-    private static final Map<String, String> ATTITUDES = new HashMap<>();
+    private static final Map<ResourceLocation, String> ATTITUDES = new HashMap<>();
 
     static {
         // Base airframes (each has its own hand-authored model json = OBJ + default skin).
@@ -94,27 +95,53 @@ public final class MissileModels {
     }
 
     private static void reg(String id, String modelName) {
-        BY_ID.put(id, new ResourceLocation(WFBallistics.MODID, "entity/missiles/" + modelName));
+        BY_ID.put(rl(id), new ResourceLocation(WFBallistics.MODID, "entity/missiles/" + modelName));
+    }
+
+    /**
+     * @return the {@link ResourceLocation} key for a model's short path under the mod namespace.
+     */
+    public static ResourceLocation rl(String id) {
+        return new ResourceLocation(WFBallistics.MODID, id);
+    }
+
+    /**
+     * @return the key of the {@link #DEFAULT} model.
+     */
+    public static ResourceLocation defaultId() {
+        return DEFAULT;
+    }
+
+    /**
+     * Resolve a persisted/typed id string to a model key: a bare path is taken under the mod namespace, a
+     * {@code namespace:path} string is parsed as-is, and anything unparseable falls back to {@link #DEFAULT}.
+     */
+    public static ResourceLocation parse(String id) {
+        if (id == null || id.isEmpty()) {
+            return DEFAULT;
+        }
+        ResourceLocation parsed = id.indexOf(':') >= 0 ? ResourceLocation.tryParse(id) : rl(id);
+        return parsed != null ? parsed : DEFAULT;
     }
 
     /**
      * @return true if the id maps to a known model.
      */
-    public static boolean exists(String id) {
+    public static boolean exists(ResourceLocation id) {
         return BY_ID.containsKey(id);
     }
 
     /**
      * @return the model json location for the id, falling back to {@link #DEFAULT}.
      */
-    public static ResourceLocation model(String id) {
+    public static ResourceLocation model(ResourceLocation id) {
         return BY_ID.getOrDefault(id, BY_ID.get(DEFAULT));
     }
 
     /**
      * @return all registered ids, in registration order.
      */
-    public static Set<String> ids() {
+    public static Set<ResourceLocation> ids() {
         return Collections.unmodifiableSet(BY_ID.keySet());
     }
 
@@ -122,7 +149,7 @@ public final class MissileModels {
      * @return the longest axis of the model's mesh, in model units (cached). Reads the model json + obj
      * off the jar, so it works server-side. Falls back to 1.0 if the assets can't be read.
      */
-    public static double length(String id) {
+    public static double length(ResourceLocation id) {
         return LENGTHS.computeIfAbsent(id, i -> {
             try {
                 double len = ObjBounds.longestAxisFromModel(model(i));
@@ -137,7 +164,7 @@ public final class MissileModels {
      * @return the mesh size (per-axis, model units) of the missile model, cached. Reads the model json +
      * obj off the jar so it works server-side. Falls back to a 1×1×1 box if the assets can't be read.
      */
-    public static Vec3 dimensions(String id) {
+    public static Vec3 dimensions(ResourceLocation id) {
         return DIMENSIONS.computeIfAbsent(id, i -> {
             try {
                 Vec3 d = ObjBounds.dimensionsFromModel(model(i));
@@ -152,7 +179,7 @@ public final class MissileModels {
      * @return the geometric center offset (model units) of the missile model relative to its origin,
      * cached. Missile meshes sit base-at-origin, so this is roughly {@code (0, length/2, 0)}.
      */
-    public static Vec3 center(String id) {
+    public static Vec3 center(ResourceLocation id) {
         return CENTERS.computeIfAbsent(id, i -> {
             try {
                 return ObjBounds.centerFromModel(model(i));
@@ -169,14 +196,14 @@ public final class MissileModels {
     public static void rotor(String id, String rotorModelName, float axisX, float axisY, float axisZ,
                              float degreesPerTick) {
         ResourceLocation model = new ResourceLocation(WFBallistics.MODID, "entity/missiles/" + rotorModelName);
-        ROTORS.computeIfAbsent(id, k -> new ArrayList<>())
+        ROTORS.computeIfAbsent(rl(id), k -> new ArrayList<>())
                 .add(new Rotor(model, new Vector3f(axisX, axisY, axisZ).normalize(), degreesPerTick));
     }
 
     /**
      * @return the spinning parts registered for a model id (empty if none).
      */
-    public static List<Rotor> rotors(String id) {
+    public static List<Rotor> rotors(ResourceLocation id) {
         return ROTORS.getOrDefault(id, List.of());
     }
 
@@ -185,13 +212,13 @@ public final class MissileModels {
      * default to {@link #DEFAULT_ATTITUDE} ("missile") unless assigned another, e.g. "drone".
      */
     public static void attitude(String id, String attitudeId) {
-        ATTITUDES.put(id, attitudeId);
+        ATTITUDES.put(rl(id), attitudeId);
     }
 
     /**
      * @return the attitude id for a model (how it rotates to its heading), or {@link #DEFAULT_ATTITUDE}.
      */
-    public static String attitudeId(String id) {
+    public static String attitudeId(ResourceLocation id) {
         return ATTITUDES.getOrDefault(id, DEFAULT_ATTITUDE);
     }
 

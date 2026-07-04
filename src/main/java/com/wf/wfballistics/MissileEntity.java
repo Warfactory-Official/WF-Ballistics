@@ -633,7 +633,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
      * Distance from the entity origin (mesh base) to the model's front face along the heading.
      */
     private double noseForward() {
-        String id = this.getModelId();
+        ResourceLocation id = this.getModelId();
         return MissileModels.center(id).y + MissileModels.dimensions(id).y * 0.5;
     }
 
@@ -670,7 +670,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         obbDy = move.y;
         obbDz = move.z;
 
-        String modelId = this.getModelId();
+        ResourceLocation modelId = this.getModelId();
         Vec3 dims = MissileModels.dimensions(modelId);
         Vec3 localCenter = MissileModels.center(modelId);
 
@@ -719,16 +719,16 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     @Override
     protected void defineSynchedData() {
-        this.entityData.define(MODEL_ID, MissileModels.DEFAULT);
+        this.entityData.define(MODEL_ID, MissileModels.DEFAULT.toString());
         this.entityData.define(EXHAUST_COLOR, DEFAULT_EXHAUST_COLOR);
     }
 
-    public String getModelId() {
-        return this.entityData.get(MODEL_ID);
+    public ResourceLocation getModelId() {
+        return MissileModels.parse(this.entityData.get(MODEL_ID));
     }
 
-    public void setModelId(String id) {
-        this.entityData.set(MODEL_ID, MissileModels.exists(id) ? id : MissileModels.DEFAULT);
+    public void setModelId(ResourceLocation id) {
+        this.entityData.set(MODEL_ID, (MissileModels.exists(id) ? id : MissileModels.DEFAULT).toString());
     }
 
     /**
@@ -1437,7 +1437,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (!Double.isNaN(this.attackAngle)) {
             tag.putDouble("AttackAngle", this.attackAngle);
         }
-        tag.putString("ModelId", this.getModelId());
+        tag.putString("ModelId", this.getModelId().toString());
         tag.putInt("ExhaustColor", this.getExhaustColor());
         tag.putInt("CruiseTicks", this.cruiseTicks);
         tag.putString("DetonationId", this.detonationId.toString());
@@ -1537,7 +1537,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         if (tag.contains("ModelId")) {
-            this.setModelId(tag.getString("ModelId"));
+            this.setModelId(MissileModels.parse(tag.getString("ModelId")));
         }
 
         if (tag.contains("ExhaustColor")) {
@@ -1762,7 +1762,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private Double ascentSpeed = null;
         private Double attackAngle = null;
         private Double maxTurnRate = null; // null = keep the model-size default
-        private String modelId = MissileModels.DEFAULT;
+        private ResourceLocation modelId = MissileModels.DEFAULT;
         private int exhaustColor = DEFAULT_EXHAUST_COLOR;
         private boolean startInCruise = false;
         private boolean startInAttack = false;
@@ -1898,7 +1898,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         /**
          * Pick which missile model/skin to render and fly as (see {@link MissileModels}).
          */
-        public Builder model(String modelId) {
+        public Builder model(ResourceLocation modelId) {
             this.modelId = modelId;
             return this;
         }

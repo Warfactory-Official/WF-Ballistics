@@ -1,12 +1,18 @@
 package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
+import com.wf.wfballistics.client.gui.MissileDispenserScreen;
+import com.wf.wfballistics.client.render.BombletRenderer;
+import com.wf.wfballistics.client.render.EntityTorexRender;
 import com.wf.wfballistics.item.MissilePreset;
 import com.wf.wfballistics.item.MissilePresetRegistry;
+import com.wf.wfballistics.menu.ModMenus;
 import dev.engine_room.flywheel.api.visual.EntityVisual;
 import dev.engine_room.flywheel.api.visualization.EntityVisualizer;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.api.visualization.VisualizerRegistry;
+import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
@@ -34,22 +40,22 @@ public class WFBallisticsClient {
 
         // Bomblets are simple tumbling orange cubes (fragmentation payload).
         event.registerEntityRenderer(ModEntities.BOMBLET.get(),
-                com.wf.wfballistics.client.render.BombletRenderer::new);
+                BombletRenderer::new);
 
         // Mist clouds draw nothing themselves — they are pure particle effects (see MistClientFX).
         event.registerEntityRenderer(ModEntities.MIST.get(),
-                ctx -> new net.minecraft.client.renderer.entity.NoopRenderer<>(ctx));
+                NoopRenderer::new);
 
         event.registerEntityRenderer(ModEntities.FIRE_LINGERING.get(),
-                ctx -> new net.minecraft.client.renderer.entity.NoopRenderer<>(ctx));
+                NoopRenderer::new);
 
         // The nuke explosion is server-side block destruction; nothing to draw.
         event.registerEntityRenderer(ModEntities.NUKE_EXPLOSION.get(),
-                ctx -> new net.minecraft.client.renderer.entity.NoopRenderer<>(ctx));
+                NoopRenderer::new);
 
         // The Torex mushroom cloud has its own bespoke cloudlet renderer.
         event.registerEntityRenderer(ModEntities.NUKE_TOREX.get(),
-                com.wf.wfballistics.client.render.EntityTorexRender::new);
+                EntityTorexRender::new);
 
         LOGGER.info("HELLO FROM CLIENT SETUP");
 
@@ -64,13 +70,13 @@ public class WFBallisticsClient {
             return;
         }
         for (MissilePreset preset : MissilePresetRegistry.all()) {
-            models.put(missileItemModel(preset.id()), template);
+            models.put(missileItemModel(preset.id().getPath()), template);
         }
     }
 
     private static BakedModel missileItemTemplate(Map<ResourceLocation, BakedModel> models) {
         for (MissilePreset preset : MissilePresetRegistry.all()) {
-            BakedModel model = models.get(missileItemModel(preset.id()));
+            BakedModel model = models.get(missileItemModel(preset.id().getPath()));
             if (model != null && model.isCustomRenderer()) {
                 return model;
             }
@@ -84,12 +90,11 @@ public class WFBallisticsClient {
 
     @SubscribeEvent
     public static void onClientSetup(final FMLClientSetupEvent event) {
-        LOGGER.info("HELLO FROM ONCLIENTSETUP");
 
         event.enqueueWork(() -> {
-            net.minecraft.client.gui.screens.MenuScreens.register(
-                    com.wf.wfballistics.menu.ModMenus.MISSILE_DISPENSER.get(),
-                    com.wf.wfballistics.client.gui.MissileDispenserScreen::new);
+            MenuScreens.register(
+                    ModMenus.MISSILE_DISPENSER.get(),
+                    MissileDispenserScreen::new);
 
             EntityVisualizer<MissileEntity> visualizer = new EntityVisualizer<MissileEntity>() {
                 @Override

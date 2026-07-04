@@ -1,11 +1,13 @@
 package com.wf.wfballistics.item;
 
 import com.wf.wfballistics.MissileEntity;
+import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.Entity;
@@ -102,7 +104,7 @@ public class MissileItem extends Item {
         return this.preset;
     }
 
-    public String modelId() {
+    public ResourceLocation modelId() {
         return this.preset.modelId();
     }
 
@@ -116,7 +118,7 @@ public class MissileItem extends Item {
             Vec3 target = aimTarget(level, player);
             MissileEntity missile = preset.build(level, target);
             missile.setControlId(player.getUUID());
-            missile.setTeamId(com.wf.wfballistics.compat.WarforgeCompat.factionOfPlayer(player.getUUID()));
+            missile.setTeamId(WarforgeCompat.factionOfPlayer(player.getUUID()));
             if (preset.isInterceptor()) {
                 MissileEntity locked = lockCandidate(level, player);
                 if (locked != null) {
@@ -142,7 +144,7 @@ public class MissileItem extends Item {
 
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(kv("Airframe", preset.modelId(), ChatFormatting.WHITE));
+        tooltip.add(kv("Airframe", preset.modelId().getPath(), ChatFormatting.WHITE));
         tooltip.add(kv("Warhead", preset.warheadId().getPath(), ChatFormatting.WHITE));
         if (preset.isInterceptor()) {
             tooltip.add(kv("Damage vs missiles",

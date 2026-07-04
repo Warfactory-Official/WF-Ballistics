@@ -21,8 +21,8 @@ import net.minecraft.world.phys.Vec3;
  */
 public final class MissilePreset {
 
-    private final String id;
-    private final String modelId;
+    private final ResourceLocation id;
+    private final ResourceLocation modelId;
     private final ResourceLocation warheadId;
     private final boolean highAltitude;
     private final double altitudeParam; // cruiseAltitude (high) or terrainClearance (terrain follow)
@@ -73,15 +73,15 @@ public final class MissilePreset {
         this.exhaustColor = b.exhaustColor;
     }
 
-    public static Builder builder(String id, String modelId, String warheadId) {
+    public static Builder builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
         return new Builder(id, modelId, warheadId);
     }
 
-    public String id() {
+    public ResourceLocation id() {
         return id;
     }
 
-    public String modelId() {
+    public ResourceLocation modelId() {
         return modelId;
     }
 
@@ -223,8 +223,8 @@ public final class MissilePreset {
     }
 
     public static final class Builder {
-        private final String id;
-        private final String modelId;
+        private final ResourceLocation id;
+        private final ResourceLocation modelId;
         private final ResourceLocation warheadId;
         private boolean highAltitude = false;
         private double altitudeParam = 24.0;
@@ -248,11 +248,10 @@ public final class MissilePreset {
         private boolean evasiveManeuver = false;
         private int exhaustColor = MissileEntity.DEFAULT_EXHAUST_COLOR;
 
-        private Builder(String id, String modelId, String warheadId) {
+        private Builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
             this.id = id;
-            this.modelId = MissileModels.exists(modelId) ? modelId : MissileModels.DEFAULT;
-            ResourceLocation warhead = WarheadRegistry.parse(warheadId);
-            this.warheadId = WarheadRegistry.exists(warhead) ? warhead : WarheadRegistry.defaultId();
+            this.modelId = MissileModels.exists(modelId) ? modelId : MissileModels.defaultId();
+            this.warheadId = WarheadRegistry.exists(warheadId) ? warheadId : WarheadRegistry.defaultId();
         }
 
         /**
@@ -340,18 +339,22 @@ public final class MissilePreset {
         }
 
         /**
-         * Pick the cruise-phase flight stage by id (e.g. {@code "loiter"} for a loitering drone).
+         * Pick the cruise-phase flight stage by id (e.g. {@code FlightStageRegistry.rl("loiter")} for a
+         * loitering drone). An id not registered for the cruise phase falls back to the phase default.
          */
-        public Builder cruiseStage(String id) {
-            this.cruiseStageId = FlightStageRegistry.parse(MissileEntity.Phase.CRUISE, id);
+        public Builder cruiseStage(ResourceLocation id) {
+            this.cruiseStageId = FlightStageRegistry.exists(MissileEntity.Phase.CRUISE, id)
+                    ? id : FlightStageRegistry.defaultId(MissileEntity.Phase.CRUISE);
             return this;
         }
 
         /**
-         * Pick the attack-phase flight stage by id (e.g. {@code "dive"} for a near-vertical top-attack).
+         * Pick the attack-phase flight stage by id (e.g. {@code FlightStageRegistry.rl("dive")} for a
+         * near-vertical top-attack). An id not registered for the attack phase falls back to the phase default.
          */
-        public Builder attackStage(String id) {
-            this.attackStageId = FlightStageRegistry.parse(MissileEntity.Phase.ATTACK, id);
+        public Builder attackStage(ResourceLocation id) {
+            this.attackStageId = FlightStageRegistry.exists(MissileEntity.Phase.ATTACK, id)
+                    ? id : FlightStageRegistry.defaultId(MissileEntity.Phase.ATTACK);
             return this;
         }
 

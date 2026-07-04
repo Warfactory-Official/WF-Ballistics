@@ -180,7 +180,7 @@ public final class WFServerEvents {
                     + (m.getEvasion() > 0.0f ? " [EVA " + Math.round(m.getEvasion() * 100) + "%]" : "");
             String uuid = m.getUUID().toString();
             String line = String.format("• %s  %dm  %s  spd %.1f  fuel %d%%%s  %s",
-                    m.getModelId(), dist, m.getPhase(), m.getCruiseSpeed(), fuelPct, tags, uuid);
+                    m.getModelId().getPath(), dist, m.getPhase(), m.getCruiseSpeed(), fuelPct, tags, uuid);
             ChatFormatting colour = m.isStealth() ? ChatFormatting.LIGHT_PURPLE
                     : (m.isInterceptor() ? ChatFormatting.AQUA : ChatFormatting.YELLOW);
             Component comp = Component.literal(line).withStyle(s -> s
@@ -217,7 +217,7 @@ public final class WFServerEvents {
         ms.sort(Comparator.comparingDouble(player::distanceToSqr));
         MissileEntity m = ms.get(0);
         m.setDesignatedTarget(aim.getUUID());
-        src.sendSuccess(() -> Component.literal("Re-tasked " + m.getModelId() + " onto "
+        src.sendSuccess(() -> Component.literal("Re-tasked " + m.getModelId().getPath() + " onto "
                 + aim.getName().getString()), true);
         return 1;
     }
@@ -233,7 +233,7 @@ public final class WFServerEvents {
         Vec3 target = swarmTarget(level, player);
         long swarmId = SwarmManager.newId(level);
         UUID team = WarforgeCompat.factionOfPlayer(player.getUUID());
-        MissilePreset preset = MissilePresetRegistry.get("cruise");
+        MissilePreset preset = MissilePresetRegistry.get(MissilePresetRegistry.rl("cruise"));
         Vec3 base = player.getEyePosition().add(player.getLookAngle().scale(3.0));
         for (int i = 0; i < count; i++) {
             MissileEntity m = preset.build(level, target);
@@ -243,7 +243,7 @@ public final class WFServerEvents {
             if (i == 0) {
                 m.setCommander(true);
             }
-            double side = (i % 2 == 0 ? 1.0 : -1.0) * ((i + 1) / 2) * 2.0;
+            double side = (i % 2 == 0 ? 1.0 : -1.0) * ((double) (i + 1) / 2) * 2.0;
             Vec3 spawn = base.add(side, i * 0.4, 0.0);
             m.moveTo(spawn.x, spawn.y, spawn.z, player.getYRot(), 0.0f);
             level.addFreshEntity(m);
@@ -282,7 +282,7 @@ public final class WFServerEvents {
     }
 
     private static void spawnInterceptor(ServerLevel level, ServerPlayer player, Vec3 spawn, UUID lock) {
-        MissilePreset preset = MissilePresetRegistry.get("interceptor");
+        MissilePreset preset = MissilePresetRegistry.get(MissilePresetRegistry.rl("interceptor"));
         MissileEntity m = preset.build(level, spawn);
         m.setControlId(player.getUUID());
         m.setTeamId(com.wf.wfballistics.compat.WarforgeCompat.factionOfPlayer(player.getUUID()));

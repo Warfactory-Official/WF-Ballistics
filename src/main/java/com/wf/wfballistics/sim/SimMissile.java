@@ -1,6 +1,7 @@
 package com.wf.wfballistics.sim;
 
 import com.wf.wfballistics.MissileEntity;
+import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.flight.FlightStageRegistry;
 import com.wf.wfballistics.warhead.WarheadRegistry;
@@ -29,7 +30,7 @@ public final class SimMissile {
     public double terrainClearance = 24.0;
     public float explosionOffset = 0.0f;
     public double maxTurnRate = 0.0;
-    public String modelId = "";
+    public ResourceLocation modelId = MissileModels.defaultId();
     public ResourceLocation detonationId = WarheadRegistry.defaultId();
     public ResourceLocation ascentStageId = null;
     public ResourceLocation cruiseStageId = null;
@@ -107,7 +108,7 @@ public final class SimMissile {
         sm.terrainClearance = tag.getDouble("TerrainClearance");
         sm.explosionOffset = tag.getFloat("ExplosionOffset");
         sm.maxTurnRate = tag.getDouble("MaxTurnRate");
-        sm.modelId = tag.getString("ModelId");
+        sm.modelId = MissileModels.parse(tag.getString("ModelId"));
         if (tag.contains("DetonationId")) {
             sm.detonationId = WarheadRegistry.parse(tag.getString("DetonationId"));
         }
@@ -241,7 +242,7 @@ public final class SimMissile {
         tag.putDouble("TerrainClearance", terrainClearance);
         tag.putFloat("ExplosionOffset", explosionOffset);
         tag.putDouble("MaxTurnRate", maxTurnRate);
-        tag.putString("ModelId", modelId);
+        tag.putString("ModelId", modelId.toString());
         tag.putString("DetonationId", detonationId.toString());
         if (ascentStageId != null) {
             tag.putString("AscentStage", ascentStageId.toString());
