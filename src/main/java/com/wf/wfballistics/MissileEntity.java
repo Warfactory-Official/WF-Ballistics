@@ -54,6 +54,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public static final double CRUISE_SPEED = 1.0;
     public static final double ASCENT_SPEED_FACTOR = 1.5;
     public static final double MIN_ASCENT_SPEED = 1.5;
+    public static final double MIN_ATTACK_ANGLE = 5.0;
+    public static final double MAX_ATTACK_ANGLE = 90.0;
     // Safety/arming: the warhead is inert until the missile has flown this far from its launch point, so it
     // can't fuze, impact-detonate, or be blown up by damage while still on/near the launcher.
     public static final double ARMING_DISTANCE = 6.0;
@@ -140,6 +142,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // simulated travel time matches an in-world flight.
     private double cruiseSpeed = CRUISE_SPEED;
     private double ascentSpeed = Double.NaN;
+    private double attackAngle = Double.NaN;
     // Airburst fuze: while diving, detonate in the air once the missile is within this many
     // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
     private float explosionOffset = 0.0f;
@@ -788,6 +791,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
+     * @return the desired terminal impact angle in degrees below horizontal (90 = straight down), or
+     * {@link Double#NaN} for best fit (the attack stage's natural dive).
+     */
+    public double getAttackAngle() {
+        return this.attackAngle;
+    }
+
+    /**
      * Cruise-altitude memory used by the cruise stage's altitude smoothing (NaN until the first cruise tick).
      */
     public double getCruiseTargetY() {
@@ -1423,6 +1434,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (!Double.isNaN(this.ascentSpeed)) {
             tag.putDouble("AscentSpeed", this.ascentSpeed);
         }
+        if (!Double.isNaN(this.attackAngle)) {
+            tag.putDouble("AttackAngle", this.attackAngle);
+        }
         tag.putString("ModelId", this.getModelId());
         tag.putInt("ExhaustColor", this.getExhaustColor());
         tag.putInt("CruiseTicks", this.cruiseTicks);
@@ -1516,6 +1530,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         if (tag.contains("AscentSpeed")) {
             this.ascentSpeed = tag.getDouble("AscentSpeed");
+        }
+
+        if (tag.contains("AttackAngle")) {
+            this.attackAngle = tag.getDouble("AttackAngle");
         }
 
         if (tag.contains("ModelId")) {
@@ -1742,6 +1760,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
         private double cruiseSpeed = CRUISE_SPEED;
         private Double ascentSpeed = null;
+        private Double attackAngle = null;
         private Double maxTurnRate = null; // null = keep the model-size default
         private String modelId = MissileModels.DEFAULT;
         private int exhaustColor = DEFAULT_EXHAUST_COLOR;
@@ -1864,6 +1883,15 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         public Builder ascentSpeed(double blocksPerTick) {
             this.ascentSpeed = blocksPerTick;
+            return this;
+        }
+
+        /**
+         * Desired terminal impact angle in degrees below horizontal (90 = straight down / top-attack). Leave
+         * unset for best fit (the attack stage's natural dive). Clamped to a workable range.
+         */
+        public Builder attackAngle(double degrees) {
+            this.attackAngle = Math.max(MIN_ATTACK_ANGLE, Math.min(MAX_ATTACK_ANGLE, degrees));
             return this;
         }
 
@@ -2101,6 +2129,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             missile.cruiseSpeed = this.cruiseSpeed;
             if (this.ascentSpeed != null) {
                 missile.ascentSpeed = this.ascentSpeed;
+            }
+            if (this.attackAngle != null) {
+                missile.attackAngle = this.attackAngle;
             }
             missile.health = this.health;
             missile.setModelId(this.modelId);
