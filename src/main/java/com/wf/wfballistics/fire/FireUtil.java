@@ -29,7 +29,7 @@ public final class FireUtil {
         if (level.isClientSide) {
             return 0;
         }
-        VolumetricFill.Fill fill = VolumetricFill.flood(level, BlockPos.containing(center), radius, MAX_CELLS);
+        VolumetricFill.Fill fill = VolumetricFill.flood(level, BlockPos.containing(center), radius, MAX_CELLS, false);
         if (fill == null || fill.count() == 0) {
             return 0;
         }

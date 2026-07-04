@@ -1,19 +1,15 @@
 package com.wf.wfballistics.flight;
 
 import com.wf.wfballistics.MissileEntity.Phase;
+import com.wf.wfballistics.WFBallistics;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.*;
 
-/**
- * Registry of {@link FlightStage}s, grouped by the {@link Phase} they fly. A missile stores one stage id per
- * phase and composes them into its {@link FlightProfile}, so its ascent curve, cruise/loiter behaviour and
- * attack run can each be swapped independently (and persisted / picked in the emitter GUI). Add-ons register
- * their own stages via {@link #register}; the first stage registered for a phase is that phase's default.
- */
 public final class FlightStageRegistry {
 
-    private static final Map<Phase, Map<String, FlightStage>> BY_PHASE = new EnumMap<>(Phase.class);
-    private static final Map<Phase, String> DEFAULT_ID = new EnumMap<>(Phase.class);
+    private static final Map<Phase, Map<ResourceLocation, FlightStage>> BY_PHASE = new EnumMap<>(Phase.class);
+    private static final Map<Phase, ResourceLocation> DEFAULT_ID = new EnumMap<>(Phase.class);
 
     static {
         register(Phase.ASCEND, AscentStage.INSTANCE);
@@ -21,8 +17,6 @@ public final class FlightStageRegistry {
         register(Phase.CRUISE, LoiterStage.INSTANCE);
         register(Phase.ATTACK, AttackStage.INSTANCE);
         register(Phase.ATTACK, VerticalDiveStage.INSTANCE);
-        // Interceptor homing: registered for every phase so an all-"intercept" interceptor keeps homing in
-        // any phase and survives the id-based FlightProfile rebuild on reload (see InterceptStage).
         register(Phase.ASCEND, InterceptStage.INSTANCE);
         register(Phase.CRUISE, InterceptStage.INSTANCE);
         register(Phase.ATTACK, InterceptStage.INSTANCE);
@@ -31,19 +25,30 @@ public final class FlightStageRegistry {
     private FlightStageRegistry() {
     }
 
-    /**
-     * Register a stage for a phase; the first one registered for a phase becomes that phase's default.
-     */
-    public static void register(Phase phase, FlightStage stage) {
-        BY_PHASE.computeIfAbsent(phase, p -> new LinkedHashMap<>()).put(stage.id(), stage);
-        DEFAULT_ID.putIfAbsent(phase, stage.id());
+    public static ResourceLocation rl(String path) {
+        return new ResourceLocation(WFBallistics.MODID, path);
     }
 
-    /**
-     * @return the stage for {@code (phase, id)}, falling back to the phase's default when unknown.
-     */
-    public static FlightStage get(Phase phase, String id) {
-        Map<String, FlightStage> byId = BY_PHASE.get(phase);
+    public static ResourceLocation keyOf(FlightStage stage) {
+        return rl(stage.id());
+    }
+
+    public static ResourceLocation parse(Phase phase, String id) {
+        if (id == null || id.isEmpty()) {
+            return DEFAULT_ID.get(phase);
+        }
+        ResourceLocation parsed = id.indexOf(':') >= 0 ? ResourceLocation.tryParse(id) : rl(id);
+        return parsed != null ? parsed : DEFAULT_ID.get(phase);
+    }
+
+    public static void register(Phase phase, FlightStage stage) {
+        ResourceLocation id = keyOf(stage);
+        BY_PHASE.computeIfAbsent(phase, p -> new LinkedHashMap<>()).put(id, stage);
+        DEFAULT_ID.putIfAbsent(phase, id);
+    }
+
+    public static FlightStage get(Phase phase, ResourceLocation id) {
+        Map<ResourceLocation, FlightStage> byId = BY_PHASE.get(phase);
         if (byId == null) {
             return null;
         }
@@ -51,20 +56,17 @@ public final class FlightStageRegistry {
         return stage != null ? stage : byId.get(DEFAULT_ID.get(phase));
     }
 
-    public static boolean exists(Phase phase, String id) {
-        Map<String, FlightStage> byId = BY_PHASE.get(phase);
+    public static boolean exists(Phase phase, ResourceLocation id) {
+        Map<ResourceLocation, FlightStage> byId = BY_PHASE.get(phase);
         return byId != null && byId.containsKey(id);
     }
 
-    public static String defaultId(Phase phase) {
+    public static ResourceLocation defaultId(Phase phase) {
         return DEFAULT_ID.get(phase);
     }
 
-    /**
-     * @return all stage ids registered for a phase, in registration order.
-     */
-    public static Set<String> ids(Phase phase) {
-        Map<String, FlightStage> byId = BY_PHASE.get(phase);
+    public static Set<ResourceLocation> ids(Phase phase) {
+        Map<ResourceLocation, FlightStage> byId = BY_PHASE.get(phase);
         return byId != null ? Collections.unmodifiableSet(byId.keySet()) : Set.of();
     }
 }

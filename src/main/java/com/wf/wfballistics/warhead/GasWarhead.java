@@ -1,9 +1,11 @@
 package com.wf.wfballistics.warhead;
 
 import com.wf.wfballistics.MissileEntity;
+import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.entity.mist.GasCloud;
 import com.wf.wfballistics.fluid.WFFluids;
 import com.wf.wfballistics.fx.ExplosionCreator;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.phys.Vec3;
@@ -20,7 +22,7 @@ public final class GasWarhead {
     /**
      * Registered warhead id (also selectable from the dispenser GUI).
      */
-    public static final String ID = "gas";
+    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "gas");
 
     private GasWarhead() {
     }

@@ -27,6 +27,7 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
     final float brightness;
     private final Level level;
     private boolean playedClatter = false;
+
     public SkeletonBoneEffect(Level level, List<Bone> bones, float brightness) {
         this.level = level;
         this.bones = bones;
@@ -133,8 +134,10 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
             if (onGround) return false;
 
             BlockPos below = BlockPos.containing(x, y - 0.1, z);
-            if (!level.getBlockState(below).getCollisionShape(level, below).isEmpty()) {
+            net.minecraft.world.phys.shapes.VoxelShape shape = level.getBlockState(below).getCollisionShape(level, below);
+            if (!shape.isEmpty()) {
                 onGround = true;
+                y = below.getY() + shape.max(net.minecraft.core.Direction.Axis.Y);
                 vx = vy = vz = 0;
                 return true;
             }

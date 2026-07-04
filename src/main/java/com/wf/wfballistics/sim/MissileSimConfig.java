@@ -66,29 +66,15 @@ public final class MissileSimConfig {
      */
     public static final float INTERCEPT_CHANCE = 0.5f;
     /**
-     * Default per-interceptor kill probability (real entities and simulated interceptors), overridable per
-     * interceptor (see {@code MissileEntity.interceptChance} / {@code SimMissile.interceptChance}).
-     */
-    public static float DEFAULT_INTERCEPT_CHANCE = 0.90f;
-    /**
      * Simulated interceptors close on their target at this speed (blocks/tick).
      */
     public static final double INTERCEPTOR_SPEED = 1.5;
-
-    // --- Real (in-world) interceptor entities ---
-    /**
-     * Separation (blocks) at which an in-world interceptor's closest-approach test rolls for the kill. Kept
-     * generous so it triggers reliably for fast crossing targets (cf. the sim's {@link #INTERCEPT_DISTANCE}).
-     */
-    public static double INTERCEPTOR_KILL_RADIUS = 6.0;
-    /**
-     * How far a NEAREST-mode interceptor scans for a hostile missile to home on, each tick.
-     */
-    public static double INTERCEPTOR_ACQUIRE_RANGE = 200.0;
     /**
      * An interceptor self-destructs (fizzles) after this many ticks aloft, so a miss can't loiter forever.
      */
     public static final int INTERCEPTOR_LIFETIME_TICKS = 600;
+
+    // --- Real (in-world) interceptor entities ---
     /**
      * Ticks an interceptor may go without any resolvable target before it gives up and fizzles.
      */
@@ -104,61 +90,9 @@ public final class MissileSimConfig {
      */
     public static final double INTERCEPTOR_ENTITY_SPEED = 4.0;
     /**
-     * Interceptor battery magazine size — how many interceptors it can fire before it must reload. 0 (default)
-     * means unlimited (no ammo logistics).
-     */
-    public static int BATTERY_MAGAZINE = 0;
-    /**
-     * Ticks a battery takes to regenerate one interceptor toward its magazine (its "supply chain").
-     */
-    public static int BATTERY_RELOAD_TICKS = 200;
-    /**
-     * Stealth missiles are seen by automatic detection (interceptor acquisition, batteries, CIWS) only within
-     * this short range (vs the detector's normal range) — the main effect of stealth: a tiny engagement window.
-     */
-    public static double STEALTH_DETECT_RANGE = 32.0;
-    /**
-     * Per-scan probability that a stealth missile within {@link #STEALTH_DETECT_RANGE} is actually detected, so
-     * a fast stealth missile usually slips through the brief window (but can be seen — it is not invisible).
-     */
-    public static float STEALTH_DETECT_CHANCE = 0.25f;
-    /**
-     * Multiplier applied to a missile's evasion while it is in the terminal ATTACK dive, so a maneuvering
-     * warhead is hardest to intercept on its way down (clamped so effective evasion never exceeds 1).
-     */
-    public static double DIVE_EVASION_MULTIPLIER = 1.5;
-    /**
      * Default max heading change per tick (radians) for an in-world interceptor — nimble, near-pure pursuit.
      */
     public static final double INTERCEPTOR_TURN_RATE = 0.6;
-    /**
-     * Kill-chance multiplier for a "crossing" shot — when the interceptor is too slow to catch the target and
-     * can only try to cross its flight path. Noticeably lower than a proper timed intercept, so a slow
-     * interceptor is unreliable against a fast (e.g. supersonic/ballistic) missile it cannot run down.
-     */
-    public static float INTERCEPTOR_CROSSING_HIT_FACTOR = 0.35f;
-    /**
-     * When true, a proximity intercept damages the target's health pool (shared with CIWS fire) instead of a
-     * binary destroy/miss: a successful roll deals {@link #INTERCEPTOR_HIT_DAMAGE}, a miss deals
-     * {@link #INTERCEPTOR_GRAZE_DAMAGE}, and the target dies once the pool is depleted. Lets interceptors +
-     * CIWS combine and makes a missile's {@code health} (toughness) matter. Default off (binary kill).
-     */
-    public static boolean INTERCEPTOR_CHIP_MODE = false;
-    /**
-     * Damage a successful intercept deals to the health pool in chip mode (default {@code > DEFAULT_HEALTH},
-     * so one good hit still downs an ordinary missile).
-     */
-    public static float INTERCEPTOR_HIT_DAMAGE = 60.0f;
-    /**
-     * Damage a missed intercept deals to the health pool in chip mode — many near-misses wear a missile down.
-     */
-    public static float INTERCEPTOR_GRAZE_DAMAGE = 8.0f;
-    /**
-     * cruiseSpeed (blocks/tick) at or above which a missile is classed "supersonic". Interceptor batteries
-     * use this to split responsibility: the normal battery engages subsonic missiles, the supersonic battery
-     * engages supersonic ones.
-     */
-    public static double SUPERSONIC_SPEED = 2.5;
     /**
      * Default cruise speed for a supersonic interceptor — fast enough to actually run down a supersonic
      * missile (rather than only cross its path).
@@ -192,6 +126,72 @@ public final class MissileSimConfig {
      */
     public static final int COLLISION_MAX_SUBSTEPS = 8;
     /**
+     * Default per-interceptor kill probability (real entities and simulated interceptors), overridable per
+     * interceptor (see {@code MissileEntity.interceptChance} / {@code SimMissile.interceptChance}).
+     */
+    public static float DEFAULT_INTERCEPT_CHANCE = 0.90f;
+    /**
+     * Separation (blocks) at which an in-world interceptor's closest-approach test rolls for the kill. Kept
+     * generous so it triggers reliably for fast crossing targets (cf. the sim's {@link #INTERCEPT_DISTANCE}).
+     */
+    public static double INTERCEPTOR_KILL_RADIUS = 6.0;
+    /**
+     * How far a NEAREST-mode interceptor scans for a hostile missile to home on, each tick.
+     */
+    public static double INTERCEPTOR_ACQUIRE_RANGE = 200.0;
+    /**
+     * Interceptor battery magazine size — how many interceptors it can fire before it must reload. 0 (default)
+     * means unlimited (no ammo logistics).
+     */
+    public static int BATTERY_MAGAZINE = 0;
+    /**
+     * Ticks a battery takes to regenerate one interceptor toward its magazine (its "supply chain").
+     */
+    public static int BATTERY_RELOAD_TICKS = 200;
+    /**
+     * Stealth missiles are seen by automatic detection (interceptor acquisition, batteries, CIWS) only within
+     * this short range (vs the detector's normal range) — the main effect of stealth: a tiny engagement window.
+     */
+    public static double STEALTH_DETECT_RANGE = 32.0;
+    /**
+     * Per-scan probability that a stealth missile within {@link #STEALTH_DETECT_RANGE} is actually detected, so
+     * a fast stealth missile usually slips through the brief window (but can be seen — it is not invisible).
+     */
+    public static float STEALTH_DETECT_CHANCE = 0.25f;
+    /**
+     * Multiplier applied to a missile's evasion while it is in the terminal ATTACK dive, so a maneuvering
+     * warhead is hardest to intercept on its way down (clamped so effective evasion never exceeds 1).
+     */
+    public static double DIVE_EVASION_MULTIPLIER = 1.5;
+    /**
+     * Kill-chance multiplier for a "crossing" shot — when the interceptor is too slow to catch the target and
+     * can only try to cross its flight path. Noticeably lower than a proper timed intercept, so a slow
+     * interceptor is unreliable against a fast (e.g. supersonic/ballistic) missile it cannot run down.
+     */
+    public static float INTERCEPTOR_CROSSING_HIT_FACTOR = 0.35f;
+    /**
+     * When true, a proximity intercept damages the target's health pool (shared with CIWS fire) instead of a
+     * binary destroy/miss: a successful roll deals {@link #INTERCEPTOR_HIT_DAMAGE}, a miss deals
+     * {@link #INTERCEPTOR_GRAZE_DAMAGE}, and the target dies once the pool is depleted. Lets interceptors +
+     * CIWS combine and makes a missile's {@code health} (toughness) matter. Default off (binary kill).
+     */
+    public static boolean INTERCEPTOR_CHIP_MODE = false;
+    /**
+     * Damage a successful intercept deals to the health pool in chip mode (default {@code > DEFAULT_HEALTH},
+     * so one good hit still downs an ordinary missile).
+     */
+    public static float INTERCEPTOR_HIT_DAMAGE = 60.0f;
+    /**
+     * Damage a missed intercept deals to the health pool in chip mode — many near-misses wear a missile down.
+     */
+    public static float INTERCEPTOR_GRAZE_DAMAGE = 8.0f;
+    /**
+     * cruiseSpeed (blocks/tick) at or above which a missile is classed "supersonic". Interceptor batteries
+     * use this to split responsibility: the normal battery engages subsonic missiles, the supersonic battery
+     * engages supersonic ones.
+     */
+    public static double SUPERSONIC_SPEED = 2.5;
+    /**
      * Active interception mode. Togglable at runtime via {@code /wfballistics interceptmode ...}.
      */
     public static InterceptResolution INTERCEPT_MODE = InterceptResolution.IN_WORLD;
@@ -201,6 +201,7 @@ public final class MissileSimConfig {
      * Active collision fidelity. Left on the cheap ray by default; {@code OBB_SWEEP} is opt-in.
      */
     public static CollisionFidelity COLLISION_FIDELITY = CollisionFidelity.CENTER_RAY;
+
     private MissileSimConfig() {
     }
 

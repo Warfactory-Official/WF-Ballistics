@@ -5,13 +5,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -28,10 +22,11 @@ public final class MissileModels {
      * Id used when a requested one is unknown or unset.
      */
     public static final String DEFAULT = "v2";
-
+    // Per-model orientation style ("attitude") id — how the model rotates to its heading (missile vs drone).
+    // Resolved to a strategy client-side (see client.render.MissileAttitudeRegistry). Default = "missile".
+    public static final String DEFAULT_ATTITUDE = "missile";
     // Continuous spin speed for the Shahed pusher propeller (degrees per tick). Purely visual.
     private static final float SHAHED_ROTOR_SPEED = 45.0f;
-
     private static final Map<String, ResourceLocation> BY_ID = new LinkedHashMap<>();
     private static final Map<String, Double> LENGTHS = new ConcurrentHashMap<>();
     private static final Map<String, Vec3> DIMENSIONS = new ConcurrentHashMap<>();
@@ -39,9 +34,6 @@ public final class MissileModels {
     // Spinning parts ("rotors") per model id, and a cache of each rotor mesh's centre (its spin pivot).
     private static final Map<String, List<Rotor>> ROTORS = new HashMap<>();
     private static final Map<ResourceLocation, Vec3> ROTOR_PIVOTS = new ConcurrentHashMap<>();
-    // Per-model orientation style ("attitude") id — how the model rotates to its heading (missile vs drone).
-    // Resolved to a strategy client-side (see client.render.MissileAttitudeRegistry). Default = "missile".
-    public static final String DEFAULT_ATTITUDE = "missile";
     private static final Map<String, String> ATTITUDES = new HashMap<>();
 
     static {
@@ -171,18 +163,6 @@ public final class MissileModels {
     }
 
     /**
-     * A continuously spinning part of a missile model (rotor / propeller): a separate mesh the client draws
-     * as its own instance, spun about {@code axis} at {@code degreesPerTick}. The spin pivot is derived from
-     * the mesh's own centre (see {@link #rotorPivot}), so nothing is hardcoded per model.
-     *
-     * @param model          model-json location of the rotor mesh (baked separately by {@code ModModels})
-     * @param axis           unit spin axis in model space
-     * @param degreesPerTick constant spin rate
-     */
-    public record Rotor(ResourceLocation model, Vector3f axis, float degreesPerTick) {
-    }
-
-    /**
      * Register a spinning part for a model. Drop in the rotor's model json/obj and add one call — the client
      * renderer picks it up generically; there is no per-model spin code.
      */
@@ -227,5 +207,17 @@ public final class MissileModels {
                 return Vec3.ZERO;
             }
         });
+    }
+
+    /**
+     * A continuously spinning part of a missile model (rotor / propeller): a separate mesh the client draws
+     * as its own instance, spun about {@code axis} at {@code degreesPerTick}. The spin pivot is derived from
+     * the mesh's own centre (see {@link #rotorPivot}), so nothing is hardcoded per model.
+     *
+     * @param model          model-json location of the rotor mesh (baked separately by {@code ModModels})
+     * @param axis           unit spin axis in model space
+     * @param degreesPerTick constant spin rate
+     */
+    public record Rotor(ResourceLocation model, Vector3f axis, float degreesPerTick) {
     }
 }

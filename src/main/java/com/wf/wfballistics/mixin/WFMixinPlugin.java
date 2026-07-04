@@ -18,6 +18,15 @@ import java.util.Set;
  */
 public class WFMixinPlugin implements IMixinConfigPlugin {
 
+    private static boolean isSodiumFamilyLoaded() {
+        return isModLoaded("embeddium") || isModLoaded("rubidium") || isModLoaded("sodium");
+    }
+
+    private static boolean isModLoaded(String modId) {
+        LoadingModList list = LoadingModList.get();
+        return list != null && list.getModFileById(modId) != null;
+    }
+
     @Override
     public void onLoad(String mixinPackage) {
     }
@@ -31,6 +40,9 @@ public class WFMixinPlugin implements IMixinConfigPlugin {
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.endsWith("MixinLevelRenderer")) {
             return !isSodiumFamilyLoaded();
+        }
+        if (mixinClassName.contains(".gt.")) {
+            return isModLoaded("gtceu");
         }
         return true;
     }
@@ -50,15 +62,5 @@ public class WFMixinPlugin implements IMixinConfigPlugin {
 
     @Override
     public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
-    }
-
-    private static boolean isSodiumFamilyLoaded() {
-        LoadingModList list = LoadingModList.get();
-        if (list == null) {
-            return false;
-        }
-        return list.getModFileById("embeddium") != null
-                || list.getModFileById("rubidium") != null
-                || list.getModFileById("sodium") != null;
     }
 }

@@ -13,14 +13,17 @@ public final class BillboardLod {
     private static final float STILL_DOT = 0.99999f;
 
     private final Quaternionf lastCamRot = new Quaternionf();
+    /**
+     * Draw only puffs whose index is a multiple of this; collapse the rest. Valid after {@link #update}.
+     */
+    public int stride = 1;
+    /**
+     * Whether to interpolate positions/colours by partial tick this frame. Valid after {@link #update}.
+     */
+    public boolean interpolate = true;
     private boolean hasLast = false;
     private int frame = 0;
     private int lastUpdate = Integer.MIN_VALUE;
-
-    /** Draw only puffs whose index is a multiple of this; collapse the rest. Valid after {@link #update}. */
-    public int stride = 1;
-    /** Whether to interpolate positions/colours by partial tick this frame. Valid after {@link #update}. */
-    public boolean interpolate = true;
 
     /**
      * @return true if the effect should be refreshed this frame; false to leave its instances untouched.
@@ -28,7 +31,7 @@ public final class BillboardLod {
     public boolean update(Quaternionf camRot, double distanceSq) {
         frame++;
 
-       //Fabulous gets a pass. It's uses proper shaders
+        //Fabulous gets a pass. It's uses proper shaders
         if (Minecraft.useShaderTransparency()) {
             stride = 1;
             interpolate = true;

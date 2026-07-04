@@ -159,9 +159,9 @@ public final class DamageResistanceHandler {
 
 
     /**
-         * A flat threshold (DT) and a fractional resistance (DR, 0..1) for one category.
-         */
-        public record Resistance(float threshold, float resistance) {
+     * A flat threshold (DT) and a fractional resistance (DR, 0..1) for one category.
+     */
+    public record Resistance(float threshold, float resistance) {
     }
 
     /**

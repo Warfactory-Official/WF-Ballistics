@@ -30,10 +30,10 @@ public class Debris {
     private final float pitchSpeed, yawSpeed;
     private final boolean trail;
     private final float trailScale;
-    private double x, y, z, prevX, prevY, prevZ;
     private final double vx;
-    private double vy;
     private final double vz;
+    private double x, y, z, prevX, prevY, prevZ;
+    private double vy;
     private float pitch, yaw, prevPitch, prevYaw;
     private int age = 0;
     private boolean canCollide = false;

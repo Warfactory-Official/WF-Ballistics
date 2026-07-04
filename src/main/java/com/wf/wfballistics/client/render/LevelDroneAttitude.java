@@ -17,7 +17,9 @@ public final class LevelDroneAttitude implements MissileAttitude {
 
     public static final LevelDroneAttitude INSTANCE = new LevelDroneAttitude();
 
-    /** The model's dorsal ("up") axis in local space, held toward world-up (see class doc). */
+    /**
+     * The model's dorsal ("up") axis in local space, held toward world-up (see class doc).
+     */
     private static final Vector3f MODEL_UP = new Vector3f(0.0f, 0.0f, -1.0f);
     private static final Vector3f WORLD_UP = new Vector3f(0.0f, 1.0f, 0.0f);
 

@@ -91,6 +91,11 @@ public class MissileItem extends Item {
         return best;
     }
 
+    private static Component kv(String label, String value, ChatFormatting valueColour) {
+        return Component.literal(label + ": ").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal(value).withStyle(valueColour));
+    }
+
     public MissilePreset preset() {
         return this.preset;
     }
@@ -102,6 +107,9 @@ public class MissileItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
+        if (!player.getAbilities().instabuild) {
+            return InteractionResultHolder.pass(stack);
+        }
         if (!level.isClientSide) {
             Vec3 target = aimTarget(level, player);
             MissileEntity missile = preset.build(level, target);
@@ -130,15 +138,10 @@ public class MissileItem extends Item {
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
     }
 
-    private static Component kv(String label, String value, ChatFormatting valueColour) {
-        return Component.literal(label + ": ").withStyle(ChatFormatting.GRAY)
-                .append(Component.literal(value).withStyle(valueColour));
-    }
-
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(kv("Airframe", preset.modelId(), ChatFormatting.WHITE));
-        tooltip.add(kv("Warhead", preset.warheadId(), ChatFormatting.WHITE));
+        tooltip.add(kv("Warhead", preset.warheadId().getPath(), ChatFormatting.WHITE));
 
 
         if (!Screen.hasShiftDown()) {
@@ -179,12 +182,12 @@ public class MissileItem extends Item {
         if (preset.splitDepth() > 0) {
             tooltip.add(kv("Split depth", String.valueOf(preset.splitDepth()), ChatFormatting.GOLD));
         }
-        if (preset.fragmentCount() > 0 && ("fragmentation".equals(preset.warheadId()) || preset.splitDepth() > 0)) {
+        if (preset.fragmentCount() > 0 && ("fragmentation".equals(preset.warheadId().getPath()) || preset.splitDepth() > 0)) {
             tooltip.add(kv("Fragments", String.valueOf(preset.fragmentCount()), ChatFormatting.GOLD));
         }
         if (preset.cruiseStageId() != null || preset.attackStageId() != null) {
-            String cruise = preset.cruiseStageId() != null ? preset.cruiseStageId() : "cruise";
-            String attack = preset.attackStageId() != null ? preset.attackStageId() : "attack";
+            String cruise = preset.cruiseStageId() != null ? preset.cruiseStageId().getPath() : "cruise";
+            String attack = preset.attackStageId() != null ? preset.attackStageId().getPath() : "attack";
             tooltip.add(kv("Flight profile", cruise + " / " + attack, ChatFormatting.DARK_AQUA));
         }
     }

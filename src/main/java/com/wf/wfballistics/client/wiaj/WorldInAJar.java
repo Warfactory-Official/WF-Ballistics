@@ -18,19 +18,16 @@ import org.jetbrains.annotations.Nullable;
 
 public class WorldInAJar implements BlockAndTintGetter {
 
-    public final int sizeX;
-    public final int sizeY;
-    public final int sizeZ;
-
-    private final BlockState[][][] blocks;
-    private final BlockState air = Blocks.AIR.defaultBlockState();
-
     // Debris takes no light from the world it was chipped out of: a block dug from deep underground carries
     // zero light and would bake in pitch black. Every face uses full sky exposure instead, so the render-time
     // lightmap (time of day) is the only thing that shades it.
     private static final int BAKED_SKY_LIGHT = 15;
     private static final int BAKED_BLOCK_LIGHT = 0;
-
+    public final int sizeX;
+    public final int sizeY;
+    public final int sizeZ;
+    private final BlockState[][][] blocks;
+    private final BlockState air = Blocks.AIR.defaultBlockState();
     private int tint = 0xFFFFFF;
 
     public WorldInAJar(int x, int y, int z) {

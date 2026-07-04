@@ -1,16 +1,14 @@
 package com.wf.wfballistics.client.flywheel;
 
 import com.wf.wfballistics.ModModels;
+import com.wf.wfballistics.client.fx.ParticleLight;
 import dev.engine_room.flywheel.api.instance.Instancer;
 import dev.engine_room.flywheel.api.visual.EffectVisual;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.instance.InstanceTypes;
 import dev.engine_room.flywheel.lib.instance.TransformedInstance;
-import dev.engine_room.flywheel.lib.model.Models;
 import dev.engine_room.flywheel.lib.visual.AbstractVisual;
 import dev.engine_room.flywheel.lib.visual.SimpleDynamicVisual;
-import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
@@ -31,9 +29,9 @@ public class SkeletonBoneVisual extends AbstractVisual implements SimpleDynamicV
         super(ctx, (Level) effect.level(), partialTick);
         this.effect = effect;
 
-        Instancer<TransformedInstance> skull = instancerProvider().instancer(InstanceTypes.TRANSFORMED, Models.partial(ModModels.BONE_SKULL));
-        Instancer<TransformedInstance> torso = instancerProvider().instancer(InstanceTypes.TRANSFORMED, Models.partial(ModModels.BONE_TORSO));
-        Instancer<TransformedInstance> limb = instancerProvider().instancer(InstanceTypes.TRANSFORMED, Models.partial(ModModels.BONE_LIMB));
+        Instancer<TransformedInstance> skull = instancerProvider().instancer(InstanceTypes.TRANSFORMED, FlywheelModels.translucent(ModModels.BONE_SKULL));
+        Instancer<TransformedInstance> torso = instancerProvider().instancer(InstanceTypes.TRANSFORMED, FlywheelModels.translucent(ModModels.BONE_TORSO));
+        Instancer<TransformedInstance> limb = instancerProvider().instancer(InstanceTypes.TRANSFORMED, FlywheelModels.translucent(ModModels.BONE_LIMB));
 
         this.instances = new TransformedInstance[effect.bones.size()];
         for (int i = 0; i < instances.length; i++) {
@@ -73,7 +71,7 @@ public class SkeletonBoneVisual extends AbstractVisual implements SimpleDynamicV
             instance.setTransform(scratch);
             int alpha = (int) (bone.alpha(pt) * 255F);
             instance.colorArgb((alpha << 24) | (grey << 16) | (grey << 8) | grey);
-            instance.light(LevelRenderer.getLightColor(level, BlockPos.containing(bone.x, bone.y, bone.z)));
+            instance.light(ParticleLight.surface(level, bone.x, bone.y, bone.z));
             instance.setChanged();
         }
     }

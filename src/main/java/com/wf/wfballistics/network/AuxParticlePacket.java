@@ -1,7 +1,6 @@
 package com.wf.wfballistics.network;
 
 import com.wf.wfballistics.client.ClientPacketHandler;
-import com.wf.wfballistics.client.fx.WFEffects;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraftforge.api.distmarker.Dist;

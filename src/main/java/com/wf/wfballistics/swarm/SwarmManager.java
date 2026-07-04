@@ -4,17 +4,12 @@ import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-
-import java.util.Comparator;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -31,6 +26,11 @@ public final class SwarmManager {
 
     // level -> (swarmId -> members). Server-side only; the client never queries membership.
     private static final Map<Level, Map<Long, Set<MissileEntity>>> BY_LEVEL = new ConcurrentHashMap<>();
+    /**
+     * Lateral and trailing spacing (blocks) between slots in the wedge formation.
+     */
+    private static final double FORMATION_LATERAL = 6.0;
+    private static final double FORMATION_TRAIL = 6.0;
 
     private SwarmManager() {
     }
@@ -66,6 +66,8 @@ public final class SwarmManager {
         return set != null ? set : Set.of();
     }
 
+    // --- commander / formation ---
+
     /**
      * @return how many live members {@code swarmId} has in {@code level}.
      */
@@ -95,12 +97,6 @@ public final class SwarmManager {
         }
         return out;
     }
-
-    // --- commander / formation ---
-
-    /** Lateral and trailing spacing (blocks) between slots in the wedge formation. */
-    private static final double FORMATION_LATERAL = 6.0;
-    private static final double FORMATION_TRAIL = 6.0;
 
     /**
      * @return the live commander of {@code swarmId} in {@code level}, or null if the swarm has none.

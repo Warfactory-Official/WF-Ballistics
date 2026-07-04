@@ -33,6 +33,7 @@ public final class UnsafeHolder {
     public static final int DA_SHIFT = Integer.numberOfTrailingZeros(U.arrayIndexScale(double[].class));
     public static final long RA_BASE = U.arrayBaseOffset(Object[].class);
     public static final int RA_SHIFT = Integer.numberOfTrailingZeros(U.arrayIndexScale(Object[].class));
+
     private UnsafeHolder() {
     }
 

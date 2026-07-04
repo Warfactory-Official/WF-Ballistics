@@ -400,6 +400,11 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
 
     public class Cloudlet {
 
+        private final double motionConvectionMult = 0.5D;
+        private final double motionLiftMult = 0.625D;
+        private final double motionRingMult = 0.5D;
+        private final double motionCondensationMult = 1D;
+        private final double motionShockwaveMult = 1D;
         public double posX;
         public double posY;
         public double posZ;
@@ -428,13 +433,7 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
         private double computedMotionX;
         private double computedMotionY;
         private double computedMotionZ;
-
         private double motionMult = 1D;
-        private final double motionConvectionMult = 0.5D;
-        private final double motionLiftMult = 0.625D;
-        private final double motionRingMult = 0.5D;
-        private final double motionCondensationMult = 1D;
-        private final double motionShockwaveMult = 1D;
 
         public Cloudlet(double posX, double posY, double posZ, float angle, int age, int maxAge) {
             this(posX, posY, posZ, angle, age, maxAge, TorexType.STANDARD);

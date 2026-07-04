@@ -1,10 +1,6 @@
 package com.wf.wfballistics;
 
-import com.wf.wfballistics.entity.BombletEntity;
-import com.wf.wfballistics.entity.EntityNukeExplosionMK5;
-import com.wf.wfballistics.entity.EntityNukeTorex;
-import com.wf.wfballistics.entity.FireLingeringEntity;
-import com.wf.wfballistics.entity.MistEntity;
+import com.wf.wfballistics.entity.*;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -47,7 +43,7 @@ public class ModEntities {
             );
 
     public static final RegistryObject<EntityType<FireLingeringEntity>> FIRE_LINGERING =
-            ENTITY_TYPES.register("fire_lingering", () -> EntityType.Builder.<FireLingeringEntity>of(FireLingeringEntity::new, MobCategory.MISC)
+            ENTITY_TYPES.register("fire_lingering", () -> EntityType.Builder.of(FireLingeringEntity::new, MobCategory.MISC)
                     .sized(1.0F, 1.0F)
                     .clientTrackingRange(10)
                     .updateInterval(Integer.MAX_VALUE)

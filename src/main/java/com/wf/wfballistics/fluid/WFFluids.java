@@ -29,18 +29,20 @@ public final class WFFluids {
             FLUID_TYPES.register("phosgene", () -> new GasFluidType(0xCFE0C0));
     // Mustard gas
     public static final RegistryObject<FluidType> MUSTARD_GAS_TYPE =
-            FLUID_TYPES.register("mustard_gas", () -> new GasFluidType(0xB8A038));    public static final RegistryObject<ForgeFlowingFluid> PHOSGENE =
+            FLUID_TYPES.register("mustard_gas", () -> new GasFluidType(0xB8A038));
+    public static final RegistryObject<FluidType> KEROSENE_TYPE =
+            FLUID_TYPES.register("kerosene", KeroseneFluidType::new);    public static final RegistryObject<ForgeFlowingFluid> PHOSGENE =
             FLUIDS.register("phosgene", () -> new ForgeFlowingFluid.Source(WFFluids.PHOSGENE_PROPS));
+
     private WFFluids() {
-    }    public static final RegistryObject<ForgeFlowingFluid> FLOWING_PHOSGENE =
-            FLUIDS.register("flowing_phosgene", () -> new ForgeFlowingFluid.Flowing(WFFluids.PHOSGENE_PROPS));
+    }
 
     public static void register(IEventBus modBus) {
         FLUID_TYPES.register(modBus);
         FLUIDS.register(modBus);
         ITEMS.register(modBus);
-    }    public static final ForgeFlowingFluid.Properties PHOSGENE_PROPS =
-            new ForgeFlowingFluid.Properties(PHOSGENE_TYPE, PHOSGENE, FLOWING_PHOSGENE);
+    }    public static final RegistryObject<ForgeFlowingFluid> FLOWING_PHOSGENE =
+            FLUIDS.register("flowing_phosgene", () -> new ForgeFlowingFluid.Flowing(WFFluids.PHOSGENE_PROPS));
 
     public static class GasFluidType extends FluidType {
 
@@ -84,26 +86,6 @@ public final class WFFluids {
             });
         }
     }
-    public static final RegistryObject<ForgeFlowingFluid> MUSTARD_GAS =
-            FLUIDS.register("mustard_gas", () -> new ForgeFlowingFluid.Source(WFFluids.MUSTARD_GAS_PROPS));
-    public static final RegistryObject<ForgeFlowingFluid> FLOWING_MUSTARD_GAS =
-            FLUIDS.register("flowing_mustard_gas", () -> new ForgeFlowingFluid.Flowing(WFFluids.MUSTARD_GAS_PROPS));
-    public static final ForgeFlowingFluid.Properties MUSTARD_GAS_PROPS =
-            new ForgeFlowingFluid.Properties(MUSTARD_GAS_TYPE, MUSTARD_GAS, FLOWING_MUSTARD_GAS);
-
-
-    public static final RegistryObject<FluidType> KEROSENE_TYPE =
-            FLUID_TYPES.register("kerosene", KeroseneFluidType::new);
-    public static final RegistryObject<ForgeFlowingFluid> KEROSENE =
-            FLUIDS.register("kerosene", () -> new ForgeFlowingFluid.Source(WFFluids.KEROSENE_PROPS));
-    public static final RegistryObject<ForgeFlowingFluid> FLOWING_KEROSENE =
-            FLUIDS.register("flowing_kerosene", () -> new ForgeFlowingFluid.Flowing(WFFluids.KEROSENE_PROPS));
-    public static final RegistryObject<Item> KEROSENE_BUCKET =
-            ITEMS.register("kerosene_bucket", () -> new BucketItem(KEROSENE,
-                    new Item.Properties().craftRemainder(Items.BUCKET).stacksTo(1)));
-    public static final ForgeFlowingFluid.Properties KEROSENE_PROPS =
-            new ForgeFlowingFluid.Properties(KEROSENE_TYPE, KEROSENE, FLOWING_KEROSENE).bucket(KEROSENE_BUCKET);
-
 
     public static class KeroseneFluidType extends FluidType {
 
@@ -139,5 +121,30 @@ public final class WFFluids {
                 }
             });
         }
-    }
+    }    public static final ForgeFlowingFluid.Properties PHOSGENE_PROPS =
+            new ForgeFlowingFluid.Properties(PHOSGENE_TYPE, PHOSGENE, FLOWING_PHOSGENE);
+
+
+
+    public static final RegistryObject<ForgeFlowingFluid> MUSTARD_GAS =
+            FLUIDS.register("mustard_gas", () -> new ForgeFlowingFluid.Source(WFFluids.MUSTARD_GAS_PROPS));
+    public static final RegistryObject<ForgeFlowingFluid> FLOWING_MUSTARD_GAS =
+            FLUIDS.register("flowing_mustard_gas", () -> new ForgeFlowingFluid.Flowing(WFFluids.MUSTARD_GAS_PROPS));
+    public static final ForgeFlowingFluid.Properties MUSTARD_GAS_PROPS =
+            new ForgeFlowingFluid.Properties(MUSTARD_GAS_TYPE, MUSTARD_GAS, FLOWING_MUSTARD_GAS);
+
+
+
+    public static final RegistryObject<ForgeFlowingFluid> KEROSENE =
+            FLUIDS.register("kerosene", () -> new ForgeFlowingFluid.Source(WFFluids.KEROSENE_PROPS));
+    public static final RegistryObject<ForgeFlowingFluid> FLOWING_KEROSENE =
+            FLUIDS.register("flowing_kerosene", () -> new ForgeFlowingFluid.Flowing(WFFluids.KEROSENE_PROPS));
+    public static final RegistryObject<Item> KEROSENE_BUCKET =
+            ITEMS.register("kerosene_bucket", () -> new BucketItem(KEROSENE,
+                    new Item.Properties().craftRemainder(Items.BUCKET).stacksTo(1)));
+    public static final ForgeFlowingFluid.Properties KEROSENE_PROPS =
+            new ForgeFlowingFluid.Properties(KEROSENE_TYPE, KEROSENE, FLOWING_KEROSENE).bucket(KEROSENE_BUCKET);
+
+
+
 }

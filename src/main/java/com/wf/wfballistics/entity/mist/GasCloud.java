@@ -60,7 +60,7 @@ public final class GasCloud {
         if (level.isClientSide) {
             return 0;
         }
-        VolumetricFill.Fill fill = VolumetricFill.flood(level, BlockPos.containing(center), radius, maxCells);
+        VolumetricFill.Fill fill = VolumetricFill.flood(level, BlockPos.containing(center), radius, maxCells, true);
         if (fill == null || fill.count() == 0) {
             return 0;
         }

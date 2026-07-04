@@ -3,8 +3,10 @@ package com.wf.wfballistics.item;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.ModEntities;
+import com.wf.wfballistics.flight.FlightStageRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.warhead.WarheadRegistry;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -21,7 +23,7 @@ public final class MissilePreset {
 
     private final String id;
     private final String modelId;
-    private final String warheadId;
+    private final ResourceLocation warheadId;
     private final boolean highAltitude;
     private final double altitudeParam; // cruiseAltitude (high) or terrainClearance (terrain follow)
     private final double cruiseSpeed;
@@ -36,8 +38,8 @@ public final class MissilePreset {
     private final int fuelTicks;
     private final double acceleration;
     private final double deceleration;
-    private final String cruiseStageId;
-    private final String attackStageId;
+    private final ResourceLocation cruiseStageId;
+    private final ResourceLocation attackStageId;
     private final boolean stealth;
     private final float evasion;
     private final boolean evasiveManeuver;
@@ -81,7 +83,7 @@ public final class MissilePreset {
         return modelId;
     }
 
-    public String warheadId() {
+    public ResourceLocation warheadId() {
         return warheadId;
     }
 
@@ -141,11 +143,11 @@ public final class MissilePreset {
         return deceleration;
     }
 
-    public String cruiseStageId() {
+    public ResourceLocation cruiseStageId() {
         return cruiseStageId;
     }
 
-    public String attackStageId() {
+    public ResourceLocation attackStageId() {
         return attackStageId;
     }
 
@@ -214,7 +216,7 @@ public final class MissilePreset {
     public static final class Builder {
         private final String id;
         private final String modelId;
-        private final String warheadId;
+        private final ResourceLocation warheadId;
         private boolean highAltitude = false;
         private double altitudeParam = 24.0;
         private double cruiseSpeed = MissileEntity.CRUISE_SPEED;
@@ -229,8 +231,8 @@ public final class MissilePreset {
         private int fuelTicks = MissileEntity.DEFAULT_FUEL_TICKS;
         private double acceleration = MissileEntity.DEFAULT_ACCELERATION;
         private double deceleration = MissileEntity.DEFAULT_DECELERATION;
-        private String cruiseStageId = null; // null = phase default
-        private String attackStageId = null;
+        private ResourceLocation cruiseStageId = null; // null = phase default
+        private ResourceLocation attackStageId = null;
         private boolean stealth = false;
         private float evasion = 0.0f;
         private boolean evasiveManeuver = false;
@@ -239,7 +241,8 @@ public final class MissilePreset {
         private Builder(String id, String modelId, String warheadId) {
             this.id = id;
             this.modelId = MissileModels.exists(modelId) ? modelId : MissileModels.DEFAULT;
-            this.warheadId = WarheadRegistry.exists(warheadId) ? warheadId : WarheadRegistry.defaultId();
+            ResourceLocation warhead = WarheadRegistry.parse(warheadId);
+            this.warheadId = WarheadRegistry.exists(warhead) ? warhead : WarheadRegistry.defaultId();
         }
 
         /**
@@ -330,7 +333,7 @@ public final class MissilePreset {
          * Pick the cruise-phase flight stage by id (e.g. {@code "loiter"} for a loitering drone).
          */
         public Builder cruiseStage(String id) {
-            this.cruiseStageId = id;
+            this.cruiseStageId = FlightStageRegistry.parse(MissileEntity.Phase.CRUISE, id);
             return this;
         }
 
@@ -338,7 +341,7 @@ public final class MissilePreset {
          * Pick the attack-phase flight stage by id (e.g. {@code "dive"} for a near-vertical top-attack).
          */
         public Builder attackStage(String id) {
-            this.attackStageId = id;
+            this.attackStageId = FlightStageRegistry.parse(MissileEntity.Phase.ATTACK, id);
             return this;
         }
 

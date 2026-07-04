@@ -1,9 +1,11 @@
 package com.wf.wfballistics.entity;
 
 import com.wf.wfballistics.ModEntities;
+import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.aef.nuke.ExplosionNukeGeneric;
 import com.wf.wfballistics.fx.ExplosionSmallCreator;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -57,17 +59,20 @@ public class BombletEntity extends Projectile {
         FireLingeringEntity.spawn(level, pos.x, pos.y, pos.z, 3.0f, 2.0f, 120, FireLingeringEntity.TYPE_DIESEL);
         ExplosionSmallCreator.composeEffect(level, pos.x, pos.y, pos.z, 3, 1.0f, 0.6f);
     };
+    public static final ResourceLocation STANDARD_ID = rl("standard");
+    public static final ResourceLocation INERT_ID = rl("inert");
+    public static final ResourceLocation FIRE_ID = rl("fire");
     private static final double GRAVITY = 0.05;
     private static final double DRAG = 0.99;
-    private static final Map<String, Detonation> WARHEADS = new HashMap<>();
+    private static final Map<ResourceLocation, Detonation> WARHEADS = new HashMap<>();
 
     static {
-        WARHEADS.put("standard", STANDARD);
-        WARHEADS.put("inert", INERT);
-        WARHEADS.put("fire", FIRE);
+        WARHEADS.put(STANDARD_ID, STANDARD);
+        WARHEADS.put(INERT_ID, INERT);
+        WARHEADS.put(FIRE_ID, FIRE);
     }
 
-    private String detonationId = "standard";
+    private ResourceLocation detonationId = STANDARD_ID;
     private Detonation detonation = STANDARD;
     private int maxFuse = DEFAULT_FUSE;
     // Guards against re-entrant detonation (the blast can hurt/hit this bomblet before discard() runs).
@@ -83,12 +88,12 @@ public class BombletEntity extends Projectile {
      * @param detonationId registered id for that warhead so it persists across save/load
      * @param fuse         ticks before self-detonation (<= 0 disables the fuse)
      */
-    public BombletEntity(Level level, Vec3 pos, Vec3 velocity, Detonation detonation, String detonationId, int fuse) {
+    public BombletEntity(Level level, Vec3 pos, Vec3 velocity, Detonation detonation, ResourceLocation detonationId, int fuse) {
         this(ModEntities.BOMBLET.get(), level);
         this.setPos(pos.x, pos.y, pos.z);
         this.setDeltaMovement(velocity);
         this.detonation = detonation != null ? detonation : STANDARD;
-        this.detonationId = detonationId != null ? detonationId : "standard";
+        this.detonationId = detonationId != null ? detonationId : STANDARD_ID;
         this.maxFuse = fuse;
 
         // Cosmetic heading so the entity's yaw/pitch match its travel (the cube tumbles in the renderer).
@@ -99,12 +104,16 @@ public class BombletEntity extends Projectile {
         this.xRotO = this.getXRot();
     }
 
-    public static void registerWarhead(String id, Detonation detonation) {
+    public static void registerWarhead(ResourceLocation id, Detonation detonation) {
         WARHEADS.put(id, detonation);
     }
 
-    private static Detonation warhead(String id) {
+    private static Detonation warhead(ResourceLocation id) {
         return WARHEADS.getOrDefault(id, STANDARD);
+    }
+
+    private static ResourceLocation rl(String path) {
+        return new ResourceLocation(WFBallistics.MODID, path);
     }
 
     @Override
@@ -180,7 +189,7 @@ public class BombletEntity extends Projectile {
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
-        tag.putString("Detonation", this.detonationId);
+        tag.putString("Detonation", this.detonationId.toString());
         tag.putInt("MaxFuse", this.maxFuse);
         tag.putBoolean("Detonated", this.detonated);
     }
@@ -189,7 +198,8 @@ public class BombletEntity extends Projectile {
     protected void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         if (tag.contains("Detonation")) {
-            this.detonationId = tag.getString("Detonation");
+            ResourceLocation parsed = ResourceLocation.tryParse(tag.getString("Detonation"));
+            this.detonationId = parsed != null ? parsed : STANDARD_ID;
             this.detonation = warhead(this.detonationId);
         }
         if (tag.contains("MaxFuse")) {

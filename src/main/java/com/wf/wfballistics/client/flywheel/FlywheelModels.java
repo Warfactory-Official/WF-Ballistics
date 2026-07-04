@@ -13,7 +13,6 @@ import dev.engine_room.flywheel.lib.util.RendererReloadCache;
 public final class FlywheelModels {
 
 
-
     private static final Material PARTICLE = SimpleMaterial.builder()
             .transparency(Transparency.ORDER_INDEPENDENT)
             .cutout(CutoutShaders.EPSILON)
@@ -26,10 +25,24 @@ public final class FlywheelModels {
                     .materialFunc((renderType, shaded) -> PARTICLE)
                     .build());
 
+    private static final Material TRANSLUCENT = SimpleMaterial.builder()
+            .transparency(Transparency.ORDER_INDEPENDENT)
+            .cutout(CutoutShaders.EPSILON)
+            .build();
+
+    private static final RendererReloadCache<PartialModel, Model> TRANSLUCENT_MODEL =
+            new RendererReloadCache<>(partial -> BakedModelBuilder.create(partial.get())
+                    .materialFunc((renderType, shaded) -> TRANSLUCENT)
+                    .build());
+
     private FlywheelModels() {
     }
 
     public static Model particleQuad() {
         return PARTICLE_MODEL.get(ModModels.INSTANCED_QUAD);
+    }
+
+    public static Model translucent(PartialModel partial) {
+        return TRANSLUCENT_MODEL.get(partial);
     }
 }

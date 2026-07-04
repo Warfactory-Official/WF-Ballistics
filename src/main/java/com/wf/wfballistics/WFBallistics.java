@@ -31,10 +31,10 @@ public class WFBallistics {
         com.wf.wfballistics.WFSounds.register(modEventBus);
 
         modEventBus.register(com.wf.wfballistics.config.WFConfig.class);
-       ModLoadingContext.get().registerConfig(
+        ModLoadingContext.get().registerConfig(
                 ModConfig.Type.COMMON, com.wf.wfballistics.config.WFConfig.SPEC);
         ModLoadingContext.get().registerConfig(
-               ModConfig.Type.CLIENT, com.wf.wfballistics.config.WFClientConfig.SPEC);
+                ModConfig.Type.CLIENT, com.wf.wfballistics.config.WFClientConfig.SPEC);
 
         MinecraftForge.EVENT_BUS.register(this);
     }

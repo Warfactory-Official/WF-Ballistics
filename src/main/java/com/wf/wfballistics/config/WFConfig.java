@@ -4,8 +4,8 @@ import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import net.minecraftforge.common.ForgeConfigSpec;
-import net.minecraftforge.fml.event.config.ModConfigEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.event.config.ModConfigEvent;
 
 /**
  * Server/common config for the tunables most worth adjusting without recompiling: the WarForge integration

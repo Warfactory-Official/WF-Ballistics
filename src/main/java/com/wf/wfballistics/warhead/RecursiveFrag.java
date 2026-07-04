@@ -2,9 +2,11 @@ package com.wf.wfballistics.warhead;
 
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.ModEntities;
+import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.fx.ExplosionCreator;
 import com.wf.wfballistics.swarm.SwarmManager;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntityType;
@@ -33,7 +35,7 @@ public final class RecursiveFrag {
     /**
      * Registered warhead id (also selectable from the dispenser GUI).
      */
-    public static final String ID = "recursive_frag";
+    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "recursive_frag");
     /**
      * Default generations for a GUI-launched recursive missile: splits, those split, then a blast.
      */
@@ -59,6 +61,7 @@ public final class RecursiveFrag {
      * Leaf (final generation) blast radius — kept small; a full cluster is many of these.
      */
     private static final float LEAF_BLAST_RADIUS = 4.0f;
+
     private RecursiveFrag() {
     }
 

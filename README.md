@@ -28,7 +28,8 @@ behaviour is registered through a small registry and is meant to be extended by 
   `ATTACK`). Stages include a gravity-turn ascent, terrain-following / high-altitude cruise, a loitering
   orbit (Shahed-style drone), attack runs, and vertical terminal dives.
 - **Warheads** - standard HE, mini-nuke, airburst fragmentation, recursive cluster fragmentation, chemical
-  gas, a no-op interceptor payload, and inert duds. Each warhead can define a cheaper "neutralised" effect
+  gas, incendiary, an electromagnetic-pulse (EMP) payload that drains and disables machines without breaking
+  blocks, a no-op interceptor payload, and inert duds. Each warhead can define a cheaper "neutralised" effect
   used when the missile is shot down mid-air.
 - **Active defense** - CIWS turrets (hitscan) and launch-and-forget interceptor batteries (normal /
   supersonic), plus predictive friendly deconfliction so a swarm doesn't ram itself. Stealth missiles are
@@ -42,8 +43,13 @@ behaviour is registered through a small registry and is meant to be extended by 
   (`aef/nuke`).
 - **Supporting systems** - a custom damage-class/resistance model (`damage/`), a custom fire type
   (`fire/`), drifting gas clouds (`entity/mist/`), a data-driven model + rotor catalogue rendered through
-  Flywheel instancing (`MissileModels`, `MissileVisual`), and optional [WarForge](https://www.curseforge.com/minecraft/mc-mods/warforge)
-  faction friend-or-foe (`compat/WarforgeCompat`).
+  Flywheel instancing (`MissileModels`, `MissileVisual`).
+- **Optional mod integrations** (`compat/`) - compiled against each mod's API and wired through Forge's
+  optional-dependency system (isolated behind `ModList` checks, so the mod loads fine without them):
+  [WarForge](https://www.curseforge.com/minecraft/mc-mods/warforge) faction friend-or-foe + claim-aware
+  explosions, and [GregTech Modern](https://www.curseforge.com/minecraft/mc-mods/gregtechceu-modern) for the
+  EMP warhead (drains EU, pauses machines, breaks multiblock maintenance, and locks buffers from recharging
+  via an optional gated mixin).
 
 ---
 
@@ -62,7 +68,7 @@ com.wf.wfballistics
 ├── aef/                       ExplosionAEF framework (+ aef/nuke batched ray-march)
 ├── damage/  fire/  fluid/     custom damage classes, fire type, kerosene fluid
 ├── entity/                    bomblets, gas mist, nuke-explosion + torex entities
-├── compat/                    WarForge faction integration (soft reflection facade)
+├── compat/                    optional GregTech Modern (EMP) + WarForge integrations (compile-against)
 ├── config/                    WFConfig (Forge ModConfig) mirrored into MissileSimConfig statics
 └── mixin/ · network/ · client/   engine hooks, packets, client-only rendering/particles
 ```
@@ -73,7 +79,7 @@ Everything is wired up from `WFBallistics` (the `@Mod` entry point) and its regi
 
 ## Extending it
 
-All extension points follow the same shape: a static registry keyed by a short stable string id that is
+All extension points follow the same shape: a static registry keyed by a `ResourceLocation` that is
 persisted on the missile, so a payload/stage/preset survives save-load and can be selected at runtime.
 Register during mod construction (before registries freeze).
 
@@ -83,7 +89,7 @@ A warhead is a `Detonation` - given the missile and the impact position it produ
 pair it with an `InterceptDetonation`, the cheaper effect used when the missile is destroyed mid-air.
 
 ```java
-WarheadRegistry.register("my_warhead", (missile, pos) -> {
+WarheadRegistry.register(new ResourceLocation("mymod", "my_warhead"), (missile, pos) -> {
     Level level = missile.level();
     if (level.isClientSide) return;
     // ... spawn your blast / effect at pos ...
@@ -149,8 +155,8 @@ CurseMaven). Mappings are Mojang official for 1.20.1.
 
 WF Ballistics publishes with `maven-publish` to `mcmodsrepo/`. In development, add the deobfuscated jar as
 a dependency and register your warheads/stages/presets from your mod's constructor. Because the registries
-are keyed by string id and persisted on the entity, content you add is automatically restored on load and
-selectable in the missile emitter GUI.
+are keyed by `ResourceLocation` and persisted on the entity, content you add is automatically restored on
+load and selectable in the missile emitter GUI.
 
 ---
 

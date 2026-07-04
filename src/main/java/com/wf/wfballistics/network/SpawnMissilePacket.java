@@ -9,6 +9,7 @@ import com.wf.wfballistics.flight.FlightStageRegistry;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -24,7 +25,7 @@ public class SpawnMissilePacket {
 
     private final BlockPos pos;
     private final String modelId;
-    private final String warheadId;
+    private final ResourceLocation warheadId;
     private final boolean highAltitude;
     private final double targetX;
     private final double targetY;
@@ -37,15 +38,16 @@ public class SpawnMissilePacket {
     private final float health;         // <= 0 means "use the default health pool"
     private final boolean startInCruise;
     private final boolean startArmed;
-    private final String ascentStageId;
-    private final String cruiseStageId;
-    private final String attackStageId;
+    private final ResourceLocation ascentStageId;
+    private final ResourceLocation cruiseStageId;
+    private final ResourceLocation attackStageId;
 
-    public SpawnMissilePacket(BlockPos pos, String modelId, String warheadId, boolean highAltitude,
+    public SpawnMissilePacket(BlockPos pos, String modelId, ResourceLocation warheadId, boolean highAltitude,
                               double targetX, double targetY, double targetZ, float explosionOffset,
                               double altitudeParam, int fragmentCount, double cruiseSpeed, double turnRate,
                               float health, boolean startInCruise, boolean startArmed,
-                              String ascentStageId, String cruiseStageId, String attackStageId) {
+                              ResourceLocation ascentStageId, ResourceLocation cruiseStageId,
+                              ResourceLocation attackStageId) {
         this.pos = pos;
         this.modelId = modelId;
         this.warheadId = warheadId;
@@ -69,7 +71,7 @@ public class SpawnMissilePacket {
     public static void encode(SpawnMissilePacket m, FriendlyByteBuf b) {
         b.writeBlockPos(m.pos);
         b.writeUtf(m.modelId);
-        b.writeUtf(m.warheadId);
+        b.writeResourceLocation(m.warheadId);
         b.writeBoolean(m.highAltitude);
         b.writeDouble(m.targetX);
         b.writeDouble(m.targetY);
@@ -82,16 +84,16 @@ public class SpawnMissilePacket {
         b.writeFloat(m.health);
         b.writeBoolean(m.startInCruise);
         b.writeBoolean(m.startArmed);
-        b.writeUtf(m.ascentStageId);
-        b.writeUtf(m.cruiseStageId);
-        b.writeUtf(m.attackStageId);
+        b.writeResourceLocation(m.ascentStageId);
+        b.writeResourceLocation(m.cruiseStageId);
+        b.writeResourceLocation(m.attackStageId);
     }
 
     public static SpawnMissilePacket decode(FriendlyByteBuf b) {
         return new SpawnMissilePacket(
                 b.readBlockPos(),
                 b.readUtf(),
-                b.readUtf(),
+                b.readResourceLocation(),
                 b.readBoolean(),
                 b.readDouble(),
                 b.readDouble(),
@@ -104,9 +106,9 @@ public class SpawnMissilePacket {
                 b.readFloat(),
                 b.readBoolean(),
                 b.readBoolean(),
-                b.readUtf(),
-                b.readUtf(),
-                b.readUtf());
+                b.readResourceLocation(),
+                b.readResourceLocation(),
+                b.readResourceLocation());
     }
 
     public static void handle(SpawnMissilePacket m, Supplier<NetworkEvent.Context> ctx) {
@@ -114,6 +116,9 @@ public class SpawnMissilePacket {
         context.enqueueWork(() -> {
             ServerPlayer player = context.getSender();
             if (player == null) {
+                return;
+            }
+            if (!player.getAbilities().instabuild && !player.hasPermissions(2)) {
                 return;
             }
             ServerLevel level = player.serverLevel();
@@ -131,7 +136,7 @@ public class SpawnMissilePacket {
             }
 
             String model = MissileModels.exists(m.modelId) ? m.modelId : MissileModels.DEFAULT;
-            String warhead = WarheadRegistry.exists(m.warheadId) ? m.warheadId : WarheadRegistry.defaultId();
+            ResourceLocation warhead = WarheadRegistry.exists(m.warheadId) ? m.warheadId : WarheadRegistry.defaultId();
             double speed = m.cruiseSpeed > 1.0E-3 ? m.cruiseSpeed : MissileEntity.CRUISE_SPEED;
             int frags = Math.max(0, m.fragmentCount);
             float health = m.health > 0.0f ? m.health : MissileEntity.DEFAULT_HEALTH;

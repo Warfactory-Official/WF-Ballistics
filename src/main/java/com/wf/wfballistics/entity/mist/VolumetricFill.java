@@ -24,7 +24,7 @@ public final class VolumetricFill {
     private VolumetricFill() {
     }
 
-    public static Fill flood(Level level, BlockPos origin, int radius, int maxCells) {
+    public static Fill flood(Level level, BlockPos origin, int radius, int maxCells, boolean spherical) {
         int minX = origin.getX() - radius;
         int minZ = origin.getZ() - radius;
         int minY = Math.max(level.getMinBuildHeight(), origin.getY() - radius);
@@ -45,6 +45,7 @@ public final class VolumetricFill {
         ChunkView view = new ChunkView(level);
 
         int ox = origin.getX() - minX;
+        int oy = origin.getY() - minY;
         int oz = origin.getZ() - minZ;
         int startY = -1;
         for (int y = origin.getY() - minY; y < sy; y++) {
@@ -76,6 +77,17 @@ public final class VolumetricFill {
                 int ny = y0 + DY[d];
                 int nz = z0 + DZ[d];
                 if (nx < 0 || nx >= sx || ny < 0 || ny >= sy || nz < 0 || nz >= sz) {
+                    continue;
+                }
+                int hdx = nx - ox;
+                int hdz = nz - oz;
+                int horiz = hdx * hdx + hdz * hdz;
+                if (spherical) {
+                    int hdy = ny - oy;
+                    if (horiz + hdy * hdy > radius * radius) {
+                        continue;
+                    }
+                } else if (horiz > radius * radius) {
                     continue;
                 }
                 int nidx = (nx * sy + ny) * sz + nz;

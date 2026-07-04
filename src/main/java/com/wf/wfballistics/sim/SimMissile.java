@@ -2,7 +2,10 @@ package com.wf.wfballistics.sim;
 
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.ModEntities;
+import com.wf.wfballistics.flight.FlightStageRegistry;
+import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
@@ -23,10 +26,10 @@ public final class SimMissile {
     public float explosionOffset = 0.0f;
     public double maxTurnRate = 0.0;
     public String modelId = "";
-    public String detonationId = "standard";
-    public String ascentStageId = null;
-    public String cruiseStageId = null;
-    public String attackStageId = null;
+    public ResourceLocation detonationId = WarheadRegistry.defaultId();
+    public ResourceLocation ascentStageId = null;
+    public ResourceLocation cruiseStageId = null;
+    public ResourceLocation attackStageId = null;
     public int fragmentCount = MissileEntity.DEFAULT_FRAGMENT_COUNT;
     public int splitDepth = 0;
     public long swarmId = 0L;
@@ -98,16 +101,16 @@ public final class SimMissile {
         sm.maxTurnRate = tag.getDouble("MaxTurnRate");
         sm.modelId = tag.getString("ModelId");
         if (tag.contains("DetonationId")) {
-            sm.detonationId = tag.getString("DetonationId");
+            sm.detonationId = WarheadRegistry.parse(tag.getString("DetonationId"));
         }
         if (tag.contains("AscentStage")) {
-            sm.ascentStageId = tag.getString("AscentStage");
+            sm.ascentStageId = FlightStageRegistry.parse(MissileEntity.Phase.ASCEND, tag.getString("AscentStage"));
         }
         if (tag.contains("CruiseStage")) {
-            sm.cruiseStageId = tag.getString("CruiseStage");
+            sm.cruiseStageId = FlightStageRegistry.parse(MissileEntity.Phase.CRUISE, tag.getString("CruiseStage"));
         }
         if (tag.contains("AttackStage")) {
-            sm.attackStageId = tag.getString("AttackStage");
+            sm.attackStageId = FlightStageRegistry.parse(MissileEntity.Phase.ATTACK, tag.getString("AttackStage"));
         }
         if (tag.contains("FragmentCount")) {
             sm.fragmentCount = tag.getInt("FragmentCount");
@@ -222,15 +225,15 @@ public final class SimMissile {
         tag.putFloat("ExplosionOffset", explosionOffset);
         tag.putDouble("MaxTurnRate", maxTurnRate);
         tag.putString("ModelId", modelId);
-        tag.putString("DetonationId", detonationId);
+        tag.putString("DetonationId", detonationId.toString());
         if (ascentStageId != null) {
-            tag.putString("AscentStage", ascentStageId);
+            tag.putString("AscentStage", ascentStageId.toString());
         }
         if (cruiseStageId != null) {
-            tag.putString("CruiseStage", cruiseStageId);
+            tag.putString("CruiseStage", cruiseStageId.toString());
         }
         if (attackStageId != null) {
-            tag.putString("AttackStage", attackStageId);
+            tag.putString("AttackStage", attackStageId.toString());
         }
         tag.putInt("FragmentCount", fragmentCount);
         tag.putInt("SplitDepth", splitDepth);

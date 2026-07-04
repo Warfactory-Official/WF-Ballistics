@@ -1,13 +1,16 @@
 package com.wf.wfballistics.warhead;
 
 import com.wf.wfballistics.MissileEntity;
+import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.aef.ExplosionAEF;
+import com.wf.wfballistics.aef.nuke.MiniNuke;
 import com.wf.wfballistics.aef.standard.BlockAllocatorStandard;
 import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
 import com.wf.wfballistics.aef.standard.PlayerProcessorStandard;
 import com.wf.wfballistics.entity.BombletEntity;
 import com.wf.wfballistics.fx.ExplosionCreator;
 import com.wf.wfballistics.util.FragmentationUtil;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
@@ -16,16 +19,10 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Registry of missile warheads, keyed by a short stable id (persisted on the {@link MissileEntity} so the
- * payload survives save/load and can be picked at runtime). Add-ons register their own via {@link #register}.
- */
 public final class WarheadRegistry {
 
     public static final int STANDARD_BLAST_RADIUS = 50;
-    /**
-     * Standard high-explosive: a large crater blast plus the big explosion FX.
-     */
+
     public static final Detonation STANDARD = (missile, pos) -> {
         Level level = missile.level();
         if (level.isClientSide) {
@@ -48,8 +45,8 @@ public final class WarheadRegistry {
     };
 
     public static final Detonation MININUKE = (missile, pos) ->
-            com.wf.wfballistics.aef.nuke.MiniNuke.detonate(missile.level(), pos,
-                    com.wf.wfballistics.aef.nuke.MiniNuke.medium());
+            MiniNuke.detonate(missile.level(), pos,
+                    MiniNuke.medium());
 
     public static final Detonation FRAGMENTATION = (missile, pos) -> {
         Level level = missile.level();
@@ -58,7 +55,7 @@ public final class WarheadRegistry {
         }
         FragmentationUtil.cone(level, pos, new Vec3(0.0, -1.0, 0.0),
                 Math.toRadians(60.0), missile.getFragmentCount(), 1.2, 0.4,
-                "standard", BombletEntity.STANDARD, BombletEntity.DEFAULT_FUSE, null);
+                BombletEntity.STANDARD_ID, BombletEntity.STANDARD, BombletEntity.DEFAULT_FUSE, null);
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     };
 
@@ -72,54 +69,52 @@ public final class WarheadRegistry {
 
     public static final Detonation INERT = (missile, pos) -> {
     };
-    private static final String DEFAULT_ID = "standard";
-    private static final Map<String, Detonation> WARHEADS = new LinkedHashMap<>();
-    // Optional per-warhead intercept effect (see getIntercept); a warhead absent here runs its Detonation.
-    private static final Map<String, InterceptDetonation> INTERCEPTS = new LinkedHashMap<>();
+
+    private static final ResourceLocation DEFAULT_ID = rl("standard");
+    private static final Map<ResourceLocation, Detonation> WARHEADS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, InterceptDetonation> INTERCEPTS = new LinkedHashMap<>();
 
     static {
         register(DEFAULT_ID, STANDARD, STANDARD_INTERCEPT);
-        register("mininuke", MININUKE);
-        register("fragmentation", FRAGMENTATION);
+        register(rl("mininuke"), MININUKE);
+        register(rl("fragmentation"), FRAGMENTATION);
         register(RecursiveFrag.ID, RecursiveFrag::detonate);
         register(GasWarhead.ID, GasWarhead::detonate);
         register(FireWarhead.ID, FireWarhead::detonate);
         register(FireCluster.ID, FireCluster::detonate);
-        register("interceptor", INTERCEPTOR, INTERCEPTOR::detonate);
-        register("inert", INERT);
+        register(rl("interceptor"), INTERCEPTOR, INTERCEPTOR::detonate);
+        register(rl("inert"), INERT);
     }
 
     private WarheadRegistry() {
     }
 
-    public static void register(String id, Detonation detonation) {
+    public static ResourceLocation rl(String path) {
+        return new ResourceLocation(WFBallistics.MODID, path);
+    }
+
+    public static ResourceLocation parse(String id) {
+        if (id == null || id.isEmpty()) {
+            return DEFAULT_ID;
+        }
+        ResourceLocation parsed = id.indexOf(':') >= 0 ? ResourceLocation.tryParse(id) : rl(id);
+        return parsed != null ? parsed : DEFAULT_ID;
+    }
+
+    public static void register(ResourceLocation id, Detonation detonation) {
         WARHEADS.put(id, detonation);
     }
 
-    /**
-     * Register a warhead together with a custom {@link InterceptDetonation} — the (typically cheaper,
-     * "neutralised") effect used when the missile is destroyed mid-air by an interceptor or a colliding
-     * missile instead of reaching its target. Warheads registered without one fall back to running their
-     * normal {@link Detonation} on intercept (see {@link #getIntercept}).
-     */
-    public static void register(String id, Detonation detonation, InterceptDetonation intercept) {
+    public static void register(ResourceLocation id, Detonation detonation, InterceptDetonation intercept) {
         WARHEADS.put(id, detonation);
         INTERCEPTS.put(id, intercept);
     }
 
-    /**
-     * @return the warhead for {@code id}, falling back to {@link #STANDARD} when unknown.
-     */
-    public static Detonation get(String id) {
+    public static Detonation get(ResourceLocation id) {
         return WARHEADS.getOrDefault(id, STANDARD);
     }
 
-    /**
-     * @return the intercept effect for {@code id}: its registered {@link InterceptDetonation} if it has one,
-     * otherwise a fallback that runs the full {@link Detonation} — so, by default, an intercept detonates the
-     * warhead exactly as a target impact would.
-     */
-    public static InterceptDetonation getIntercept(String id) {
+    public static InterceptDetonation getIntercept(ResourceLocation id) {
         InterceptDetonation intercept = INTERCEPTS.get(id);
         if (intercept != null) {
             return intercept;
@@ -128,33 +123,23 @@ public final class WarheadRegistry {
         return detonation::detonate;
     }
 
-    public static boolean exists(String id) {
+    public static boolean exists(ResourceLocation id) {
         return WARHEADS.containsKey(id);
     }
 
-    /**
-     * @return all registered ids, in registration order.
-     */
-    public static Set<String> ids() {
+    public static Set<ResourceLocation> ids() {
         return Collections.unmodifiableSet(WARHEADS.keySet());
     }
 
-    public static String defaultId() {
+    public static ResourceLocation defaultId() {
         return DEFAULT_ID;
     }
 
-    /**
-     * What a warhead does when the missile goes off.
-     */
     @FunctionalInterface
     public interface Detonation {
         void detonate(MissileEntity missile, Vec3 pos);
     }
 
-    /**
-     * What a warhead does when its missile is destroyed mid-air by an interceptor or a colliding missile,
-     * Primarily used to cheapen some expensive explosions
-     */
     @FunctionalInterface
     public interface InterceptDetonation {
         void detonate(MissileEntity missile, Vec3 pos);

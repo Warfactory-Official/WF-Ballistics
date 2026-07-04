@@ -1,6 +1,7 @@
 package com.wf.wfballistics.util;
 
 import com.wf.wfballistics.entity.BombletEntity;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
@@ -20,7 +21,7 @@ public final class FragmentationUtil {
      */
     public static List<BombletEntity> burst(Level level, Vec3 origin, int count, double speed) {
         return burst(level, origin, count, speed, speed * 0.25,
-                "standard", BombletEntity.STANDARD, BombletEntity.DEFAULT_FUSE, null);
+                BombletEntity.STANDARD_ID, BombletEntity.STANDARD, BombletEntity.DEFAULT_FUSE, null);
     }
 
     /**
@@ -35,7 +36,7 @@ public final class FragmentationUtil {
      * @param owner        who fired the burst (skipped by the bomblets' hit checks, credited for damage); may be null
      */
     public static List<BombletEntity> burst(Level level, Vec3 origin, int count, double speed, double speedJitter,
-                                            String detonationId, BombletEntity.Detonation detonation,
+                                            ResourceLocation detonationId, BombletEntity.Detonation detonation,
                                             int fuse, Entity owner) {
         List<BombletEntity> out = new ArrayList<>();
         if (level.isClientSide || count <= 0) {
@@ -51,7 +52,7 @@ public final class FragmentationUtil {
 
 
     public static List<BombletEntity> cone(Level level, Vec3 origin, Vec3 direction, double halfAngleRad,
-                                           int count, double speed, double speedJitter, String detonationId,
+                                           int count, double speed, double speedJitter, ResourceLocation detonationId,
                                            BombletEntity.Detonation detonation, int fuse, Entity owner) {
         List<BombletEntity> out = new ArrayList<>();
         if (level.isClientSide || count <= 0) {
@@ -67,7 +68,7 @@ public final class FragmentationUtil {
     }
 
     private static BombletEntity launch(Level level, Vec3 origin, Vec3 dir, double speed, double speedJitter,
-                                        BombletEntity.Detonation detonation, String detonationId, int fuse,
+                                        BombletEntity.Detonation detonation, ResourceLocation detonationId, int fuse,
                                         Entity owner, RandomSource random) {
         double s = Math.max(0.0, speed + (random.nextDouble() * 2.0 - 1.0) * speedJitter);
         BombletEntity bomblet = new BombletEntity(level, origin, dir.scale(s), detonation, detonationId, fuse);

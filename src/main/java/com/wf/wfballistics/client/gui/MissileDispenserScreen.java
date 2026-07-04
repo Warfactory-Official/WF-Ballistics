@@ -16,6 +16,7 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.phys.Vec3;
 
@@ -26,10 +27,10 @@ import java.util.List;
 public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispenserMenu> {
 
     private static final List<String> MODELS = new ArrayList<>(MissileModels.ids());
-    private static final List<String> WARHEADS = new ArrayList<>(WarheadRegistry.ids());
-    private static final List<String> ASCENT_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.ASCEND));
-    private static final List<String> CRUISE_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.CRUISE));
-    private static final List<String> ATTACK_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.ATTACK));
+    private static final List<ResourceLocation> WARHEADS = new ArrayList<>(WarheadRegistry.ids());
+    private static final List<ResourceLocation> ASCENT_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.ASCEND));
+    private static final List<ResourceLocation> CRUISE_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.CRUISE));
+    private static final List<ResourceLocation> ATTACK_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.ATTACK));
     private static final String[] CRUISE_LABELS = {"Terrain Follow", "High Altitude"};
 
     private static final int PAD = 8;
@@ -85,8 +86,13 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         return box != null ? box.getValue() : fallback;
     }
 
-    private static String stageAt(List<String> stages, int index) {
-        return stages.isEmpty() ? "" : stages.get(Math.floorMod(index, stages.size()));
+    private static ResourceLocation stageAt(List<ResourceLocation> stages, int index) {
+        return stages.isEmpty() ? null : stages.get(Math.floorMod(index, stages.size()));
+    }
+
+    private static String stageLabel(List<ResourceLocation> stages, int index) {
+        ResourceLocation stage = stageAt(stages, index);
+        return stage == null ? "" : stage.getPath();
     }
 
     private static double parseDouble(String s, double fallback) {
@@ -200,11 +206,11 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
 
     private void refreshButtonLabels() {
         modelButton.setMessage(Component.literal("Model: " + MODELS.get(modelIndex)));
-        warheadButton.setMessage(Component.literal("Warhead: " + WARHEADS.get(warheadIndex)));
+        warheadButton.setMessage(Component.literal("Warhead: " + WARHEADS.get(warheadIndex).getPath()));
         cruiseButton.setMessage(Component.literal("Cruise: " + CRUISE_LABELS[cruiseIndex]));
-        ascentStageButton.setMessage(Component.literal("A:" + stageAt(ASCENT_STAGES, ascentStageIndex)));
-        cruiseStageButton.setMessage(Component.literal("C:" + stageAt(CRUISE_STAGES, cruiseStageIndex)));
-        attackStageButton.setMessage(Component.literal("T:" + stageAt(ATTACK_STAGES, attackStageIndex)));
+        ascentStageButton.setMessage(Component.literal("A:" + stageLabel(ASCENT_STAGES, ascentStageIndex)));
+        cruiseStageButton.setMessage(Component.literal("C:" + stageLabel(CRUISE_STAGES, cruiseStageIndex)));
+        attackStageButton.setMessage(Component.literal("T:" + stageLabel(ATTACK_STAGES, attackStageIndex)));
         inCruiseButton.setMessage(Component.literal("Launch: " + (startInCruise ? "Cruise" : "Ascend")));
         armedButton.setMessage(Component.literal("Pre-armed: " + (startArmed ? "Yes" : "No")));
     }
@@ -243,7 +249,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         double altitude = parseDouble(altitudeBox.getValue(), 24.0);
         boolean highAltitude = cruiseIndex == 1;
         double cruiseAltitudeY = highAltitude ? altitude : menu.pos().getY() + altitude;
-        boolean loiter = LoiterStage.INSTANCE.id().equals(stageAt(CRUISE_STAGES, cruiseStageIndex));
+        boolean loiter = FlightStageRegistry.keyOf(LoiterStage.INSTANCE).equals(stageAt(CRUISE_STAGES, cruiseStageIndex));
         int loiterTicks = loiter ? LoiterStage.LOITER_TICKS : 0;
         int ticks = ArrivalEstimator.estimateTicks(Vec3.atCenterOf(menu.pos()),
                 new Vec3(tx, ty, tz), speed, cruiseAltitudeY, loiterTicks);

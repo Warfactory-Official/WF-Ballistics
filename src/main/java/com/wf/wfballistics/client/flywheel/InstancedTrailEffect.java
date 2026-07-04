@@ -16,10 +16,10 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
     private static final double PUFF_SPACING = 0.6;   // target spacing between trail puffs (blocks)
     private static final int MAX_SEGMENT_PUFFS = 24;  // cap on puffs used to bridge one tick's travel (near)
     final Flame[] pool;
-    // Emitter/effect centre (missile position), refreshed each tick; used for the distance LOD.
-    double cx, cy, cz;
     private final Level level;
     private final Entity source;
+    // Emitter/effect centre (missile position), refreshed each tick; used for the distance LOD.
+    double cx, cy, cz;
     private int cursor = 0;
     private boolean sourceGone = false;
     // Previous emission point, so a fast mover's per-tick jump can be bridged into a continuous trail section.

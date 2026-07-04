@@ -28,14 +28,17 @@ public class BlockMutatorDebris implements IBlockMutator {
         this.debris = debris;
     }
 
-    /** Resolves a block by registry id, falling back to stone if the id is unknown. */
+    /**
+     * Resolves a block by registry id, falling back to stone if the id is unknown.
+     */
     public BlockMutatorDebris(ResourceLocation id) {
         Block block = ForgeRegistries.BLOCKS.getValue(id);
         this.debris = (block != null ? block : Blocks.STONE).defaultBlockState();
     }
 
     @Override
-    public void mutatePre(ExplosionAEF explosion, BlockState state, BlockPos pos) { }
+    public void mutatePre(ExplosionAEF explosion, BlockState state, BlockPos pos) {
+    }
 
     @Override
     public void mutatePost(ExplosionAEF explosion, BlockPos pos) {

@@ -38,6 +38,8 @@ public final class WFEffects {
             case "instanced_smoke" -> instancedSmoke(level, x, y, z, data);
             case "ashes" -> ashes(level, x, y, z, data);
             case "skeleton" -> skeleton(level, x, y, z, data);
+            case "emp" -> emp(level, x, y, z, data);
+            case "emp_stun" -> empStun(level, x, y, z, data);
             default -> { /* unknown effect id, ignore */ }
         }
     }
@@ -200,6 +202,32 @@ public final class WFEffects {
                 ClientSoundScheduler.playDelayed(x, y, z, sound, SoundSource.BLOCKS,
                         near ? 1.0F : 4.0F, 1.0F, ClientSoundScheduler.soundDelay(dist));
             }
+        }
+    }
+
+    private static void emp(ClientLevel level, double x, double y, double z, CompoundTag data) {
+        int radius = data.contains("radius") ? data.getInt("radius") : 48;
+        EMPBeams.spawnBurst(x, y, z, radius, level.random);
+
+        for (int i = 0; i < 40; i++) {
+            double a = level.random.nextDouble() * Math.PI * 2.0;
+            double rr = level.random.nextDouble() * 3.0;
+            level.addParticle(ParticleTypes.ELECTRIC_SPARK,
+                    x + Math.cos(a) * rr, y + (level.random.nextDouble() - 0.5) * 4.0, z + Math.sin(a) * rr,
+                    Math.cos(a) * 0.3, level.random.nextGaussian() * 0.1, Math.sin(a) * 0.3);
+        }
+    }
+
+    private static void empStun(ClientLevel level, double x, double y, double z, CompoundTag data) {
+        EMPBeams.spawnStun(x, y, z, level.random);
+        for (int i = 0; i < 6; i++) {
+            level.addParticle(ParticleTypes.ELECTRIC_SPARK,
+                    x + (level.random.nextDouble() - 0.5) * 0.8,
+                    y + (level.random.nextDouble() - 0.5) * 0.8,
+                    z + (level.random.nextDouble() - 0.5) * 0.8,
+                    (level.random.nextDouble() - 0.5) * 0.2,
+                    level.random.nextDouble() * 0.15,
+                    (level.random.nextDouble() - 0.5) * 0.2);
         }
     }
 

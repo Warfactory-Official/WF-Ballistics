@@ -3,8 +3,8 @@ package com.wf.wfballistics;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.entity.OBBEntity;
-import com.wf.wfballistics.fx.ExplosionCreator;
 import com.wf.wfballistics.flight.*;
+import com.wf.wfballistics.fx.ExplosionCreator;
 import com.wf.wfballistics.sim.IMissileListener;
 import com.wf.wfballistics.sim.MissileListenerRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
@@ -17,12 +17,13 @@ import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
@@ -56,10 +57,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public static final double ARMING_DISTANCE = 6.0;
     // Interception damage pool: CIWS fire / interceptors chip this down; at <= 0 the missile is destroyed.
     public static final float DEFAULT_HEALTH = 50.0f;
-    // Fuel is measured in ticks of powered flight (one burned per tick). When the tank is dry the missile
-    // stops thrusting and falls ballistically. Default is generous so ordinary strikes complete; a redirected
-    // or long-loitering missile/drone can still run out. Per-missile via the Builder / preset.
-    public static int DEFAULT_FUEL_TICKS = 1200;
     // Change in actual speed per tick (blocks/tick^2) while spooling up toward / braking down to the speed the
     // guidance asks for. cruiseSpeed is the target/max speed; these govern how fast it is reached and shed.
     public static final double DEFAULT_ACCELERATION = 0.15;
@@ -107,6 +104,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private static final double ARMING_DISTANCE_SQ = ARMING_DISTANCE * ARMING_DISTANCE;
     // Failsafe: arm anyway after this many ticks so a missile that somehow can't travel never stays a live dud.
     private static final int ARMING_FAILSAFE_TICKS = 100;
+    // Fuel is measured in ticks of powered flight (one burned per tick). When the tank is dry the missile
+    // stops thrusting and falls ballistically. Default is generous so ordinary strikes complete; a redirected
+    // or long-loitering missile/drone can still run out. Per-missile via the Builder / preset.
+    public static int DEFAULT_FUEL_TICKS = 1200;
     // Oriented bounding box that wraps the (elongated) missile model, giving projectiles an accurate,
     // rotation-aware hitbox instead of the coarse vanilla AABB. Kept live-updated in refreshObb().
     private final OBB obb = new OBB(new Vector3d(), new Vector3d(), new Quaterniond(), OBB.Part.BODY);
@@ -121,9 +122,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // each resolved from FlightStageRegistry by id and composed into the runtime profile. Selecting stages
     // independently is what lets a missile become e.g. a loitering drone; the choice survives save/load.
     // Declared before the profile so the field initialisers run in order.
-    private String ascentStageId = FlightStageRegistry.defaultId(Phase.ASCEND);
-    private String cruiseStageId = FlightStageRegistry.defaultId(Phase.CRUISE);
-    private String attackStageId = FlightStageRegistry.defaultId(Phase.ATTACK);
+    private ResourceLocation ascentStageId = FlightStageRegistry.defaultId(Phase.ASCEND);
+    private ResourceLocation cruiseStageId = FlightStageRegistry.defaultId(Phase.CRUISE);
+    private ResourceLocation attackStageId = FlightStageRegistry.defaultId(Phase.ATTACK);
     private FlightProfile flightProfile = FlightProfile.fromIds(this.ascentStageId, this.cruiseStageId, this.attackStageId);
     // Loitering-munition timer: ticks spent orbiting on-station (see LoiterStage). Persisted.
     private int loiterTicks = 0;
@@ -139,7 +140,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Airburst fuze: while diving, detonate in the air once the missile is within this many
     // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
     private float explosionOffset = 0.0f;
-    private String detonationId = "standard";
+    private ResourceLocation detonationId = WarheadRegistry.defaultId();
     // Number of bomblets the FRAGMENTATION warhead scatters; per-missile, set via the Builder.
     private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
     private WarheadRegistry.Detonation detonation = WarheadRegistry.STANDARD;
@@ -265,6 +266,58 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         Vec3 newDir = curDir.scale(Math.cos(maxTurnRate))
                 .add(axis.cross(curDir).scale(Math.sin(maxTurnRate)));
         return newDir.normalize().scale(desiredSpeed);
+    }
+
+    private static double approach(double cur, double target, double maxDelta) {
+        double diff = target - cur;
+        if (Math.abs(diff) <= maxDelta) {
+            return target;
+        }
+        return cur + Math.copySign(maxDelta, diff);
+    }
+
+    /**
+     * @return the target UUIDs already "claimed" by interceptors in {@code missiles}, from the perspective of
+     * a claimant with entity id {@code selfId} (pass {@link Integer#MAX_VALUE} for a battery, which yields to
+     * every interceptor). A LOCK interceptor always claims its lock target; a NEAREST interceptor claims its
+     * current target only against higher-id peers — so exactly one interceptor keeps a shared target and the
+     * rest divert to other threats (no dogpiling, and no two interceptors swapping off each other forever).
+     */
+    public static Set<UUID> claimedTargets(List<MissileEntity> missiles, int selfId) {
+        Set<UUID> claimed = new HashSet<>();
+        for (MissileEntity o : missiles) {
+            if (!o.interceptor || o.getId() == selfId) {
+                continue;
+            }
+            if (o.interceptMode == InterceptMode.LOCK && o.lockTargetId != null) {
+                claimed.add(o.lockTargetId);
+            } else if (o.currentTargetId != null && o.getId() < selfId) {
+                claimed.add(o.currentTargetId);
+            }
+        }
+        return claimed;
+    }
+
+    private static double smallestPositive(double a, double b) {
+        if (a > 0.0 && b > 0.0) {
+            return Math.min(a, b);
+        }
+        if (a > 0.0) {
+            return a;
+        }
+        return b > 0.0 ? b : -1.0;
+    }
+
+    /**
+     * A visible/audible flak burst at the intercept point so a kill and a miss are easy to tell apart at
+     * range: a bright burst + explosion boom on a kill, a small puff + lighter pop on a miss.
+     */
+    private static void spawnInterceptBurst(ServerLevel level, Vec3 p, boolean kill) {
+        level.sendParticles(ParticleTypes.EXPLOSION, p.x, p.y, p.z, kill ? 3 : 1, 1.0, 1.0, 1.0, 0.0);
+        level.sendParticles(ParticleTypes.FLAME, p.x, p.y, p.z, kill ? 24 : 6, 1.4, 1.4, 1.4, 0.06);
+        level.sendParticles(ParticleTypes.LARGE_SMOKE, p.x, p.y, p.z, kill ? 14 : 5, 1.6, 1.6, 1.6, 0.02);
+        level.playSound(null, p.x, p.y, p.z, SoundEvents.GENERIC_EXPLODE, SoundSource.HOSTILE,
+                kill ? 3.0f : 1.3f, kill ? 1.0f : 1.5f);
     }
 
     @Override
@@ -722,15 +775,15 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         this.cruiseTargetY = cruiseTargetY;
     }
 
-    public String getAscentStageId() {
+    public ResourceLocation getAscentStageId() {
         return this.ascentStageId;
     }
 
-    public String getCruiseStageId() {
+    public ResourceLocation getCruiseStageId() {
         return this.cruiseStageId;
     }
 
-    public String getAttackStageId() {
+    public ResourceLocation getAttackStageId() {
         return this.attackStageId;
     }
 
@@ -757,14 +810,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         double cruiseAltitudeY = (this.cruiseMode == CruiseMode.HIGH_ALTITUDE)
                 ? this.cruiseAltitude
                 : this.getY() + this.terrainClearance;
-        int loiterRemaining = LoiterStage.INSTANCE.id().equals(this.cruiseStageId)
+        int loiterRemaining = FlightStageRegistry.keyOf(LoiterStage.INSTANCE).equals(this.cruiseStageId)
                 ? Math.max(0, LoiterStage.LOITER_TICKS - this.loiterTicks)
                 : 0;
         return ArrivalEstimator.estimateTicks(this.position(), this.getTarget(), this.cruiseSpeed,
                 cruiseAltitudeY, loiterRemaining);
     }
 
-    public String getDetonationId() {
+    public ResourceLocation getDetonationId() {
         return this.detonationId;
     }
 
@@ -912,14 +965,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         return new Vec3(base.x + Math.cos(angle) * r, base.y, base.z + Math.sin(angle) * r);
     }
 
-    private static double approach(double cur, double target, double maxDelta) {
-        double diff = target - cur;
-        if (Math.abs(diff) <= maxDelta) {
-            return target;
-        }
-        return cur + Math.copySign(maxDelta, diff);
-    }
-
     /**
      * Unpowered flight (out of fuel): no thrust or guidance — the missile keeps its horizontal momentum
      * (lightly dragged) while gravity pulls it down toward a terminal speed, so it arcs over and falls with
@@ -958,6 +1003,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         return this.fuelCapacity;
     }
 
+    // --- Interceptor guidance & kill (server-side) ---
+
     public double getAcceleration() {
         return this.acceleration;
     }
@@ -983,8 +1030,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
         super.remove(reason);
     }
-
-    // --- Interceptor guidance & kill (server-side) ---
 
     /**
      * Interceptor per-tick update: keep this interceptor registered as a listener (so nearby off-world
@@ -1067,28 +1112,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * @return the target UUIDs already "claimed" by interceptors in {@code missiles}, from the perspective of
-     * a claimant with entity id {@code selfId} (pass {@link Integer#MAX_VALUE} for a battery, which yields to
-     * every interceptor). A LOCK interceptor always claims its lock target; a NEAREST interceptor claims its
-     * current target only against higher-id peers — so exactly one interceptor keeps a shared target and the
-     * rest divert to other threats (no dogpiling, and no two interceptors swapping off each other forever).
-     */
-    public static Set<UUID> claimedTargets(List<MissileEntity> missiles, int selfId) {
-        Set<UUID> claimed = new HashSet<>();
-        for (MissileEntity o : missiles) {
-            if (!o.interceptor || o.getId() == selfId) {
-                continue;
-            }
-            if (o.interceptMode == InterceptMode.LOCK && o.lockTargetId != null) {
-                claimed.add(o.lockTargetId);
-            } else if (o.currentTargetId != null && o.getId() < selfId) {
-                claimed.add(o.currentTargetId);
-            }
-        }
-        return claimed;
-    }
-
-    /**
      * Predicted intercept point: where to aim so a run at cruise speed meets the target's straight-line
      * motion. Solves {@code |D + Vt·t| = s·t} for the smallest positive {@code t} (D = target − interceptor,
      * Vt = target velocity, s = interceptor speed); falls back to the target's current position when the
@@ -1128,16 +1151,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
         double u = Math.max(0.0, -d.dot(vt) / vlen2); // foot of the perpendicular onto the forward path
         return tPos.add(vt.scale(u));
-    }
-
-    private static double smallestPositive(double a, double b) {
-        if (a > 0.0 && b > 0.0) {
-            return Math.min(a, b);
-        }
-        if (a > 0.0) {
-            return a;
-        }
-        return b > 0.0 ? b : -1.0;
     }
 
     /**
@@ -1191,18 +1204,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
         this.detonate(point, true); // spent whether it hits or misses (one-shot)
         return true;
-    }
-
-    /**
-     * A visible/audible flak burst at the intercept point so a kill and a miss are easy to tell apart at
-     * range: a bright burst + explosion boom on a kill, a small puff + lighter pop on a miss.
-     */
-    private static void spawnInterceptBurst(ServerLevel level, Vec3 p, boolean kill) {
-        level.sendParticles(ParticleTypes.EXPLOSION, p.x, p.y, p.z, kill ? 3 : 1, 1.0, 1.0, 1.0, 0.0);
-        level.sendParticles(ParticleTypes.FLAME, p.x, p.y, p.z, kill ? 24 : 6, 1.4, 1.4, 1.4, 0.06);
-        level.sendParticles(ParticleTypes.LARGE_SMOKE, p.x, p.y, p.z, kill ? 14 : 5, 1.6, 1.6, 1.6, 0.02);
-        level.playSound(null, p.x, p.y, p.z, SoundEvents.GENERIC_EXPLODE, SoundSource.HOSTILE,
-                kill ? 3.0f : 1.3f, kill ? 1.0f : 1.5f);
     }
 
     // --- IMissileListener (interceptors only; a normal missile is never registered) ---
@@ -1372,10 +1373,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         tag.putString("ModelId", this.getModelId());
         tag.putInt("ExhaustColor", this.getExhaustColor());
         tag.putInt("CruiseTicks", this.cruiseTicks);
-        tag.putString("DetonationId", this.detonationId);
-        tag.putString("AscentStage", this.ascentStageId);
-        tag.putString("CruiseStage", this.cruiseStageId);
-        tag.putString("AttackStage", this.attackStageId);
+        tag.putString("DetonationId", this.detonationId.toString());
+        tag.putString("AscentStage", this.ascentStageId.toString());
+        tag.putString("CruiseStage", this.cruiseStageId.toString());
+        tag.putString("AttackStage", this.attackStageId.toString());
         tag.putInt("LoiterTicks", this.loiterTicks);
         tag.putInt("FragmentCount", this.fragmentCount);
         tag.putInt("SplitDepth", this.splitDepth);
@@ -1473,18 +1474,18 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         if (tag.contains("DetonationId")) {
-            this.detonationId = tag.getString("DetonationId");
+            this.detonationId = WarheadRegistry.parse(tag.getString("DetonationId"));
             this.detonation = WarheadRegistry.get(this.detonationId);
         }
 
         if (tag.contains("AscentStage")) {
-            this.ascentStageId = tag.getString("AscentStage");
+            this.ascentStageId = FlightStageRegistry.parse(Phase.ASCEND, tag.getString("AscentStage"));
         }
         if (tag.contains("CruiseStage")) {
-            this.cruiseStageId = tag.getString("CruiseStage");
+            this.cruiseStageId = FlightStageRegistry.parse(Phase.CRUISE, tag.getString("CruiseStage"));
         }
         if (tag.contains("AttackStage")) {
-            this.attackStageId = tag.getString("AttackStage");
+            this.attackStageId = FlightStageRegistry.parse(Phase.ATTACK, tag.getString("AttackStage"));
         }
         this.rebuildFlightProfile();
         this.loiterTicks = tag.getInt("LoiterTicks");
@@ -1677,10 +1678,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private double cruiseAltitude = 200.0;
         private double terrainClearance = 24.0;
         private float explosionOffset = 0.0f;
-        private String detonationId = "standard";
-        private String ascentStageId = null; // null = keep the phase's default stage
-        private String cruiseStageId = null;
-        private String attackStageId = null;
+        private ResourceLocation detonationId = WarheadRegistry.defaultId();
+        private ResourceLocation ascentStageId = null; // null = keep the phase's default stage
+        private ResourceLocation cruiseStageId = null;
+        private ResourceLocation attackStageId = null;
         private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
         private double cruiseSpeed = CRUISE_SPEED;
         private Double maxTurnRate = null; // null = keep the model-size default
@@ -1748,7 +1749,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
          * Pick the warhead by its registered id (see {@link #registerWarhead}); defaults to
          * {@code "standard"}. Using an id (rather than a raw lambda) lets the warhead survive save/load.
          */
-        public Builder detonation(String detonationId) {
+        public Builder detonation(ResourceLocation detonationId) {
             this.detonationId = detonationId;
             return this;
         }
@@ -1756,7 +1757,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         /**
          * Pick the ascent-phase stage by its registered id (see {@link FlightStageRegistry}).
          */
-        public Builder ascentStage(String id) {
+        public Builder ascentStage(ResourceLocation id) {
             this.ascentStageId = id;
             return this;
         }
@@ -1764,7 +1765,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         /**
          * Pick the cruise-phase stage (e.g. {@code "cruise"} or {@code "loiter"}) by its registered id.
          */
-        public Builder cruiseStage(String id) {
+        public Builder cruiseStage(ResourceLocation id) {
             this.cruiseStageId = id;
             return this;
         }
@@ -1772,7 +1773,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         /**
          * Pick the attack-phase stage (e.g. {@code "attack"} or {@code "dive"}) by its registered id.
          */
-        public Builder attackStage(String id) {
+        public Builder attackStage(ResourceLocation id) {
             this.attackStageId = id;
             return this;
         }
@@ -2073,9 +2074,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 // delay) and with no ground-attack terrain-follow. It starts in ASCEND so InterceptStage first
                 // boosts straight up clear of any silo/depression walls before homing (see InterceptStage);
                 // in the open that clear is satisfied almost at once, so reaction time is barely affected.
-                missile.ascentStageId = InterceptStage.INSTANCE.id();
-                missile.cruiseStageId = InterceptStage.INSTANCE.id();
-                missile.attackStageId = InterceptStage.INSTANCE.id();
+                missile.ascentStageId = FlightStageRegistry.keyOf(InterceptStage.INSTANCE);
+                missile.cruiseStageId = FlightStageRegistry.keyOf(InterceptStage.INSTANCE);
+                missile.attackStageId = FlightStageRegistry.keyOf(InterceptStage.INSTANCE);
                 missile.rebuildFlightProfile();
                 // A fresh launch starts in ASCEND so it climbs clear of any silo/depression before homing; a
                 // rematerialized interceptor (startInCruise) is already airborne mid-intercept, so it keeps

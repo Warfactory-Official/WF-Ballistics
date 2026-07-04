@@ -99,6 +99,10 @@ public final class MissilePresetRegistry {
                 .terrainFollow(24.0).cruiseSpeed(1.2).stealth().evasion(0.3f)
                 .fuel(MissileEntity.FuelType.LIQUID, 1600).build());
 
+        register(MissilePreset.builder("emp", "stealth", "emp")
+                .terrainFollow(24.0).cruiseSpeed(1.2).stealth().evasion(0.3f)
+                .fuel(MissileEntity.FuelType.LIQUID, 1600).build());
+
 
         register(MissilePreset.builder("interceptor", "abm", "interceptor")
                 .highAltitude(200.0)

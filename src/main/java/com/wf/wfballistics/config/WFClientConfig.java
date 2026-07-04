@@ -3,7 +3,6 @@ package com.wf.wfballistics.config;
 import net.minecraftforge.common.ForgeConfigSpec;
 
 
-
 public final class WFClientConfig {
 
     public static final ForgeConfigSpec SPEC;

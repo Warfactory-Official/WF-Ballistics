@@ -6,7 +6,8 @@
   "plugin": "com.wf.wfballistics.mixin.WFMixinPlugin",
   "refmap": "wfballistics.refmap.json",
   "mixins": [
-    "MixinProjectileUtil"
+    "MixinProjectileUtil",
+    "gt.MixinNotifiableEnergyContainer"
   ],
   "client": [
     "MixinBufferBuilder",

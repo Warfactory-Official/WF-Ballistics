@@ -26,7 +26,9 @@ public final class MissileAttitudeRegistry {
         BY_ID.put(id, attitude);
     }
 
-    /** @return the attitude for {@code id}, falling back to nose-to-velocity when unknown. */
+    /**
+     * @return the attitude for {@code id}, falling back to nose-to-velocity when unknown.
+     */
     public static MissileAttitude get(String id) {
         return BY_ID.getOrDefault(id, NoseToVelocityAttitude.INSTANCE);
     }

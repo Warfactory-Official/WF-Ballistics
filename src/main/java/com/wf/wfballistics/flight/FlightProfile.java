@@ -1,6 +1,7 @@
 package com.wf.wfballistics.flight;
 
 import com.wf.wfballistics.MissileEntity;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -40,7 +41,7 @@ public final class FlightProfile {
     /**
      * Compose a profile by resolving one stage id per phase through the {@link FlightStageRegistry}.
      */
-    public static FlightProfile fromIds(String ascentId, String cruiseId, String attackId) {
+    public static FlightProfile fromIds(ResourceLocation ascentId, ResourceLocation cruiseId, ResourceLocation attackId) {
         return of(FlightStageRegistry.get(MissileEntity.Phase.ASCEND, ascentId),
                 FlightStageRegistry.get(MissileEntity.Phase.CRUISE, cruiseId),
                 FlightStageRegistry.get(MissileEntity.Phase.ATTACK, attackId));

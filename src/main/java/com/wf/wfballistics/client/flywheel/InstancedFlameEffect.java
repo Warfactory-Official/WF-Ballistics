@@ -15,9 +15,9 @@ public class InstancedFlameEffect implements WFFlywheelEffect {
     private static final int MAX_LIFE = 16;
 
     final Flame[] pool;
-    double cx, cy, cz;
     private final Level level;
     private final FireLingeringEntity source;
+    double cx, cy, cz;
     private int cursor = 0;
     private boolean sourceGone = false;
     private double minX, minZ, baseY, spanX, spanZ;
