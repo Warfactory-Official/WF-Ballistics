@@ -3,6 +3,8 @@ package com.wf.wfballistics.client.gui;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileEntity.Phase;
 import com.wf.wfballistics.MissileModels;
+import com.wf.wfballistics.block.entity.LaunchConfig;
+import com.wf.wfballistics.block.entity.MissileDispenserBlockEntity;
 import com.wf.wfballistics.flight.ArrivalEstimator;
 import com.wf.wfballistics.flight.FlightStageRegistry;
 import com.wf.wfballistics.flight.LoiterStage;
@@ -56,6 +58,9 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     private boolean startInCruise;
     private boolean startArmed;
 
+    private boolean seeded;
+    private LaunchConfig seed;
+
     private Button modelButton;
     private Button warheadButton;
     private Button cruiseButton;
@@ -103,9 +108,40 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         }
     }
 
+    private static String num(double v) {
+        if (v == Math.rint(v) && !Double.isInfinite(v)) {
+            return Long.toString((long) v);
+        }
+        return Double.toString(v);
+    }
+
+    private void seed() {
+        if (this.seeded) {
+            return;
+        }
+        this.seeded = true;
+        if (this.minecraft == null || this.minecraft.level == null) {
+            return;
+        }
+        if (this.minecraft.level.getBlockEntity(menu.pos()) instanceof MissileDispenserBlockEntity be
+                && be.getConfig() != null) {
+            LaunchConfig c = be.getConfig();
+            this.seed = c;
+            this.modelIndex = Math.max(0, MODELS.indexOf(c.modelId));
+            this.warheadIndex = Math.max(0, WARHEADS.indexOf(c.warheadId));
+            this.cruiseIndex = c.highAltitude ? 1 : 0;
+            this.ascentStageIndex = Math.max(0, ASCENT_STAGES.indexOf(c.ascentStageId));
+            this.cruiseStageIndex = Math.max(0, CRUISE_STAGES.indexOf(c.cruiseStageId));
+            this.attackStageIndex = Math.max(0, ATTACK_STAGES.indexOf(c.attackStageId));
+            this.startInCruise = c.startInCruise;
+            this.startArmed = c.startArmed;
+        }
+    }
+
     @Override
     protected void init() {
         super.init();
+        seed();
         this.editBoxes.clear();
         this.editHints.clear();
 
@@ -146,12 +182,16 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         }).bounds(x + 2 * (THIRD + GAP), y, THIRD, BTN_H).build());
         y += BTN_H + ROW_GAP;
 
-        // Target row (three boxes). Default to the player's rounded position.
+        // Target row (three boxes). Default to a stored config, else the player's rounded position.
         BlockPos self = menu.pos();
         String defX = prev(targetX, Integer.toString(self.getX()));
         String defY = prev(targetY, Integer.toString(self.getY()));
         String defZ = prev(targetZ, Integer.toString(self.getZ()));
-        if (targetX == null && this.minecraft != null && this.minecraft.player != null) {
+        if (targetX == null && seed != null) {
+            defX = num(seed.targetX);
+            defY = num(seed.targetY);
+            defZ = num(seed.targetZ);
+        } else if (targetX == null && this.minecraft != null && this.minecraft.player != null) {
             defX = Long.toString(Math.round(this.minecraft.player.getX()));
             defY = Long.toString(Math.round(this.minecraft.player.getY()));
             defZ = Long.toString(Math.round(this.minecraft.player.getZ()));
@@ -163,18 +203,18 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         y += BOX_H + ROW_GAP;
 
         y += LABEL_H;
-        offsetBox = makeBox(x, y, HALF, prev(offsetBox, "0"), "Airburst offset");
-        altitudeBox = makeBox(x + HALF + GAP, y, HALF, prev(altitudeBox, "24"), "Altitude / Clearance");
+        offsetBox = makeBox(x, y, HALF, prev(offsetBox, seed != null ? num(seed.explosionOffset) : "0"), "Airburst offset");
+        altitudeBox = makeBox(x + HALF + GAP, y, HALF, prev(altitudeBox, seed != null ? num(seed.altitudeParam) : "24"), "Altitude / Clearance");
         y += BOX_H + ROW_GAP;
 
         y += LABEL_H;
-        fragmentBox = makeBox(x, y, HALF, prev(fragmentBox, "24"), "Fragment count");
-        speedBox = makeBox(x + HALF + GAP, y, HALF, prev(speedBox, "1.0"), "Cruise speed");
+        fragmentBox = makeBox(x, y, HALF, prev(fragmentBox, seed != null ? Integer.toString(seed.fragmentCount) : "24"), "Fragment count");
+        speedBox = makeBox(x + HALF + GAP, y, HALF, prev(speedBox, seed != null ? num(seed.cruiseSpeed) : "1.0"), "Cruise speed");
         y += BOX_H + ROW_GAP;
 
         y += LABEL_H;
-        turnRateBox = makeBox(x, y, HALF, prev(turnRateBox, "0"), "Turn rate (0=auto)");
-        healthBox = makeBox(x + HALF + GAP, y, HALF, prev(healthBox, Float.toString(MissileEntity.DEFAULT_HEALTH)), "Health");
+        turnRateBox = makeBox(x, y, HALF, prev(turnRateBox, seed != null ? num(seed.turnRate) : "0"), "Turn rate (0=auto)");
+        healthBox = makeBox(x + HALF + GAP, y, HALF, prev(healthBox, seed != null ? num(seed.health) : Float.toString(MissileEntity.DEFAULT_HEALTH)), "Health");
         y += BOX_H + ROW_GAP;
 
         // Toggle row.
@@ -188,8 +228,10 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         }).bounds(x + HALF + GAP, y, HALF, BTN_H).build());
         y += BTN_H + ROW_GAP;
 
-        addRenderableWidget(Button.builder(Component.literal("Spawn Missile"), b -> spawn())
-                .bounds(x, y, W_FULL, BTN_H).build());
+        addRenderableWidget(Button.builder(Component.literal("Save"), b -> save())
+                .bounds(x, y, HALF, BTN_H).build());
+        addRenderableWidget(Button.builder(Component.literal("Launch"), b -> spawn())
+                .bounds(x + HALF + GAP, y, HALF, BTN_H).build());
 
         refreshButtonLabels();
     }
@@ -215,24 +257,34 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         armedButton.setMessage(Component.literal("Pre-armed: " + (startArmed ? "Yes" : "No")));
     }
 
-    private void spawn() {
-        double tx = parseDouble(targetX.getValue(), menu.pos().getX());
-        double ty = parseDouble(targetY.getValue(), menu.pos().getY());
-        double tz = parseDouble(targetZ.getValue(), menu.pos().getZ());
-        float offset = (float) parseDouble(offsetBox.getValue(), 0.0);
-        double altitude = parseDouble(altitudeBox.getValue(), 24.0);
-        int fragments = (int) Math.round(parseDouble(fragmentBox.getValue(), 24.0));
-        double speed = parseDouble(speedBox.getValue(), 1.0);
-        double turnRate = parseDouble(turnRateBox.getValue(), 0.0);
-        float health = (float) parseDouble(healthBox.getValue(), MissileEntity.DEFAULT_HEALTH);
-        boolean highAltitude = cruiseIndex == 1;
+    private LaunchConfig buildConfig() {
+        LaunchConfig c = new LaunchConfig();
+        c.modelId = MODELS.get(modelIndex);
+        c.warheadId = WARHEADS.get(warheadIndex);
+        c.highAltitude = cruiseIndex == 1;
+        c.targetX = parseDouble(targetX.getValue(), menu.pos().getX());
+        c.targetY = parseDouble(targetY.getValue(), menu.pos().getY());
+        c.targetZ = parseDouble(targetZ.getValue(), menu.pos().getZ());
+        c.explosionOffset = (float) parseDouble(offsetBox.getValue(), 0.0);
+        c.altitudeParam = parseDouble(altitudeBox.getValue(), 24.0);
+        c.fragmentCount = (int) Math.round(parseDouble(fragmentBox.getValue(), 24.0));
+        c.cruiseSpeed = parseDouble(speedBox.getValue(), 1.0);
+        c.turnRate = parseDouble(turnRateBox.getValue(), 0.0);
+        c.health = (float) parseDouble(healthBox.getValue(), MissileEntity.DEFAULT_HEALTH);
+        c.startInCruise = startInCruise;
+        c.startArmed = startArmed;
+        c.ascentStageId = stageAt(ASCENT_STAGES, ascentStageIndex);
+        c.cruiseStageId = stageAt(CRUISE_STAGES, cruiseStageIndex);
+        c.attackStageId = stageAt(ATTACK_STAGES, attackStageIndex);
+        return c;
+    }
 
-        WFNetwork.sendToServer(new SpawnMissilePacket(menu.pos(), MODELS.get(modelIndex), WARHEADS.get(warheadIndex),
-                highAltitude, tx, ty, tz, offset, altitude, fragments, speed, turnRate, health,
-                startInCruise, startArmed,
-                stageAt(ASCENT_STAGES, ascentStageIndex),
-                stageAt(CRUISE_STAGES, cruiseStageIndex),
-                stageAt(ATTACK_STAGES, attackStageIndex)));
+    private void spawn() {
+        WFNetwork.sendToServer(new SpawnMissilePacket(menu.pos(), buildConfig(), true));
+    }
+
+    private void save() {
+        WFNetwork.sendToServer(new SpawnMissilePacket(menu.pos(), buildConfig(), false));
     }
 
     /**
