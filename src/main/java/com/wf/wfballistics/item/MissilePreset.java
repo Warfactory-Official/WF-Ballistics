@@ -40,6 +40,7 @@ public final class MissilePreset {
     private final double deceleration;
     private final ResourceLocation cruiseStageId;
     private final ResourceLocation attackStageId;
+    private final double attackAngle;
     private final boolean stealth;
     private final float evasion;
     private final boolean evasiveManeuver;
@@ -65,6 +66,7 @@ public final class MissilePreset {
         this.deceleration = b.deceleration;
         this.cruiseStageId = b.cruiseStageId;
         this.attackStageId = b.attackStageId;
+        this.attackAngle = b.attackAngle;
         this.stealth = b.stealth;
         this.evasion = b.evasion;
         this.evasiveManeuver = b.evasiveManeuver;
@@ -151,6 +153,10 @@ public final class MissilePreset {
         return attackStageId;
     }
 
+    public double attackAngle() {
+        return attackAngle;
+    }
+
     public boolean isStealth() {
         return stealth;
     }
@@ -200,6 +206,9 @@ public final class MissilePreset {
         if (attackStageId != null) {
             b.attackStage(attackStageId);
         }
+        if (!Double.isNaN(attackAngle)) {
+            b.attackAngle(attackAngle);
+        }
         if (stealth) {
             b.stealth(true);
         }
@@ -233,6 +242,7 @@ public final class MissilePreset {
         private double deceleration = MissileEntity.DEFAULT_DECELERATION;
         private ResourceLocation cruiseStageId = null; // null = phase default
         private ResourceLocation attackStageId = null;
+        private double attackAngle = Double.NaN;
         private boolean stealth = false;
         private float evasion = 0.0f;
         private boolean evasiveManeuver = false;
@@ -342,6 +352,15 @@ public final class MissilePreset {
          */
         public Builder attackStage(String id) {
             this.attackStageId = FlightStageRegistry.parse(MissileEntity.Phase.ATTACK, id);
+            return this;
+        }
+
+        /**
+         * Desired terminal impact angle in degrees below horizontal (90 = straight down). Leave unset for best
+         * fit, the attack stage's natural dive (see {@link MissileEntity.Builder#attackAngle}).
+         */
+        public Builder attackAngle(double degrees) {
+            this.attackAngle = degrees;
             return this;
         }
 

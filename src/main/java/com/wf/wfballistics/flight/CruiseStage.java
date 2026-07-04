@@ -58,7 +58,23 @@ public final class CruiseStage implements FlightStage {
     @Override
     @Nullable
     public MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
-        return ctx.horizontalDist() < BRAKING_RANGE ? MissileEntity.Phase.ATTACK : null;
+        return ctx.horizontalDist() < handoffRange(missile, ctx) ? MissileEntity.Phase.ATTACK : null;
+    }
+
+    /**
+     * The horizontal range at which to hand off to the terminal attack. Best fit uses the fixed
+     * {@link #BRAKING_RANGE}; a desired attack angle starts the run at the range where the angled approach
+     * line becomes reachable from the current altitude, so a shallow angle gets room to descend onto it.
+     */
+    private static double handoffRange(MissileEntity missile, FlightContext ctx) {
+        double angle = missile.getAttackAngle();
+        if (Double.isNaN(angle)) {
+            return BRAKING_RANGE;
+        }
+        double theta = Math.toRadians(Mth.clamp(angle, MissileEntity.MIN_ATTACK_ANGLE, MissileEntity.MAX_ATTACK_ANGLE));
+        double height = missile.getY() - ctx.target().y;
+        double required = height > 0.0 ? height / Math.tan(theta) : BRAKING_RANGE;
+        return Math.max(BRAKING_RANGE, required);
     }
 
     @Override

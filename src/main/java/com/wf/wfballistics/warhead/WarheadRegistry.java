@@ -6,6 +6,7 @@ import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.aef.nuke.MiniNuke;
 import com.wf.wfballistics.aef.standard.BlockAllocatorStandard;
 import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
+import com.wf.wfballistics.aef.standard.EntityProcessorCross;
 import com.wf.wfballistics.aef.standard.PlayerProcessorStandard;
 import com.wf.wfballistics.entity.BombletEntity;
 import com.wf.wfballistics.fx.ExplosionCreator;
@@ -22,16 +23,18 @@ import java.util.Set;
 public final class WarheadRegistry {
 
     public static final int STANDARD_BLAST_RADIUS = 50;
+    public static final float STANDARD_BLAST_SIZE = 15F;
 
     public static final Detonation STANDARD = (missile, pos) -> {
         Level level = missile.level();
         if (level.isClientSide) {
             return;
         }
-        var xnt = new ExplosionAEF(level, pos.x, pos.y, pos.z, 15F);
+        var xnt = new ExplosionAEF(level, pos.x, pos.y, pos.z, STANDARD_BLAST_SIZE);
 
         xnt.setBlockAllocator(new BlockAllocatorStandard(32));
         xnt.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
+        xnt.setEntityProcessor(new EntityProcessorCross());
         xnt.setPlayerProcessor(new PlayerProcessorStandard());
         xnt.explode();
         ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
@@ -73,6 +76,7 @@ public final class WarheadRegistry {
     private static final ResourceLocation DEFAULT_ID = rl("standard");
     private static final Map<ResourceLocation, Detonation> WARHEADS = new LinkedHashMap<>();
     private static final Map<ResourceLocation, InterceptDetonation> INTERCEPTS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, Float> BLAST_SIZE = new LinkedHashMap<>();
 
     static {
         register(DEFAULT_ID, STANDARD, STANDARD_INTERCEPT);
@@ -84,6 +88,9 @@ public final class WarheadRegistry {
         register(FireCluster.ID, FireCluster::detonate);
         register(rl("interceptor"), INTERCEPTOR, INTERCEPTOR::detonate);
         register(rl("inert"), INERT);
+
+        BLAST_SIZE.put(DEFAULT_ID, STANDARD_BLAST_SIZE);
+        BLAST_SIZE.put(FireWarhead.ID, 8F);
     }
 
     private WarheadRegistry() {
@@ -125,6 +132,15 @@ public final class WarheadRegistry {
 
     public static boolean exists(ResourceLocation id) {
         return WARHEADS.containsKey(id);
+    }
+
+    public static float blastSize(ResourceLocation id) {
+        return BLAST_SIZE.getOrDefault(id, 0f);
+    }
+
+    public static int peakEntityDamage(ResourceLocation id) {
+        float size = blastSize(id);
+        return size <= 0f ? 0 : (int) (8.0f * size + 1.0f);
     }
 
     public static Set<ResourceLocation> ids() {

@@ -1,6 +1,8 @@
 package com.wf.wfballistics.item;
 
 import com.wf.wfballistics.MissileEntity;
+import com.wf.wfballistics.sim.MissileSimConfig;
+import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -142,6 +144,15 @@ public class MissileItem extends Item {
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(kv("Airframe", preset.modelId(), ChatFormatting.WHITE));
         tooltip.add(kv("Warhead", preset.warheadId().getPath(), ChatFormatting.WHITE));
+        if (preset.isInterceptor()) {
+            tooltip.add(kv("Damage vs missiles",
+                    String.valueOf((int) MissileSimConfig.INTERCEPTOR_HIT_DAMAGE), ChatFormatting.RED));
+        } else {
+            int entityDamage = WarheadRegistry.peakEntityDamage(preset.warheadId());
+            if (entityDamage > 0) {
+                tooltip.add(kv("Damage vs entities", "~" + entityDamage, ChatFormatting.RED));
+            }
+        }
 
 
         if (!Screen.hasShiftDown()) {
@@ -160,6 +171,10 @@ public class MissileItem extends Item {
         tooltip.add(kv("Altitude", preset.highAltitude()
                 ? "high, " + (int) preset.altitudeParam()
                 : "terrain-follow +" + (int) preset.altitudeParam(), ChatFormatting.AQUA));
+        if (!preset.isInterceptor()) {
+            tooltip.add(kv("Attack angle", Double.isNaN(preset.attackAngle())
+                    ? "best fit" : (int) preset.attackAngle() + " deg", ChatFormatting.AQUA));
+        }
         int ticks = preset.fuelTicks();
         tooltip.add(kv("Fuel", preset.fuelType() + ", " + ticks + " ticks (~" + (ticks / 20) + "s)", ChatFormatting.BLUE));
 
