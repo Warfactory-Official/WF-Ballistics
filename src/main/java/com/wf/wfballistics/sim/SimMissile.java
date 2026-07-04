@@ -5,10 +5,14 @@ import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.flight.FlightStageRegistry;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 
@@ -47,6 +51,9 @@ public final class SimMissile {
     public double deceleration = MissileEntity.DEFAULT_DECELERATION;
     public boolean stealth = false;
     public float evasion = 0.0f;
+    public boolean commander = false;
+    public Vec3 formationOffset = Vec3.ZERO;
+    public final List<SimMissile> swarmMembers = new ArrayList<>();
 
     public static SimMissile fromEntity(MissileEntity m) {
         SimMissile sm = new SimMissile();
@@ -79,6 +86,7 @@ public final class SimMissile {
         sm.deceleration = m.getDeceleration();
         sm.stealth = m.isStealth();
         sm.evasion = m.getEvasion();
+        sm.commander = m.isCommander();
         sm.role = Role.NORMAL;
         return sm;
     }
@@ -157,6 +165,14 @@ public final class SimMissile {
         if (tag.contains("Evasion")) {
             sm.evasion = tag.getFloat("Evasion");
         }
+        sm.commander = tag.getBoolean("Commander");
+        sm.formationOffset = getVec(tag, "FormationOffset");
+        if (tag.contains("SwarmMembers")) {
+            ListTag memberList = tag.getList("SwarmMembers", Tag.TAG_COMPOUND);
+            for (int i = 0; i < memberList.size(); i++) {
+                sm.swarmMembers.add(load(memberList.getCompound(i)));
+            }
+        }
         return sm;
     }
 
@@ -189,6 +205,7 @@ public final class SimMissile {
                 .fragmentCount(this.fragmentCount)
                 .splitDepth(this.splitDepth)
                 .swarmId(this.swarmId)
+                .commander(this.commander)
                 .controlId(this.controlId)
                 .teamId(this.teamId)
                 .fuel(this.fuelType, this.fuel) // preserve remaining fuel across the offload/respawn
@@ -256,6 +273,15 @@ public final class SimMissile {
         tag.putDouble("Deceleration", deceleration);
         tag.putBoolean("Stealth", stealth);
         tag.putFloat("Evasion", evasion);
+        tag.putBoolean("Commander", commander);
+        putVec(tag, "FormationOffset", formationOffset);
+        if (!swarmMembers.isEmpty()) {
+            ListTag memberList = new ListTag();
+            for (SimMissile mem : swarmMembers) {
+                memberList.add(mem.save());
+            }
+            tag.put("SwarmMembers", memberList);
+        }
         return tag;
     }
 

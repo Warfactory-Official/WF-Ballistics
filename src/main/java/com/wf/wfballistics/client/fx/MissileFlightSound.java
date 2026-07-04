@@ -4,6 +4,7 @@ import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
+import net.minecraft.client.resources.sounds.SoundInstance;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
@@ -11,7 +12,8 @@ import net.minecraft.world.entity.Entity;
 
 public final class MissileFlightSound extends AbstractTickableSoundInstance {
 
-    private static final float BASE_VOLUME = 4.0F;
+    private static final float MAX_VOLUME = 0.9F;
+    private static final double HEARING_RANGE = 160.0;
     private static final float BASE_PITCH = 1.0F;
     private static final double SPEED_OF_SOUND = ClientSoundScheduler.SPEED_OF_SOUND;
     private static final float MIN_PITCH = 0.5F;
@@ -28,7 +30,8 @@ public final class MissileFlightSound extends AbstractTickableSoundInstance {
         this.missile = missile;
         this.looping = true;
         this.delay = 0;
-        this.volume = BASE_VOLUME;
+        this.attenuation = SoundInstance.Attenuation.NONE;
+        this.volume = MAX_VOLUME;
         this.pitch = BASE_PITCH;
         this.x = missile.getX();
         this.y = missile.getY();
@@ -57,6 +60,12 @@ public final class MissileFlightSound extends AbstractTickableSoundInstance {
         double ly = listener.getEyeY();
         double lz = listener.getZ();
 
+        double ux = lx - sx;
+        double uy = ly - sy;
+        double uz = lz - sz;
+        double dist = Math.sqrt(ux * ux + uy * uy + uz * uz);
+        this.volume = (float) (MAX_VOLUME * Mth.clamp(1.0 - dist / HEARING_RANGE, 0.0, 1.0));
+
         if (!this.primed) {
             this.prevSourceX = sx;
             this.prevSourceY = sy;
@@ -75,20 +84,18 @@ public final class MissileFlightSound extends AbstractTickableSoundInstance {
         double lvy = ly - this.prevListenerY;
         double lvz = lz - this.prevListenerZ;
 
-        double ux = lx - sx;
-        double uy = ly - sy;
-        double uz = lz - sz;
-        double dist = Math.sqrt(ux * ux + uy * uy + uz * uz);
-
         if (dist > 1.0E-4) {
             double inv = 1.0 / dist;
-            ux *= inv;
-            uy *= inv;
-            uz *= inv;
-            double vSource = svx * ux + svy * uy + svz * uz;
-            double vListener = lvx * ux + lvy * uy + lvz * uz;
-            double factor = (SPEED_OF_SOUND - vListener) / (SPEED_OF_SOUND - vSource);
-            this.pitch = (float) Mth.clamp(BASE_PITCH * factor, MIN_PITCH, MAX_PITCH);
+            double dirX = ux * inv;
+            double dirY = uy * inv;
+            double dirZ = uz * inv;
+            double vSource = svx * dirX + svy * dirY + svz * dirZ;
+            double vListener = lvx * dirX + lvy * dirY + lvz * dirZ;
+            double denom = SPEED_OF_SOUND - vSource;
+            if (Math.abs(denom) > 1.0E-3) {
+                double factor = (SPEED_OF_SOUND - vListener) / denom;
+                this.pitch = (float) Mth.clamp(BASE_PITCH * factor, MIN_PITCH, MAX_PITCH);
+            }
         }
 
         this.prevSourceX = sx;

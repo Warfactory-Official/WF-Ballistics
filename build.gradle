@@ -19,6 +19,20 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(17)
 jarJar.enable()
 
 println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
+
+// MC 1.20.1 (LWJGL 3.3.1) bundles OpenAL Soft 1.21.1, which has no PipeWire backend and garbles
+// audio on most launches on PipeWire systems. Prefer the system OpenAL Soft (native PipeWire
+// backend) when installed. No-ops on Windows/macOS or when absent, so it is safe for other builds.
+def systemOpenAl = [
+        '/usr/lib/libopenal.so.1',
+        '/usr/lib64/libopenal.so.1',
+        '/usr/lib/x86_64-linux-gnu/libopenal.so.1',
+        '/usr/local/lib/libopenal.so.1',
+].collect { file(it) }.find { it.exists() }
+if (systemOpenAl != null) {
+    logger.lifecycle "OpenAL: overriding bundled LWJGL native with system ${systemOpenAl}"
+}
+
 minecraft {
     // The mappings can be changed at any time and must be in the following format.
     // Channel:   Version:
@@ -87,6 +101,10 @@ minecraft {
         client {
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
             property 'forge.enabledGameTestNamespaces', mod_id
+
+            if (systemOpenAl != null) {
+                property 'org.lwjgl.openal.libname', systemOpenAl.absolutePath
+            }
 
             // Required for flywheel
             property 'mixin.env.remapRefMap', 'true'

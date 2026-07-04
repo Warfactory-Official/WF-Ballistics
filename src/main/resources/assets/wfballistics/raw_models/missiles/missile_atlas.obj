@@ -1,6 +1,6 @@
 # Blender v3.2.0 OBJ File: 'titan.blend'
 # www.blender.org
-mtllib missile_icbm.mtl
+mtllib missile_atlas.mtl
 o Circle.002_Circle.003
 v -0.883883 0.687500 -0.883883
 v -1.154849 0.687500 -0.478354
@@ -1021,7 +1021,7 @@ vn 0.9549 0.1504 0.2559
 vn 0.4867 0.2290 -0.8430
 vn -0.9549 0.1504 -0.2559
 vn -0.4867 0.2290 0.8430
-usemtl Material.001
+usemtl missile_texture
 s off
 f 14/1/1 29/2/1 13/3/1
 f 31/4/1 16/5/1 32/6/1

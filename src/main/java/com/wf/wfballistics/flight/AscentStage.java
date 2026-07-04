@@ -6,31 +6,34 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Vertical boost that gradually pitches over toward the target as it nears cruise altitude (a gravity turn).
+ * Vertical boost that rotates toward the target as it nears cruise altitude: a constant-speed gravity turn.
+ * The climb runs at the missile's own {@link MissileEntity#getAscentSpeed() ascent speed} (which scales with
+ * cruise speed unless overridden), so a fast missile climbs fast, and the pitch-over is spread across the top
+ * fraction of the <em>actual</em> climb height, so a low terrain-follow hop and a tall high-altitude climb both
+ * pitch over proportionally rather than on a fixed absolute band.
  */
 public final class AscentStage implements FlightStage {
 
     public static final AscentStage INSTANCE = new AscentStage();
 
-    /**
-     * Boost speed during launch (blocks/tick) — the missile accelerates up to this off the pad.
-     */
-    private static final double ASCENT_SPEED = 1.5;
-    /**
-     * Distance below cruise altitude at which the missile begins pitching over toward the target.
-     */
-    private static final double PITCHOVER_BAND = 48.0;
+    private static final double PITCHOVER_FRACTION = 0.5;
+    private static final double MIN_PITCHOVER_BAND = 16.0;
+    private static final double MAX_PITCHOVER_ANGLE = Math.toRadians(72.0);
 
     private AscentStage() {
     }
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        double remaining = ctx.safeAltitude() - missile.getY();
-        double lean = 1.0 - Mth.clamp(remaining / PITCHOVER_BAND, 0.0, 1.0); // 0 low, -> 1 at cruise altitude
-        double up = ASCENT_SPEED * (1.0 - 0.6 * lean);
-        double horiz = ASCENT_SPEED * 0.8 * lean;
-        return new Vec3(ctx.nx() * horiz, up, ctx.nz() * horiz);
+        double speed = missile.getAscentSpeed();
+        double climbTo = ctx.safeAltitude();
+        double climbHeight = Math.max(1.0, climbTo - missile.getLaunchY());
+        double band = Math.min(climbHeight, Math.max(MIN_PITCHOVER_BAND, climbHeight * PITCHOVER_FRACTION));
+        double remaining = climbTo - missile.getY();
+        double lean = 1.0 - Mth.clamp(remaining / band, 0.0, 1.0);
+        double theta = lean * MAX_PITCHOVER_ANGLE;
+        double horiz = speed * Math.sin(theta);
+        return new Vec3(ctx.nx() * horiz, speed * Math.cos(theta), ctx.nz() * horiz);
     }
 
     @Override

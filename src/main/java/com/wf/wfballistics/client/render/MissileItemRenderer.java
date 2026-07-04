@@ -3,10 +3,8 @@ package com.wf.wfballistics.client.render;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
-import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.ModModels;
 import com.wf.wfballistics.item.MissileItem;
-import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -47,20 +45,17 @@ public class MissileItemRenderer extends BlockEntityWithoutLevelRenderer {
         if (!(stack.getItem() instanceof MissileItem missile)) {
             return;
         }
-        String modelId = missile.modelId();
-        PartialModel partial = ModModels.missile(modelId);
-        BakedModel baked = partial == null ? null : partial.get();
+        ModModels.RenderModel model = ModModels.render(missile.modelId());
+        BakedModel baked = model.baked();
         if (baked == null) {
-            return; // models not baked yet (pre first resource load)
+            return;
         }
 
-        double length = Math.max(1.0, MissileModels.length(modelId));
-        Vec3 center = MissileModels.center(modelId);
-        float scale = (float) (1.0 / length);
+        float scale = (float) (1.0 / model.length());
+        Vec3 center = model.center();
 
         pose.pushPose();
 
-        // Inventory spin about the vertical (long) axis — the signature HBM look.
         if (ctx == ItemDisplayContext.GUI) {
             float spin = (float) ((System.currentTimeMillis() / 25L) % 360L);
             pose.translate(0.5, 0.5, 0.5);
@@ -68,7 +63,6 @@ public class MissileItemRenderer extends BlockEntityWithoutLevelRenderer {
             pose.translate(-0.5, -0.5, -0.5);
         }
 
-        // Stand the base-at-origin, Y-up missile up inside the item's [0,1]^3 unit space, centred in X/Z.
         pose.translate(0.5, 0.0, 0.5);
         pose.scale(scale, scale, scale);
         pose.translate(-center.x, 0.0, -center.z);

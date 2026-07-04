@@ -14,7 +14,6 @@ import com.wf.wfballistics.util.OBB;
 import com.wf.wfballistics.util.SweptCollision;
 import com.wf.wfballistics.warhead.RecursiveFrag;
 import com.wf.wfballistics.warhead.WarheadRegistry;
-import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -38,6 +37,7 @@ import net.minecraft.world.phys.Vec3;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -52,6 +52,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public static final int DEFAULT_EXHAUST_COLOR = 0xFFB20D;
 
     public static final double CRUISE_SPEED = 1.0;
+    public static final double ASCENT_SPEED_FACTOR = 1.5;
+    public static final double MIN_ASCENT_SPEED = 1.5;
     // Safety/arming: the warhead is inert until the missile has flown this far from its launch point, so it
     // can't fuze, impact-detonate, or be blown up by damage while still on/near the launcher.
     public static final double ARMING_DISTANCE = 6.0;
@@ -61,6 +63,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // guidance asks for. cruiseSpeed is the target/max speed; these govern how fast it is reached and shed.
     public static final double DEFAULT_ACCELERATION = 0.15;
     public static final double DEFAULT_DECELERATION = 0.25;
+    private static final double DIVE_ACCELERATION = 1.5;
     // Ballistic fall (out of fuel): downward accel, terminal speed, and a light horizontal drag so momentum
     // (inertia) carries the missile forward as it arcs down instead of being zeroed.
     private static final double FUEL_OUT_GRAVITY = 0.05;
@@ -84,8 +87,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private static final double SATURATION_SPREAD = 10.0;
     // Ticks between sonic-boom shock rings while travelling supersonic.
     private static final int SONIC_BOOM_INTERVAL = 6;
-    private static final EntityDataAccessor<BlockPos> TARGET_POS =
-            SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.BLOCK_POS);
     private static final EntityDataAccessor<String> MODEL_ID =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.STRING);
     // Synced so the client-side exhaust trail can tint itself per missile (see InstancedTrailEffect).
@@ -117,6 +118,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Transform (position + heading) the OBB was last built for; refreshObb() skips recomputation while
     // these are unchanged, so the repeated getOBBs() calls during a hit-check don't rebuild it each time.
     private double obbX = Double.NaN, obbY, obbZ, obbDx, obbDy, obbDz;
+    private Vec3 target = Vec3.ZERO;
     private Phase phase = Phase.ASCEND;
     // How this missile flies: one swappable stage per phase (ascent curve, cruise/loiter, attack run),
     // each resolved from FlightStageRegistry by id and composed into the runtime profile. Selecting stages
@@ -137,6 +139,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Horizontal cruise speed (blocks/tick). The off-world simulation advances at this same rate so
     // simulated travel time matches an in-world flight.
     private double cruiseSpeed = CRUISE_SPEED;
+    private double ascentSpeed = Double.NaN;
     // Airburst fuze: while diving, detonate in the air once the missile is within this many
     // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
     private float explosionOffset = 0.0f;
@@ -462,13 +465,21 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         // Interceptors never offload to the off-world sim
         if (!this.interceptor
-                && this.swarmId == 0L
                 && this.phase == Phase.CRUISE
                 && this.cruiseTicks > MissileSimConfig.CRUISE_SIM_DELAY_TICKS
                 && horizontalDist > MissileSimConfig.DESTINATION_RANGE
                 && !SimMissileManager.nearAnyListener(serverLevel, this.position())) {
-            SimMissileManager.startSim(this);
-            return;
+            if (this.swarmId == 0L) {
+                SimMissileManager.startSim(this);
+                return;
+            }
+            if (this.commander) {
+                List<MissileEntity> subs = this.formationSubordinates(serverLevel);
+                if (subs != null) {
+                    SimMissileManager.startSimSwarm(this, subs);
+                    return;
+                }
+            }
         }
 
         // Detonation triggers are inert until the missile has armed clear of the launcher.
@@ -509,14 +520,12 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * The altitude the missile should hold this tick: the fixed cruise height in HIGH_ALTITUDE mode, or the
-     * scanned terrain top (looked ahead toward the target once past ascent) plus the terrain clearance.
+     * The altitude the missile should hold this tick: the scanned terrain top (looked ahead toward the target
+     * once past ascent) plus the terrain clearance. In HIGH_ALTITUDE mode it holds the fixed cruise height but
+     * is floored to that terrain-safe height so it still climbs over rising ground instead of into it.
      * Shared by the flight stages via the {@link FlightContext}.
      */
     private double computeSafeAltitude(Vec3 pos, double dx, double dz, double horizontalDist) {
-        if (this.cruiseMode == CruiseMode.HIGH_ALTITUDE) {
-            return this.cruiseAltitude;
-        }
         double terrainScanRadius = 24.0; // how far around the missile we look for terrain
         double lookAhead = 32.0;         // how far ahead (toward target) to scan while cruising
         double scanCenterX = pos.x;
@@ -525,7 +534,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             scanCenterX += (dx / horizontalDist) * lookAhead;
             scanCenterZ += (dz / horizontalDist) * lookAhead;
         }
-        return scanTerrainTop(scanCenterX, scanCenterZ, terrainScanRadius) + this.terrainClearance;
+        double terrainSafe = scanTerrainTop(scanCenterX, scanCenterZ, terrainScanRadius) + this.terrainClearance;
+        if (this.cruiseMode == CruiseMode.HIGH_ALTITUDE) {
+            return Math.max(this.cruiseAltitude, terrainSafe);
+        }
+        return terrainSafe;
     }
 
     /**
@@ -540,7 +553,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         int maxTop = this.level().getMinBuildHeight();
         for (int ox = -r; ox <= r; ox += step) {
             for (int oz = -r; oz <= r; oz += step) {
-                int top = this.level().getHeight(Heightmap.Types.WORLD_SURFACE, cx + ox, cz + oz);
+                int top = this.level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cx + ox, cz + oz);
                 if (top > maxTop) {
                     maxTop = top;
                 }
@@ -703,7 +716,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     @Override
     protected void defineSynchedData() {
-        this.entityData.define(TARGET_POS, BlockPos.ZERO);
         this.entityData.define(MODEL_ID, MissileModels.DEFAULT);
         this.entityData.define(EXHAUST_COLOR, DEFAULT_EXHAUST_COLOR);
     }
@@ -728,12 +740,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     public Vec3 getTarget() {
-        BlockPos pos = this.entityData.get(TARGET_POS);
-        return new Vec3(pos.getX(), pos.getY(), pos.getZ());
+        return this.target;
     }
 
     public void setTarget(Vec3 target) {
-        this.entityData.set(TARGET_POS, new BlockPos((int) target.x, (int) target.y, (int) target.z));
+        this.target = target;
     }
 
     public Phase getPhase() {
@@ -762,6 +773,18 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     public double getCruiseSpeed() {
         return this.cruiseSpeed;
+    }
+
+    public static double ascentSpeedFor(double cruiseSpeed) {
+        return Math.max(MIN_ASCENT_SPEED, cruiseSpeed * ASCENT_SPEED_FACTOR);
+    }
+
+    public double getAscentSpeed() {
+        return Double.isNaN(this.ascentSpeed) ? ascentSpeedFor(this.cruiseSpeed) : this.ascentSpeed;
+    }
+
+    public double getLaunchY() {
+        return this.launchPos != null ? this.launchPos.y : this.getY();
     }
 
     /**
@@ -814,7 +837,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 ? Math.max(0, LoiterStage.LOITER_TICKS - this.loiterTicks)
                 : 0;
         return ArrivalEstimator.estimateTicks(this.position(), this.getTarget(), this.cruiseSpeed,
-                cruiseAltitudeY, loiterRemaining);
+                this.getAscentSpeed(), cruiseAltitudeY, loiterRemaining);
     }
 
     public ResourceLocation getDetonationId() {
@@ -921,7 +944,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         double targetSpeed = desired.length();
         Vec3 cur = this.getDeltaMovement();
         double curSpeed = cur.length();
-        double rate = curSpeed <= targetSpeed ? this.acceleration : this.deceleration;
+        double rate = curSpeed <= targetSpeed ? this.effectiveAcceleration() : this.deceleration;
         double newSpeed = approach(curSpeed, targetSpeed, rate);
         Vec3 dir;
         if (targetSpeed > 1.0E-8) {
@@ -932,6 +955,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             dir = new Vec3(0.0, 1.0, 0.0);
         }
         return dir.scale(newSpeed);
+    }
+
+    private double effectiveAcceleration() {
+        boolean fast = this.phase == Phase.ATTACK || this.boostTicks > 0;
+        return fast ? Math.max(this.acceleration, DIVE_ACCELERATION) : this.acceleration;
     }
 
     /**
@@ -951,6 +979,28 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             desired = desired.scale(maxSpeed / sp);
         }
         return desired;
+    }
+
+    /**
+     * @return this commander's live formation subordinates if the whole swarm is eligible to offload as one
+     * object (every member alive, still in formation, and clear of any listener), or null if not — in which
+     * case the swarm keeps flying in-world. An empty list (commander with no surviving members) is eligible.
+     */
+    private List<MissileEntity> formationSubordinates(ServerLevel level) {
+        List<MissileEntity> subs = new ArrayList<>();
+        for (MissileEntity m : SwarmManager.members(level, this.swarmId)) {
+            if (m == this) {
+                continue;
+            }
+            if (!m.isAlive() || m.isRemoved() || m.brokeFormation || m.isCommander()) {
+                return null;
+            }
+            if (SimMissileManager.nearAnyListener(level, m.position())) {
+                return null;
+            }
+            subs.add(m);
+        }
+        return subs;
     }
 
     /**
@@ -1034,7 +1084,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     /**
      * Interceptor per-tick update: keep this interceptor registered as a listener (so nearby off-world
      * missiles rematerialize and a real target won't offload), resolve its current target, and write a lead
-     * point into {@link #TARGET_POS} so the shared flight code flies toward the predicted intercept. Self-
+     * point via {@link #setTarget} so the shared flight code flies toward the predicted intercept. Self-
      * terminates (fizzle) once it exceeds its lifetime or has gone too long without any resolvable target.
      *
      * @return false if the interceptor removed itself this tick (the caller should stop ticking it).
@@ -1271,7 +1321,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         this.fuel -= BOOST_FUEL_COST;
         this.boostTicks = BOOST_DURATION;
         this.boostManeuver = this.evasiveManeuver ? this.computeJink(sl.random, interceptorPos) : null;
-        double boostedSpeed = this.getCruiseSpeed() * BOOST_SPEED_MULT;
+        double boostedSpeed = Math.max(this.getDeltaMovement().length(), this.getCruiseSpeed() * BOOST_SPEED_MULT);
         double speedFactor = Math.min(1.0, boostedSpeed / Math.max(1.0E-3, interceptorSpeed));
         float escapeChance = (float) (this.effectiveEvasion() * speedFactor);
         return sl.random.nextFloat() < escapeChance;
@@ -1370,6 +1420,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         tag.putFloat("ExplosionOffset", this.explosionOffset);
         tag.putDouble("MaxTurnRate", this.maxTurnRate);
         tag.putDouble("CruiseSpeed", this.cruiseSpeed);
+        if (!Double.isNaN(this.ascentSpeed)) {
+            tag.putDouble("AscentSpeed", this.ascentSpeed);
+        }
         tag.putString("ModelId", this.getModelId());
         tag.putInt("ExhaustColor", this.getExhaustColor());
         tag.putInt("CruiseTicks", this.cruiseTicks);
@@ -1459,6 +1512,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         if (tag.contains("CruiseSpeed")) {
             this.cruiseSpeed = tag.getDouble("CruiseSpeed");
+        }
+
+        if (tag.contains("AscentSpeed")) {
+            this.ascentSpeed = tag.getDouble("AscentSpeed");
         }
 
         if (tag.contains("ModelId")) {
@@ -1684,6 +1741,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private ResourceLocation attackStageId = null;
         private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
         private double cruiseSpeed = CRUISE_SPEED;
+        private Double ascentSpeed = null;
         private Double maxTurnRate = null; // null = keep the model-size default
         private String modelId = MissileModels.DEFAULT;
         private int exhaustColor = DEFAULT_EXHAUST_COLOR;
@@ -1801,6 +1859,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
          */
         public Builder cruiseSpeed(double blocksPerTick) {
             this.cruiseSpeed = blocksPerTick;
+            return this;
+        }
+
+        public Builder ascentSpeed(double blocksPerTick) {
+            this.ascentSpeed = blocksPerTick;
             return this;
         }
 
@@ -2036,6 +2099,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 missile.explosionOffset = RecursiveFrag.splitAltitude(missile.splitDepth);
             }
             missile.cruiseSpeed = this.cruiseSpeed;
+            if (this.ascentSpeed != null) {
+                missile.ascentSpeed = this.ascentSpeed;
+            }
             missile.health = this.health;
             missile.setModelId(this.modelId);
             missile.setExhaustColor(this.exhaustColor);

@@ -1,7 +1,10 @@
 package com.wf.wfballistics;
 
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -36,10 +39,34 @@ public class ModModels {
     }
 
     /**
-     * @return the baked model for a missile id, falling back to {@link MissileModels#DEFAULT}.
+     * @return the baked model for a missile id, falling back to {@link MissileModels#DEFAULT} when the id is
+     * unknown or its own model failed to bake (missing/unbaked).
      */
     public static PartialModel missile(String id) {
-        return MISSILES.getOrDefault(id, MISSILES.get(MissileModels.DEFAULT));
+        PartialModel partial = MISSILES.get(id);
+        return usableBaked(partial) != null ? partial : MISSILES.get(MissileModels.DEFAULT);
+    }
+
+    public static RenderModel render(String id) {
+        BakedModel baked = usableBaked(MISSILES.get(id));
+        String key = id;
+        if (baked == null) {
+            key = MissileModels.DEFAULT;
+            baked = usableBaked(MISSILES.get(MissileModels.DEFAULT));
+        }
+        return new RenderModel(baked, Math.max(1.0, MissileModels.length(key)), MissileModels.center(key));
+    }
+
+    private static BakedModel usableBaked(PartialModel partial) {
+        if (partial == null) {
+            return null;
+        }
+        BakedModel baked = partial.get();
+        return baked == null || baked == Minecraft.getInstance().getModelManager().getMissingModel()
+                ? null : baked;
+    }
+
+    public record RenderModel(BakedModel baked, double length, Vec3 center) {
     }
 
     /**
