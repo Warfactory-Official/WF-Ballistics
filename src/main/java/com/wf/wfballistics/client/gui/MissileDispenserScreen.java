@@ -26,7 +26,7 @@ import java.util.List;
 
 public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispenserMenu> {
 
-    private static final List<String> MODELS = new ArrayList<>(MissileModels.ids());
+    private static final List<ResourceLocation> MODELS = new ArrayList<>(MissileModels.ids());
     private static final List<ResourceLocation> WARHEADS = new ArrayList<>(WarheadRegistry.ids());
     private static final List<ResourceLocation> ASCENT_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.ASCEND));
     private static final List<ResourceLocation> CRUISE_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.CRUISE));
@@ -205,7 +205,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     }
 
     private void refreshButtonLabels() {
-        modelButton.setMessage(Component.literal("Model: " + MODELS.get(modelIndex)));
+        modelButton.setMessage(Component.literal("Model: " + MODELS.get(modelIndex).getPath()));
         warheadButton.setMessage(Component.literal("Warhead: " + WARHEADS.get(warheadIndex).getPath()));
         cruiseButton.setMessage(Component.literal("Cruise: " + CRUISE_LABELS[cruiseIndex]));
         ascentStageButton.setMessage(Component.literal("A:" + stageLabel(ASCENT_STAGES, ascentStageIndex)));

@@ -13,6 +13,7 @@ import dev.engine_room.flywheel.lib.visual.AbstractEntityVisual;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.phys.Vec3;
@@ -54,7 +55,7 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
     public MissileVisual(VisualizationContext context, Projectile entity) {
         super(context, entity, 0.0f);
 
-        String modelId = (entity instanceof MissileEntity missile) ? missile.getModelId() : MissileModels.DEFAULT;
+        ResourceLocation modelId = (entity instanceof MissileEntity missile) ? missile.getModelId() : MissileModels.DEFAULT;
         this.attitude = MissileAttitudeRegistry.get(MissileModels.attitudeId(modelId));
         var flywheelModel = Models.partial(ModModels.missile(modelId));
 

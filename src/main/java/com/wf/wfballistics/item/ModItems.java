@@ -1,6 +1,7 @@
 package com.wf.wfballistics.item;
 
 import com.wf.wfballistics.WFBallistics;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.registries.DeferredRegister;
@@ -20,13 +21,13 @@ public final class ModItems {
     public static final DeferredRegister<Item> ITEMS =
             DeferredRegister.create(ForgeRegistries.ITEMS, WFBallistics.MODID);
 
-    private static final Map<String, RegistryObject<MissileItem>> MISSILE_ITEMS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, RegistryObject<MissileItem>> MISSILE_ITEMS = new LinkedHashMap<>();
 
     static {
         // Presets must exist before we enumerate them into items (both happen before the registry freezes).
         MissilePresetRegistry.bootstrap();
         for (MissilePreset preset : MissilePresetRegistry.all()) {
-            MISSILE_ITEMS.put(preset.id(), ITEMS.register("missile_" + preset.id(),
+            MISSILE_ITEMS.put(preset.id(), ITEMS.register("missile_" + preset.id().getPath(),
                     () -> new MissileItem(preset, new Item.Properties().stacksTo(16))));
         }
     }

@@ -9,7 +9,7 @@ and range all spend from it. Design is deciding where that budget goes.
 
 ---
 
-## 1. The mental model
+## 1. The missile state machine
 
 Every missile flies through three **phases**, and each phase is driven by a swappable **stage**:
 
@@ -65,7 +65,7 @@ MissilePresetRegistry.register(
 ```
 
 **MissileEntity.Builder (programmatic / one-off).** The full API a preset wraps. Use it when spawning a
-missile from code (commands, dispensers, warheads that spawn child missiles). It exposes a few knobs the
+missile from code (commands, dispensers, warheads that spawn child missiles). It exposes a few variables the
 preset does not, notably `ascentStage(...)` and `ascentSpeed(...)`.
 
 ```java
@@ -251,7 +251,7 @@ Think of three competing goals and one budget:
         SPEED  (reach fast, force crossing shots, but drinks fuel and needs accel + turn)
          /  \
         /    \
-   RANGE ---- SURVIVABILITY  (evasion drinks fuel; stealth trades speed; health is free but only vs attrition)
+   RANGE ---- SURVIVABILITY  (evasion consumes fuel; stealth trades speed; health is free but only vs attrition)
         \    /
          \  /
          FUEL  (the shared budget: range = speed x fuel, and every dodge costs 150)

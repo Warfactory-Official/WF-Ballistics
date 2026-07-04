@@ -7,6 +7,7 @@ import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.util.OBB;
 import net.minecraft.client.renderer.LevelRenderer;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
@@ -150,7 +151,7 @@ public final class OBBRenderer {
      */
     private static double noseForward(Entity entity) {
         if (entity instanceof MissileEntity missile) {
-            String id = missile.getModelId();
+            ResourceLocation id = missile.getModelId();
             return MissileModels.center(id).y + MissileModels.dimensions(id).y * 0.5;
         }
         return 0.0;
