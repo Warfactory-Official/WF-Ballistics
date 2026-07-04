@@ -23,7 +23,7 @@ public final class AttackStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        double horizontalSpeed = missile.getCruiseSpeed() * (ctx.horizontalDist() / DECEL_RANGE);
+        double horizontalSpeed = missile.getCruiseSpeed() * Math.min(1.0, ctx.horizontalDist() / DECEL_RANGE);
         double vy = Math.max(missile.getDeltaMovement().y - DIVE_GRAVITY, TERMINAL_FALL_VELOCITY);
         return new Vec3(ctx.nx() * horizontalSpeed, vy, ctx.nz() * horizontalSpeed);
     }

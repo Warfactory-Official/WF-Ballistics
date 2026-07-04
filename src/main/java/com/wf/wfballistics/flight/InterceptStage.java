@@ -32,6 +32,7 @@ public final class InterceptStage implements FlightStage {
     // distant terrain while still catching the close walls of a silo or narrow depression.
     private static final double CLEAR_MARGIN = 3.0;
     private static final int CLEAR_SCAN_RADIUS = 3;
+    private static final int MAX_CLEAR_TICKS = 40;
 
     private InterceptStage() {
     }
@@ -78,7 +79,8 @@ public final class InterceptStage implements FlightStage {
     public MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
         // Hand off from the vertical launch-clear to homing once above the enclosing walls; otherwise the
         // interceptor never changes phase (it ends on a kill, a lost target, or lifetime).
-        if (missile.getPhase() == MissileEntity.Phase.ASCEND && clearedLaunchWalls(missile)) {
+        if (missile.getPhase() == MissileEntity.Phase.ASCEND
+                && (clearedLaunchWalls(missile) || missile.tickCount >= MAX_CLEAR_TICKS)) {
             return MissileEntity.Phase.CRUISE;
         }
         return null;

@@ -52,6 +52,12 @@ public final class SimMissileManager {
                 // treated as having crashed (interceptors are short-lived and resolved separately).
                 if (sm.role == SimMissile.Role.NORMAL) {
                     sm.fuel -= (int) dt;
+                    if (!sm.swarmMembers.isEmpty()) {
+                        for (SimMissile mem : sm.swarmMembers) {
+                            mem.fuel -= (int) dt;
+                        }
+                        sm.swarmMembers.removeIf(mem -> mem.fuel <= 0);
+                    }
                     if (sm.fuel <= 0) {
                         LOGGER.debug("[wfballistics] simulated missile {} ran out of fuel and crashed near {}",
                                 sm.id, sm.pos);
@@ -249,7 +255,40 @@ public final class SimMissileManager {
         missile.discard(); // triggers chunk release via MissileEntity#remove
     }
 
+    /**
+     * Offload a coordinated swarm (a commander plus its formation members) as a single simulated object: the
+     * commander drives the track; each member rides along as a snapshot at its offset from the commander, and
+     * the whole formation rematerializes together (see {@link #respawn}). Members are discarded before the
+     * commander so no successor is promoted on the way out.
+     */
+    public static void startSimSwarm(MissileEntity commander, List<MissileEntity> subordinates) {
+        if (!(commander.level() instanceof ServerLevel level)) {
+            return;
+        }
+        SimMissile lead = SimMissile.fromEntity(commander);
+        Vec3 cpos = commander.position();
+        for (MissileEntity sub : subordinates) {
+            SimMissile member = SimMissile.fromEntity(sub);
+            member.formationOffset = sub.position().subtract(cpos);
+            lead.swarmMembers.add(member);
+        }
+        SimMissileRegistry.get(level).add(lead);
+        LOGGER.debug("[wfballistics] swarm {} ({} members) offloaded as one object at {}",
+                commander.getSwarmId(), lead.swarmMembers.size() + 1, lead.pos);
+        for (MissileEntity sub : subordinates) {
+            sub.discard();
+        }
+        commander.discard();
+    }
+
     private static void respawn(ServerLevel level, SimMissile sm, Vec3 spawnPos) {
+        spawnOne(level, sm, spawnPos);
+        for (SimMissile member : sm.swarmMembers) {
+            spawnOne(level, member, spawnPos.add(member.formationOffset));
+        }
+    }
+
+    private static void spawnOne(ServerLevel level, SimMissile sm, Vec3 spawnPos) {
         MissileEntity m = sm.toEntity(level, spawnPos);
         ChunkPos cp = m.chunkPosition();
         // Force the spawn chunk (ticking) before adding so there is a loaded chunk to place into; the

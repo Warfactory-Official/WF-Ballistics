@@ -1,16 +1,24 @@
 package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
+import com.wf.wfballistics.item.MissilePreset;
+import com.wf.wfballistics.item.MissilePresetRegistry;
 import dev.engine_room.flywheel.api.visual.EntityVisual;
 import dev.engine_room.flywheel.api.visualization.EntityVisualizer;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.api.visualization.VisualizerRegistry;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.resources.model.ModelResourceLocation;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.EntityRenderersEvent;
+import net.minecraftforge.client.event.ModelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import org.slf4j.Logger;
+
+import java.util.Map;
 
 // This annotation tells Forge to only execute this class on the physical Client game instance
 @Mod.EventBusSubscriber(modid = WFBallistics.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
@@ -46,6 +54,32 @@ public class WFBallisticsClient {
         LOGGER.info("HELLO FROM CLIENT SETUP");
 
         ModModels.init();
+    }
+
+    @SubscribeEvent
+    public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
+        Map<ResourceLocation, BakedModel> models = event.getModels();
+        BakedModel template = missileItemTemplate(models);
+        if (template == null) {
+            return;
+        }
+        for (MissilePreset preset : MissilePresetRegistry.all()) {
+            models.put(missileItemModel(preset.id()), template);
+        }
+    }
+
+    private static BakedModel missileItemTemplate(Map<ResourceLocation, BakedModel> models) {
+        for (MissilePreset preset : MissilePresetRegistry.all()) {
+            BakedModel model = models.get(missileItemModel(preset.id()));
+            if (model != null && model.isCustomRenderer()) {
+                return model;
+            }
+        }
+        return null;
+    }
+
+    private static ModelResourceLocation missileItemModel(String presetId) {
+        return new ModelResourceLocation(WFBallistics.MODID, "missile_" + presetId, "inventory");
     }
 
     @SubscribeEvent

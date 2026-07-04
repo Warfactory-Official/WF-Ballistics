@@ -252,7 +252,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         boolean loiter = FlightStageRegistry.keyOf(LoiterStage.INSTANCE).equals(stageAt(CRUISE_STAGES, cruiseStageIndex));
         int loiterTicks = loiter ? LoiterStage.LOITER_TICKS : 0;
         int ticks = ArrivalEstimator.estimateTicks(Vec3.atCenterOf(menu.pos()),
-                new Vec3(tx, ty, tz), speed, cruiseAltitudeY, loiterTicks);
+                new Vec3(tx, ty, tz), speed, MissileEntity.ascentSpeedFor(speed), cruiseAltitudeY, loiterTicks);
         return String.format("ETA ~%.1fs", ticks / 20.0);
     }
 
