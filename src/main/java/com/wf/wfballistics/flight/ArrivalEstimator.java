@@ -3,10 +3,7 @@ package com.wf.wfballistics.flight;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Rough time-to-impact estimate for a missile, from its dominant flight terms: climb to cruise altitude,
- * horizontal transit at cruise speed, terminal descent — plus any loiter time when the cruise stage loiters.
- * A planning aid (shown in the debug emitter and available on the entity), not an exact integration of the
- * guidance, so it ignores turn arcs and the altitude-smoothing lag.
+ * Rough time-to-impact estimate for a missile, from its dominant flight terms
  */
 public final class ArrivalEstimator {
 

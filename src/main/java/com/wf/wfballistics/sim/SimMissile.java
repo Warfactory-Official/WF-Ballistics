@@ -31,9 +31,19 @@ public final class SimMissile {
     public int splitDepth = 0;
     public long swarmId = 0L;
     public UUID controlId = null;
+    public UUID teamId = null;
     // Interception.
     public Role role = Role.NORMAL;
     public UUID interceptTarget = null;
+    public float interceptChance = MissileSimConfig.DEFAULT_INTERCEPT_CHANCE;
+    // Propulsion & fuel (carried so an offloaded missile keeps burning down and reconstructs correctly).
+    public MissileEntity.FuelType fuelType = MissileEntity.FuelType.SOLID;
+    public int fuel = MissileEntity.DEFAULT_FUEL_TICKS;
+    public int fuelCapacity = MissileEntity.DEFAULT_FUEL_TICKS;
+    public double acceleration = MissileEntity.DEFAULT_ACCELERATION;
+    public double deceleration = MissileEntity.DEFAULT_DECELERATION;
+    public boolean stealth = false;
+    public float evasion = 0.0f;
 
     public static SimMissile fromEntity(MissileEntity m) {
         SimMissile sm = new SimMissile();
@@ -57,6 +67,15 @@ public final class SimMissile {
         sm.splitDepth = m.getSplitDepth();
         sm.swarmId = m.getSwarmId();
         sm.controlId = m.getControlId();
+        sm.teamId = m.getTeamId();
+        sm.interceptChance = m.getInterceptChance();
+        sm.fuelType = m.getFuelType();
+        sm.fuel = m.getFuel();
+        sm.fuelCapacity = m.getFuelCapacity();
+        sm.acceleration = m.getAcceleration();
+        sm.deceleration = m.getDeceleration();
+        sm.stealth = m.isStealth();
+        sm.evasion = m.getEvasion();
         sm.role = Role.NORMAL;
         return sm;
     }
@@ -100,12 +119,40 @@ public final class SimMissile {
         if (tag.hasUUID("ControlId")) {
             sm.controlId = tag.getUUID("ControlId");
         }
+        if (tag.hasUUID("TeamId")) {
+            sm.teamId = tag.getUUID("TeamId");
+        }
         try {
             sm.role = Role.valueOf(tag.getString("Role"));
         } catch (IllegalArgumentException ignored) {
         }
         if (tag.hasUUID("InterceptTarget")) {
             sm.interceptTarget = tag.getUUID("InterceptTarget");
+        }
+        if (tag.contains("InterceptChance")) {
+            sm.interceptChance = tag.getFloat("InterceptChance");
+        }
+        if (tag.contains("FuelType")) {
+            try {
+                sm.fuelType = MissileEntity.FuelType.valueOf(tag.getString("FuelType"));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        if (tag.contains("Fuel")) {
+            sm.fuel = tag.getInt("Fuel");
+        }
+        if (tag.contains("FuelCapacity")) {
+            sm.fuelCapacity = tag.getInt("FuelCapacity");
+        }
+        if (tag.contains("Acceleration")) {
+            sm.acceleration = tag.getDouble("Acceleration");
+        }
+        if (tag.contains("Deceleration")) {
+            sm.deceleration = tag.getDouble("Deceleration");
+        }
+        sm.stealth = tag.getBoolean("Stealth");
+        if (tag.contains("Evasion")) {
+            sm.evasion = tag.getFloat("Evasion");
         }
         return sm;
     }
@@ -140,8 +187,20 @@ public final class SimMissile {
                 .splitDepth(this.splitDepth)
                 .swarmId(this.swarmId)
                 .controlId(this.controlId)
+                .teamId(this.teamId)
+                .fuel(this.fuelType, this.fuel) // preserve remaining fuel across the offload/respawn
+                .acceleration(this.acceleration)
+                .deceleration(this.deceleration)
+                .stealth(this.stealth)
+                .evasion(this.evasion)
                 .startInCruise()
                 .startArmed(); // a simulated missile has already flown clear of its launcher
+
+        // A simulated interceptor rematerializes as a real interceptor entity, resuming its LOCK on the
+        // target so the in-world closest-approach roll (MissileEntity.tryIntercept) finishes the kill.
+        if (this.role == Role.INTERCEPTOR && this.interceptTarget != null) {
+            b.interceptor(true).lockTarget(this.interceptTarget).interceptChance(this.interceptChance);
+        }
 
         MissileEntity m = b.build();
         m.setUUID(this.id);
@@ -179,10 +238,21 @@ public final class SimMissile {
         if (controlId != null) {
             tag.putUUID("ControlId", controlId);
         }
+        if (teamId != null) {
+            tag.putUUID("TeamId", teamId);
+        }
         tag.putString("Role", role.name());
         if (interceptTarget != null) {
             tag.putUUID("InterceptTarget", interceptTarget);
         }
+        tag.putFloat("InterceptChance", interceptChance);
+        tag.putString("FuelType", fuelType.name());
+        tag.putInt("Fuel", fuel);
+        tag.putInt("FuelCapacity", fuelCapacity);
+        tag.putDouble("Acceleration", acceleration);
+        tag.putDouble("Deceleration", deceleration);
+        tag.putBoolean("Stealth", stealth);
+        tag.putFloat("Evasion", evasion);
         return tag;
     }
 

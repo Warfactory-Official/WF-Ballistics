@@ -10,6 +10,7 @@ import dev.engine_room.flywheel.lib.visual.AbstractVisual;
 import dev.engine_room.flywheel.lib.visual.SimpleDynamicVisual;
 import net.minecraft.core.Vec3i;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
@@ -23,6 +24,10 @@ public class InstancedTrailVisual extends AbstractVisual implements SimpleDynami
     private final InstancedTrailEffect effect;
     private final TransformedInstance[] instances;
     private final Matrix4f scratch = new Matrix4f();
+    private final Matrix4f base = new Matrix4f();
+    private final BillboardLod lod = new BillboardLod();
+    // Whether each slot is currently collapsed to a zero-size quad, so we only re-upload the collapse once.
+    private final boolean[] collapsed;
 
     public InstancedTrailVisual(VisualizationContext ctx, InstancedTrailEffect effect, float partialTick) {
         super(ctx, (Level) effect.level(), partialTick);
@@ -35,32 +40,55 @@ public class InstancedTrailVisual extends AbstractVisual implements SimpleDynami
         for (int i = 0; i < instances.length; i++) {
             instances[i] = instancer.createInstance();
         }
+        this.collapsed = new boolean[instances.length];
     }
 
     @Override
     public void beginFrame(Context context) {
-        float pt = context.partialTick();
+        Vec3 camPos = context.camera().getPosition();
+        double dx = effect.cx - camPos.x;
+        double dy = effect.cy - camPos.y;
+        double dz = effect.cz - camPos.z;
+        if (!lod.update(context.camera().rotation(), dx * dx + dy * dy + dz * dz)) {
+            return; // distant/settled trail: nothing changed enough to re-upload this frame
+        }
+
+        float pt = lod.interpolate ? context.partialTick() : 0F;
+        int stride = lod.stride;
         Quaternionf camRotation = context.camera().rotation();
         Vec3i origin = renderOrigin();
+
+        // Puffs from one emission section share age, life and scale, so their billboard matrix (rotation +
+        // scale about the centre) is identical and only the translation differs. Rebuild that base matrix only
+        // when the scale actually changes and reuse it across the run — this skips the per-puff camera rotation
+        // for the bulk of a trail.
+        float baseScale = Float.NaN;
 
         for (int i = 0; i < instances.length; i++) {
             InstancedTrailEffect.Flame flame = effect.pool[i];
             TransformedInstance instance = instances[i];
 
-            if (!flame.active) {
-                instance.setTransform(scratch.identity().scale(0F));
-                instance.setChanged();
+            // Inactive slots, and (on distant trails) the strided-out neighbours a drawn puff stands in for,
+            // collapse to a zero-size quad. Only re-upload that collapse once.
+            if (!flame.active || (i % stride) != 0) {
+                if (!collapsed[i]) {
+                    instance.setTransform(scratch.identity().scale(0F));
+                    instance.setChanged();
+                    collapsed[i] = true;
+                }
                 continue;
             }
+            collapsed[i] = false;
 
             float scale = flame.scale(pt);
-            scratch.identity()
-                    .translate((float) (flame.ix(pt) - origin.getX()),
-                            (float) (flame.iy(pt) - origin.getY()),
-                            (float) (flame.iz(pt) - origin.getZ()))
-                    .rotate(camRotation)
-                    .scale(scale)
-                    .translate(-0.5F, -0.5F, -0.5F);
+            if (scale != baseScale) {
+                base.identity().rotate(camRotation).scale(scale).translate(-0.5F, -0.5F, -0.5F);
+                baseScale = scale;
+            }
+            scratch.set(base).translateLocal(
+                    (float) (flame.ix(pt) - origin.getX()),
+                    (float) (flame.iy(pt) - origin.getY()),
+                    (float) (flame.iz(pt) - origin.getZ()));
 
             instance.setTransform(scratch);
             instance.colorArgb(flame.argb(pt));

@@ -49,6 +49,18 @@ public final class ExplosionCreator {
     }
 
     /**
+     * @param waveScale ring radius (blocks); scale it with speed for a bigger crack at higher Mach
+     */
+    public static void sonicBoom(Level level, double x, double y, double z, float waveScale) {
+        if (level.isClientSide) {
+            return;
+        }
+        CompoundTag data = new CompoundTag();
+        data.putFloat("waveScale", waveScale);
+        WFNetwork.sendToAllAround(level, x, y, z, 256.0, new AuxParticlePacket("sonic_boom", x, y, z, data));
+    }
+
+    /**
      * Compact large-explosion preset (HBM {@code composeEffectSmall}).
      */
     public static void composeEffectSmall(Level level, double x, double y, double z) {

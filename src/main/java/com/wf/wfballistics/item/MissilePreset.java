@@ -3,6 +3,7 @@ package com.wf.wfballistics.item;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.ModEntities;
+import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
@@ -14,6 +15,7 @@ import net.minecraft.world.phys.Vec3;
  *
  * <p>Build one with {@link Builder}; only {@code id} / {@code model} / {@code warhead} are required, the rest
  * default to a plain terrain-following cruise missile.
+ * TODO: Add Lombok or something
  */
 public final class MissilePreset {
 
@@ -28,6 +30,18 @@ public final class MissilePreset {
     private final int fragmentCount;
     private final float explosionOffset;
     private final int splitDepth;
+    private final boolean interceptor;
+    private final float interceptChance;
+    private final MissileEntity.FuelType fuelType;
+    private final int fuelTicks;
+    private final double acceleration;
+    private final double deceleration;
+    private final String cruiseStageId;
+    private final String attackStageId;
+    private final boolean stealth;
+    private final float evasion;
+    private final boolean evasiveManeuver;
+    private final int exhaustColor;
 
     private MissilePreset(Builder b) {
         this.id = b.id;
@@ -41,6 +55,18 @@ public final class MissilePreset {
         this.fragmentCount = b.fragmentCount;
         this.explosionOffset = b.explosionOffset;
         this.splitDepth = b.splitDepth;
+        this.interceptor = b.interceptor;
+        this.interceptChance = b.interceptChance;
+        this.fuelType = b.fuelType;
+        this.fuelTicks = b.fuelTicks;
+        this.acceleration = b.acceleration;
+        this.deceleration = b.deceleration;
+        this.cruiseStageId = b.cruiseStageId;
+        this.attackStageId = b.attackStageId;
+        this.stealth = b.stealth;
+        this.evasion = b.evasion;
+        this.evasiveManeuver = b.evasiveManeuver;
+        this.exhaustColor = b.exhaustColor;
     }
 
     public static Builder builder(String id, String modelId, String warheadId) {
@@ -57,6 +83,86 @@ public final class MissilePreset {
 
     public String warheadId() {
         return warheadId;
+    }
+
+    public boolean isInterceptor() {
+        return interceptor;
+    }
+
+    public boolean highAltitude() {
+        return highAltitude;
+    }
+
+    public double altitudeParam() {
+        return altitudeParam;
+    }
+
+    public double cruiseSpeed() {
+        return cruiseSpeed;
+    }
+
+    public double turnRate() {
+        return turnRate;
+    }
+
+    public float health() {
+        return health;
+    }
+
+    public int fragmentCount() {
+        return fragmentCount;
+    }
+
+    public float explosionOffset() {
+        return explosionOffset;
+    }
+
+    public int splitDepth() {
+        return splitDepth;
+    }
+
+    public float interceptChance() {
+        return interceptChance;
+    }
+
+    public MissileEntity.FuelType fuelType() {
+        return fuelType;
+    }
+
+    public int fuelTicks() {
+        return fuelTicks;
+    }
+
+    public double acceleration() {
+        return acceleration;
+    }
+
+    public double deceleration() {
+        return deceleration;
+    }
+
+    public String cruiseStageId() {
+        return cruiseStageId;
+    }
+
+    public String attackStageId() {
+        return attackStageId;
+    }
+
+    public boolean isStealth() {
+        return stealth;
+    }
+
+    public float evasion() {
+        return evasion;
+    }
+
+    public boolean isEvasiveManeuver() {
+        return evasiveManeuver;
+    }
+
+    public int exhaustColor() {
+        return exhaustColor;
     }
 
     /**
@@ -82,6 +188,26 @@ public final class MissilePreset {
         if (splitDepth > 0) {
             b.splitDepth(splitDepth);
         }
+        if (interceptor) {
+            b.interceptor(true).interceptChance(interceptChance);
+        }
+        b.fuel(fuelType, fuelTicks).acceleration(acceleration).deceleration(deceleration);
+        if (cruiseStageId != null) {
+            b.cruiseStage(cruiseStageId);
+        }
+        if (attackStageId != null) {
+            b.attackStage(attackStageId);
+        }
+        if (stealth) {
+            b.stealth(true);
+        }
+        if (evasion > 0.0f) {
+            b.evasion(evasion);
+        }
+        if (evasiveManeuver) {
+            b.evasiveManeuver(true);
+        }
+        b.exhaustColor(exhaustColor);
         return b.build();
     }
 
@@ -97,6 +223,18 @@ public final class MissilePreset {
         private int fragmentCount = MissileEntity.DEFAULT_FRAGMENT_COUNT;
         private float explosionOffset = 0.0f;
         private int splitDepth = 0;
+        private boolean interceptor = false;
+        private float interceptChance = MissileSimConfig.DEFAULT_INTERCEPT_CHANCE;
+        private MissileEntity.FuelType fuelType = MissileEntity.FuelType.SOLID;
+        private int fuelTicks = MissileEntity.DEFAULT_FUEL_TICKS;
+        private double acceleration = MissileEntity.DEFAULT_ACCELERATION;
+        private double deceleration = MissileEntity.DEFAULT_DECELERATION;
+        private String cruiseStageId = null; // null = phase default
+        private String attackStageId = null;
+        private boolean stealth = false;
+        private float evasion = 0.0f;
+        private boolean evasiveManeuver = false;
+        private int exhaustColor = MissileEntity.DEFAULT_EXHAUST_COLOR;
 
         private Builder(String id, String modelId, String warheadId) {
             this.id = id;
@@ -155,6 +293,86 @@ public final class MissilePreset {
          */
         public Builder splitDepth(int splitDepth) {
             this.splitDepth = splitDepth;
+            return this;
+        }
+
+        /**
+         * Make this preset an interceptor with the given kill chance (see {@link MissileEntity.Builder#interceptor}).
+         * Best paired with the {@code "interceptor"} warhead and a high {@code cruiseSpeed}/{@code turnRate}.
+         */
+        public Builder interceptor(float chance) {
+            this.interceptor = true;
+            this.interceptChance = chance;
+            return this;
+        }
+
+        /**
+         * Load the tank: {@code type} of propellant and {@code ticks} of powered flight (see
+         * {@link MissileEntity.Builder#fuel}). Running dry mid-flight makes the missile fall ballistically.
+         */
+        public Builder fuel(MissileEntity.FuelType type, int ticks) {
+            this.fuelType = type;
+            this.fuelTicks = ticks;
+            return this;
+        }
+
+        /**
+         * Acceleration / deceleration limits (blocks/tick^2) governing how fast actual speed reaches and sheds
+         * the cruise (target) speed.
+         */
+        public Builder accel(double acceleration, double deceleration) {
+            this.acceleration = acceleration;
+            this.deceleration = deceleration;
+            return this;
+        }
+
+        /**
+         * Pick the cruise-phase flight stage by id (e.g. {@code "loiter"} for a loitering drone).
+         */
+        public Builder cruiseStage(String id) {
+            this.cruiseStageId = id;
+            return this;
+        }
+
+        /**
+         * Pick the attack-phase flight stage by id (e.g. {@code "dive"} for a near-vertical top-attack).
+         */
+        public Builder attackStage(String id) {
+            this.attackStageId = id;
+            return this;
+        }
+
+        /**
+         * Make this missile stealth: invisible to automatic detection (see {@link MissileEntity#isStealth}).
+         */
+        public Builder stealth() {
+            this.stealth = true;
+            return this;
+        }
+
+        /**
+         * Evasion (0..1): how often this missile escapes an interception (see {@link MissileEntity#getEvasion}).
+         */
+        public Builder evasion(float evasion) {
+            this.evasion = evasion;
+            return this;
+        }
+
+        /**
+         * Evasive maneuvering: makes evasion boosts jink off-course instead of sprinting straight (see
+         * {@link MissileEntity.Builder#evasiveManeuver}). Pair with a non-zero {@link #evasion}.
+         */
+        public Builder evasiveManeuver() {
+            this.evasiveManeuver = true;
+            return this;
+        }
+
+        /**
+         * Tint of the exhaust trail (hot RGB 0xRRGGBB) the client-side plume fades from (see
+         * {@link MissileEntity.Builder#exhaustColor}). Default {@link MissileEntity#DEFAULT_EXHAUST_COLOR}.
+         */
+        public Builder exhaustColor(int rgb) {
+            this.exhaustColor = rgb;
             return this;
         }
 

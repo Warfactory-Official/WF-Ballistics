@@ -21,6 +21,11 @@ public final class FlightStageRegistry {
         register(Phase.CRUISE, LoiterStage.INSTANCE);
         register(Phase.ATTACK, AttackStage.INSTANCE);
         register(Phase.ATTACK, VerticalDiveStage.INSTANCE);
+        // Interceptor homing: registered for every phase so an all-"intercept" interceptor keeps homing in
+        // any phase and survives the id-based FlightProfile rebuild on reload (see InterceptStage).
+        register(Phase.ASCEND, InterceptStage.INSTANCE);
+        register(Phase.CRUISE, InterceptStage.INSTANCE);
+        register(Phase.ATTACK, InterceptStage.INSTANCE);
     }
 
     private FlightStageRegistry() {

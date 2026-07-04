@@ -58,6 +58,10 @@ public final class LoiterStage implements FlightStage {
     @Override
     @Nullable
     public MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
+        if (missile.hasDesignatedTarget()) {
+            boolean onStation = ctx.horizontalDist() <= ORBIT_RADIUS + 6.0;
+            return (missile.hasLiveDesignatedTarget() && onStation) ? MissileEntity.Phase.ATTACK : null;
+        }
         return missile.getLoiterTicks() >= LOITER_TICKS ? MissileEntity.Phase.ATTACK : null;
     }
 

@@ -1,26 +1,5 @@
-# shahedjarty_body material (auto-generated for WF-Ballistics)
+# shahedjarty_body material (single material; every face samples the one shahedtxtjarty collage via its UVs)
 newmtl Material
-Ka 1.000 1.000 1.000
-Kd 1.000 1.000 1.000
-Ks 0.000 0.000 0.000
-d 1.0
-illum 1
-map_Kd #missile_texture
-newmtl Material.001
-Ka 1.000 1.000 1.000
-Kd 1.000 1.000 1.000
-Ks 0.000 0.000 0.000
-d 1.0
-illum 1
-map_Kd #missile_texture
-newmtl Material.002
-Ka 1.000 1.000 1.000
-Kd 1.000 1.000 1.000
-Ks 0.000 0.000 0.000
-d 1.0
-illum 1
-map_Kd #missile_texture
-newmtl Material.003
 Ka 1.000 1.000 1.000
 Kd 1.000 1.000 1.000
 Ks 0.000 0.000 0.000

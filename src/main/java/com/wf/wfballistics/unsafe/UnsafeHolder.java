@@ -12,7 +12,6 @@ import java.lang.reflect.Field;
  * operation the renderer and the {@code BufferBuilder} mixin actually use — absolute-address
  * {@code putFloat}/{@code putInt}, {@code getLong(Object, long)}, and the field/array offset queries — with
  * identical runtime behaviour and no compiler-plugin requirement.
- * Movblock's magic
  */
 public final class UnsafeHolder {
     public static final Unsafe U = getUnsafe();

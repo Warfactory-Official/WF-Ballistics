@@ -41,6 +41,24 @@ public class ModBlocks {
             ITEMS.register("turret_ciws", () ->
                     new BlockItem(TURRET_CIWS.get(), new Item.Properties()));
 
+    public static final RegistryObject<Block> TURRET_INTERCEPTOR =
+            BLOCKS.register("turret_interceptor", () -> new TurretInterceptorBlock(
+                    BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).requiresCorrectToolForDrops(),
+                    false));
+
+    public static final RegistryObject<Item> TURRET_INTERCEPTOR_ITEM =
+            ITEMS.register("turret_interceptor", () ->
+                    new BlockItem(TURRET_INTERCEPTOR.get(), new Item.Properties()));
+
+    public static final RegistryObject<Block> TURRET_INTERCEPTOR_SUPERSONIC =
+            BLOCKS.register("turret_interceptor_supersonic", () -> new TurretInterceptorBlock(
+                    BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).requiresCorrectToolForDrops(),
+                    true));
+
+    public static final RegistryObject<Item> TURRET_INTERCEPTOR_SUPERSONIC_ITEM =
+            ITEMS.register("turret_interceptor_supersonic", () ->
+                    new BlockItem(TURRET_INTERCEPTOR_SUPERSONIC.get(), new Item.Properties()));
+
     public static void register(IEventBus bus) {
         BLOCKS.register(bus);
         ITEMS.register(bus);

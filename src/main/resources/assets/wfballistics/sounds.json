@@ -34,5 +34,18 @@
     "sounds": [
       "wfballistics:weapon/explosion_large_far"
     ]
+  },
+  "weapon.sonic_boom": {
+    "sounds": [
+      "wfballistics:weapon/sonic_boom"
+    ]
+  },
+  "weapon.missile_flight": {
+    "sounds": [
+      {
+        "name": "wfballistics:weapon/missile_flight",
+        "stream": true
+      }
+    ]
   }
 }

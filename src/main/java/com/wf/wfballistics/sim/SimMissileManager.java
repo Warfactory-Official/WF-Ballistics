@@ -3,7 +3,6 @@ package com.wf.wfballistics.sim;
 import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileModels;
-import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -49,6 +48,16 @@ public final class SimMissileManager {
             sm.lastGameTime = now;
             if (dt > 0) {
                 advance(sm, dt, byId);
+                // Powered missiles burn fuel off-world too; one that runs dry over unloaded terrain is
+                // treated as having crashed (interceptors are short-lived and resolved separately).
+                if (sm.role == SimMissile.Role.NORMAL) {
+                    sm.fuel -= (int) dt;
+                    if (sm.fuel <= 0) {
+                        LOGGER.debug("[wfballistics] simulated missile {} ran out of fuel and crashed near {}",
+                                sm.id, sm.pos);
+                        dead.add(sm);
+                    }
+                }
             }
         }
 
@@ -127,7 +136,14 @@ public final class SimMissileManager {
     private static void resolveByChance(ServerLevel level, SimMissile interceptor, SimMissile target, Set<SimMissile> dead) {
         double d = MissileSimConfig.INTERCEPT_DISTANCE;
         if (interceptor.pos.distanceToSqr(target.pos) <= d * d) {
-            boolean hit = level.getRandom().nextFloat() < MissileSimConfig.INTERCEPT_CHANCE;
+            // Higher-tier (evasive) targets can boost clear, but only to the extent they can out-run the
+            // interceptor: escape scales with the boosted-speed / interceptor-speed ratio, so a much faster
+            // interceptor still connects (matches the in-world evadeBoost math; cruising, so no dive bonus).
+            double boosted = target.speed * 2.0; // approximates the evasive boost burst
+            double speedFactor = Math.min(1.0, boosted / Math.max(1.0E-3, interceptor.speed));
+            float escape = (float) (target.evasion * speedFactor);
+            float chance = interceptor.interceptChance * (1.0f - escape);
+            boolean hit = level.getRandom().nextFloat() < chance;
             dead.add(interceptor); // spent whether it hits or misses
             if (hit) {
                 dead.add(target);
@@ -139,9 +155,9 @@ public final class SimMissileManager {
     }
 
     /**
-     * IN_WORLD: predict the collision area and, once it is imminent, spawn both missiles as real
-     * entities a short distance back from it and let them play out in the loaded world.
-     * TODO: Interception mechanics
+     * IN_WORLD: predict the collision area and, once it is imminent, respawn <em>both</em> the target and the
+     * interceptor as real entities a short distance back from it, and let the real interceptor's in-world
+     * closest-approach roll ({@link MissileEntity#tryIntercept}) play out the kill in the loaded world.
      */
     private static void resolveInWorld(ServerLevel level, SimMissile interceptor, SimMissile target, Set<SimMissile> dead) {
         CollisionPredictor.Result p = CollisionPredictor.predict(interceptor, target);
@@ -151,35 +167,22 @@ public final class SimMissileManager {
         Vec3 c = p.point();
         double dist = MissileSimConfig.INTERCEPT_SPAWN_DISTANCE;
 
+        // Target: a short way back along its heading toward the meeting point.
         Vec3 tHeading = horizontalUnit(target.pos, target.target);
         Vec3 tSpawn = new Vec3(c.x - tHeading.x * dist, target.simY, c.z - tHeading.z * dist);
         respawn(level, target, tSpawn);
 
-
+        // Interceptor: a real interceptor entity (its LOCK on the target rides in SimMissile.toEntity),
+        // spawned back along its own approach so it flies in and rolls for the kill.
         Vec3 toC = c.subtract(interceptor.pos);
         double len = toC.length();
         Vec3 iUnit = len > 1.0E-6 ? toC.scale(1.0 / len) : new Vec3(0.0, 0.0, 1.0);
         Vec3 iSpawn = c.subtract(iUnit.scale(dist));
-        spawnInertInterceptor(level, interceptor, iSpawn, c);
+        respawn(level, interceptor, iSpawn);
 
         dead.add(interceptor);
         dead.add(target);
         LOGGER.debug("[wfballistics] in-world interception staged around {} ({} ticks out)", c, p.ticks());
-    }
-
-    private static void spawnInertInterceptor(ServerLevel level, SimMissile interceptor, Vec3 spawnPos, Vec3 aim) {
-        MissileEntity m = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
-                .target(aim)
-                .highAltitude(aim.y)
-                .model(interceptor.modelId)
-                .cruiseSpeed(interceptor.speed)
-                .detonation("inert")
-                .startInCruise()
-                .build();
-        m.moveTo(spawnPos.x, spawnPos.y, spawnPos.z, m.getYRot(), m.getXRot());
-        ChunkPos cp = m.chunkPosition();
-        ForgeChunkManager.forceChunk(level, WFBallistics.MODID, m, cp.x, cp.z, true, true);
-        level.addFreshEntity(m);
     }
 
     private static Vec3 horizontalUnit(Vec3 from, Vec3 to) {
@@ -258,6 +261,10 @@ public final class SimMissileManager {
 
 
     public static void launchInterceptor(ServerLevel level, Vec3 start, UUID targetId) {
+        launchInterceptor(level, start, targetId, MissileSimConfig.DEFAULT_INTERCEPT_CHANCE);
+    }
+
+    public static void launchInterceptor(ServerLevel level, Vec3 start, UUID targetId, float chance) {
         SimMissile sm = new SimMissile();
         sm.id = UUID.randomUUID();
         sm.pos = start;
@@ -270,6 +277,7 @@ public final class SimMissileManager {
         sm.modelId = MissileModels.DEFAULT;
         sm.role = SimMissile.Role.INTERCEPTOR;
         sm.interceptTarget = targetId;
+        sm.interceptChance = chance;
         SimMissileRegistry.get(level).add(sm);
         LOGGER.debug("[wfballistics] interceptor {} launched at target {}", sm.id, targetId);
     }

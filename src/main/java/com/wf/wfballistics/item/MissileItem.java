@@ -1,15 +1,19 @@
 package com.wf.wfballistics.item;
 
 import com.wf.wfballistics.MissileEntity;
+import net.minecraft.ChatFormatting;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -17,13 +21,10 @@ import net.minecraftforge.client.extensions.common.IClientItemExtensions;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Consumer;
 
-/**
- * A carryable preset missile. Right-click to launch it at whatever the player is aiming at (a block hit, or a
- * point downrange if aiming at the sky). Renders as the actual 3D missile model in hand and inventory via
- * {@link com.wf.wfballistics.client.render.MissileItemRenderer} (see {@link #initializeClient}).
- */
+
 public class MissileItem extends Item {
 
     private static final double AIM_RANGE = 256.0;
@@ -47,6 +48,49 @@ public class MissileItem extends Item {
         return hit.getType() == HitResult.Type.BLOCK ? hit.getLocation() : end;
     }
 
+    @Nullable
+    private static MissileEntity lockCandidate(Level level, Player player) {
+        Vec3 eye = player.getEyePosition();
+        Vec3 end = eye.add(player.getLookAngle().scale(AIM_RANGE));
+        AABB search = new AABB(eye, end).inflate(1.0);
+        MissileEntity best = null;
+        double bestSq = Double.MAX_VALUE;
+        for (MissileEntity m : level.getEntitiesOfClass(MissileEntity.class, search,
+                e -> e.isAlive() && !e.isInterceptor())) {
+            Optional<Vec3> clip = m.getBoundingBox().inflate(m.getPickRadius()).clip(eye, end);
+            if (clip.isPresent()) {
+                double d = clip.get().distanceToSqr(eye);
+                if (d < bestSq) {
+                    bestSq = d;
+                    best = m;
+                }
+            }
+        }
+        return best;
+    }
+
+
+    @Nullable
+    private static Entity aimEntity(Level level, Player player) {
+        Vec3 eye = player.getEyePosition();
+        Vec3 end = eye.add(player.getLookAngle().scale(AIM_RANGE));
+        AABB search = new AABB(eye, end).inflate(1.0);
+        Entity best = null;
+        double bestSq = Double.MAX_VALUE;
+        for (Entity e : level.getEntities(player, search,
+                x -> x != player && x.isAlive() && x.isPickable() && !(x instanceof MissileEntity))) {
+            Optional<Vec3> clip = e.getBoundingBox().inflate(0.3).clip(eye, end);
+            if (clip.isPresent()) {
+                double d = clip.get().distanceToSqr(eye);
+                if (d < bestSq) {
+                    bestSq = d;
+                    best = e;
+                }
+            }
+        }
+        return best;
+    }
+
     public MissilePreset preset() {
         return this.preset;
     }
@@ -61,6 +105,19 @@ public class MissileItem extends Item {
         if (!level.isClientSide) {
             Vec3 target = aimTarget(level, player);
             MissileEntity missile = preset.build(level, target);
+            missile.setControlId(player.getUUID());
+            missile.setTeamId(com.wf.wfballistics.compat.WarforgeCompat.factionOfPlayer(player.getUUID()));
+            if (preset.isInterceptor()) {
+                MissileEntity locked = lockCandidate(level, player);
+                if (locked != null) {
+                    missile.setInterceptLock(locked.getUUID());
+                }
+            } else {
+                Entity designated = aimEntity(level, player);
+                if (designated != null) {
+                    missile.setDesignatedTarget(designated.getUUID());
+                }
+            }
             Vec3 spawn = player.getEyePosition().add(player.getLookAngle().scale(2.0));
             missile.moveTo(spawn.x, spawn.y, spawn.z, player.getYRot(), 0.0f);
             level.addFreshEntity(missile);
@@ -73,17 +130,67 @@ public class MissileItem extends Item {
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide());
     }
 
+    private static Component kv(String label, String value, ChatFormatting valueColour) {
+        return Component.literal(label + ": ").withStyle(ChatFormatting.GRAY)
+                .append(Component.literal(value).withStyle(valueColour));
+    }
+
     @Override
     public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
-        tooltip.add(Component.translatable("item.wfballistics.missile.model", preset.modelId())
-                .withStyle(net.minecraft.ChatFormatting.GRAY));
-        tooltip.add(Component.translatable("item.wfballistics.missile.warhead", preset.warheadId())
-                .withStyle(net.minecraft.ChatFormatting.GRAY));
+        tooltip.add(kv("Airframe", preset.modelId(), ChatFormatting.WHITE));
+        tooltip.add(kv("Warhead", preset.warheadId(), ChatFormatting.WHITE));
+
+
+        if (!Screen.hasShiftDown()) {
+            tooltip.add(Component.literal("Hold ").withStyle(ChatFormatting.DARK_GRAY)
+                    .append(Component.literal("SHIFT").withStyle(ChatFormatting.GRAY))
+                    .append(Component.literal(" for details").withStyle(ChatFormatting.DARK_GRAY)));
+            return;
+        }
+
+        // Flight (aqua/blue).
+        tooltip.add(kv("Cruise speed", String.format("%.1f blocks/tick", preset.cruiseSpeed()), ChatFormatting.AQUA));
+        tooltip.add(kv("Accel / decel", String.format("%.2f / %.2f", preset.acceleration(), preset.deceleration()),
+                ChatFormatting.AQUA));
+        tooltip.add(kv("Turn rate", preset.turnRate() > 0.0 ? String.format("%.2f rad/tick", preset.turnRate()) : "auto",
+                ChatFormatting.AQUA));
+        tooltip.add(kv("Altitude", preset.highAltitude()
+                ? "high, " + (int) preset.altitudeParam()
+                : "terrain-follow +" + (int) preset.altitudeParam(), ChatFormatting.AQUA));
+        int ticks = preset.fuelTicks();
+        tooltip.add(kv("Fuel", preset.fuelType() + ", " + ticks + " ticks (~" + (ticks / 20) + "s)", ChatFormatting.BLUE));
+
+        // Survivability (green / light purple).
+        tooltip.add(kv("Health", String.valueOf((int) preset.health()), ChatFormatting.GREEN));
+        if (preset.evasion() > 0.0f) {
+            tooltip.add(kv("Evasion", Math.round(preset.evasion() * 100) + "%", ChatFormatting.GREEN));
+        }
+        if (preset.isStealth()) {
+            tooltip.add(kv("Stealth", "low observable", ChatFormatting.LIGHT_PURPLE));
+        }
+
+        // Role / payload (red / gold).
+        if (preset.isInterceptor()) {
+            tooltip.add(kv("Interceptor kill chance", Math.round(preset.interceptChance() * 100) + "%", ChatFormatting.RED));
+        }
+        if (preset.explosionOffset() > 0.0f) {
+            tooltip.add(kv("Airburst", (int) preset.explosionOffset() + " blocks above target", ChatFormatting.GOLD));
+        }
+        if (preset.splitDepth() > 0) {
+            tooltip.add(kv("Split depth", String.valueOf(preset.splitDepth()), ChatFormatting.GOLD));
+        }
+        if (preset.fragmentCount() > 0 && ("fragmentation".equals(preset.warheadId()) || preset.splitDepth() > 0)) {
+            tooltip.add(kv("Fragments", String.valueOf(preset.fragmentCount()), ChatFormatting.GOLD));
+        }
+        if (preset.cruiseStageId() != null || preset.attackStageId() != null) {
+            String cruise = preset.cruiseStageId() != null ? preset.cruiseStageId() : "cruise";
+            String attack = preset.attackStageId() != null ? preset.attackStageId() : "attack";
+            tooltip.add(kv("Flight profile", cruise + " / " + attack, ChatFormatting.DARK_AQUA));
+        }
     }
 
     @Override
     public void initializeClient(Consumer<IClientItemExtensions> consumer) {
-        // Client-only: swaps in the 3D missile-model renderer. Never loaded on the dedicated server.
         consumer.accept(new IClientItemExtensions() {
             @Override
             public net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer getCustomRenderer() {

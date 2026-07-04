@@ -4,6 +4,7 @@ import com.wf.wfballistics.ModModels;
 import dev.engine_room.flywheel.api.material.Material;
 import dev.engine_room.flywheel.api.material.Transparency;
 import dev.engine_room.flywheel.api.model.Model;
+import dev.engine_room.flywheel.lib.material.CutoutShaders;
 import dev.engine_room.flywheel.lib.material.SimpleMaterial;
 import dev.engine_room.flywheel.lib.model.baked.BakedModelBuilder;
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
@@ -12,8 +13,10 @@ import dev.engine_room.flywheel.lib.util.RendererReloadCache;
 public final class FlywheelModels {
 
 
+
     private static final Material PARTICLE = SimpleMaterial.builder()
-            .transparency(Transparency.TRANSLUCENT)
+            .transparency(Transparency.ORDER_INDEPENDENT)
+            .cutout(CutoutShaders.EPSILON)
             .diffuse(false)
             .mipmap(false)
             .build();

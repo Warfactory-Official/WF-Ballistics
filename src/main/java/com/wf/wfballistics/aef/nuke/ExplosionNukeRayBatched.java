@@ -11,15 +11,17 @@ import net.minecraft.world.phys.Vec3;
 import java.util.*;
 
 /**
- * 处理核爆过程的工具类
+ * Carries out a nuclear blast as a batched, multi-tick ray-march: rays are cast outward on a generalized
+ * spiral, the blocks each ray reaches are recorded, then those blocks are cleared chunk-by-chunk so the
+ * cost is spread across several ticks instead of stalling one.
  */
 public class ExplosionNukeRayBatched implements IExplosionRay {
-    //所有需要处理的区块，key是区块的位置，value是区块中待删方块的列表
+    // Blocks queued for removal, grouped by chunk: key = chunk position, value = ray endpoints in that chunk.
     private final HashMap<ChunkPos, List<Vec3>> perChunk = new HashMap<>(); //for future: optimize blockmap further by using sub-chunks instead of chunks
     private final List<ChunkPos> orderedChunks = new ArrayList<>();
     private final CoordComparator comparator = new CoordComparator();
-    private final BlockPos pos;       //爆炸中心所在的位置（实体）
-    private final ChunkPos chunkPos;  //爆炸中心所在的区块
+    private final BlockPos pos;       // blast center (the explosion entity's position)
+    private final ChunkPos chunkPos;  // chunk containing the blast center
 
     private final Level level;
 
@@ -30,7 +32,7 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
     int collectTipCnt = 0;
     int processChunkCnt = 0;
     private int gspNum;
-    //球坐标系的方位角
+    // Spherical angles of the current ray (theta = polar, phi = azimuth).
     private double theta;
     private double phi;
     private boolean isAusf3Complete = false;
@@ -66,43 +68,39 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
     public void collectTip(int count) {
         int amountProcessed = 0;
         while (this.gspNumMax >= this.gspNum) {
-            //将球坐标方位角转换成对应直角坐标方向向量
+            // Convert the spherical angles into a Cartesian direction vector.
             Vec3 vec = spherical2cartesian(new Vec2((float) theta, (float) phi));
 
             int length = (int) Math.ceil(strength);
-            //res这里应该是类似冲击强度的概念
+            // Remaining shockwave intensity along this ray, depleted as it passes through blocks.
             float res = strength;
-            //沿着一条从中心发出的射线，冲击波可以到达的最远距离。
+            // Farthest block this ray reaches (its endpoint).
             Vec3 endPoint = null;
             HashSet<ChunkPos> chunkCoords = new HashSet();
-            //从原点开始，沿着特定方向，考察length格数
-            //i相当于延申的距离
+            // March outward from the center along vec, one block at a time, up to `length` blocks.
             for (int i = 0; i < length && i < this.radius && res > 0; i++) {
-                //从原点pos沿vec延申i格的位置
+                // Position i blocks out from the center along vec.
                 Vec3 dirVec = new Vec3(pos.getX(), pos.getY(), pos.getZ()).add(vec.scale(i));
                 BlockPos dirPos = new BlockPos((int) Math.floor(dirVec.x), (int) Math.floor(dirVec.y), (int) Math.floor(dirVec.z));
                 BlockState blockState = level.getBlockState(dirPos);
-                //fac应该是冲击波的衰减程度
+                // Shockwave falloff with distance from the center.
                 double fac = 100 - ((double) i) / ((double) length) * 100;
                 fac *= 0.07D;
 
-                //爆炸抗性这里先使用block的默认抗性
-                // 我也搞不明白怎么回事，只能用一种简单粗暴的方式删除所有草方块之类的东西。
+                // Uses the block's default explosion resistance; replaceable blocks (grass, plants, ...) are cleared outright.
                 if (blockState.canBeReplaced()) level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2, 0);
                 if (!blockState.liquid())
                     res -= (float) Math.pow(blockState.getBlock().getExplosionResistance(), 7.5D - fac);
 
                 if (res > 0 && !blockState.isAir()) {
-                    //更新lastPos
                     endPoint = dirVec;
-                    //添加区块
                     chunkCoords.add(new ChunkPos(dirPos));
                 }
             }
 
             for (ChunkPos pos : chunkCoords) {
                 List<Vec3> endList = perChunk.computeIfAbsent(pos, k -> new ArrayList<>());
-                //不同区块重用端点，端点不一定在区块内，删除的时候在下一阶段做判断
+                // Chunks reuse the same endpoint, which may fall outside the chunk; that is resolved in the removal phase.
                 endList.add(endPoint);
             }
 
@@ -124,8 +122,8 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
 
         ChunkPos coord = orderedChunks.get(0);
         List<Vec3> list = perChunk.get(coord);
-        HashSet<BlockPos> toRem = new HashSet<>();      //被移除的方块
-        HashSet<BlockPos> toRemTips = new HashSet<>();  //被移除的处在边界点的方块
+        HashSet<BlockPos> toRem = new HashSet<>();      // blocks to remove in this chunk
+        HashSet<BlockPos> toRemTips = new HashSet<>();  // blocks to remove that sit at a ray's endpoint (edge tips)
 
         int enter = Math.min(Math.abs(pos.getX() - (coord.x << 4)), Math.abs(pos.getZ() - (coord.z << 4))) - 16; //jump ahead to cut back on NOPs
 
@@ -166,9 +164,6 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
             }
         }
 
-//        List<T> nearbyEntities = level.getNearbyEntities(LivingEntity.class, TargetingConditions.forCombat().range(20.0D), this, new AABB(new BlockPos(coord.x << 4, pos.getY() - 30, coord.z << 4), new BlockPos(coord.x << 4 + 15, pos.getY() + 30, coord.z << 4 + 15)));
-
-
         perChunk.remove(coord);
         orderedChunks.remove(0);
     }
@@ -177,7 +172,7 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
         level.setBlock(blockPos, Blocks.AIR.defaultBlockState(), 3);
     }
 
-    //更新方位角
+    // Advances theta/phi to the next point on the generalized spiral.
     private void generateGspUp() {
         if (this.gspNum < this.gspNumMax) {
             int k = this.gspNum + 1;
@@ -222,7 +217,7 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
         return isAusf3Complete && perChunk.isEmpty();
     }
 
-    //比较器，用于根据到中心点的距离对区块排序
+    // Orders chunks by Manhattan distance from the blast center so nearer chunks are cleared first.
     public class CoordComparator implements Comparator<ChunkPos> {
         @Override
         public int compare(ChunkPos o1, ChunkPos o2) {

@@ -11,32 +11,18 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
 
-/**
- * Turns things that die by fire into a pile of ash. When a burning entity is killed, it bursts into a cloud
- * of settling ash particles (the {@code "ashes"} effect in {@link com.wf.wfballistics.client.fx.WFEffects})
- * with a disintegration sound, instead of just keeling over.
- *
- * <p>The entity still dies and drops loot normally — this is purely the death visual. Triggered from
- * {@link FireHandler#death} for any fire death, and from the explosion damage path for charges that kill
- * while their target is alight.
- */
 public final class AshHandler {
 
     private AshHandler() {
     }
 
-    /**
-     * Cremates the entity if it was killed by fire (custom or vanilla) or was burning when it died.
-     */
     public static void decideGore(LivingEntity entity, DamageSource source) {
         if (source.is(DamageTypeTags.IS_FIRE) || entity.isOnFire()) {
             cremate(entity);
         }
     }
 
-    /**
-     * Spawns the ash burst + sound. The particle count scales with the entity's volume.
-     */
+
     public static void cremate(LivingEntity entity) {
         Level level = entity.level();
         if (level.isClientSide) return;

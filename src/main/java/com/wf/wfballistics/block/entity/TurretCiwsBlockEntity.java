@@ -17,19 +17,10 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-/**
- * Close-in weapon system: a point-defense turret that shoots down nearby {@link MissileEntity}s.
- *
- * <p>Stripped-down port of HBM's CIWS turret (TileEntityTurretHoward): kept the anti-missile essentials —
- * radius acquisition of the nearest missile with line-of-sight, a per-tick slew/tracking gate, and hitscan
- * fire with a per-shot hit probability that chips the missile's {@link MissileEntity#damageMissile health
- * pool}. Dropped the HBM baggage (power, ammo/magazine, radar interfaces, thermal vision, GUI, redstone,
- * and targeting of players/vehicles/shells). Also acts as an {@link IMissileListener} so simulated missiles
- * re-materialize into the real world before they reach firing range.
- */
+
 public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListener {
 
-    // --- tuning ---
+    //tuning
     /**
      * Firing/acquisition radius (blocks).
      */
@@ -153,7 +144,7 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
         for (MissileEntity m : candidates) {
             Vec3 c = m.getBoundingBox().getCenter();
             double dsq = c.distanceToSqr(muzzle);
-            if (dsq <= bestSq && hasLineOfSight(sl, muzzle, c)) {
+            if (dsq <= bestSq && m.detectableAt(dsq, sl.random) && hasLineOfSight(sl, muzzle, c)) {
                 bestSq = dsq;
                 best = m;
             }

@@ -10,6 +10,7 @@ import dev.engine_room.flywheel.lib.visual.AbstractVisual;
 import dev.engine_room.flywheel.lib.visual.SimpleDynamicVisual;
 import net.minecraft.core.Vec3i;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
@@ -27,6 +28,10 @@ public class InstancedParticleVisual extends AbstractVisual implements SimpleDyn
     private final InstancedParticleEffect effect;
     private final TransformedInstance[] instances;
     private final Matrix4f scratch = new Matrix4f();
+    private final Matrix4f base = new Matrix4f();
+    private final BillboardLod lod = new BillboardLod();
+    // Whether each slot is currently collapsed to a zero-size quad, so we only re-upload the collapse once.
+    private final boolean[] collapsed;
 
     public InstancedParticleVisual(VisualizationContext ctx, InstancedParticleEffect effect, float partialTick) {
         super(ctx, (Level) effect.level(), partialTick);
@@ -39,33 +44,53 @@ public class InstancedParticleVisual extends AbstractVisual implements SimpleDyn
         for (int i = 0; i < instances.length; i++) {
             instances[i] = instancer.createInstance();
         }
+        this.collapsed = new boolean[instances.length];
     }
 
     @Override
     public void beginFrame(Context context) {
-        float pt = context.partialTick();
+        Vec3 camPos = context.camera().getPosition();
+        double dx = effect.cx - camPos.x;
+        double dy = effect.cy - camPos.y;
+        double dz = effect.cz - camPos.z;
+        if (!lod.update(context.camera().rotation(), dx * dx + dy * dy + dz * dz)) {
+            return; // distant/settled cloud: nothing changed enough to re-upload this frame
+        }
+
+        float pt = lod.interpolate ? context.partialTick() : 0F;
+        int stride = lod.stride;
         Quaternionf camRotation = context.camera().rotation();
         Vec3i origin = renderOrigin();
+
+        // Reuse the rotation+scale billboard matrix across consecutive puffs of equal scale; only translation
+        // differs between them (see InstancedTrailVisual for the same trick).
+        float baseScale = Float.NaN;
 
         for (int i = 0; i < instances.length; i++) {
             InstancedParticleEffect.Puff puff = effect.puffs[i];
             TransformedInstance instance = instances[i];
 
-            if (puff.dead()) {
-                // Collapse to a zero-size quad rather than churning instance allocation.
-                instance.setTransform(scratch.identity().scale(0F));
-                instance.setChanged();
+            // Dead puffs, and (on distant clouds) strided-out ones, collapse to a zero-size quad. Only
+            // re-upload that collapse once rather than every frame.
+            if (puff.dead() || (i % stride) != 0) {
+                if (!collapsed[i]) {
+                    instance.setTransform(scratch.identity().scale(0F));
+                    instance.setChanged();
+                    collapsed[i] = true;
+                }
                 continue;
             }
+            collapsed[i] = false;
 
             float scale = puff.scale(pt);
-            scratch.identity()
-                    .translate((float) (puff.ix(pt) - origin.getX()),
-                            (float) (puff.iy(pt) - origin.getY()),
-                            (float) (puff.iz(pt) - origin.getZ()))
-                    .rotate(camRotation)
-                    .scale(scale)
-                    .translate(-0.5F, -0.5F, -0.5F);
+            if (scale != baseScale) {
+                base.identity().rotate(camRotation).scale(scale).translate(-0.5F, -0.5F, -0.5F);
+                baseScale = scale;
+            }
+            scratch.set(base).translateLocal(
+                    (float) (puff.ix(pt) - origin.getX()),
+                    (float) (puff.iy(pt) - origin.getY()),
+                    (float) (puff.iz(pt) - origin.getZ()));
 
             instance.setTransform(scratch);
             instance.colorArgb(puff.argb(pt));

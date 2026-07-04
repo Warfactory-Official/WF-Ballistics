@@ -22,11 +22,16 @@ public class InstancedParticleEffect implements WFFlywheelEffect {
 
     final Puff[] puffs;
     final int maxAge;
+    // Spawn point, used as the effect centre for the distance LOD.
+    final double cx, cy, cz;
     private final Level level;
     int age = 0;
 
     public InstancedParticleEffect(Level level, double x, double y, double z, int count, float scale, float speed) {
         this.level = level;
+        this.cx = x;
+        this.cy = y;
+        this.cz = z;
         this.puffs = new Puff[count];
         int max = 0;
         for (int i = 0; i < count; i++) {

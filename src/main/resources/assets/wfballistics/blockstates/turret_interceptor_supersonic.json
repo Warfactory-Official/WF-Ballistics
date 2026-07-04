@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "wfballistics:block/turret_interceptor_supersonic"
+    }
+  }
+}

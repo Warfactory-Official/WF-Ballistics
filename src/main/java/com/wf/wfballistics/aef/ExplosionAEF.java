@@ -2,6 +2,7 @@ package com.wf.wfballistics.aef;
 
 import com.wf.wfballistics.aef.interfaces.*;
 import com.wf.wfballistics.aef.standard.*;
+import com.wf.wfballistics.compat.WarforgeCompat;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
@@ -64,6 +65,9 @@ public class ExplosionAEF {
     private IPlayerProcessor playerProcessor;
     // SFX are deliberately plural and granular (bang, smoke, flash, ...) so they can be mixed per blast.
     private IExplosionSFX[] sfx;
+    // When false (default), the blast respects WarForge land claims (protected blocks survive, unless the
+    // chunk is in an active siege zone). Set true for a blast that should flatten claimed land regardless.
+    private boolean bypassClaims = false;
 
     public ExplosionAEF(Level level, double x, double y, double z, float size) {
         this(level, x, y, z, size, null);
@@ -100,6 +104,13 @@ public class ExplosionAEF {
         // 1 + 2: gather targets before anything is mutated.
         if (processBlocks) affectedBlocks = blockAllocator.allocate(this, level, posX, posY, posZ, size);
         if (processEntities) affectedPlayers = entityProcessor.process(this, level, posX, posY, posZ, size);
+
+        // Respect WarForge land claims unless this blast bypasses them: drop protected positions before the
+        // block processor destroys anything. WarForge already permits destruction in active siege zones, so a
+        // besieged base can still be hit. No-op when WarForge isn't installed.
+        if (processBlocks && !this.bypassClaims) {
+            WarforgeCompat.filterClaimProtected(level, affectedBlocks);
+        }
 
         // 3 + 4: apply effects.
         if (processBlocks) blockProcessor.process(this, level, posX, posY, posZ, affectedBlocks);
@@ -139,6 +150,14 @@ public class ExplosionAEF {
 
     public ExplosionAEF setSFX(IExplosionSFX... sfx) {
         this.sfx = sfx;
+        return this;
+    }
+
+    /**
+     * When true, this blast ignores WarForge land claims and destroys protected blocks anyway
+     */
+    public ExplosionAEF bypassClaims(boolean bypassClaims) {
+        this.bypassClaims = bypassClaims;
         return this;
     }
 

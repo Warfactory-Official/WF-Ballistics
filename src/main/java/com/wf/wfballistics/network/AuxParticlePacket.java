@@ -12,11 +12,6 @@ import java.util.function.Supplier;
 
 /**
  * A generic "play this named particle effect here" packet.
- *
- * <p>Rather than one packet class per effect, the effect is identified by a string key registered in
- * {@link WFEffects}; arbitrary parameters (scale, colour, counts, a target
- * entity id, ...) ride along in the {@link CompoundTag}. This keeps adding a new effect to a single
- * registration call instead of a new packet + wiring.
  */
 public record AuxParticlePacket(String effect, double x, double y, double z, CompoundTag data) {
 

@@ -133,6 +133,16 @@ repositories {
         url "https://maven.createmod.net/"
     }
 
+    maven {
+        // CurseMaven — hosts curse.maven:* artifacts (e.g. spark). Required for the spark dep below;
+        // scoped to the curse.maven group so it is not queried for anything else.
+        name "Cursemaven"
+        url "https://cursemaven.com"
+        content {
+            includeGroup "curse.maven"
+        }
+    }
+
     mavenCentral()
 }
 
@@ -142,7 +152,7 @@ mixin {
 }
 
 dependencies {
-    // mixins o algo
+    // MixinExtras — companion annotation processor for the Mixin toolchain
     implementation annotationProcessor("io.github.llamalad7:mixinextras-common:0.4.0")
     annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
 
@@ -150,6 +160,8 @@ dependencies {
     runtimeOnly(jarJar(fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}"))) {
         jarJar.ranged(it, flywheel_version_range)
     }
+    runtimeOnly fg.deobf("curse.maven:spark-361579:4738952")
+
 
     // Specify the version of Minecraft to use.
     // Any artifact can be supplied so long as it has a "userdev" classifier artifact and is a compatible patcher artifact.

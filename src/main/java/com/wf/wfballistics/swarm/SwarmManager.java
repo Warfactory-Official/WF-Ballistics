@@ -4,6 +4,8 @@ import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.Comparator;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -92,6 +94,78 @@ public final class SwarmManager {
             }
         }
         return out;
+    }
+
+    // --- commander / formation ---
+
+    /** Lateral and trailing spacing (blocks) between slots in the wedge formation. */
+    private static final double FORMATION_LATERAL = 6.0;
+    private static final double FORMATION_TRAIL = 6.0;
+
+    /**
+     * @return the live commander of {@code swarmId} in {@code level}, or null if the swarm has none.
+     */
+    public static MissileEntity commander(Level level, long swarmId) {
+        for (MissileEntity m : members(level, swarmId)) {
+            if (m.isCommander() && m.isAlive() && !m.isRemoved()) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @return the world position of {@code subordinate}'s slot in a wedge (V) formation trailing the commander:
+     * alternating left/right and stepping back one rank every two slots, held at the commander's altitude.
+     * Slots are assigned by a stable id ordering so a missile doesn't swap slots tick to tick.
+     */
+    public static Vec3 formationSlot(MissileEntity commander, MissileEntity subordinate) {
+        int idx = formationIndex(commander, subordinate); // 1-based slot among the subordinates
+        Vec3 vel = commander.getDeltaMovement();
+        double h = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        Vec3 fwd = h > 1.0E-4 ? new Vec3(vel.x / h, 0.0, vel.z / h) : new Vec3(0.0, 0.0, 1.0);
+        Vec3 right = new Vec3(fwd.z, 0.0, -fwd.x);
+        int rank = (idx + 1) / 2;
+        double lateral = (idx % 2 == 1 ? -1 : 1) * FORMATION_LATERAL * rank;
+        double trail = -FORMATION_TRAIL * rank;
+        return new Vec3(commander.getX() + right.x * lateral + fwd.x * trail,
+                commander.getY(),
+                commander.getZ() + right.z * lateral + fwd.z * trail);
+    }
+
+    private static int formationIndex(MissileEntity commander, MissileEntity subordinate) {
+        List<MissileEntity> subs = new ArrayList<>();
+        for (MissileEntity m : members(commander.level(), commander.getSwarmId())) {
+            if (!m.isCommander() && m.isAlive() && !m.isRemoved()) {
+                subs.add(m);
+            }
+        }
+        subs.sort(Comparator.comparingInt(MissileEntity::getId));
+        int i = subs.indexOf(subordinate);
+        return i < 0 ? 1 : i + 1;
+    }
+
+    /**
+     * Promotes a successor when a commander is lost: the surviving swarm member nearest the fallen commander
+     * becomes the new commander (inheriting its mission target); the rest re-form on it next tick.
+     */
+    public static void promoteSuccessor(Level level, long swarmId, MissileEntity dying) {
+        MissileEntity best = null;
+        double bestSq = Double.MAX_VALUE;
+        for (MissileEntity m : members(level, swarmId)) {
+            if (m == dying || m.isCommander() || !m.isAlive() || m.isRemoved()) {
+                continue;
+            }
+            double d = m.position().distanceToSqr(dying.position());
+            if (d < bestSq) {
+                bestSq = d;
+                best = m;
+            }
+        }
+        if (best != null) {
+            best.setCommander(true);
+            best.setTarget(dying.getTarget());
+        }
     }
 
     // --- membership maintenance ---

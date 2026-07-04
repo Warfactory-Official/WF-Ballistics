@@ -12,14 +12,12 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
 public class EntityNukeExplosionMK5 extends EntityExplosionChunkLoading {
-    //爆炸的强度
     public static final EntityDataAccessor<Integer> EXPLODE_STRENGTH = SynchedEntityData.defineId(EntityNukeExplosionMK5.class, EntityDataSerializers.INT);
-    //爆炸半径
     public static final EntityDataAccessor<Integer> EXPLODE_RADIUS = SynchedEntityData.defineId(EntityNukeExplosionMK5.class, EntityDataSerializers.INT);
-    //辐射蔓延速度
+    // How fast the blast front propagates outward (ray points processed per tick).
     public static final EntityDataAccessor<Integer> RADIATION_SPEED = SynchedEntityData.defineId(EntityNukeExplosionMK5.class, EntityDataSerializers.INT);
     private static final int default_explode_strength = 100;
-    //负责爆炸的主要类
+    // The blast algorithm that does the actual destruction.
     IExplosionRay explosion;
 
     public EntityNukeExplosionMK5(EntityType<?> pEntityType, Level pLevel) {
@@ -76,21 +74,7 @@ public class EntityNukeExplosionMK5 extends EntityExplosionChunkLoading {
                 int destructionBudget = Math.max(1, tickBudget - cacheBudget);
                 explosion.cacheChunksTick(cacheBudget);
                 explosion.destructionTick(destructionBudget);
-            }
-//            else if(fallout) {
-//
-//                EntityFalloutRain fallout = new EntityFalloutRain(this.worldObj);
-//                fallout.posX = this.posX;
-//                fallout.posY = this.posY;
-//                fallout.posZ = this.posZ;
-//                fallout.setScale((int)(this.length * 2.5 + falloutAdd) * BombConfig.falloutRange / 100);
-//
-//                this.worldObj.spawnEntityInWorld(fallout);
-//
-//                this.clearChunkLoader();
-//                this.setDead();
-//            }
-            else {
+            } else {
                 this.clearChunkLoader();
                 this.discard();
             }

@@ -73,6 +73,16 @@ versionRange = "${flywheel_version_range}"
 ordering = "AFTER"
 side = "CLIENT"
 
+# Optional integration: when Superb Warfare is present, WF missiles are folded into its
+# superbwarfare:destroyable_projectile tag (see data/superbwarfare/tags/entity_types) so its
+# missiles, anti-air and radar can lock onto them. Loaded AFTER it so the merged tag is stable.
+[[dependencies.${ mod_id }]]
+modId = "superbwarfare"
+mandatory = false
+versionRange = "*"
+ordering = "AFTER"
+side = "BOTH"
+
 # Features are specific properties of the game environment, that you may want to declare you require. This example declares
 # that your mod requires GL version 3.2 or higher. Other features will be added. They are side aware so declaring this won't
 # stop your mod loading on the server for example.

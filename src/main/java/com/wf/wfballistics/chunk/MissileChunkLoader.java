@@ -60,7 +60,7 @@ public final class MissileChunkLoader {
         LongOpenHashSet desiredNonTicking = new LongOpenHashSet();
         if (loadFan) {
             collectFan(desiredNonTicking, pos, vel);
-            desiredNonTicking.remove(ownChunk); // own chunk is handled as ticking. Totally hasn't caused me to get stuck for a while
+            desiredNonTicking.remove(ownChunk);
         }
 
         for (long key : desiredTicking) {

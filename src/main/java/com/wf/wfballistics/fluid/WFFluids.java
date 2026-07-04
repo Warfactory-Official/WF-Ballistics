@@ -2,6 +2,9 @@ package com.wf.wfballistics.fluid;
 
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.BucketItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.Items;
 import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fluids.FluidType;
@@ -12,22 +15,14 @@ import net.minecraftforge.registries.RegistryObject;
 
 import java.util.function.Consumer;
 
-/**
- * The mod's Forge fluids. These are deliberately minimal "gas" fluids: they have a {@link FluidType} and the
- * source/flowing pair Forge requires, but no fluid block, bucket or world placement — they exist purely to
- * be loaded into a {@link com.wf.wfballistics.entity.MistEntity}. Negative density marks them as gases, and
- * each carries the tint its mist is drawn with.
- *
- * <p>To add another gas: register a {@code FluidType} + source + flowing here, then bind a
- * {@link com.wf.wfballistics.entity.mist.MistEffect} to the source fluid in
- * {@link com.wf.wfballistics.entity.mist.MistEffects#bootstrap()}.
- */
 public final class WFFluids {
 
     public static final DeferredRegister<FluidType> FLUID_TYPES =
             DeferredRegister.create(ForgeRegistries.Keys.FLUID_TYPES, WFBallistics.MODID);
     public static final DeferredRegister<net.minecraft.world.level.material.Fluid> FLUIDS =
             DeferredRegister.create(ForgeRegistries.FLUIDS, WFBallistics.MODID);
+    public static final DeferredRegister<Item> ITEMS =
+            DeferredRegister.create(ForgeRegistries.ITEMS, WFBallistics.MODID);
 
     //Phosgene
     public static final RegistryObject<FluidType> PHOSGENE_TYPE =
@@ -43,6 +38,7 @@ public final class WFFluids {
     public static void register(IEventBus modBus) {
         FLUID_TYPES.register(modBus);
         FLUIDS.register(modBus);
+        ITEMS.register(modBus);
     }    public static final ForgeFlowingFluid.Properties PHOSGENE_PROPS =
             new ForgeFlowingFluid.Properties(PHOSGENE_TYPE, PHOSGENE, FLOWING_PHOSGENE);
 
@@ -96,8 +92,52 @@ public final class WFFluids {
             new ForgeFlowingFluid.Properties(MUSTARD_GAS_TYPE, MUSTARD_GAS, FLOWING_MUSTARD_GAS);
 
 
+    public static final RegistryObject<FluidType> KEROSENE_TYPE =
+            FLUID_TYPES.register("kerosene", KeroseneFluidType::new);
+    public static final RegistryObject<ForgeFlowingFluid> KEROSENE =
+            FLUIDS.register("kerosene", () -> new ForgeFlowingFluid.Source(WFFluids.KEROSENE_PROPS));
+    public static final RegistryObject<ForgeFlowingFluid> FLOWING_KEROSENE =
+            FLUIDS.register("flowing_kerosene", () -> new ForgeFlowingFluid.Flowing(WFFluids.KEROSENE_PROPS));
+    public static final RegistryObject<Item> KEROSENE_BUCKET =
+            ITEMS.register("kerosene_bucket", () -> new BucketItem(KEROSENE,
+                    new Item.Properties().craftRemainder(Items.BUCKET).stacksTo(1)));
+    public static final ForgeFlowingFluid.Properties KEROSENE_PROPS =
+            new ForgeFlowingFluid.Properties(KEROSENE_TYPE, KEROSENE, FLOWING_KEROSENE).bucket(KEROSENE_BUCKET);
 
 
+    public static class KeroseneFluidType extends FluidType {
 
+        private static final ResourceLocation STILL = new ResourceLocation("block/water_still");
+        private static final ResourceLocation FLOW = new ResourceLocation("block/water_flow");
+        private static final int TINT = 0xC8A64B; // amber
 
+        public KeroseneFluidType() {
+            super(FluidType.Properties.create()
+                    .density(800)
+                    .viscosity(1200)
+                    .temperature(300)
+                    .canSwim(true)
+                    .canDrown(true));
+        }
+
+        @Override
+        public void initializeClient(Consumer<IClientFluidTypeExtensions> consumer) {
+            consumer.accept(new IClientFluidTypeExtensions() {
+                @Override
+                public int getTintColor() {
+                    return 0xFF000000 | TINT;
+                }
+
+                @Override
+                public ResourceLocation getStillTexture() {
+                    return STILL;
+                }
+
+                @Override
+                public ResourceLocation getFlowingTexture() {
+                    return FLOW;
+                }
+            });
+        }
+    }
 }

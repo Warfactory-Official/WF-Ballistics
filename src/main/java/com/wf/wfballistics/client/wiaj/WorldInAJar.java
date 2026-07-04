@@ -25,8 +25,12 @@ public class WorldInAJar implements BlockAndTintGetter {
     private final BlockState[][][] blocks;
     private final BlockState air = Blocks.AIR.defaultBlockState();
 
-    private int skyLight = 15;
-    private int blockLight = 15;
+    // Debris takes no light from the world it was chipped out of: a block dug from deep underground carries
+    // zero light and would bake in pitch black. Every face uses full sky exposure instead, so the render-time
+    // lightmap (time of day) is the only thing that shades it.
+    private static final int BAKED_SKY_LIGHT = 15;
+    private static final int BAKED_BLOCK_LIGHT = 0;
+
     private int tint = 0xFFFFFF;
 
     public WorldInAJar(int x, int y, int z) {
@@ -83,11 +87,6 @@ public class WorldInAJar implements BlockAndTintGetter {
         return s != null ? s : air;
     }
 
-    public void setLight(Level level, BlockPos pos) {
-        this.skyLight = level.getBrightness(LightLayer.SKY, pos);
-        this.blockLight = level.getBrightness(LightLayer.BLOCK, pos);
-    }
-
     private boolean neighborNonAir(int x, int y, int z) {
         return !getBlockState(x + 1, y, z).isAir() || !getBlockState(x - 1, y, z).isAir()
                 || !getBlockState(x, y + 1, z).isAir() || !getBlockState(x, y - 1, z).isAir()
@@ -137,7 +136,7 @@ public class WorldInAJar implements BlockAndTintGetter {
 
     @Override
     public int getBrightness(LightLayer lightLayer, BlockPos pos) {
-        return lightLayer == LightLayer.SKY ? this.skyLight : this.blockLight;
+        return lightLayer == LightLayer.SKY ? BAKED_SKY_LIGHT : BAKED_BLOCK_LIGHT;
     }
 
     @Override

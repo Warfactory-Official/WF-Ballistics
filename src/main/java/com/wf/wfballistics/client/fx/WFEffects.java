@@ -34,17 +34,18 @@ public final class WFEffects {
         switch (effect) {
             case "explosion_small" -> explosionSmall(level, x, y, z, data);
             case "explosion_large" -> explosionLarge(level, x, y, z, data);
+            case "sonic_boom" -> sonicBoom(level, x, y, z, data);
             case "instanced_smoke" -> instancedSmoke(level, x, y, z, data);
             case "ashes" -> ashes(level, x, y, z, data);
             case "skeleton" -> skeleton(level, x, y, z, data);
-            default -> { /* unknown effect id — ignore */ }
+            default -> { /* unknown effect id, ignore */ }
         }
     }
 
     /**
      * Same blast as {@link #explosionSmall}, but the smoke cloud is rendered as Flywheel GPU instances when
      * the Flywheel backend is active (one instanced draw for the whole cloud). Falls back to vanilla
-     * particles when it isn't, so the effect always shows.
+     * particles when it isn't.
      */
     private static void instancedSmoke(ClientLevel level, double x, double y, double z, CompoundTag data) {
         int count = data.getInt("count");
@@ -140,6 +141,21 @@ public final class WFEffects {
                 float pitch = 0.9F + rand.nextFloat() * 0.2F;
                 ClientSoundScheduler.playDelayed(x, y, z, sound, SoundSource.BLOCKS,
                         near ? 8.0F : 16.0F, pitch, ClientSoundScheduler.soundDelay(dist));
+            }
+        }
+    }
+
+    private static void sonicBoom(ClientLevel level, double x, double y, double z, CompoundTag data) {
+        float waveScale = data.contains("waveScale") ? data.getFloat("waveScale") : 12F;
+        int waveAge = Math.max(1, (int) (12F * waveScale / 45F));
+        Minecraft.getInstance().particleEngine.add(new ShockwaveParticle(level, x, y, z, waveScale, waveAge));
+
+        Player player = Minecraft.getInstance().player;
+        if (player != null) {
+            double dist = Math.sqrt(player.distanceToSqr(x, y, z));
+            if (dist <= 256) {
+                ClientSoundScheduler.playDelayed(x, y, z, WFSounds.SONIC_BOOM.get(), SoundSource.BLOCKS,
+                        6.0F, 0.8F + level.random.nextFloat() * 0.2F, ClientSoundScheduler.soundDelay(dist));
             }
         }
     }

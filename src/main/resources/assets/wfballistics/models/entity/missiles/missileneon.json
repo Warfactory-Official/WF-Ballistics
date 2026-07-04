@@ -1,5 +1,6 @@
 {
   "loader": "forge:obj",
+  "emissive_ambient": false,
   "model": "wfballistics:raw_models/missiles/missileneon.obj",
   "flip_v": true,
   "textures": {

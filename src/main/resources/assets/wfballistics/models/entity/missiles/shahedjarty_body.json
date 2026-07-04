@@ -1,5 +1,6 @@
 {
   "loader": "forge:obj",
+  "emissive_ambient": false,
   "model": "wfballistics:raw_models/missiles/shahedjarty_body.obj",
   "flip_v": true,
   "textures": {

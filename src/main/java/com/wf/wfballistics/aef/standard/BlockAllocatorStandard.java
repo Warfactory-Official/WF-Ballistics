@@ -14,8 +14,8 @@ import java.util.Set;
 /**
  * The vanilla explosion ray-march, reproduced exactly: fire rays from the centre through every cell on the
  * surface of a {@code resolution³} cube and march each ray outward in 0.3-block steps, draining the ray's
- * (randomised) power by each block's explosion resistance until it runs out. Every block a surviving ray
- * passes through is marked for destruction.
+ * (randomised) power by each block's explosion resistance until it runs out. Every non-air block a
+ * surviving ray passes through is marked for destruction.
  *
  * <p>{@code resolution} is the classic vanilla 16; raising it produces a smoother, more spherical blast at
  * a roughly quadratic cost (only the cube's shell is iterated, so it scales with {@code resolution²}).
@@ -66,7 +66,11 @@ public class BlockAllocatorStandard implements IBlockAllocator {
                             power -= (blockResistance(explosion, level, cursor, state, power) + 0.3F) * step;
                         }
 
-                        if (power > 0.0F && canDestroy(explosion, level, cursor, state, power)) {
+                        // Only collect real blocks: skipping air means a blast in open space doesn't
+                        // allocate a throwaway BlockPos for every step of every ray (mid-air, that was
+                        // hundreds of thousands of short-lived objects per blast — a GC spike), and the
+                        // block processor no longer has to re-scan and discard air positions afterwards.
+                        if (power > 0.0F && !state.isAir() && canDestroy(explosion, level, cursor, state, power)) {
                             affectedBlocks.add(cursor.immutable());
                         }
 

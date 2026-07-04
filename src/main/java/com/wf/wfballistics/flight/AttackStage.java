@@ -1,11 +1,11 @@
 package com.wf.wfballistics.flight;
 
 import com.wf.wfballistics.MissileEntity;
-import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Steep terminal dive: bleed horizontal speed as the target nears while accelerating straight down.
+ * Steep terminal dive: bleed horizontal speed as the target nears while accelerating straight down under
+ * gravity.
  */
 public final class AttackStage implements FlightStage {
 
@@ -13,10 +13,10 @@ public final class AttackStage implements FlightStage {
 
     // Horizontal speed scales to zero as the missile closes this distance (matches the cruise hand-off range).
     private static final double DECEL_RANGE = 30.0;
-    // Steep attack-dive speed (larger than cruise, as if under gravity).
-    private static final float TERMINAL_FALL_VELOCITY = -8.0f;
-    // How quickly vertical speed eases toward the dive velocity.
-    private static final float VERTICAL_SMOOTHING = 0.01f;
+    // Downward acceleration accumulated each tick during the dive (gravity + a bit of thrust).
+    private static final double DIVE_GRAVITY = 0.06;
+    // Terminal (maximum) dive speed.
+    private static final double TERMINAL_FALL_VELOCITY = -14.0;
 
     private AttackStage() {
     }
@@ -24,7 +24,7 @@ public final class AttackStage implements FlightStage {
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
         double horizontalSpeed = missile.getCruiseSpeed() * (ctx.horizontalDist() / DECEL_RANGE);
-        double vy = Mth.lerp(VERTICAL_SMOOTHING, (float) missile.getDeltaMovement().y, TERMINAL_FALL_VELOCITY);
+        double vy = Math.max(missile.getDeltaMovement().y - DIVE_GRAVITY, TERMINAL_FALL_VELOCITY);
         return new Vec3(ctx.nx() * horizontalSpeed, vy, ctx.nz() * horizontalSpeed);
     }
 

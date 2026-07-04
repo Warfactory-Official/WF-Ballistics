@@ -116,9 +116,8 @@ public class Debris {
         }
     }
 
-    public void bake(ClientLevel level) {
+    public void bake() {
         this.baked = true;
-        this.jar.setLight(level, BlockPos.containing(this.x, this.y, this.z));
 
         BufferBuilder builder = new BufferBuilder(2048);
         builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);

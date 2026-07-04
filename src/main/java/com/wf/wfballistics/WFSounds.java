@@ -21,6 +21,8 @@ public final class WFSounds {
     public static final RegistryObject<SoundEvent> EXPLOSION_SMALL_FAR = register("weapon.explosion_small_far");
     public static final RegistryObject<SoundEvent> EXPLOSION_LARGE_NEAR = register("weapon.explosion_large_near");
     public static final RegistryObject<SoundEvent> EXPLOSION_LARGE_FAR = register("weapon.explosion_large_far");
+    public static final RegistryObject<SoundEvent> SONIC_BOOM = register("weapon.sonic_boom");
+    public static final RegistryObject<SoundEvent> MISSILE_FLIGHT = register("weapon.missile_flight");
 
     private WFSounds() {
     }

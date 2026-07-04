@@ -145,6 +145,7 @@ public class SpawnMissilePacket {
                     .cruiseSpeed(speed)
                     .health(health)
                     .controlId(dispenser.getControlId())
+                    .teamId(com.wf.wfballistics.compat.WarforgeCompat.factionClaiming(level, m.pos))
                     .ascentStage(FlightStageRegistry.exists(Phase.ASCEND, m.ascentStageId)
                             ? m.ascentStageId : FlightStageRegistry.defaultId(Phase.ASCEND))
                     .cruiseStage(FlightStageRegistry.exists(Phase.CRUISE, m.cruiseStageId)

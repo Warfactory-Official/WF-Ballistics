@@ -97,7 +97,7 @@ public final class DebrisManager {
                 if (bakeBudget <= 0) {
                     continue; // defer this chunk's tessellation to a later frame (it just appears a tick late)
                 }
-                debris.bake(level);
+                debris.bake();
                 bakeBudget--;
             }
             debris.render(poseStack, projection, cam, partialTick);

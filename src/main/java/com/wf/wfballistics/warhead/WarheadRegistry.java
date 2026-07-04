@@ -2,6 +2,9 @@ package com.wf.wfballistics.warhead;
 
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.aef.ExplosionAEF;
+import com.wf.wfballistics.aef.standard.BlockAllocatorStandard;
+import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
+import com.wf.wfballistics.aef.standard.PlayerProcessorStandard;
 import com.wf.wfballistics.entity.BombletEntity;
 import com.wf.wfballistics.fx.ExplosionCreator;
 import com.wf.wfballistics.util.FragmentationUtil;
@@ -16,9 +19,6 @@ import java.util.Set;
 /**
  * Registry of missile warheads, keyed by a short stable id (persisted on the {@link MissileEntity} so the
  * payload survives save/load and can be picked at runtime). Add-ons register their own via {@link #register}.
- *
- * <p>A warhead is a {@link Detonation}: given the missile and the impact position it produces the effect
- * (blast, mini-nuke, bomblet scatter, …). Registration order is preserved so a UI can list them stably.
  */
 public final class WarheadRegistry {
 
@@ -31,18 +31,26 @@ public final class WarheadRegistry {
         if (level.isClientSide) {
             return;
         }
-        new ExplosionAEF(level, pos.x, pos.y, pos.z, STANDARD_BLAST_RADIUS).makeStandard().explode();
+        var xnt = new ExplosionAEF(level, pos.x, pos.y, pos.z, 15F);
+
+        xnt.setBlockAllocator(new BlockAllocatorStandard(32));
+        xnt.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
+        xnt.setPlayerProcessor(new PlayerProcessorStandard());
+        xnt.explode();
         ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
     };
-    /**
-     * Compact tactical nuke.
-     */
+    public static final InterceptDetonation STANDARD_INTERCEPT = (missile, pos) -> {
+        Level level = missile.level();
+        if (level.isClientSide) {
+            return;
+        }
+        ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
+    };
+
     public static final Detonation MININUKE = (missile, pos) ->
             com.wf.wfballistics.aef.nuke.MiniNuke.detonate(missile.level(), pos,
                     com.wf.wfballistics.aef.nuke.MiniNuke.medium());
-    /**
-     * Airburst fragmentation: rains a downward cone of bomblets (count taken from the missile).
-     */
+
     public static final Detonation FRAGMENTATION = (missile, pos) -> {
         Level level = missile.level();
         if (level.isClientSide) {
@@ -53,20 +61,30 @@ public final class WarheadRegistry {
                 "standard", BombletEntity.STANDARD, BombletEntity.DEFAULT_FUSE, null);
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     };
-    /**
-     * Dud: removes the missile with no effect.
-     */
+
+    public static final Detonation INTERCEPTOR = (missile, pos) -> {
+        Level level = missile.level();
+        if (level.isClientSide) {
+            return;
+        }
+        ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
+    };
+
     public static final Detonation INERT = (missile, pos) -> {
     };
     private static final String DEFAULT_ID = "standard";
     private static final Map<String, Detonation> WARHEADS = new LinkedHashMap<>();
+    // Optional per-warhead intercept effect (see getIntercept); a warhead absent here runs its Detonation.
+    private static final Map<String, InterceptDetonation> INTERCEPTS = new LinkedHashMap<>();
 
     static {
-        register(DEFAULT_ID, STANDARD);
+        register(DEFAULT_ID, STANDARD, STANDARD_INTERCEPT);
         register("mininuke", MININUKE);
         register("fragmentation", FRAGMENTATION);
         register(RecursiveFrag.ID, RecursiveFrag::detonate);
         register(GasWarhead.ID, GasWarhead::detonate);
+        register(FireWarhead.ID, FireWarhead::detonate);
+        register("interceptor", INTERCEPTOR, INTERCEPTOR::detonate);
         register("inert", INERT);
     }
 
@@ -78,10 +96,35 @@ public final class WarheadRegistry {
     }
 
     /**
+     * Register a warhead together with a custom {@link InterceptDetonation} — the (typically cheaper,
+     * "neutralised") effect used when the missile is destroyed mid-air by an interceptor or a colliding
+     * missile instead of reaching its target. Warheads registered without one fall back to running their
+     * normal {@link Detonation} on intercept (see {@link #getIntercept}).
+     */
+    public static void register(String id, Detonation detonation, InterceptDetonation intercept) {
+        WARHEADS.put(id, detonation);
+        INTERCEPTS.put(id, intercept);
+    }
+
+    /**
      * @return the warhead for {@code id}, falling back to {@link #STANDARD} when unknown.
      */
     public static Detonation get(String id) {
         return WARHEADS.getOrDefault(id, STANDARD);
+    }
+
+    /**
+     * @return the intercept effect for {@code id}: its registered {@link InterceptDetonation} if it has one,
+     * otherwise a fallback that runs the full {@link Detonation} — so, by default, an intercept detonates the
+     * warhead exactly as a target impact would.
+     */
+    public static InterceptDetonation getIntercept(String id) {
+        InterceptDetonation intercept = INTERCEPTS.get(id);
+        if (intercept != null) {
+            return intercept;
+        }
+        Detonation detonation = get(id);
+        return detonation::detonate;
     }
 
     public static boolean exists(String id) {
@@ -104,6 +147,15 @@ public final class WarheadRegistry {
      */
     @FunctionalInterface
     public interface Detonation {
+        void detonate(MissileEntity missile, Vec3 pos);
+    }
+
+    /**
+     * What a warhead does when its missile is destroyed mid-air by an interceptor or a colliding missile,
+     * Primarily used to cheapen some expensive explosions
+     */
+    @FunctionalInterface
+    public interface InterceptDetonation {
         void detonate(MissileEntity missile, Vec3 pos);
     }
 }

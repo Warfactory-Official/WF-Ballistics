@@ -6,6 +6,8 @@ import dev.engine_room.flywheel.api.visual.DynamicVisual;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.instance.InstanceTypes;
 import dev.engine_room.flywheel.lib.instance.TransformedInstance;
+import com.wf.wfballistics.client.render.MissileAttitude;
+import com.wf.wfballistics.client.render.MissileAttitudeRegistry;
 import dev.engine_room.flywheel.lib.model.Models;
 import dev.engine_room.flywheel.lib.visual.AbstractEntityVisual;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -32,9 +34,11 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
     private final TransformedInstance[] rotorInstances;
     private final MissileModels.Rotor[] rotorSpecs;
     private final Vector3f[] rotorPivots;
+    // How this model rotates to its heading (nose-to-velocity missile, level drone, ...) — a swappable strategy.
+    private final MissileAttitude attitude;
     private final Quaternionf orientation = new Quaternionf();
-    // Because minecraft's oldPos values and deltaMovement values are both inaccurate for some fucking reason,
-    // we use our own position tracking for rendering smoothing on partial ticks
+    // Minecraft's oldPos and deltaMovement are both unreliable for this entity, so we track position
+    // ourselves to smooth rendering across partial ticks.
     private double prevX;
     private double prevY;
     private double prevZ;
@@ -51,10 +55,8 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         super(context, entity, 0.0f);
 
         String modelId = (entity instanceof MissileEntity missile) ? missile.getModelId() : MissileModels.DEFAULT;
+        this.attitude = MissileAttitudeRegistry.get(MissileModels.attitudeId(modelId));
         var flywheelModel = Models.partial(ModModels.missile(modelId));
-
-        //var testingState = Blocks.WHITE_CONCRETE.defaultBlockState();
-        //var testingModel = dev.engine_room.flywheel.lib.model.Models.block(testingState);
 
         this.modelInstance = context.instancerProvider()
                 .instancer(InstanceTypes.TRANSFORMED, flywheelModel)
@@ -144,7 +146,7 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
 
         if (hx * hx + hy * hy + hz * hz > 1.0E-8) {
             Vector3f heading = new Vector3f((float) hx, (float) hy, (float) hz).normalize();
-            Quaternionf target = new Quaternionf().rotationTo(new Vector3f(0f, 1f, 0f), heading);
+            Quaternionf target = attitude.orientation(heading);
             if (orientationInit) {
                 orientation.slerp(target, ORIENTATION_SMOOTHING);
             } else {

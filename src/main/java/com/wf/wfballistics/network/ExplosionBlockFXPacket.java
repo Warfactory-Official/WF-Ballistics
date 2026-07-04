@@ -14,10 +14,6 @@ import java.util.function.Supplier;
 /**
  * The data the client needs to reproduce the standard explosion's visuals: the epicentre, the radius, and
  * the positions of the blocks that were broken (so debris and smoke can radiate outward from each one).
- *
- * <p>Block positions are delta-encoded as zig-zag varint offsets from the (integer) epicentre. Blast blocks
- * are clustered around the centre, so each coordinate offset is small and varints cost ~1–2 bytes instead of
- * the 8 bytes a raw {@code long} position takes — a large saving for big block sets.
  */
 public record ExplosionBlockFXPacket(double x, double y, double z, float size, List<BlockPos> blocks) {
 

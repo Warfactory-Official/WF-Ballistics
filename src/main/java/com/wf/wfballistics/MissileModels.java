@@ -39,6 +39,10 @@ public final class MissileModels {
     // Spinning parts ("rotors") per model id, and a cache of each rotor mesh's centre (its spin pivot).
     private static final Map<String, List<Rotor>> ROTORS = new HashMap<>();
     private static final Map<ResourceLocation, Vec3> ROTOR_PIVOTS = new ConcurrentHashMap<>();
+    // Per-model orientation style ("attitude") id — how the model rotates to its heading (missile vs drone).
+    // Resolved to a strategy client-side (see client.render.MissileAttitudeRegistry). Default = "missile".
+    public static final String DEFAULT_ATTITUDE = "missile";
+    private static final Map<String, String> ATTITUDES = new HashMap<>();
 
     static {
         // Base airframes (each has its own hand-authored model json = OBJ + default skin).
@@ -88,8 +92,10 @@ public final class MissileModels {
         // spinning part is just reg(body) + rotor(prop) — no per-model code anywhere in the render path.
         reg("shahed", "shahed_body");
         rotor("shahed", "shahed_prop", 0.0f, 1.0f, 0.0f, SHAHED_ROTOR_SPEED);
+        attitude("shahed", "drone");
         reg("shahedjarty", "shahedjarty_body");
         rotor("shahedjarty", "shahedjarty_prop", 0.0f, 1.0f, 0.0f, SHAHED_ROTOR_SPEED);
+        attitude("shahedjarty", "drone");
     }
 
     private MissileModels() {
@@ -192,6 +198,21 @@ public final class MissileModels {
      */
     public static List<Rotor> rotors(String id) {
         return ROTORS.getOrDefault(id, List.of());
+    }
+
+    /**
+     * Set how a model orients to its heading, by attitude id (see {@code MissileAttitudeRegistry}). Models
+     * default to {@link #DEFAULT_ATTITUDE} ("missile") unless assigned another, e.g. "drone".
+     */
+    public static void attitude(String id, String attitudeId) {
+        ATTITUDES.put(id, attitudeId);
+    }
+
+    /**
+     * @return the attitude id for a model (how it rotates to its heading), or {@link #DEFAULT_ATTITUDE}.
+     */
+    public static String attitudeId(String id) {
+        return ATTITUDES.getOrDefault(id, DEFAULT_ATTITUDE);
     }
 
     /**

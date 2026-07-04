@@ -8,6 +8,7 @@ import net.minecraft.world.level.saveddata.SavedData;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Per-dimension persistent store of {@link SimMissile}s. Data only — advancement/spawn logic lives
@@ -43,6 +44,18 @@ public final class SimMissileRegistry extends SavedData {
 
     public List<SimMissile> view() {
         return missiles;
+    }
+
+    /**
+     * @return the simulated missile with this id, or null if none (e.g. it's a real entity or already gone).
+     */
+    public SimMissile getById(UUID id) {
+        for (SimMissile sm : missiles) {
+            if (id.equals(sm.id)) {
+                return sm;
+            }
+        }
+        return null;
     }
 
     public void add(SimMissile sm) {
