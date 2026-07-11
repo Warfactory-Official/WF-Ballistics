@@ -3,8 +3,9 @@
   "emissive_ambient": false,
   "model": "wfballistics:raw_models/missiles/missile_abm.obj",
   "flip_v": true,
+  "automatic_culling": false,
   "textures": {
-    "missile_texture": "wfballistics:models/missiles/missile_abm",
-    "particle": "wfballistics:models/missiles/missile_abm"
+    "missile_texture": "wfballistics:models/missiles/abm_missile",
+    "particle": "wfballistics:models/missiles/abm_missile"
   }
 }

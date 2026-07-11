@@ -118,7 +118,7 @@ public final class MissilePresetRegistry {
                 .accel(0.4, 0.5).fuel(MissileEntity.FuelType.LIQUID, 1600).evasion(0.15f).build());
 
 
-        register(MissilePreset.builder(rl("hypersonic"), MissileModels.rl("strong"), WarheadRegistry.rl("standard"))
+        register(MissilePreset.builder(rl("hypersonic"), MissileModels.rl("neon"), WarheadRegistry.rl("standard"))
                 .highAltitude(300.0).cruiseSpeed(12.0).health(60.0f)
                 .accel(0.8, 0.9).fuel(MissileEntity.FuelType.SOLID, 2000).evasion(0.3f)
                 .evasiveManeuver().build());

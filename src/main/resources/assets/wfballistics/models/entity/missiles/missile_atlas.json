@@ -1,10 +1,11 @@
 {
   "loader": "forge:obj",
   "emissive_ambient": false,
-  "model": "wfballistics:raw_models/missiles/missile_atlas.obj",
+  "model": "wfballistics:raw_models/missiles/icbm.obj",
   "flip_v": true,
+  "automatic_culling": false,
   "textures": {
-    "missile_texture": "wfballistics:models/missiles/missile_atlas_nuclear",
-    "particle": "wfballistics:models/missiles/missile_atlas_nuclear"
+    "missile_texture": "wfballistics:models/missiles/icbm",
+    "particle": "wfballistics:models/missiles/icbm"
   }
 }

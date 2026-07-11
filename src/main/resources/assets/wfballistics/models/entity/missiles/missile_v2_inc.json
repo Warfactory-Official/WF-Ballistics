@@ -1,10 +1,11 @@
 {
   "loader": "forge:obj",
   "emissive_ambient": false,
-  "model": "wfballistics:raw_models/missiles/missile_v2.obj",
+  "model": "wfballistics:raw_models/missiles/incendiary_missile.obj",
   "flip_v": true,
+  "automatic_culling": false,
   "textures": {
-    "missile_texture": "wfballistics:models/missiles/missile_v2_inc",
-    "particle": "wfballistics:models/missiles/missile_v2_inc"
+    "missile_texture": "wfballistics:models/missiles/incendiary_missile",
+    "particle": "wfballistics:models/missiles/incendiary_missile"
   }
 }

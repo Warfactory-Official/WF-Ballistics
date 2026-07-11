@@ -3,6 +3,7 @@
   "emissive_ambient": false,
   "model": "wfballistics:raw_models/missiles/missile_v2.obj",
   "flip_v": true,
+  "automatic_culling": false,
   "textures": {
     "missile_texture": "wfballistics:models/missiles/missile_v2_decoy",
     "particle": "wfballistics:models/missiles/missile_v2_decoy"
