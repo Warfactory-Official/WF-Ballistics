@@ -1,10 +1,11 @@
 {
   "loader": "forge:obj",
   "emissive_ambient": false,
-  "model": "wfballistics:raw_models/missiles/missiletaint.obj",
+  "model": "wfballistics:raw_models/missiles/chemical_missile.obj",
   "flip_v": true,
+  "automatic_culling": false,
   "textures": {
-    "missile_texture": "wfballistics:models/missiles/missiletaint",
-    "particle": "wfballistics:models/missiles/missiletaint"
+    "missile_texture": "wfballistics:models/missiles/chemical_rocket",
+    "particle": "wfballistics:models/missiles/chemical_rocket"
   }
 }
