@@ -33,12 +33,20 @@ public abstract class MixinBufferBuilder implements DirectBufferAccess {
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void hbm$afterInit(int pCapacity, CallbackInfo ci) {
-        hbm$address = UnsafeHolder.U.getLong(buffer, HBM$BUF_ADDR_OFFSET);
+        hbm$updateAddress();
     }
 
     @Inject(method = "ensureCapacity", at = @At("RETURN"))
     private void hbm$afterGrow(int pIncreaseAmount, CallbackInfo ci) {
-        hbm$address = UnsafeHolder.U.getLong(buffer, HBM$BUF_ADDR_OFFSET);
+        hbm$updateAddress();
+    }
+
+    @Unique
+    private void hbm$updateAddress() {
+        ByteBuffer buf = this.buffer;
+        hbm$address = (buf != null && buf.isDirect())
+                ? UnsafeHolder.U.getLong(buf, HBM$BUF_ADDR_OFFSET)
+                : 0L;
     }
 
     @Override
