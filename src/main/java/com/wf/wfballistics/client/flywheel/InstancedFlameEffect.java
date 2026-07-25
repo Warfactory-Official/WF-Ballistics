@@ -3,16 +3,21 @@ package com.wf.wfballistics.client.flywheel;
 import com.wf.wfballistics.entity.FireLingeringEntity;
 import dev.engine_room.flywheel.api.visual.EffectVisual;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
+import net.minecraft.client.Camera;
+import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 public class InstancedFlameEffect implements WFFlywheelEffect {
 
     private static final int MAX_EMIT = 24;
     private static final int MAX_LIFE = 16;
+    private static final double FULL_DENSITY_SQ = 64.0 * 64.0;
+    private static final double MIN_DENSITY = 0.15;
 
     final Flame[] pool;
     private final Level level;
@@ -26,7 +31,7 @@ public class InstancedFlameEffect implements WFFlywheelEffect {
         this.level = source.level();
         this.source = source;
         refreshFootprint();
-        this.pool = new Flame[MAX_EMIT * MAX_LIFE];
+        this.pool = new Flame[emitPerTick() * MAX_LIFE];
         for (int i = 0; i < pool.length; i++) {
             pool[i] = new Flame();
         }
@@ -49,6 +54,25 @@ public class InstancedFlameEffect implements WFFlywheelEffect {
         return Mth.clamp((int) (area * 0.75), 2, MAX_EMIT);
     }
 
+    private int scaledEmit() {
+        int emit = emitPerTick();
+        double distSq = cameraDistSq();
+        if (distSq <= FULL_DENSITY_SQ) {
+            return emit;
+        }
+        double factor = Math.max(MIN_DENSITY, Math.sqrt(FULL_DENSITY_SQ / distSq));
+        return Math.max(1, (int) Math.ceil(emit * factor));
+    }
+
+    private double cameraDistSq() {
+        Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        Vec3 p = camera.getPosition();
+        double dx = cx - p.x;
+        double dy = cy - p.y;
+        double dz = cz - p.z;
+        return dx * dx + dy * dy + dz * dz;
+    }
+
     @Override
     public LevelAccessor level() {
         return level;
@@ -66,7 +90,7 @@ public class InstancedFlameEffect implements WFFlywheelEffect {
         }
         if (!sourceGone) {
             refreshFootprint();
-            int emit = emitPerTick();
+            int emit = scaledEmit();
             for (int k = 0; k < emit; k++) {
                 double px = minX + level.random.nextDouble() * spanX;
                 double pz = minZ + level.random.nextDouble() * spanZ;
