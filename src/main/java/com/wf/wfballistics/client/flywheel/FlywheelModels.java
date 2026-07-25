@@ -14,7 +14,7 @@ public final class FlywheelModels {
 
 
     private static final Material PARTICLE = SimpleMaterial.builder()
-            .transparency(Transparency.ORDER_INDEPENDENT)
+            .transparency(Transparency.ADDITIVE)
             .cutout(CutoutShaders.EPSILON)
             .diffuse(false)
             .mipmap(false)
