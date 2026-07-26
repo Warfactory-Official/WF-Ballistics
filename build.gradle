@@ -204,7 +204,11 @@ dependencies {
     annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
 
     compileOnly fg.deobf("dev.engine-room.flywheel:flywheel-forge-api-${minecraft_version}:${flywheel_version}")
-    runtimeOnly(jarJar(fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}"))) {
+    // Dev run: plain runtimeOnly so FML discovers flywheel as a mod in the workspace. A jarJar-only dep is
+    // embedded for the production jar but is NOT loaded in the dev environment (JiJ only unpacks from a built
+    // jar), which leaves flywheel [MISSING] in-dev. Keep both: runtimeOnly for dev, jarJar for the shipped jar.
+    runtimeOnly fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}")
+    jarJar(fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}")) {
         jarJar.ranged(it, flywheel_version_range)
     }
     runtimeOnly fg.deobf("curse.maven:spark-361579:4738952")
