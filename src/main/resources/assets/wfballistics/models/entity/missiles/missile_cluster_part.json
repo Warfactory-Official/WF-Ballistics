@@ -1,0 +1,10 @@
+{
+  "loader": "forge:obj",
+  "emissive_ambient": false,
+  "model": "wfballistics:raw_models/missiles/missile_cluster_part.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wfballistics:models/missiles/missile_cluster_part",
+    "particle": "wfballistics:models/missiles/missile_cluster_part"
+  }
+}

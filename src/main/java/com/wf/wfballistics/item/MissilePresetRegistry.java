@@ -91,7 +91,7 @@ public final class MissilePresetRegistry {
                 .highAltitude(200.0).explosionOffset(30.0f).fragmentCount(32)
                 .fuel(MissileEntity.FuelType.SOLID, 1500).build());
 
-        register(MissilePreset.builder(rl("cluster"), MissileModels.rl("micro"), RecursiveFrag.ID)
+        register(MissilePreset.builder(rl("cluster"), MissileModels.rl("cluster"), RecursiveFrag.ID)
                 .terrainFollow(16.0).cruiseSpeed(1.5).splitDepth(2).fragmentCount(4)
                 .explosionOffset(16.0f).fuel(MissileEntity.FuelType.SOLID, 1200).build());
 
