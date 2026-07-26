@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -45,16 +46,29 @@ public class MissileItemRenderer extends BlockEntityWithoutLevelRenderer {
         if (!(stack.getItem() instanceof MissileItem missile)) {
             return;
         }
-        ModModels.RenderModel model = ModModels.render(missile.modelId());
+        renderModel(missile.modelId(), stack, ctx, pose, buffer, light, overlay, RenderType.cutout());
+    }
+
+    public void renderModel(ResourceLocation modelId, ItemStack stack, ItemDisplayContext ctx, PoseStack pose,
+                            MultiBufferSource buffer, int light, int overlay, RenderType type) {
+        pose.pushPose();
+        BakedModel baked = applyTransform(modelId, ctx, pose);
+        if (baked != null) {
+            VertexConsumer consumer = buffer.getBuffer(type);
+            Minecraft.getInstance().getItemRenderer().renderModelLists(baked, stack, light, overlay, pose, consumer);
+        }
+        pose.popPose();
+    }
+
+    public BakedModel applyTransform(ResourceLocation modelId, ItemDisplayContext ctx, PoseStack pose) {
+        ModModels.RenderModel model = ModModels.render(modelId);
         BakedModel baked = model.baked();
         if (baked == null) {
-            return;
+            return null;
         }
 
         float scale = (float) (1.0 / model.length());
         Vec3 center = model.center();
-
-        pose.pushPose();
 
         if (ctx == ItemDisplayContext.GUI) {
             float spin = (float) ((System.currentTimeMillis() / 25L) % 360L);
@@ -67,9 +81,6 @@ public class MissileItemRenderer extends BlockEntityWithoutLevelRenderer {
         pose.scale(scale, scale, scale);
         pose.translate(-center.x, 0.0, -center.z);
 
-        VertexConsumer consumer = buffer.getBuffer(RenderType.cutout());
-        Minecraft.getInstance().getItemRenderer().renderModelLists(baked, stack, light, overlay, pose, consumer);
-
-        pose.popPose();
+        return baked;
     }
 }
