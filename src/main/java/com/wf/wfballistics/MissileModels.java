@@ -43,6 +43,8 @@ public final class MissileModels {
         reg("atlas", "missile_atlas");
         reg("booster", "missilebooster");
         reg("carrier", "missilecarrier");
+        reg("cluster", "missile_cluster");
+        reg("cluster_part", "missile_cluster_part");
         reg("huge", "missile_huge");
         reg("micro", "missile_micro");
         reg("neon", "missileneon");

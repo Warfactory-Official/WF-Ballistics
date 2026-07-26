@@ -47,9 +47,11 @@ public final class RecursiveFrag {
     private static final int MIN_CHILDREN = 2;
     private static final int MAX_CHILDREN = 5;
     /**
-     * Small, agile fragmentation-style airframe the missilelets fly as.
+     * Small submunition airframe the missilelets fly as — a scaled-down cluster warhead, distinct from (and
+     * smaller than) the parent {@code cluster} model, since each missilelet only carries a fraction of the
+     * original payload.
      */
-    private static final ResourceLocation CHILD_MODEL = MissileModels.rl("micro");
+    private static final ResourceLocation CHILD_MODEL = MissileModels.rl("cluster_part");
     /**
      * Missilelet cruise/dive speed (blocks/tick) and the outward burst speed at the moment of splitting.
      */
