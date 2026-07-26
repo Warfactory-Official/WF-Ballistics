@@ -1,6 +1,5 @@
 package com.wf.wfballistics.warhead;
 
-import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.aef.nuke.MiniNuke;
@@ -25,8 +24,8 @@ public final class WarheadRegistry {
     public static final int STANDARD_BLAST_RADIUS = 50;
     public static final float STANDARD_BLAST_SIZE = 15F;
 
-    public static final Detonation STANDARD = (missile, pos) -> {
-        Level level = missile.level();
+    public static final Detonation STANDARD = (source, pos) -> {
+        Level level = source.level();
         if (level.isClientSide) {
             return;
         }
@@ -39,38 +38,38 @@ public final class WarheadRegistry {
         xnt.explode();
         ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
     };
-    public static final InterceptDetonation STANDARD_INTERCEPT = (missile, pos) -> {
-        Level level = missile.level();
+    public static final InterceptDetonation STANDARD_INTERCEPT = (source, pos) -> {
+        Level level = source.level();
         if (level.isClientSide) {
             return;
         }
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     };
 
-    public static final Detonation MININUKE = (missile, pos) ->
-            MiniNuke.detonate(missile.level(), pos,
+    public static final Detonation MININUKE = (source, pos) ->
+            MiniNuke.detonate(source.level(), pos,
                     MiniNuke.medium());
 
-    public static final Detonation FRAGMENTATION = (missile, pos) -> {
-        Level level = missile.level();
+    public static final Detonation FRAGMENTATION = (source, pos) -> {
+        Level level = source.level();
         if (level.isClientSide) {
             return;
         }
         FragmentationUtil.cone(level, pos, new Vec3(0.0, -1.0, 0.0),
-                Math.toRadians(60.0), missile.getFragmentCount(), 1.2, 0.4,
-                BombletEntity.STANDARD_ID, BombletEntity.STANDARD, BombletEntity.DEFAULT_FUSE, null);
+                Math.toRadians(60.0), source.getFragmentCount(), 1.2, 0.4,
+                BombletWarhead.ID, BombletWarhead.STANDARD, BombletEntity.DEFAULT_FUSE, null);
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     };
 
-    public static final Detonation INTERCEPTOR = (missile, pos) -> {
-        Level level = missile.level();
+    public static final Detonation INTERCEPTOR = (source, pos) -> {
+        Level level = source.level();
         if (level.isClientSide) {
             return;
         }
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     };
 
-    public static final Detonation INERT = (missile, pos) -> {
+    public static final Detonation INERT = (source, pos) -> {
     };
 
     private static final ResourceLocation DEFAULT_ID = rl("standard");
@@ -89,6 +88,8 @@ public final class WarheadRegistry {
         register(rl("interceptor"), INTERCEPTOR, INTERCEPTOR::detonate);
         register(rl("inert"), INERT);
         register(rl("emp"), EMPWarhead::detonate);
+        register(BombletWarhead.ID, BombletWarhead.STANDARD);
+        register(BombletWarhead.FIRE_ID, BombletWarhead.FIRE);
 
         BLAST_SIZE.put(DEFAULT_ID, STANDARD_BLAST_SIZE);
         BLAST_SIZE.put(FireWarhead.ID, 8F);
@@ -120,6 +121,10 @@ public final class WarheadRegistry {
 
     public static Detonation get(ResourceLocation id) {
         return WARHEADS.getOrDefault(id, STANDARD);
+    }
+
+    public static Detonation get(ResourceLocation id, Detonation fallback) {
+        return WARHEADS.getOrDefault(id, fallback);
     }
 
     public static InterceptDetonation getIntercept(ResourceLocation id) {
@@ -154,11 +159,11 @@ public final class WarheadRegistry {
 
     @FunctionalInterface
     public interface Detonation {
-        void detonate(MissileEntity missile, Vec3 pos);
+        void detonate(WarheadCarrier source, Vec3 pos);
     }
 
     @FunctionalInterface
     public interface InterceptDetonation {
-        void detonate(MissileEntity missile, Vec3 pos);
+        void detonate(WarheadCarrier source, Vec3 pos);
     }
 }

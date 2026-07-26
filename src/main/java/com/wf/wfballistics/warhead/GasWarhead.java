@@ -1,6 +1,5 @@
 package com.wf.wfballistics.warhead;
 
-import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.entity.mist.GasCloud;
 import com.wf.wfballistics.fluid.WFFluids;
@@ -37,8 +36,8 @@ public final class GasWarhead {
     /**
      * Warhead entry point (registered as {@link #ID}).
      */
-    public static void detonate(MissileEntity missile, Vec3 pos) {
-        Level level = missile.level();
+    public static void detonate(WarheadCarrier source, Vec3 pos) {
+        Level level = source.level();
         if (level.isClientSide) {
             return;
         }

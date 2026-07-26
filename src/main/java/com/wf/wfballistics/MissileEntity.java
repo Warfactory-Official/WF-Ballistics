@@ -13,6 +13,7 @@ import com.wf.wfballistics.swarm.SwarmManager;
 import com.wf.wfballistics.util.OBB;
 import com.wf.wfballistics.util.SweptCollision;
 import com.wf.wfballistics.warhead.RecursiveFrag;
+import com.wf.wfballistics.warhead.WarheadCarrier;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -43,7 +44,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-public class MissileEntity extends Projectile implements OBBEntity, IMissileListener {
+public class MissileEntity extends Projectile implements OBBEntity, IMissileListener, WarheadCarrier {
 
     public static final int DEFAULT_FRAGMENT_COUNT = 24;
 
@@ -1823,7 +1824,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Pick the warhead by its registered id (see {@link #registerWarhead}); defaults to
+         * Pick the warhead by its registered id (see {@link WarheadRegistry#register}); defaults to
          * {@code "standard"}. Using an id (rather than a raw lambda) lets the warhead survive save/load.
          */
         public Builder detonation(ResourceLocation detonationId) {
