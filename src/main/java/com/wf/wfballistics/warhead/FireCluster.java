@@ -1,6 +1,5 @@
 package com.wf.wfballistics.warhead;
 
-import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.entity.BombletEntity;
 import com.wf.wfballistics.fx.ExplosionCreator;
@@ -22,17 +21,17 @@ public final class FireCluster {
     private FireCluster() {
     }
 
-    public static void detonate(MissileEntity missile, Vec3 pos) {
-        Level level = missile.level();
+    public static void detonate(WarheadCarrier source, Vec3 pos) {
+        Level level = source.level();
         if (level.isClientSide) {
             return;
         }
-        int count = missile.getFragmentCount();
+        int count = source.getFragmentCount();
         if (asFireballs) {
             spawnFireballs(level, pos, count);
         } else {
             FragmentationUtil.cone(level, pos, new Vec3(0.0, -1.0, 0.0), HALF_ANGLE, count,
-                    SPEED, SPEED_JITTER, BombletEntity.FIRE_ID, BombletEntity.FIRE, BombletEntity.DEFAULT_FUSE, null);
+                    SPEED, SPEED_JITTER, BombletWarhead.FIRE_ID, BombletWarhead.FIRE, BombletEntity.DEFAULT_FUSE, null);
         }
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     }

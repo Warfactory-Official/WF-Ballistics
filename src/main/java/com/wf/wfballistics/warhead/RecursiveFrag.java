@@ -87,12 +87,12 @@ public final class RecursiveFrag {
     /**
      * Warhead entry point (registered as {@link #ID}).
      */
-    public static void detonate(MissileEntity missile, Vec3 pos) {
-        Level level = missile.level();
+    public static void detonate(WarheadCarrier source, Vec3 pos) {
+        Level level = source.level();
         if (level.isClientSide) {
             return;
         }
-        if (missile.getSplitDepth() > 0) {
+        if (source instanceof MissileEntity missile && missile.getSplitDepth() > 0) {
             split(missile, pos);
         } else {
             leafBlast(level, pos);

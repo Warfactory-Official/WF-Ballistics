@@ -1,6 +1,5 @@
 package com.wf.wfballistics.warhead;
 
-import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.aef.standard.BlockAllocatorBlockEntities;
@@ -23,8 +22,8 @@ public final class EMPWarhead {
     private EMPWarhead() {
     }
 
-    public static void detonate(MissileEntity missile, Vec3 pos) {
-        Level level = missile.level();
+    public static void detonate(WarheadCarrier source, Vec3 pos) {
+        Level level = source.level();
         if (level.isClientSide) {
             return;
         }
