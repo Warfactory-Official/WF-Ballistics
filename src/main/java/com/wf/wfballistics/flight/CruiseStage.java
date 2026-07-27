@@ -62,18 +62,18 @@ public final class CruiseStage implements FlightStage {
     }
 
     /**
-     * The horizontal range at which to hand off to the terminal attack. Best fit uses the fixed
-     * {@link #BRAKING_RANGE}; a desired attack angle starts the run at the range where the angled approach
-     * line becomes reachable from the current altitude, so a shallow angle gets room to descend onto it.
+     * The horizontal range at which to hand off to the terminal attack: the range where the resolved dive
+     * approach line becomes reachable from the current altitude (so a shallow angle gets room to descend onto
+     * it), floored at {@link #BRAKING_RANGE}. Steep dives resolve to roughly the brake range.
      */
     private static double handoffRange(MissileEntity missile, FlightContext ctx) {
-        double angle = missile.getAttackAngle();
-        if (Double.isNaN(angle)) {
+        double theta = Math.toRadians(missile.resolveDiveAngle(ctx));
+        double tan = Math.tan(theta);
+        if (tan <= 1.0e-4) {
             return BRAKING_RANGE;
         }
-        double theta = Math.toRadians(Mth.clamp(angle, MissileEntity.MIN_ATTACK_ANGLE, MissileEntity.MAX_ATTACK_ANGLE));
         double height = missile.getY() - ctx.target().y;
-        double required = height > 0.0 ? height / Math.tan(theta) : BRAKING_RANGE;
+        double required = height > 0.0 ? height / tan : BRAKING_RANGE;
         return Math.max(BRAKING_RANGE, required);
     }
 

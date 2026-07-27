@@ -1,28 +1,21 @@
 package com.wf.wfballistics.flight;
 
 import com.wf.wfballistics.MissileEntity;
-import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Steep terminal dive: bleed horizontal speed as the target nears while accelerating straight down under
- * gravity. When the missile carries a {@link MissileEntity#getAttackAngle() desired attack angle} it instead
- * flies a pure-pursuit approach onto the line through the target at that angle, so it strikes at the commanded
- * angle below horizontal rather than the natural best-fit dive.
+ * Terminal dive: a pure-pursuit approach onto the line through the target at the missile's resolved dive angle
+ * (an explicit {@link MissileEntity#getAttackAngle() preferred angle}, or one raycast-picked within the
+ * missile's dive-angle range - see {@link MissileEntity#resolveDiveAngle}). Speed is held constant along the
+ * approach, so the missile carves a fast arc onto the line instead of braking to a hover to pivot.
  */
 public final class AttackStage implements FlightStage {
 
     public static final AttackStage INSTANCE = new AttackStage();
 
-    // Horizontal speed scales to zero as the missile closes this distance (matches the cruise hand-off range).
-    private static final double DECEL_RANGE = 30.0;
-    // Downward acceleration accumulated each tick during the dive (gravity + a bit of thrust).
-    private static final double DIVE_GRAVITY = 0.06;
-    // Terminal (maximum) dive speed.
-    private static final double TERMINAL_FALL_VELOCITY = -14.0;
     // Carrot distance (blocks) ahead along the approach line for the angled pure-pursuit run.
     private static final double LOOKAHEAD = 12.0;
-    // Commanded closing speed along the angled approach; the missile still spools toward it under thrust.
+    // Commanded closing speed along the approach; the missile still spools toward it under thrust.
     private static final double APPROACH_SPEED = 14.0;
 
     private AttackStage() {
@@ -30,17 +23,11 @@ public final class AttackStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        double angle = missile.getAttackAngle();
-        if (!Double.isNaN(angle)) {
-            return guideAngled(missile, ctx, angle);
-        }
-        double horizontalSpeed = missile.getCruiseSpeed() * Math.min(1.0, ctx.horizontalDist() / DECEL_RANGE);
-        double vy = Math.max(missile.getDeltaMovement().y - DIVE_GRAVITY, TERMINAL_FALL_VELOCITY);
-        return new Vec3(ctx.nx() * horizontalSpeed, vy, ctx.nz() * horizontalSpeed);
+        return guideAngled(missile, ctx, missile.resolveDiveAngle(ctx), APPROACH_SPEED);
     }
 
-    private Vec3 guideAngled(MissileEntity missile, FlightContext ctx, double angleDeg) {
-        double theta = Math.toRadians(Mth.clamp(angleDeg, MissileEntity.MIN_ATTACK_ANGLE, MissileEntity.MAX_ATTACK_ANGLE));
+    static Vec3 guideAngled(MissileEntity missile, FlightContext ctx, double angleDeg, double minSpeed) {
+        double theta = Math.toRadians(angleDeg);
         double cos = Math.cos(theta);
         double sin = Math.sin(theta);
         Vec3 target = ctx.target();
@@ -51,7 +38,7 @@ public final class AttackStage implements FlightStage {
         Vec3 carrot = target.add(dir.scale(carrotParam));
         Vec3 toCarrot = carrot.subtract(pos);
         double len = toCarrot.length();
-        double speed = Math.max(missile.getCruiseSpeed(), APPROACH_SPEED);
+        double speed = Math.max(missile.getCruiseSpeed(), minSpeed);
         return len < 1.0E-4 ? dir.scale(speed) : toCarrot.scale(speed / len);
     }
 

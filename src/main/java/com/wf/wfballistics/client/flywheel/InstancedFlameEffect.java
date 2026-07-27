@@ -14,7 +14,8 @@ import net.minecraft.world.phys.Vec3;
 
 public class InstancedFlameEffect implements WFFlywheelEffect {
 
-    private static final int MAX_EMIT = 24;
+    private static final float FLAMES_PER_BLOCK = 2.0F;
+    private static final int MAX_EMIT = 256;
     private static final int MAX_LIFE = 16;
     private static final double FULL_DENSITY_SQ = 64.0 * 64.0;
     private static final double MIN_DENSITY = 0.15;
@@ -50,8 +51,12 @@ public class InstancedFlameEffect implements WFFlywheelEffect {
     }
 
     private int emitPerTick() {
-        int area = Math.max(1, (int) (spanX * spanZ));
-        return Mth.clamp((int) (area * 0.75), 2, MAX_EMIT);
+        return flameCount(spanX, spanZ);
+    }
+
+    public static int flameCount(double spanX, double spanZ) {
+        double area = Math.max(1.0, spanX * spanZ);
+        return Mth.clamp((int) Math.ceil(area * FLAMES_PER_BLOCK), 2, MAX_EMIT);
     }
 
     private int scaledEmit() {
@@ -171,9 +176,16 @@ public class InstancedFlameEffect implements WFFlywheelEffect {
 
         int argb(float pt) {
             float f = Math.min((age + pt) / life, 1F);
-            int rr = (int) (Mth.clamp(1F - f * 0.3F, 0F, 1F) * 255F);
-            int gg = (int) (Mth.clamp(0.6F * (1F - f) + 0.1F, 0F, 1F) * 255F);
-            int bb = (int) (0.05F * 255F);
+            float r = Mth.clamp(1F - f * 0.3F, 0F, 1F);
+            float g = Mth.clamp(0.6F * (1F - f) + 0.1F, 0F, 1F);
+            float b = 0.05F;
+            float w = Mth.clamp((f - 0.55F) / 0.45F, 0F, 1F);
+            r += (1F - r) * w;
+            g += (1F - g) * w;
+            b += (1F - b) * w;
+            int rr = (int) (r * 255F);
+            int gg = (int) (g * 255F);
+            int bb = (int) (b * 255F);
             int alpha = (int) (Mth.clamp((float) Math.pow(1F - f, 0.5), 0F, 1F) * 0.85F * 255F);
             return (alpha << 24) | (rr << 16) | (gg << 8) | bb;
         }

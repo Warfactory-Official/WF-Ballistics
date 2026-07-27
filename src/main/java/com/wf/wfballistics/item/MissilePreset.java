@@ -41,6 +41,8 @@ public final class MissilePreset {
     private final ResourceLocation cruiseStageId;
     private final ResourceLocation attackStageId;
     private final double attackAngle;
+    private final double minDiveAngle;
+    private final double maxDiveAngle;
     private final boolean stealth;
     private final float evasion;
     private final boolean evasiveManeuver;
@@ -67,6 +69,8 @@ public final class MissilePreset {
         this.cruiseStageId = b.cruiseStageId;
         this.attackStageId = b.attackStageId;
         this.attackAngle = b.attackAngle;
+        this.minDiveAngle = b.minDiveAngle;
+        this.maxDiveAngle = b.maxDiveAngle;
         this.stealth = b.stealth;
         this.evasion = b.evasion;
         this.evasiveManeuver = b.evasiveManeuver;
@@ -157,6 +161,14 @@ public final class MissilePreset {
         return attackAngle;
     }
 
+    public double minDiveAngle() {
+        return minDiveAngle;
+    }
+
+    public double maxDiveAngle() {
+        return maxDiveAngle;
+    }
+
     public boolean isStealth() {
         return stealth;
     }
@@ -209,6 +221,7 @@ public final class MissilePreset {
         if (!Double.isNaN(attackAngle)) {
             b.attackAngle(attackAngle);
         }
+        b.diveAngleRange(minDiveAngle, maxDiveAngle);
         if (stealth) {
             b.stealth(true);
         }
@@ -243,6 +256,8 @@ public final class MissilePreset {
         private ResourceLocation cruiseStageId = null; // null = phase default
         private ResourceLocation attackStageId = null;
         private double attackAngle = Double.NaN;
+        private double minDiveAngle = MissileEntity.DEFAULT_MIN_DIVE_ANGLE;
+        private double maxDiveAngle = MissileEntity.DEFAULT_MAX_DIVE_ANGLE;
         private boolean stealth = false;
         private float evasion = 0.0f;
         private boolean evasiveManeuver = false;
@@ -359,11 +374,21 @@ public final class MissilePreset {
         }
 
         /**
-         * Desired terminal impact angle in degrees below horizontal (90 = straight down). Leave unset for best
-         * fit, the attack stage's natural dive (see {@link MissileEntity.Builder#attackAngle}).
+         * Explicit preferred dive angle in degrees below horizontal (90 = straight down), uncapped. Leave unset
+         * to auto-pick within {@link #diveAngleRange} (see {@link MissileEntity.Builder#attackAngle}).
          */
         public Builder attackAngle(double degrees) {
             this.attackAngle = degrees;
+            return this;
+        }
+
+        /**
+         * Range (degrees below horizontal) the terminal dive auto-picks from when no explicit
+         * {@link #attackAngle} is set (see {@link MissileEntity.Builder#diveAngleRange}). Defaults to 80-90.
+         */
+        public Builder diveAngleRange(double minDegrees, double maxDegrees) {
+            this.minDiveAngle = minDegrees;
+            this.maxDiveAngle = maxDegrees;
             return this;
         }
 
