@@ -24,7 +24,12 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
     private boolean sourceGone = false;
     // Previous emission point, so a fast mover's per-tick jump can be bridged into a continuous trail section.
     private double prevX, prevY, prevZ;
+    // The emission point before that: gives a third sample so the bridge can follow a Catmull-Rom curve through
+    // the last few points instead of a straight chord, rounding the sharp corners a hard turn would otherwise
+    // leave as a kink in the trail (see tickEffect).
+    private double prev2X, prev2Y, prev2Z;
     private boolean hasPrevEmit = false;
+    private boolean hasPrev2 = false;
 
     public InstancedTrailEffect(Entity source) {
         this.level = source.level();
@@ -34,9 +39,9 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
             pool[i] = new Flame();
         }
         Vec3 emit = emitPoint();
-        this.cx = this.prevX = emit.x;
-        this.cy = this.prevY = emit.y;
-        this.cz = this.prevZ = emit.z;
+        this.cx = this.prevX = this.prev2X = emit.x;
+        this.cy = this.prevY = this.prev2Y = emit.y;
+        this.cz = this.prevZ = this.prev2Z = emit.z;
     }
 
     /**
@@ -99,16 +104,40 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
             float sectionScale = 0.6F + level.random.nextFloat() * 0.4F;
             int sectionLife = 30 + level.random.nextInt(20);
 
+            // Lay the puffs along a Catmull-Rom curve through the last three emit points (prev2 -> prev ->
+            // current) instead of the straight prev->current chord, so a sharp heading change rounds into a
+            // visible arc rather than a hard kink in the trail. The fourth control point is extrapolated
+            // straight ahead since the missile's next position isn't known yet. Falls back to the chord until
+            // enough history exists. "Not extremely accurate" by design — it just reads the flight's curvature.
+            boolean curve = hasPrev2;
+            double p3x = ex + (ex - prevX);
+            double p3y = ey + (ey - prevY);
+            double p3z = ez + (ez - prevZ);
             for (int k = 0; k < count; k++) {
                 double t = hasPrevEmit ? (double) (k + 1) / count : 1.0;
-                pool[cursor].spawn(level.random, prevX + segX * t, prevY + segY * t, prevZ + segZ * t,
-                        motion, sectionScale, sectionLife, tint);
+                double sx;
+                double sy;
+                double sz;
+                if (curve) {
+                    sx = catmullRom(prev2X, prevX, ex, p3x, t);
+                    sy = catmullRom(prev2Y, prevY, ey, p3y, t);
+                    sz = catmullRom(prev2Z, prevZ, ez, p3z, t);
+                } else {
+                    sx = prevX + segX * t;
+                    sy = prevY + segY * t;
+                    sz = prevZ + segZ * t;
+                }
+                pool[cursor].spawn(level.random, sx, sy, sz, motion, sectionScale, sectionLife, tint);
                 cursor = (cursor + 1) % pool.length;
             }
 
+            prev2X = prevX;
+            prev2Y = prevY;
+            prev2Z = prevZ;
             prevX = ex;
             prevY = ey;
             prevZ = ez;
+            hasPrev2 = hasPrevEmit;
             hasPrevEmit = true;
         }
 
@@ -143,6 +172,20 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
             return 3;
         }
         return 1;
+    }
+
+    /**
+     * One axis of a uniform Catmull-Rom spline (tension 0.5) through {@code p1}->{@code p2}, shaped by the
+     * neighbours {@code p0} and {@code p3}. Passes through p1 at t=0 and p2 at t=1, bending toward the incoming
+     * and outgoing directions so a cornered path reads as a smooth curve.
+     */
+    private static double catmullRom(double p0, double p1, double p2, double p3, double t) {
+        double t2 = t * t;
+        double t3 = t2 * t;
+        return 0.5 * ((2.0 * p1)
+                + (-p0 + p2) * t
+                + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
+                + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3);
     }
 
     @Override

@@ -1,5 +1,6 @@
 package com.wf.wfballistics;
 
+import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.entity.OBBEntity;
@@ -39,6 +40,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaterniond;
 import org.joml.Vector3d;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -47,6 +49,11 @@ import java.util.Set;
 import java.util.UUID;
 
 public class MissileEntity extends Projectile implements OBBEntity, IMissileListener, WarheadCarrier {
+
+    // DEBUG: per-tick flight diagnostics for swarm/recursive missiles (see logFlightDebug). Throttled to one
+    // line every LOG_INTERVAL ticks per missile so a long-lived spin doesn't flood the log.
+    private static final Logger LOGGER = LogUtils.getLogger();
+    private static final int LOG_INTERVAL = 4;
 
     public static final int DEFAULT_FRAGMENT_COUNT = 24;
 
@@ -137,6 +144,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private FlightProfile flightProfile = FlightProfile.fromIds(this.ascentStageId, this.cruiseStageId, this.attackStageId);
     // Loitering-munition timer: ticks spent orbiting on-station (see LoiterStage). Persisted.
     private int loiterTicks = 0;
+    // Terminal-dive commit latch: once the attack run has flown into its aim point while descending, it stops
+    // re-resolving the dive angle and flies straight on its current heading until it hits something (see
+    // AttackStage). Safeguard against re-aiming forever and orbiting an aim point it can't sit on (e.g. one
+    // left hanging in the air). One-way; not persisted (a reload re-commits on the next close descending pass).
+    private boolean diveCommitted = false;
     private CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
     private double cruiseAltitude = 200.0;
     private double terrainClearance = 24.0;
@@ -453,6 +465,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         velocity = this.applyThrust(velocity);
 
         this.setDeltaMovement(velocity);
+        this.logFlightDebug(ctx);
 
         this.hasImpulse = true;
         this.move(net.minecraft.world.entity.MoverType.SELF, this.getDeltaMovement());
@@ -510,6 +523,45 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 this.onMissileImpact(hitResult);
             }
         }
+    }
+
+    /**
+     * DEBUG: dump the flight state that explains a missilelet spinning instead of impacting — where it's
+     * aiming, how far the aim point sits above the actual ground beneath it ({@code tgtAGL} > 0 means it's
+     * aiming at empty air, e.g. over a crater), the terminal-dive angle it resolved (and the range it picked
+     * from — a shallow {@code diveAng} is what turns a clean plunge into a long, orbiting approach), and the
+     * geometry (closing speed, horizontal turn radius vs. distance). Limited to swarm/recursive missiles and
+     * throttled by {@link #LOG_INTERVAL}. Remove once the spin cause is settled.
+     */
+    private void logFlightDebug(FlightContext ctx) {
+        if (this.swarmId == 0L && !RecursiveFrag.ID.equals(this.detonationId)) {
+            return;
+        }
+        if (this.tickCount % LOG_INTERVAL != 0) {
+            return;
+        }
+        Vec3 pos = ctx.position();
+        Vec3 target = ctx.target();
+        Vec3 vel = this.getDeltaMovement();
+        double vh = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+        double closing = vel.x * ctx.nx() + vel.z * ctx.nz(); // > 0 gaining on the aim point, <= 0 overflown
+        double turnRadius = this.maxTurnRate > 1.0E-4 ? vh / this.maxTurnRate : 0.0;
+        double diveAngle = this.resolveDiveAngle(ctx);
+        int groundUnderMissile = this.level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                Mth.floor(pos.x), Mth.floor(pos.z));
+        int groundUnderTarget = this.level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                Mth.floor(target.x), Mth.floor(target.z));
+        LOGGER.info("[MSL id={} swarm={} depth={} phase={} age={} commit={}] pos=({},{},{}) tgt=({},{},{}) dist2D={} "
+                        + "vy={} vh={} spd={} closing={} turnR={} diveAng={} diveRange=[{},{}] fuze={} altAGL={} tgtAGL={}",
+                this.getId(), this.swarmId, this.splitDepth, this.phase, this.tickCount, this.diveCommitted,
+                f1(pos.x), f1(pos.y), f1(pos.z), f1(target.x), f1(target.y), f1(target.z),
+                f1(ctx.horizontalDist()), f1(vel.y), f1(vh), f1(vel.length()), f1(closing), f1(turnRadius),
+                f1(diveAngle), f1(this.minDiveAngle), f1(this.maxDiveAngle),
+                f1(this.explosionOffset), f1(pos.y - groundUnderMissile), f1(target.y - groundUnderTarget));
+    }
+
+    private static String f1(double v) {
+        return String.format("%.1f", v);
     }
 
     /**
@@ -893,6 +945,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     public void setLoiterTicks(int loiterTicks) {
         this.loiterTicks = loiterTicks;
+    }
+
+    public boolean isDiveCommitted() {
+        return this.diveCommitted;
+    }
+
+    public void setDiveCommitted(boolean diveCommitted) {
+        this.diveCommitted = diveCommitted;
     }
 
     /**
