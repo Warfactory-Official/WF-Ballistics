@@ -35,9 +35,13 @@ public class FlameParticle extends TextureSheetParticle {
         this.move(this.xd, this.yd, this.zd);
 
         float life = (float) this.age / this.lifetime;
-        this.rCol = Mth.clamp(1.0F - life * 0.3F, 0F, 1F);
-        this.gCol = Mth.clamp(0.6F * (1F - life) + 0.1F, 0F, 1F);
-        this.bCol = 0.05F;
+        float r = Mth.clamp(1.0F - life * 0.3F, 0F, 1F);
+        float g = Mth.clamp(0.6F * (1F - life) + 0.1F, 0F, 1F);
+        float b = 0.05F;
+        float w = Mth.clamp((life - 0.55F) / 0.45F, 0F, 1F);
+        this.rCol = r + (1F - r) * w;
+        this.gCol = g + (1F - g) * w;
+        this.bCol = b + (1F - b) * w;
         this.alpha = Mth.clamp((float) Math.pow(1F - life, 0.5), 0F, 1F) * 0.85F;
     }
 

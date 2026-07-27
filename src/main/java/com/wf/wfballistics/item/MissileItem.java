@@ -174,8 +174,9 @@ public class MissileItem extends Item {
                 ? "high, " + (int) preset.altitudeParam()
                 : "terrain-follow +" + (int) preset.altitudeParam(), ChatFormatting.AQUA));
         if (!preset.isInterceptor()) {
-            tooltip.add(kv("Attack angle", Double.isNaN(preset.attackAngle())
-                    ? "best fit" : (int) preset.attackAngle() + " deg", ChatFormatting.AQUA));
+            tooltip.add(kv("Dive angle", Double.isNaN(preset.attackAngle())
+                    ? (int) preset.minDiveAngle() + "-" + (int) preset.maxDiveAngle() + " deg (auto)"
+                    : (int) preset.attackAngle() + " deg", ChatFormatting.AQUA));
         }
         int ticks = preset.fuelTicks();
         tooltip.add(kv("Fuel", preset.fuelType() + ", " + ticks + " ticks (~" + (ticks / 20) + "s)", ChatFormatting.BLUE));

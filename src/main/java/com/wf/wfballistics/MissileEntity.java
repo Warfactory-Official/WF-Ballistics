@@ -29,9 +29,11 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -55,8 +57,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public static final double CRUISE_SPEED = 1.0;
     public static final double ASCENT_SPEED_FACTOR = 1.5;
     public static final double MIN_ASCENT_SPEED = 1.5;
-    public static final double MIN_ATTACK_ANGLE = 5.0;
-    public static final double MAX_ATTACK_ANGLE = 90.0;
+    public static final double DEFAULT_MIN_DIVE_ANGLE = 80.0;
+    public static final double DEFAULT_MAX_DIVE_ANGLE = 90.0;
+    private static final double DIVE_RAYCAST_RANGE = 64.0;
+    private static final int DIVE_ANGLE_SAMPLES = 6;
     // Safety/arming: the warhead is inert until the missile has flown this far from its launch point, so it
     // can't fuze, impact-detonate, or be blown up by damage while still on/near the launcher.
     public static final double ARMING_DISTANCE = 6.0;
@@ -144,6 +148,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private double cruiseSpeed = CRUISE_SPEED;
     private double ascentSpeed = Double.NaN;
     private double attackAngle = Double.NaN;
+    private double minDiveAngle = DEFAULT_MIN_DIVE_ANGLE;
+    private double maxDiveAngle = DEFAULT_MAX_DIVE_ANGLE;
     // Airburst fuze: while diving, detonate in the air once the missile is within this many
     // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
     private float explosionOffset = 0.0f;
@@ -792,11 +798,70 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * @return the desired terminal impact angle in degrees below horizontal (90 = straight down), or
-     * {@link Double#NaN} for best fit (the attack stage's natural dive).
+     * @return the explicit preferred dive angle in degrees below horizontal (90 = straight down, uncapped), or
+     * {@link Double#NaN} to auto-pick within [{@link #getMinDiveAngle()}, {@link #getMaxDiveAngle()}].
      */
     public double getAttackAngle() {
         return this.attackAngle;
+    }
+
+    public double getMinDiveAngle() {
+        return this.minDiveAngle;
+    }
+
+    public double getMaxDiveAngle() {
+        return this.maxDiveAngle;
+    }
+
+    /**
+     * The dive angle (degrees below horizontal) the terminal stages should fly this tick. An explicitly set
+     * {@link #getAttackAngle() attack angle} wins outright; otherwise the missile raycasts each candidate angle
+     * in [{@link #minDiveAngle}, {@link #maxDiveAngle}] and takes the one nearest the straight-line shot to the
+     * target whose approach corridor is unobstructed - the fastest way in that terrain will actually allow.
+     * Only invoked from the ground-attack dive/cruise stages, so interceptors (all-InterceptStage) never hit it.
+     */
+    public double resolveDiveAngle(FlightContext ctx) {
+        if (!Double.isNaN(this.attackAngle)) {
+            return this.attackAngle;
+        }
+        double lo = Math.min(this.minDiveAngle, this.maxDiveAngle);
+        double hi = Math.max(this.minDiveAngle, this.maxDiveAngle);
+        double dy = this.getY() - ctx.target().y;
+        double direct = Math.toDegrees(Math.atan2(dy, Math.max(ctx.horizontalDist(), 1.0e-4)));
+        double ideal = Mth.clamp(direct, lo, hi);
+        if (hi - lo < 1.0e-4 || ctx.horizontalDist() > DIVE_RAYCAST_RANGE) {
+            return ideal;
+        }
+        double chosen = ideal;
+        double bestDelta = Double.POSITIVE_INFINITY;
+        boolean anyClear = false;
+        for (int i = 0; i <= DIVE_ANGLE_SAMPLES; i++) {
+            double a = lo + (hi - lo) * i / DIVE_ANGLE_SAMPLES;
+            if (this.diveApproachClear(ctx, a)) {
+                double delta = Math.abs(a - ideal);
+                if (delta < bestDelta) {
+                    bestDelta = delta;
+                    chosen = a;
+                    anyClear = true;
+                }
+            }
+        }
+        return anyClear ? chosen : ideal;
+    }
+
+    private boolean diveApproachClear(FlightContext ctx, double angleDeg) {
+        double theta = Math.toRadians(angleDeg);
+        double cos = Math.cos(theta);
+        double sin = Math.sin(theta);
+        Vec3 target = ctx.target();
+        Vec3 travel = new Vec3(ctx.nx() * cos, -sin, ctx.nz() * cos);
+        double dy = this.getY() - target.y;
+        double length = Mth.clamp(Math.sqrt(ctx.horizontalDist() * ctx.horizontalDist() + dy * dy), 8.0, DIVE_RAYCAST_RANGE);
+        Vec3 aim = target.add(0.0, 0.5, 0.0);
+        Vec3 entry = aim.subtract(travel.scale(length));
+        BlockHitResult hit = this.level().clip(new ClipContext(entry, aim,
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, this));
+        return hit.getType() == HitResult.Type.MISS || hit.getLocation().distanceToSqr(aim) < 4.0;
     }
 
     /**
@@ -1438,6 +1503,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (!Double.isNaN(this.attackAngle)) {
             tag.putDouble("AttackAngle", this.attackAngle);
         }
+        tag.putDouble("MinDiveAngle", this.minDiveAngle);
+        tag.putDouble("MaxDiveAngle", this.maxDiveAngle);
         tag.putString("ModelId", this.getModelId().toString());
         tag.putInt("ExhaustColor", this.getExhaustColor());
         tag.putInt("CruiseTicks", this.cruiseTicks);
@@ -1535,6 +1602,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         if (tag.contains("AttackAngle")) {
             this.attackAngle = tag.getDouble("AttackAngle");
+        }
+
+        if (tag.contains("MinDiveAngle")) {
+            this.minDiveAngle = tag.getDouble("MinDiveAngle");
+        }
+
+        if (tag.contains("MaxDiveAngle")) {
+            this.maxDiveAngle = tag.getDouble("MaxDiveAngle");
         }
 
         if (tag.contains("ModelId")) {
@@ -1762,6 +1837,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private double cruiseSpeed = CRUISE_SPEED;
         private Double ascentSpeed = null;
         private Double attackAngle = null;
+        private Double minDiveAngle = null;
+        private Double maxDiveAngle = null;
         private Double maxTurnRate = null; // null = keep the model-size default
         private ResourceLocation modelId = MissileModels.DEFAULT;
         private int exhaustColor = DEFAULT_EXHAUST_COLOR;
@@ -1888,11 +1965,22 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Desired terminal impact angle in degrees below horizontal (90 = straight down / top-attack). Leave
-         * unset for best fit (the attack stage's natural dive). Clamped to a workable range.
+         * Explicit preferred dive angle in degrees below horizontal (90 = straight down / top-attack), uncapped.
+         * Leave unset to auto-pick within {@link #diveAngleRange}.
          */
         public Builder attackAngle(double degrees) {
-            this.attackAngle = Math.max(MIN_ATTACK_ANGLE, Math.min(MAX_ATTACK_ANGLE, degrees));
+            this.attackAngle = degrees;
+            return this;
+        }
+
+        /**
+         * When no explicit {@link #attackAngle} is set, the terminal dive auto-picks an angle in this range
+         * (degrees below horizontal) by raycasting for the fastest unobstructed approach. Defaults to
+         * [{@link #DEFAULT_MIN_DIVE_ANGLE}, {@link #DEFAULT_MAX_DIVE_ANGLE}].
+         */
+        public Builder diveAngleRange(double minDegrees, double maxDegrees) {
+            this.minDiveAngle = minDegrees;
+            this.maxDiveAngle = maxDegrees;
             return this;
         }
 
@@ -2133,6 +2221,12 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             }
             if (this.attackAngle != null) {
                 missile.attackAngle = this.attackAngle;
+            }
+            if (this.minDiveAngle != null) {
+                missile.minDiveAngle = this.minDiveAngle;
+            }
+            if (this.maxDiveAngle != null) {
+                missile.maxDiveAngle = this.maxDiveAngle;
             }
             missile.health = this.health;
             missile.setModelId(this.modelId);
