@@ -1,5 +1,6 @@
 package com.wf.wfballistics.warhead;
 
+import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.ModEntities;
@@ -13,7 +14,9 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import org.slf4j.Logger;
 
 import java.util.UUID;
 
@@ -37,6 +40,8 @@ public final class RecursiveFrag {
      * Registered warhead id (also selectable from the dispenser GUI).
      */
     public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "recursive_frag");
+    // DEBUG: logs the split geometry so it's clear whether the child aim points land on ground or in mid-air.
+    private static final Logger LOGGER = LogUtils.getLogger();
     /**
      * Default generations for a GUI-launched recursive missile: splits, those split, then a blast.
      */
@@ -126,12 +131,29 @@ public final class RecursiveFrag {
         double baseAngle = rng.nextDouble() * Math.PI * 2.0;
         double stepAngle = (Math.PI * 2.0) / count;
 
+        int groundUnderParentTarget = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                Mth.floor(target.x), Mth.floor(target.z));
+        LOGGER.info("[SPLIT parent={} swarm={} depth={} -> {} children] splitPos=({},{},{}) parentTgt=({},{},{}) "
+                        + "childOffset={} scatterR={} groundUnderTgt={} tgtAGL={}",
+                parent.getId(), swarm, parent.getSplitDepth(), count,
+                fmt(pos.x), fmt(pos.y), fmt(pos.z), fmt(target.x), fmt(target.y), fmt(target.z),
+                fmt(childOffset), fmt(radius), groundUnderParentTarget, fmt(target.y - groundUnderParentTarget));
+
         for (int i = 0; i < count; i++) {
             double angle = baseAngle + i * stepAngle + (rng.nextDouble() - 0.5) * stepAngle * 0.4;
             double r = radius * (0.7 + 0.3 * rng.nextDouble());
             double hx = Math.cos(angle);
             double hz = Math.sin(angle);
-            Vec3 childTarget = new Vec3(target.x + hx * r, target.y, target.z + hz * r);
+            double childX = target.x + hx * r;
+            double childZ = target.z + hz * r;
+            // Aim at the actual surface beneath each scattered point, not the parent's target altitude. Over
+            // uneven terrain a fixed Y leaves the aimpoint floating in mid-air, and the terminal dive — which
+            // pursues a carrot capped at the target and so can't be led below it — then orbits that empty point
+            // forever instead of coming down (confirmed by the tgtAGL/vy logs). Snapping to the ground makes
+            // every missilelet dive onto real ground.
+            int childGroundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    Mth.floor(childX), Mth.floor(childZ));
+            Vec3 childTarget = new Vec3(childX, childGroundY, childZ);
 
             MissileEntity child = MissileEntity.builder(type, level)
                     .model(CHILD_MODEL)
@@ -154,9 +176,18 @@ public final class RecursiveFrag {
             Vec3 burst = new Vec3(hx * SPREAD_LATERAL, -1.0, hz * SPREAD_LATERAL).normalize().scale(SPREAD_SPEED);
             child.setDeltaMovement(burst);
             level.addFreshEntity(child);
+
+            LOGGER.info("  child={} depth={} tgt=({},{},{}) groundUnderTgt={} tgtAGL={} (aimpoint {})",
+                    child.getId(), childDepth, fmt(childTarget.x), fmt(childTarget.y), fmt(childTarget.z),
+                    childGroundY, fmt(childTarget.y - childGroundY),
+                    childTarget.y - childGroundY > 1.0 ? "IN AIR" : "on ground");
         }
 
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
+    }
+
+    private static String fmt(double v) {
+        return String.format("%.1f", v);
     }
 
     private static void leafBlast(Level level, Vec3 pos) {
