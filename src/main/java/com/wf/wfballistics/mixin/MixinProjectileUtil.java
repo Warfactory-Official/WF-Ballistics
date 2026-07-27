@@ -14,8 +14,10 @@ import org.joml.Vector3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -25,8 +27,13 @@ import java.util.function.Predicate;
  *
  * <p>Ported from SuperbWarfare's {@code ProjectileUtilMixin} (SW's hit particles/sounds and per-part hit
  * tracking are dropped). Instead of SW's extra spatial query, this iterates the small per-level
- * {@link OBBEntityTracker} set and early-outs entirely when the level has no OBB entities. If no OBB is
- * hit, the injection does nothing and vanilla AABB hit-testing runs, so non-OBB entities are unaffected.
+ * {@link OBBEntityTracker} set and early-outs entirely when the level has no OBB entities.
+ *
+ * <p>The OBB is the sole authority for hitting a missile. The HEAD injections resolve a precise OBB hit;
+ * if none is found they do nothing, and the {@code getEntities} redirect below drops OBB entities from
+ * vanilla's fallback scan so a projectile can never hit the missile's coarse enclosing AABB. That AABB is
+ * left purely for rendering, frustum culling, broadphase and F3+B. Non-OBB entities are untouched, so
+ * vanilla AABB hit-testing runs unchanged for everything else.
  */
 @Mixin(ProjectileUtil.class)
 public class MixinProjectileUtil {
@@ -110,5 +117,24 @@ public class MixinProjectileUtil {
                 }
             }
         }
+    }
+
+    /**
+     * Vanilla's fallback loop (run when the HEAD injections above found no OBB hit) clips each candidate's
+     * {@link Entity#getBoundingBox()}. For a rotated missile that AABB is the fat enclosing box of the OBB,
+     * so a ray grazing an empty corner would register a bogus AABB hit. Dropping OBB entities from this scan
+     * leaves the OBB as the only way to hit them; the enclosing AABB stays for rendering/culling/broadphase.
+     * Guarded by {@link OBBEntityTracker#hasAny} so it's a no-op in levels with no missiles.
+     */
+    @Redirect(method = {
+            "getEntityHitResult(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;F)Lnet/minecraft/world/phys/EntityHitResult;",
+            "getEntityHitResult(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;D)Lnet/minecraft/world/phys/EntityHitResult;"
+    }, at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;getEntities(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;)Ljava/util/List;"))
+    private static List<Entity> wfballistics$dropObbFromAabbScan(Level level, Entity entity, AABB box, Predicate<? super Entity> predicate) {
+        List<Entity> candidates = level.getEntities(entity, box, predicate);
+        if (!candidates.isEmpty() && OBBEntityTracker.hasAny(level)) {
+            candidates.removeIf(e -> e instanceof OBBEntity obbEntity && !obbEntity.enableAABB());
+        }
+        return candidates;
     }
 }
