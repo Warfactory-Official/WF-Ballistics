@@ -49,6 +49,7 @@ public final class MissilePreset {
     private final boolean stealth;
     private final float evasion;
     private final boolean evasiveManeuver;
+    private final double accuracy;
     private final int exhaustColor;
     private final ResourceLocation flightSoundId;
     private final double flightSoundRange;
@@ -84,6 +85,7 @@ public final class MissilePreset {
         this.stealth = b.stealth;
         this.evasion = b.evasion;
         this.evasiveManeuver = b.evasiveManeuver;
+        this.accuracy = b.accuracy;
         this.exhaustColor = b.exhaustColor;
         this.flightSoundId = b.flightSoundId;
         this.flightSoundRange = b.flightSoundRange;
@@ -198,6 +200,11 @@ public final class MissilePreset {
         return evasiveManeuver;
     }
 
+    /** Circular-error radius (blocks) the aimpoint is scattered by at launch; 0 = pinpoint. */
+    public double accuracy() {
+        return accuracy;
+    }
+
     public int exhaustColor() {
         return exhaustColor;
     }
@@ -218,10 +225,18 @@ public final class MissilePreset {
      * Builds (but does not spawn) a live missile aimed at {@code target}.
      */
     public MissileEntity build(Level level, Vec3 target) {
+        // CEP: scatter the aimpoint within an `accuracy`-block disk (uniform in area) at launch, so an
+        // inaccurate missile (e.g. a bunker buster) lands off-target. 0 = pinpoint (aim exactly at target).
+        Vec3 aim = target;
+        if (accuracy > 0.0) {
+            double ang = level.random.nextDouble() * Math.PI * 2.0;
+            double rad = accuracy * Math.sqrt(level.random.nextDouble());
+            aim = new Vec3(target.x + Math.cos(ang) * rad, target.y, target.z + Math.sin(ang) * rad);
+        }
         MissileEntity.Builder b = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
                 .model(modelId)
                 .detonation(warheadId)
-                .target(target)
+                .target(aim)
                 .cruiseSpeed(cruiseSpeed)
                 .health(health)
                 .fragmentCount(fragmentCount)
@@ -344,6 +359,7 @@ public final class MissilePreset {
         private boolean stealth = false;
         private float evasion = 0.0f;
         private boolean evasiveManeuver = false;
+        private double accuracy = 0.0;
         private int exhaustColor = MissileEntity.DEFAULT_EXHAUST_COLOR;
         private ResourceLocation flightSoundId = null;      // null = WF-B's default missile_flight loop
         private double flightSoundRange = MissileEntity.DEFAULT_FLIGHT_SOUND_RANGE;
@@ -504,6 +520,16 @@ public final class MissilePreset {
          */
         public Builder evasiveManeuver() {
             this.evasiveManeuver = true;
+            return this;
+        }
+
+        /**
+         * Circular error probable (blocks): the aimpoint is randomly scattered within a disk of this radius at
+         * launch, so the missile lands off-target by up to {@code blocks}. 0 (default) = pinpoint. Used for
+         * deliberately inaccurate ordnance such as bunker busters.
+         */
+        public Builder accuracy(double blocks) {
+            this.accuracy = Math.max(0.0, blocks);
             return this;
         }
 
