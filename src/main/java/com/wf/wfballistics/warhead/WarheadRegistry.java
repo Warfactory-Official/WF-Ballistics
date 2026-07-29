@@ -46,6 +46,25 @@ public final class WarheadRegistry {
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     };
 
+    public static final float SHAPED_CHARGE_SIZE = 6F;
+
+    /**
+     * Top-attack shaped charge (HEAT): fires a tight jet straight down, drilling a deep, narrow shaft through
+     * hardened cover with only a shallow crater at the surface. Only blocks/entities in the downward cone are
+     * hit — see {@link com.wf.wfballistics.aef.standard.BlockAllocatorShapedCharge}. Swap the axis for the
+     * carrier's velocity if a directional (non top-attack) variant is ever needed.
+     */
+    public static final Detonation SHAPED_CHARGE = (source, pos) -> {
+        Level level = source.level();
+        if (level.isClientSide) {
+            return;
+        }
+        new ExplosionAEF(level, pos.x, pos.y, pos.z, SHAPED_CHARGE_SIZE)
+                .makeShapedCharge(new Vec3(0.0, -1.0, 0.0))
+                .explode();
+        ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
+    };
+
     public static final Detonation MININUKE = (source, pos) ->
             MiniNuke.detonate(source.level(), pos,
                     MiniNuke.medium());
@@ -81,6 +100,7 @@ public final class WarheadRegistry {
         register(DEFAULT_ID, STANDARD, STANDARD_INTERCEPT);
         register(rl("mininuke"), MININUKE);
         register(rl("fragmentation"), FRAGMENTATION);
+        register(rl("shaped_charge"), SHAPED_CHARGE);
         register(RecursiveFrag.ID, RecursiveFrag::detonate);
         register(GasWarhead.ID, GasWarhead::detonate);
         register(FireWarhead.ID, FireWarhead::detonate);
@@ -93,6 +113,7 @@ public final class WarheadRegistry {
 
         BLAST_SIZE.put(DEFAULT_ID, STANDARD_BLAST_SIZE);
         BLAST_SIZE.put(FireWarhead.ID, 8F);
+        BLAST_SIZE.put(rl("shaped_charge"), SHAPED_CHARGE_SIZE);
     }
 
     private WarheadRegistry() {

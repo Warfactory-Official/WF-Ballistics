@@ -98,6 +98,7 @@ public class EntityProcessorCross implements IEntityProcessor {
         for (Entity entity : list) {
             double distanceScaled = nearestSurfaceDistanceScaled(entity, x, y, z, size);
             if (distanceScaled > 1.0D) continue;
+            if (!isWithinBlastShape(explosion, entity, x, y, z)) continue;
 
             double deltaX = entity.getX() - x;
             double deltaY = entity.getY() + entity.getEyeHeight() - y;
@@ -182,6 +183,15 @@ public class EntityProcessorCross implements IEntityProcessor {
      * Whether a given entity should receive knockback at all; override to exempt e.g. projectiles.
      */
     protected boolean shouldDealKnockback(Entity entity) {
+        return true;
+    }
+
+    /**
+     * Blast-shape gate, checked right after the spherical range cull. Return {@code false} to spare an entity
+     * whose position falls outside this blast's actual shape — e.g. beside or behind a shaped charge's forward
+     * cone (see {@link EntityProcessorCone}). The default whole-sphere blast lets everything in range through.
+     */
+    protected boolean isWithinBlastShape(ExplosionAEF explosion, Entity entity, double x, double y, double z) {
         return true;
     }
 

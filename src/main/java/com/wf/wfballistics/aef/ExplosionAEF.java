@@ -172,6 +172,34 @@ public class ExplosionAEF {
     }
 
 
+    /**
+     * A directional shaped charge (Munroe / HEAT): a narrow forward cone about {@code direction} whose on-axis
+     * jet drills deep while the cone mouth blows a shallow crater. Both terrain ({@link BlockAllocatorShapedCharge})
+     * and entities ({@link EntityProcessorCone}) are gated to the cone, so anything beside or behind the charge is
+     * spared. Pass the round's travel/impact direction as {@code direction} — e.g. straight down for a top-attack
+     * warhead; a zero-length vector defaults to straight down.
+     *
+     * @param direction    the jet axis
+     * @param halfAngleDeg cone half-angle in degrees (tighter = deeper, narrower)
+     * @param jetPower     on-axis power multiplier applied to {@link #size} — the penetration knob (&gt; 1 punches
+     *                     through blocks a same-size sphere couldn't)
+     */
+    public ExplosionAEF makeShapedCharge(Vec3 direction, float halfAngleDeg, float jetPower) {
+        this.setBlockAllocator(new BlockAllocatorShapedCharge(direction, halfAngleDeg, jetPower));
+        this.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
+        this.setEntityProcessor(new EntityProcessorCone(direction, halfAngleDeg));
+        this.setPlayerProcessor(new PlayerProcessorStandard());
+        this.setSFX(new ExplosionEffectStandard());
+        return this;
+    }
+
+    /** Shaped charge with sensible defaults (see {@link BlockAllocatorShapedCharge}: a ~22° cone, 4x jet). */
+    public ExplosionAEF makeShapedCharge(Vec3 direction) {
+        return makeShapedCharge(direction, BlockAllocatorShapedCharge.DEFAULT_HALF_ANGLE_DEG,
+                BlockAllocatorShapedCharge.DEFAULT_JET_POWER);
+    }
+
+
     public ExplosionAEF makeAmat() {
         this.setBlockAllocator(new BlockAllocatorStandard(this.size < 15 ? 16 : 32));
         this.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
