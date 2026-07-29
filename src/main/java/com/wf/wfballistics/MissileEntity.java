@@ -15,6 +15,8 @@ import com.wf.wfballistics.util.OBB;
 import com.wf.wfballistics.util.SweptCollision;
 import com.wf.wfballistics.warhead.RecursiveFrag;
 import com.wf.wfballistics.warhead.WarheadCarrier;
+import com.wf.wfballistics.damage.MissileDamageRegistry;
+import com.wf.wfballistics.damage.MissileDamageResponse;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -23,7 +25,9 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
@@ -83,6 +87,16 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private static final double FUEL_OUT_GRAVITY = 0.05;
     private static final double TERMINAL_FALL_SPEED = -3.9;
     private static final double FALL_HORIZONTAL_DRAG = 0.99;
+    // Downed-behaviour tuning: POWER_LOSS bleeds horizontal speed far harder than a plain ballistic fall (so it
+    // decelerates while keeping its momentum's direction); SPIN_OUT sinks mildly and cooks off after a short fuse.
+    private static final double POWER_LOSS_DRAG = 0.93;
+    private static final double SPINOUT_GRAVITY = 0.03;
+    private static final int SPINOUT_MIN_FUSE = 15;
+    private static final int SPINOUT_MAX_FUSE = 45;
+    // Ticks after a missile is downed during which further hits DON'T force-detonate it, so its downed animation
+    // (spin-out, fall, ...) actually plays instead of a rapid-fire weapon (CIWS, incl. other mods' via hurt())
+    // instantly re-detonating it. Long enough that a spin-out cooks off on its own (fuse <= SPINOUT_MAX_FUSE).
+    private static final int DOWNED_REHIT_GRACE = 60;
     // Evasive boost: a short high-speed burst (extra speed, so an interceptor whiffs) bought with a chunk of
     // fuel — deliberately inefficient, so repeated dodging drains the tank and a dry missile can't dodge.
     private static final double BOOST_SPEED_MULT = 2.0;
@@ -106,6 +120,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Synced so the client-side exhaust trail can tint itself per missile (see InstancedTrailEffect).
     private static final EntityDataAccessor<Integer> EXHAUST_COLOR =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.INT);
+    // Per-missile looping flight sound id (synced so the client sound handler can pick it up on spawn); "" = the
+    // default WFSounds.MISSILE_FLIGHT loop.
+    private static final EntityDataAccessor<String> FLIGHT_SOUND =
+            SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.STRING);
     private static final double TURN_AGILITY = 1.0; // radians * (model units) per tick
     // Predictive friendly deconfliction ("don't ram your own"): a missile looks AVOID_HORIZON ticks ahead
     // for friendly missiles (same swarm or launcher) whose closest approach would fall within AVOID_MIN_SEP
@@ -169,6 +187,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Number of bomblets the FRAGMENTATION warhead scatters; per-missile, set via the Builder.
     private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
     private WarheadRegistry.Detonation detonation = WarheadRegistry.STANDARD;
+    // Per-missile damage response (resolved from its id, like the warhead), letting a preset resist/scale
+    // incoming damage by source. Default = take damage as dealt.
+    private ResourceLocation damageResponseId = MissileDamageRegistry.defaultId();
+    private MissileDamageResponse damageResponse = MissileDamageRegistry.STANDARD;
     // Max change in velocity direction per tick, in radians. Default scales from the model's length
     // (longer airframe = less nimble); overridable via the Builder.
     private double maxTurnRate = TURN_AGILITY / MissileModels.length(MissileModels.DEFAULT);
@@ -178,6 +200,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Guards against re-entrant detonation: the warhead's own blast can hurt() this still-present missile,
     // which would otherwise re-enter detonate() and recurse until the stack overflows.
     private boolean detonated = false;
+    // Shot-down state: instead of air-bursting, a downed missile runs its DownedAction (fall, spin out, ...)
+    // via tickDowned once shot down (see shootDown). downedAction is picked per-preset; the spin-out heading and
+    // fuse are set lazily the first tick a SPIN_OUT missile is downed.
+    private boolean downed = false;
+    private DownedAction downedAction = DownedAction.CRASH;
+    private Vec3 spinOutDir = null;
+    private int spinOutFuse = 0;
+    private int downedGrace = 0; // ticks left before a re-hit may force-detonate this downed missile
     // Arming state (see ARMING_DISTANCE): the launch point, captured on the first server tick, and whether
     // the warhead has gone live. While unarmed all detonation triggers are suppressed.
     private Vec3 launchPos = null;
@@ -366,7 +396,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
 
         if (this.fuel <= 0) {
-            this.ballisticFall(serverLevel, currentPos);
+            if (this.downed) {
+                this.tickDowned(serverLevel, currentPos);
+            } else {
+                this.ballisticFall(serverLevel, currentPos);
+            }
             return;
         }
         this.fuel--;
@@ -780,6 +814,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     protected void defineSynchedData() {
         this.entityData.define(MODEL_ID, MissileModels.DEFAULT.toString());
         this.entityData.define(EXHAUST_COLOR, DEFAULT_EXHAUST_COLOR);
+        this.entityData.define(FLIGHT_SOUND, "");
     }
 
     public ResourceLocation getModelId() {
@@ -799,6 +834,32 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     public void setExhaustColor(int rgb) {
         this.entityData.set(EXHAUST_COLOR, rgb);
+    }
+
+    /**
+     * @return the looping flight sound this missile plays client-side, or {@link WFSounds#MISSILE_FLIGHT} when
+     * none was set or the stored id doesn't resolve to a registered sound.
+     */
+    public SoundEvent getFlightSound() {
+        String id = this.entityData.get(FLIGHT_SOUND);
+        if (id != null && !id.isEmpty()) {
+            ResourceLocation rl = ResourceLocation.tryParse(id);
+            if (rl != null) {
+                SoundEvent event = ForgeRegistries.SOUND_EVENTS.getValue(rl);
+                if (event != null) {
+                    return event;
+                }
+            }
+        }
+        return WFSounds.MISSILE_FLIGHT.get();
+    }
+
+    /**
+     * Set the looping flight sound by id (must be a registered {@link SoundEvent}); {@code null} restores the
+     * default loop.
+     */
+    public void setFlightSound(ResourceLocation id) {
+        this.entityData.set(FLIGHT_SOUND, id == null ? "" : id.toString());
     }
 
     public Vec3 getTarget() {
@@ -1158,12 +1219,21 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
      * its inertia preserved. Still sweeps for an impact so it detonates when it hits the ground.
      */
     private void ballisticFall(ServerLevel level, Vec3 currentPos) {
+        this.coastDown(level, currentPos, FALL_HORIZONTAL_DRAG, false);
+    }
+
+    /**
+     * Shared unpowered coast: gravity toward terminal speed plus horizontal {@code drag}, moving and sweeping for
+     * an impact. {@code fizzleOnImpact} runs the neutralised effect at the crash site (a shot-down missile that
+     * lands) instead of the full impact detonation ({@link #onMissileImpact}).
+     */
+    private void coastDown(ServerLevel level, Vec3 currentPos, double drag, boolean fizzleOnImpact) {
         // Keep the missile's own chunks loaded while it coasts down.
         this.chunkLoader.update(this, level, currentPos, this.getDeltaMovement(), true);
 
         Vec3 v = this.getDeltaMovement();
         double vy = Math.max(v.y - FUEL_OUT_GRAVITY, TERMINAL_FALL_SPEED);
-        v = new Vec3(v.x * FALL_HORIZONTAL_DRAG, vy, v.z * FALL_HORIZONTAL_DRAG);
+        v = new Vec3(v.x * drag, vy, v.z * drag);
         this.setDeltaMovement(v);
 
         this.hasImpulse = true;
@@ -1173,7 +1243,66 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (this.isArmed()) {
             HitResult hitResult = this.sweepForImpact(currentPos, v);
             if (hitResult.getType() != HitResult.Type.MISS) {
-                this.onMissileImpact(hitResult);
+                if (fizzleOnImpact) {
+                    this.detonate(hitResult.getLocation(), true);
+                } else {
+                    this.onMissileImpact(hitResult);
+                }
+            }
+        }
+    }
+
+    /**
+     * Per-tick handling for a shot-down ({@link #downed}) missile, dispatched by its {@link DownedAction}:
+     * SPIN_OUT tumbles onto a random heading and cooks off; POWER_LOSS coasts down with heavy deceleration;
+     * CRASH (the default) coasts down with light drag. All but SPIN_OUT fizzle where they crash.
+     */
+    private void tickDowned(ServerLevel level, Vec3 currentPos) {
+        if (this.downedGrace > 0) {
+            this.downedGrace--;
+        }
+        switch (this.downedAction) {
+            case SPIN_OUT -> this.spinOut(level, currentPos);
+            case POWER_LOSS -> this.coastDown(level, currentPos, POWER_LOSS_DRAG, true);
+            default -> this.coastDown(level, currentPos, FALL_HORIZONTAL_DRAG, true); // CRASH
+        }
+    }
+
+    /**
+     * Spin-out: the missile veers onto a random heading — turn-rate limited (via {@link #constrainTurn}), so it
+     * arcs out of control rather than snapping — sinking as it tumbles, and its warhead cooks off (a full
+     * detonation) on impact or once a short random fuse elapses.
+     */
+    private void spinOut(ServerLevel level, Vec3 currentPos) {
+        this.chunkLoader.update(this, level, currentPos, this.getDeltaMovement(), true);
+
+        if (this.spinOutDir == null) {
+            // Pick a random veer heading (any yaw, biased 10-40 deg below horizontal) and a short tumble fuse.
+            double yaw = level.random.nextDouble() * Math.PI * 2.0;
+            double pitch = Math.toRadians(-10.0 - level.random.nextDouble() * 30.0);
+            double cp = Math.cos(pitch);
+            this.spinOutDir = new Vec3(Math.cos(yaw) * cp, Math.sin(pitch), Math.sin(yaw) * cp).normalize();
+            this.spinOutFuse = SPINOUT_MIN_FUSE + level.random.nextInt(SPINOUT_MAX_FUSE - SPINOUT_MIN_FUSE + 1);
+        }
+
+        Vec3 cur = this.getDeltaMovement();
+        double speed = Math.max(cur.length(), 1.0);
+        Vec3 v = constrainTurn(cur, this.spinOutDir.scale(speed), this.maxTurnRate);
+        v = new Vec3(v.x, v.y - SPINOUT_GRAVITY, v.z);
+        this.setDeltaMovement(v);
+
+        this.hasImpulse = true;
+        this.move(net.minecraft.world.entity.MoverType.SELF, v);
+        this.setBoundingBox(this.makeBoundingBox());
+
+        if (this.isArmed()) {
+            HitResult hitResult = this.sweepForImpact(currentPos, v);
+            if (hitResult.getType() != HitResult.Type.MISS) {
+                this.detonate(hitResult.getLocation(), false); // full warhead cooks off on impact
+                return;
+            }
+            if (--this.spinOutFuse <= 0) {
+                this.detonate(this.position(), false); // ...or after tumbling for the fuse
             }
         }
     }
@@ -1202,6 +1331,21 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     @Override
     public void remove(RemovalReason reason) {
+        // Point-defence guard. Some mods "shoot down" a projectile by calling discard() on it OUTRIGHT rather
+        // than damaging it — e.g. Superb Warfare's CIWS (AutoAimableEntity.rayShoot) does, for any Projectile
+        // that isn't its own DestroyableProjectile, `causeAirExplode(); target.discard();`. That deletes the
+        // missile in one frame with an airburst and skips our entire shoot-down/downed sequence (damageMissile
+        // → shootDown never gets to matter). Intercept such an EXTERNAL discard of a live, armed, not-yet-
+        // detonated missile and turn it into a proper shoot-down (it falls and fizzles) instead of vanishing.
+        // Our own detonate() sets `detonated` before it discards, so a real detonation passes straight through;
+        // KILLED (e.g. /kill), chunk-unloads, and unarmed missiles pass through too.
+        if (reason == RemovalReason.DISCARDED && !this.level().isClientSide
+                && !this.detonated && this.isArmed() && this.isAlive()) {
+            if (!this.downed) {
+                this.shootDown();
+            }
+            return; // veto the deletion — keep the (now downed) missile alive to coast to its own crash/fizzle
+        }
         // Release forced chunks when the missile actually goes away (killed/discarded), but not on a
         // plain chunk unload — those tickets persist so the missile resumes after a reload.
         if (!this.level().isClientSide && reason.shouldDestroy() && this.level() instanceof ServerLevel sl) {
@@ -1354,7 +1498,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return false;
         }
         if (!(level.getEntity(this.currentTargetId) instanceof MissileEntity tgt)
-                || !tgt.isAlive() || tgt.detonated || tgt.interceptor) {
+                || !tgt.isAlive() || tgt.detonated || tgt.downed || tgt.interceptor) {
             return false;
         }
         Vec3 iV = this.getDeltaMovement();
@@ -1387,7 +1531,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             // hits). A hit deals heavy damage, a miss a graze; damageMissile downs it when the pool empties.
             tgt.damageMissile(kill ? MissileSimConfig.INTERCEPTOR_HIT_DAMAGE : MissileSimConfig.INTERCEPTOR_GRAZE_DAMAGE);
         } else if (kill) {
-            tgt.detonate(point, true); // binary mode: a successful roll neutralises the target outright
+            // Binary mode: an interceptor is a guaranteed clean kill — force a full-warhead DETONATE regardless
+            // of the target's own rolled downed action (flak/CIWS use that; the dedicated interceptor overrides it).
+            tgt.shootDown(DownedAction.DETONATE);
         }
         this.detonate(point, true); // spent whether it hits or misses (one-shot)
         return true;
@@ -1567,8 +1713,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         tag.putDouble("MaxDiveAngle", this.maxDiveAngle);
         tag.putString("ModelId", this.getModelId().toString());
         tag.putInt("ExhaustColor", this.getExhaustColor());
+        tag.putString("FlightSound", this.entityData.get(FLIGHT_SOUND));
         tag.putInt("CruiseTicks", this.cruiseTicks);
         tag.putString("DetonationId", this.detonationId.toString());
+        tag.putString("DamageResponse", this.damageResponseId.toString());
         tag.putString("AscentStage", this.ascentStageId.toString());
         tag.putString("CruiseStage", this.cruiseStageId.toString());
         tag.putString("AttackStage", this.attackStageId.toString());
@@ -1604,6 +1752,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         tag.putDouble("Deceleration", this.deceleration);
         tag.putFloat("Health", this.health);
         tag.putBoolean("Armed", this.armed);
+        tag.putBoolean("Downed", this.downed);
+        tag.putInt("DownedGrace", this.downedGrace);
+        tag.putString("DownedAction", this.downedAction.name());
         if (this.launchPos != null) {
             tag.putDouble("LaunchX", this.launchPos.x);
             tag.putDouble("LaunchY", this.launchPos.y);
@@ -1680,6 +1831,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             this.setExhaustColor(tag.getInt("ExhaustColor"));
         }
 
+        if (tag.contains("FlightSound")) {
+            this.entityData.set(FLIGHT_SOUND, tag.getString("FlightSound"));
+        }
+
         if (tag.contains("CruiseTicks")) {
             this.cruiseTicks = tag.getInt("CruiseTicks");
         }
@@ -1687,6 +1842,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (tag.contains("DetonationId")) {
             this.detonationId = WarheadRegistry.parse(tag.getString("DetonationId"));
             this.detonation = WarheadRegistry.get(this.detonationId);
+        }
+
+        if (tag.contains("DamageResponse")) {
+            this.damageResponseId = MissileDamageRegistry.parse(tag.getString("DamageResponse"));
+            this.damageResponse = MissileDamageRegistry.get(this.damageResponseId);
         }
 
         if (tag.contains("AscentStage")) {
@@ -1761,6 +1921,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         this.armed = tag.getBoolean("Armed");
+        this.downed = tag.getBoolean("Downed");
+        this.downedGrace = tag.getInt("DownedGrace");
+        if (tag.contains("DownedAction")) {
+            try {
+                this.downedAction = DownedAction.valueOf(tag.getString("DownedAction"));
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
         if (tag.contains("LaunchX")) {
             this.launchPos = new Vec3(tag.getDouble("LaunchX"), tag.getDouble("LaunchY"), tag.getDouble("LaunchZ"));
         }
@@ -1825,10 +1993,60 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
         this.health -= amount;
         if (this.health <= 0.0f) {
-            // Shot down (CIWS / interceptor fire) counts as an interception: run the neutralised effect so a
-            // downed missile fizzles instead of dropping a full warhead blast (e.g. over friendly ground).
-            this.detonate(this.position(), true);
+            // Shot down (CIWS / interceptor fire): cut power and let it fall out of the sky rather than
+            // air-bursting on the spot — it fizzles (neutralised) where it crashes (see shootDown).
+            this.shootDown();
         }
+    }
+
+    /**
+     * Neutralise this missile by shooting it down: it cuts thrust and guidance and falls ballistically (see
+     * {@link #ballisticFall}), then runs the neutralised intercept effect where it hits the ground instead of a
+     * full warhead blast. No-op once already downed or detonated. Prefer this over a mid-air
+     * {@code detonate(pos, true)} anywhere a missile is "shot out of the sky".
+     */
+    public void shootDown() {
+        this.shootDown(this.downedAction);
+    }
+
+    /**
+     * Shoot this missile down with an explicit {@link DownedAction}, overriding its per-launch rolled action.
+     * Used where the downing weapon dictates the outcome — e.g. an interceptor forces a clean full-warhead
+     * {@code DETONATE} regardless of what the target rolled. The no-arg {@link #shootDown()} uses the rolled action
+     * (flak / CIWS / external hits go through that).
+     */
+    public void shootDown(DownedAction action) {
+        if (this.detonated) {
+            return;
+        }
+        if (this.downed) {
+            // Hit again while it's already falling / spinning out. Ignore hits during the grace window so the
+            // downed animation plays out (a rapid-fire CIWS would otherwise re-detonate it the same instant it
+            // goes down); once the window elapses a follow-up hit sets the warhead off where it is.
+            if (this.downedGrace <= 0) {
+                this.detonate(this.position(), false);
+            }
+            return;
+        }
+        switch (action) {
+            case FIZZLE -> this.detonate(this.position(), true);   // neutralised fizzle on the spot, mid-air
+            case DETONATE -> this.detonate(this.position(), false); // full warhead blast on the spot, mid-air
+            default -> {
+                // CRASH / POWER_LOSS / SPIN_OUT: cut power so the tick's fuel<=0 branch runs tickDowned from here.
+                // Store the (possibly overridden) action so tickDowned dispatches on the actual downed behaviour.
+                this.downedAction = action;
+                this.downed = true;
+                this.fuel = 0;
+                this.downedGrace = DOWNED_REHIT_GRACE;
+            }
+        }
+    }
+
+    /**
+     * @return true once this missile has been shot down and is falling ballistically (see {@link #shootDown}).
+     */
+    public boolean isDowned() {
+        return this.downed;
     }
 
     @Override
@@ -1837,8 +2055,22 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (this.level().isClientSide || this.isRemoved()) {
             return false;
         }
-        this.damageMissile(amount);
+        // Per-missile damage response: a preset can resist or scale incoming damage by source (e.g. a hardened
+        // airframe that only takes explosion damage). Interceptor/CIWS hits go through damageMissile() directly
+        // and are intentionally not gated here.
+        float effective = this.damageResponse.apply(this, source, amount);
+        if (effective <= 0.0f) {
+            return false;
+        }
+        this.damageMissile(effective);
         return true;
+    }
+
+    /**
+     * @return this missile's damage-response id (see {@link MissileDamageRegistry}).
+     */
+    public ResourceLocation getDamageResponseId() {
+        return this.damageResponseId;
     }
 
     public enum Phase {
@@ -1850,6 +2082,22 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public enum CruiseMode {
         TERRAIN_FOLLOW,
         HIGH_ALTITUDE
+    }
+
+    /**
+     * What a missile does when it is shot out of the sky (see {@link #shootDown}). Picked per-preset.
+     */
+    public enum DownedAction {
+        /** Neutralised fizzle on the spot, in mid-air where it was hit (the original shot-down behaviour). */
+        FIZZLE,
+        /** Instant FULL warhead blast in mid-air where it was hit — a real "detonated on the spot". */
+        DETONATE,
+        /** Cut power and fall ballistically (light drag, momentum preserved); fizzles at the crash site. */
+        CRASH,
+        /** Veer onto a random, turn-rate-limited heading (spins out), then the warhead cooks off (full blast). */
+        SPIN_OUT,
+        /** Engines cut: falls preserving momentum but decelerating hard; fizzles at the crash site. */
+        POWER_LOSS
     }
 
     /**
@@ -1902,6 +2150,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private Double maxTurnRate = null; // null = keep the model-size default
         private ResourceLocation modelId = MissileModels.DEFAULT;
         private int exhaustColor = DEFAULT_EXHAUST_COLOR;
+        private ResourceLocation flightSoundId = null; // null = keep WF-B's default missile_flight loop
+        private ResourceLocation damageResponseId = MissileDamageRegistry.defaultId();
+        private DownedAction downedAction = DownedAction.CRASH;
         private boolean startInCruise = false;
         private boolean startInAttack = false;
         private boolean startArmed = false;
@@ -2058,6 +2309,34 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
          */
         public Builder exhaustColor(int rgb) {
             this.exhaustColor = rgb;
+            return this;
+        }
+
+        /**
+         * The looping flight sound this missile plays client-side. Register the {@link SoundEvent} with your mod
+         * and pass its id; unset (or an unknown id) keeps WF-B's default {@code missile_flight} loop.
+         */
+        public Builder flightSound(ResourceLocation id) {
+            this.flightSoundId = id;
+            return this;
+        }
+
+        /**
+         * How this missile responds to incoming damage, by {@link MissileDamageRegistry} id (e.g.
+         * {@code explosion_only} to shrug off everything but blasts). Register custom responses before build;
+         * {@code null} or an unknown id falls back to the standard take-damage-as-dealt response.
+         */
+        public Builder damageResponse(ResourceLocation id) {
+            this.damageResponseId = (id != null) ? id : MissileDamageRegistry.defaultId();
+            return this;
+        }
+
+        /**
+         * What this missile does when shot out of the sky (see {@link DownedAction}). Default {@link
+         * DownedAction#CRASH} — it falls and fizzles where it lands instead of air-bursting on the spot.
+         */
+        public Builder downedAction(DownedAction action) {
+            this.downedAction = (action != null) ? action : DownedAction.CRASH;
             return this;
         }
 
@@ -2291,6 +2570,12 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             missile.health = this.health;
             missile.setModelId(this.modelId);
             missile.setExhaustColor(this.exhaustColor);
+            if (this.flightSoundId != null) {
+                missile.setFlightSound(this.flightSoundId);
+            }
+            missile.damageResponseId = this.damageResponseId;
+            missile.damageResponse = MissileDamageRegistry.get(this.damageResponseId);
+            missile.downedAction = this.downedAction;
             // Default the turn rate off the chosen model's length unless explicitly overridden.
             missile.maxTurnRate = (this.maxTurnRate != null)
                     ? this.maxTurnRate

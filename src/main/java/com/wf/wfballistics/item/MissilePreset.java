@@ -7,8 +7,11 @@ import com.wf.wfballistics.flight.FlightStageRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
+
+import java.util.Map;
 
 /**
  * An immutable, launch-ready missile configuration — the full {@link MissileEntity.Builder} minus the target,
@@ -47,6 +50,10 @@ public final class MissilePreset {
     private final float evasion;
     private final boolean evasiveManeuver;
     private final int exhaustColor;
+    private final ResourceLocation flightSoundId;
+    private final ResourceLocation damageResponseId;
+    private final MissileEntity.DownedAction downedAction;
+    private final DownedActionPicker downedActionPicker;
 
     private MissilePreset(Builder b) {
         this.id = b.id;
@@ -75,6 +82,10 @@ public final class MissilePreset {
         this.evasion = b.evasion;
         this.evasiveManeuver = b.evasiveManeuver;
         this.exhaustColor = b.exhaustColor;
+        this.flightSoundId = b.flightSoundId;
+        this.damageResponseId = b.damageResponseId;
+        this.downedAction = b.downedAction;
+        this.downedActionPicker = b.downedActionPicker;
     }
 
     public static Builder builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
@@ -185,6 +196,18 @@ public final class MissilePreset {
         return exhaustColor;
     }
 
+    public ResourceLocation flightSoundId() {
+        return flightSoundId;
+    }
+
+    public ResourceLocation damageResponseId() {
+        return damageResponseId;
+    }
+
+    public MissileEntity.DownedAction downedAction() {
+        return downedAction;
+    }
+
     /**
      * Builds (but does not spawn) a live missile aimed at {@code target}.
      */
@@ -232,7 +255,58 @@ public final class MissilePreset {
             b.evasiveManeuver(true);
         }
         b.exhaustColor(exhaustColor);
+        if (flightSoundId != null) {
+            b.flightSound(flightSoundId);
+        }
+        if (damageResponseId != null) {
+            b.damageResponse(damageResponseId);
+        }
+        // Roll the shot-down behaviour per launch when a weighted/random picker was given, else use the fixed one.
+        b.downedAction(downedActionPicker != null ? downedActionPicker.pick(level.random) : downedAction);
         return b.build();
+    }
+
+    /**
+     * Picks a {@link MissileEntity.DownedAction} at launch time — call e.g. to roll a random / weighted shot-down
+     * behaviour per missile. Rolled once in {@link #build(Level, Vec3)} (so each launched missile decides its own
+     * fate); the chosen action is then a plain enum on the entity and persists normally.
+     *
+     * <pre>{@code
+     * // 20% power loss, 80% instant detonation, per missile:
+     * .downedAction(r -> r.nextFloat() < 0.2f ? DownedAction.POWER_LOSS : DownedAction.DETONATE)
+     * // or weighted by integer shares:
+     * .downedAction(DownedActionPicker.weighted(Map.of(DownedAction.POWER_LOSS, 20, DownedAction.DETONATE, 80)))
+     * }</pre>
+     */
+    @FunctionalInterface
+    public interface DownedActionPicker {
+        MissileEntity.DownedAction pick(RandomSource random);
+
+        /**
+         * A picker that chooses among {@code weights} (action → integer share) in proportion to their weights.
+         * Non-positive weights are ignored; an all-zero/empty map falls back to {@link MissileEntity.DownedAction#CRASH}.
+         */
+        static DownedActionPicker weighted(Map<MissileEntity.DownedAction, Integer> weights) {
+            int total = 0;
+            for (int w : weights.values()) {
+                total += Math.max(0, w);
+            }
+            final int sum = total;
+            return random -> {
+                if (sum <= 0) {
+                    return MissileEntity.DownedAction.CRASH;
+                }
+                int roll = random.nextInt(sum);
+                int acc = 0;
+                for (Map.Entry<MissileEntity.DownedAction, Integer> e : weights.entrySet()) {
+                    acc += Math.max(0, e.getValue());
+                    if (roll < acc) {
+                        return e.getKey();
+                    }
+                }
+                return MissileEntity.DownedAction.CRASH;
+            };
+        }
     }
 
     public static final class Builder {
@@ -262,6 +336,10 @@ public final class MissilePreset {
         private float evasion = 0.0f;
         private boolean evasiveManeuver = false;
         private int exhaustColor = MissileEntity.DEFAULT_EXHAUST_COLOR;
+        private ResourceLocation flightSoundId = null;      // null = WF-B's default missile_flight loop
+        private ResourceLocation damageResponseId = null;   // null = standard (take damage as dealt)
+        private MissileEntity.DownedAction downedAction = MissileEntity.DownedAction.CRASH;
+        private DownedActionPicker downedActionPicker = null; // non-null = roll the action per launch
 
         private Builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
             this.id = id;
@@ -423,6 +501,44 @@ public final class MissilePreset {
          */
         public Builder exhaustColor(int rgb) {
             this.exhaustColor = rgb;
+            return this;
+        }
+
+        /**
+         * The looping flight sound this missile plays client-side, by registered {@link net.minecraft.sounds.SoundEvent}
+         * id (see {@link MissileEntity.Builder#flightSound}). Unset keeps WF-B's default {@code missile_flight} loop.
+         */
+        public Builder flightSound(ResourceLocation soundId) {
+            this.flightSoundId = soundId;
+            return this;
+        }
+
+        /**
+         * How this missile responds to incoming damage, by {@code MissileDamageRegistry} id — e.g.
+         * {@code explosion_only} to resist everything but blasts (see {@link MissileEntity.Builder#damageResponse}).
+         * Unset takes damage as dealt.
+         */
+        public Builder damageResponse(ResourceLocation responseId) {
+            this.damageResponseId = responseId;
+            return this;
+        }
+
+        /**
+         * What this missile does when shot out of the sky (see {@link MissileEntity.DownedAction}). Default
+         * {@link MissileEntity.DownedAction#CRASH}.
+         */
+        public Builder downedAction(MissileEntity.DownedAction action) {
+            this.downedAction = (action != null) ? action : MissileEntity.DownedAction.CRASH;
+            this.downedActionPicker = null; // a fixed action clears any previously-set picker
+            return this;
+        }
+
+        /**
+         * Pick the shot-down behaviour per launch (see {@link DownedActionPicker}) — e.g. a weighted random roll.
+         * Overrides any fixed {@link #downedAction(MissileEntity.DownedAction)}; {@code null} clears it.
+         */
+        public Builder downedAction(DownedActionPicker picker) {
+            this.downedActionPicker = picker;
             return this;
         }
 

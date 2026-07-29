@@ -138,7 +138,10 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
      */
     private MissileEntity acquireTarget(ServerLevel sl, Vec3 muzzle) {
         AABB box = new AABB(this.worldPosition).inflate(RANGE);
-        List<MissileEntity> candidates = sl.getEntitiesOfClass(MissileEntity.class, box, e -> !e.isRemoved());
+        // Ignore already-downed missiles: they've been neutralised and are falling/spinning out, so re-shooting
+        // them would only force-detonate them (see MissileEntity.shootDown) and cut the downed animation short.
+        List<MissileEntity> candidates = sl.getEntitiesOfClass(MissileEntity.class, box,
+                e -> !e.isRemoved() && !e.isDowned());
         MissileEntity best = null;
         double bestSq = RANGE * RANGE;
         for (MissileEntity m : candidates) {
