@@ -6,6 +6,7 @@ import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.entity.OBBEntity;
 import com.wf.wfballistics.flight.*;
 import com.wf.wfballistics.fx.ExplosionCreator;
+import com.wf.wfballistics.network.MissileFlightAudioPacket;
 import com.wf.wfballistics.sim.IMissileListener;
 import com.wf.wfballistics.sim.MissileListenerRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
@@ -81,6 +82,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // guidance asks for. cruiseSpeed is the target/max speed; these govern how fast it is reached and shed.
     public static final double DEFAULT_ACCELERATION = 0.15;
     public static final double DEFAULT_DECELERATION = 0.25;
+    /** Default distance (blocks) at which a missile's flight loop fades to silence and the server broadcasts it. */
+    public static final double DEFAULT_FLIGHT_SOUND_RANGE = 300.0;
     private static final double DIVE_ACCELERATION = 1.5;
     // Ballistic fall (out of fuel): downward accel, terminal speed, and a light horizontal drag so momentum
     // (inertia) carries the missile forward as it arcs down instead of being zeroed.
@@ -194,6 +197,13 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Max change in velocity direction per tick, in radians. Default scales from the model's length
     // (longer airframe = less nimble); overridable via the Builder.
     private double maxTurnRate = TURN_AGILITY / MissileModels.length(MissileModels.DEFAULT);
+    // Per-missile flight-audio tuning (server-authoritative; pushed to clients via MissileFlightAudioPacket, so
+    // it drives the sound even when the missile isn't tracked/rendered). range = fade-to-silence + broadcast
+    // radius (blocks); basePitch = idle engine pitch; speedPitch = added pitch per block/tick of the missile's
+    // OWN speed (engine rev), 0 = constant pitch regardless of speed (the loitering-drone exception).
+    private double flightSoundRange = DEFAULT_FLIGHT_SOUND_RANGE;
+    private float flightSoundBasePitch = 1.0f;
+    private double flightSoundSpeedPitch = 0.0;
     // Consecutive ticks spent in CRUISE; gates the offload-to-simulation transition.
     private int cruiseTicks = 0;
     private float health = DEFAULT_HEALTH;
@@ -513,6 +523,13 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 && (this.tickCount + this.getId()) % SONIC_BOOM_INTERVAL == 0) {
             ExplosionCreator.sonicBoom(this.level(), this.getX(), this.getY(), this.getZ(),
                     (float) Mth.clamp(machSpeed * 1.5, 6.0, 24.0));
+        }
+
+        // Long-range flight audio: push this missile's position/velocity to nearby players every few ticks so
+        // they hear it coming well before it enters view range. Continues seamlessly into the off-world sim
+        // (SimMissileManager broadcasts the same way) since both key on the missile's UUID.
+        if (this.tickCount % MissileFlightAudioPacket.UPDATE_INTERVAL == 0) {
+            MissileFlightAudioPacket.broadcastEntity(this);
         }
 
         // Interceptor kill check
@@ -860,6 +877,27 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
      */
     public void setFlightSound(ResourceLocation id) {
         this.entityData.set(FLIGHT_SOUND, id == null ? "" : id.toString());
+    }
+
+    /** The raw per-missile flight-sound override id, or {@code null} when it uses the default loop. */
+    public ResourceLocation getFlightSoundId() {
+        String id = this.entityData.get(FLIGHT_SOUND);
+        return (id == null || id.isEmpty()) ? null : ResourceLocation.tryParse(id);
+    }
+
+    /** Distance (blocks) at which this missile's flight loop fades to silence / the server broadcasts it. */
+    public double getFlightSoundRange() {
+        return this.flightSoundRange;
+    }
+
+    /** Idle engine pitch of this missile's flight loop. */
+    public float getFlightSoundBasePitch() {
+        return this.flightSoundBasePitch;
+    }
+
+    /** Added flight-loop pitch per block/tick of this missile's own speed (engine rev); 0 = constant. */
+    public double getFlightSoundSpeedPitch() {
+        return this.flightSoundSpeedPitch;
     }
 
     public Vec3 getTarget() {
@@ -1714,6 +1752,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         tag.putString("ModelId", this.getModelId().toString());
         tag.putInt("ExhaustColor", this.getExhaustColor());
         tag.putString("FlightSound", this.entityData.get(FLIGHT_SOUND));
+        tag.putDouble("FlightSoundRange", this.flightSoundRange);
+        tag.putFloat("FlightSoundBasePitch", this.flightSoundBasePitch);
+        tag.putDouble("FlightSoundSpeedPitch", this.flightSoundSpeedPitch);
         tag.putInt("CruiseTicks", this.cruiseTicks);
         tag.putString("DetonationId", this.detonationId.toString());
         tag.putString("DamageResponse", this.damageResponseId.toString());
@@ -1833,6 +1874,15 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         if (tag.contains("FlightSound")) {
             this.entityData.set(FLIGHT_SOUND, tag.getString("FlightSound"));
+        }
+        if (tag.contains("FlightSoundRange")) {
+            this.flightSoundRange = tag.getDouble("FlightSoundRange");
+        }
+        if (tag.contains("FlightSoundBasePitch")) {
+            this.flightSoundBasePitch = tag.getFloat("FlightSoundBasePitch");
+        }
+        if (tag.contains("FlightSoundSpeedPitch")) {
+            this.flightSoundSpeedPitch = tag.getDouble("FlightSoundSpeedPitch");
         }
 
         if (tag.contains("CruiseTicks")) {
@@ -2151,6 +2201,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private ResourceLocation modelId = MissileModels.DEFAULT;
         private int exhaustColor = DEFAULT_EXHAUST_COLOR;
         private ResourceLocation flightSoundId = null; // null = keep WF-B's default missile_flight loop
+        private double flightSoundRange = DEFAULT_FLIGHT_SOUND_RANGE;
+        private float flightSoundBasePitch = 1.0f;
+        private double flightSoundSpeedPitch = 0.0;
         private ResourceLocation damageResponseId = MissileDamageRegistry.defaultId();
         private DownedAction downedAction = DownedAction.CRASH;
         private boolean startInCruise = false;
@@ -2318,6 +2371,32 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
          */
         public Builder flightSound(ResourceLocation id) {
             this.flightSoundId = id;
+            return this;
+        }
+
+        /**
+         * Distance in blocks at which this missile's flight loop fades to silence — and, since the audio is
+         * server-pushed independently of entity tracking, the radius the server broadcasts it to. Default
+         * {@link #DEFAULT_FLIGHT_SOUND_RANGE}. Raise it for a loitering drone you should hear from far off.
+         */
+        public Builder flightSoundRange(double blocks) {
+            this.flightSoundRange = blocks;
+            return this;
+        }
+
+        /** Idle engine pitch of the flight loop (default 1.0); e.g. a heavy missile can idle lower. */
+        public Builder flightSoundBasePitch(float pitch) {
+            this.flightSoundBasePitch = pitch;
+            return this;
+        }
+
+        /**
+         * Added flight-loop pitch per block/tick of the missile's OWN speed — the engine "revs" as it flies
+         * faster. Default 0 keeps the pitch constant regardless of speed (the loitering-drone exception:
+         * only Doppler from relative motion then shifts it).
+         */
+        public Builder flightSoundSpeedPitch(double perBlockPerTick) {
+            this.flightSoundSpeedPitch = perBlockPerTick;
             return this;
         }
 
@@ -2573,6 +2652,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             if (this.flightSoundId != null) {
                 missile.setFlightSound(this.flightSoundId);
             }
+            missile.flightSoundRange = this.flightSoundRange;
+            missile.flightSoundBasePitch = this.flightSoundBasePitch;
+            missile.flightSoundSpeedPitch = this.flightSoundSpeedPitch;
             missile.damageResponseId = this.damageResponseId;
             missile.damageResponse = MissileDamageRegistry.get(this.damageResponseId);
             missile.downedAction = this.downedAction;

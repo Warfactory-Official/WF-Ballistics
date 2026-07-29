@@ -88,8 +88,7 @@ public final class DebrisManager {
         Vec3 cam = event.getCamera().getPosition();
         float partialTick = event.getPartialTick();
 
-        // Opaque terrain chunks: one solid-render-state setup for the whole batch.
-        RenderType renderType = RenderType.solid();
+        RenderType renderType = RenderType.cutoutMipped();
         renderType.setupRenderState();
         int bakeBudget = BAKE_BUDGET_PER_FRAME;
         for (Debris debris : ACTIVE) {

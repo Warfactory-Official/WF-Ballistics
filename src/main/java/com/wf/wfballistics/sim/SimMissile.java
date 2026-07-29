@@ -32,6 +32,12 @@ public final class SimMissile {
     public double maxTurnRate = 0.0;
     public ResourceLocation modelId = MissileModels.defaultId();
     public ResourceLocation detonationId = WarheadRegistry.defaultId();
+    // Flight-audio config, carried so an offloaded missile keeps its custom loop + tuning across the round-trip
+    // (previously dropped, so an offloaded gas drone lost its moped loop) and so the sim can broadcast it.
+    public ResourceLocation flightSoundId = null; // null = the default missile_flight loop
+    public double flightSoundRange = MissileEntity.DEFAULT_FLIGHT_SOUND_RANGE;
+    public float flightSoundBasePitch = 1.0f;
+    public double flightSoundSpeedPitch = 0.0;
     public ResourceLocation ascentStageId = null;
     public ResourceLocation cruiseStageId = null;
     public ResourceLocation attackStageId = null;
@@ -71,6 +77,10 @@ public final class SimMissile {
         sm.maxTurnRate = m.getMaxTurnRate();
         sm.modelId = m.getModelId();
         sm.detonationId = m.getDetonationId();
+        sm.flightSoundId = m.getFlightSoundId();
+        sm.flightSoundRange = m.getFlightSoundRange();
+        sm.flightSoundBasePitch = m.getFlightSoundBasePitch();
+        sm.flightSoundSpeedPitch = m.getFlightSoundSpeedPitch();
         sm.ascentStageId = m.getAscentStageId();
         sm.cruiseStageId = m.getCruiseStageId();
         sm.attackStageId = m.getAttackStageId();
@@ -111,6 +121,18 @@ public final class SimMissile {
         sm.modelId = MissileModels.parse(tag.getString("ModelId"));
         if (tag.contains("DetonationId")) {
             sm.detonationId = WarheadRegistry.parse(tag.getString("DetonationId"));
+        }
+        if (tag.contains("FlightSound")) {
+            sm.flightSoundId = ResourceLocation.tryParse(tag.getString("FlightSound"));
+        }
+        if (tag.contains("FlightSoundRange")) {
+            sm.flightSoundRange = tag.getDouble("FlightSoundRange");
+        }
+        if (tag.contains("FlightSoundBasePitch")) {
+            sm.flightSoundBasePitch = tag.getFloat("FlightSoundBasePitch");
+        }
+        if (tag.contains("FlightSoundSpeedPitch")) {
+            sm.flightSoundSpeedPitch = tag.getDouble("FlightSoundSpeedPitch");
         }
         if (tag.contains("AscentStage")) {
             sm.ascentStageId = FlightStageRegistry.parse(MissileEntity.Phase.ASCEND, tag.getString("AscentStage"));
@@ -223,6 +245,13 @@ public final class SimMissile {
             b.interceptor(true).lockTarget(this.interceptTarget).interceptChance(this.interceptChance);
         }
 
+        if (this.flightSoundId != null) {
+            b.flightSound(this.flightSoundId);
+        }
+        b.flightSoundRange(this.flightSoundRange)
+                .flightSoundBasePitch(this.flightSoundBasePitch)
+                .flightSoundSpeedPitch(this.flightSoundSpeedPitch);
+
         MissileEntity m = b.build();
         m.setUUID(this.id);
         m.moveTo(spawnPos.x, spawnPos.y, spawnPos.z, m.getYRot(), m.getXRot());
@@ -244,6 +273,12 @@ public final class SimMissile {
         tag.putDouble("MaxTurnRate", maxTurnRate);
         tag.putString("ModelId", modelId.toString());
         tag.putString("DetonationId", detonationId.toString());
+        if (flightSoundId != null) {
+            tag.putString("FlightSound", flightSoundId.toString());
+        }
+        tag.putDouble("FlightSoundRange", flightSoundRange);
+        tag.putFloat("FlightSoundBasePitch", flightSoundBasePitch);
+        tag.putDouble("FlightSoundSpeedPitch", flightSoundSpeedPitch);
         if (ascentStageId != null) {
             tag.putString("AscentStage", ascentStageId.toString());
         }

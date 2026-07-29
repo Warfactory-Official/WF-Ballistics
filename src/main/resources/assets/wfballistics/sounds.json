@@ -44,7 +44,7 @@
     "sounds": [
       {
         "name": "wfballistics:weapon/missile_flight",
-        "stream": true
+        "stream": false
       }
     ]
   }
