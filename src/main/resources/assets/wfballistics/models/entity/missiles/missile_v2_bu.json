@@ -1,7 +1,7 @@
 {
   "loader": "forge:obj",
   "emissive_ambient": false,
-  "model": "wfballistics:raw_models/missiles/missile_v2.obj",
+  "model": "wfballistics:raw_models/missiles/missile_v2_bu.obj",
   "flip_v": true,
   "automatic_culling": false,
   "textures": {
