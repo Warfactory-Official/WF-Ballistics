@@ -49,10 +49,11 @@ public final class WarheadRegistry {
     public static final float SHAPED_CHARGE_SIZE = 6F;
 
     /**
-     * Top-attack shaped charge (HEAT): fires a tight jet straight down, drilling a deep, narrow shaft through
-     * hardened cover with only a shallow crater at the surface. Only blocks/entities in the downward cone are
-     * hit — see {@link com.wf.wfballistics.aef.standard.BlockAllocatorShapedCharge}. Swap the axis for the
-     * carrier's velocity if a directional (non top-attack) variant is ever needed.
+     * Shaped charge (HEAT): fires a tight jet along the carrier's impact heading ({@link WarheadCarrier#angle()}),
+     * drilling a deep, narrow shaft through hardened cover with only a shallow crater at the surface. On a
+     * top-attack dive the heading points down-and-in, so it behaves as a downward penetrator; a shallow-angle
+     * strike drone instead punches sideways. Only blocks/entities in that forward cone are hit — see
+     * {@link com.wf.wfballistics.aef.standard.BlockAllocatorShapedCharge}.
      */
     public static final Detonation SHAPED_CHARGE = (source, pos) -> {
         Level level = source.level();
@@ -60,7 +61,7 @@ public final class WarheadRegistry {
             return;
         }
         new ExplosionAEF(level, pos.x, pos.y, pos.z, SHAPED_CHARGE_SIZE)
-                .makeShapedCharge(new Vec3(0.0, -1.0, 0.0))
+                .makeShapedCharge(source.angle())
                 .explode();
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     };

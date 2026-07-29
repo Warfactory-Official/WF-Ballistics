@@ -1084,6 +1084,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         return this.fragmentCount;
     }
 
+    @Override
+    public Vec3 angle() {
+        // Detonation heading = the missile's travel direction at impact (a top-attack dive points down-and-in),
+        // which a directional warhead uses as its jet axis. Fall back to straight down if somehow stationary.
+        Vec3 v = this.getDeltaMovement();
+        return v.lengthSqr() < 1.0e-8 ? new Vec3(0.0, -1.0, 0.0) : v.normalize();
+    }
+
     public int getSplitDepth() {
         return this.splitDepth;
     }

@@ -13,8 +13,8 @@ import net.minecraft.world.phys.Vec3;
 
 public class InstancedTrailEffect implements WFFlywheelEffect {
 
-    private static final double PUFF_SPACING = 0.6;   // target spacing between trail puffs (blocks)
-    private static final int MAX_SEGMENT_PUFFS = 24;  // cap on puffs used to bridge one tick's travel (near)
+    private static final double PUFF_SPACING = 0.5;   // target spacing between trail puffs (blocks)
+    private static final int MAX_SEGMENT_PUFFS = 32;  // cap on puffs used to bridge one tick's travel (near)
     final Flame[] pool;
     private final Level level;
     private final Entity source;
@@ -34,7 +34,7 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
     public InstancedTrailEffect(Entity source) {
         this.level = source.level();
         this.source = source;
-        this.pool = new Flame[192];
+        this.pool = new Flame[320];
         for (int i = 0; i < pool.length; i++) {
             pool[i] = new Flame();
         }
@@ -102,7 +102,7 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
 
             int count = Mth.clamp((int) Math.ceil(segLen / PUFF_SPACING), 1, segmentBudget());
             float sectionScale = 0.6F + level.random.nextFloat() * 0.4F;
-            int sectionLife = 30 + level.random.nextInt(20);
+            int sectionLife = 34 + level.random.nextInt(22);
 
             // Lay the puffs along a Catmull-Rom curve through the last three emit points (prev2 -> prev ->
             // current) instead of the straight prev->current chord, so a sharp heading change rounds into a
@@ -166,12 +166,12 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
             return MAX_SEGMENT_PUFFS;
         }
         if (d2 < 160.0 * 160.0) {
-            return 8;
+            return 18;
         }
         if (d2 < 320.0 * 320.0) {
-            return 3;
+            return 10;
         }
-        return 1;
+        return 4;
     }
 
     /**
@@ -246,7 +246,9 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
         }
 
         float scale(float pt) {
-            return baseScale * (0.5F + (age + pt) / life * 1.5F);
+            // Grow the puff strongly as it ages (0.5x -> ~3.3x of its base): a tight nozzle puff that billows
+            // into broad smoke, so consecutive puffs overlap and close the gaps a fast mover leaves between them.
+            return baseScale * (0.5F + (age + pt) / life * 2.8F);
         }
 
         int argb(float pt) {

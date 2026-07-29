@@ -71,6 +71,13 @@ public class BombletEntity extends Projectile implements WarheadCarrier {
     }
 
     @Override
+    public Vec3 angle() {
+        // Travel direction at detonation — the jet axis for a directional warhead. Falls back to straight down.
+        Vec3 v = this.getDeltaMovement();
+        return v.lengthSqr() < 1.0e-8 ? new Vec3(0.0, -1.0, 0.0) : v.normalize();
+    }
+
+    @Override
     public void tick() {
         super.tick();
 
