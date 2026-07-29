@@ -180,7 +180,7 @@ public final class WFEffects {
      * Block-shrapnel particles from a nearby surface plus the distance-picked explosion crack.
      */
     private static void spawnDebrisAndSound(ClientLevel level, double x, double y, double z, CompoundTag data) {
-        BlockState surface = adjacentSurface(level, x, y, z);
+        BlockState surface = nearbySurface(level, x, y, z);
         if (surface != null) {
             int debris = data.contains("debris") ? data.getInt("debris") : 15;
             for (int i = 0; i < debris; i++) {
@@ -262,13 +262,20 @@ public final class WFEffects {
     }
 
     /**
-     * First non-air block touching the point, used to texture explosion debris.
+     * A block near the point to texture explosion debris: first a non-air neighbour, otherwise the nearest
+     * ground within a few blocks below. The downward scan keeps airbursts (a bomblet fusing over open terrain)
+     * from producing no debris just because nothing solid touches the exact blast point.
      */
-    private static BlockState adjacentSurface(ClientLevel level, double x, double y, double z) {
+    private static BlockState nearbySurface(ClientLevel level, double x, double y, double z) {
         BlockPos base = BlockPos.containing(x, y, z);
         for (Direction dir : Direction.values()) {
-            BlockPos pos = base.relative(dir);
-            BlockState state = level.getBlockState(pos);
+            BlockState state = level.getBlockState(base.relative(dir));
+            if (!state.isAir()) return state;
+        }
+        BlockPos.MutableBlockPos scan = base.mutable();
+        for (int i = 0; i < 8; i++) {
+            scan.move(Direction.DOWN);
+            BlockState state = level.getBlockState(scan);
             if (!state.isAir()) return state;
         }
         return null;

@@ -51,6 +51,9 @@ public final class MissilePreset {
     private final boolean evasiveManeuver;
     private final int exhaustColor;
     private final ResourceLocation flightSoundId;
+    private final double flightSoundRange;
+    private final float flightSoundBasePitch;
+    private final double flightSoundSpeedPitch;
     private final ResourceLocation damageResponseId;
     private final MissileEntity.DownedAction downedAction;
     private final DownedActionPicker downedActionPicker;
@@ -83,6 +86,9 @@ public final class MissilePreset {
         this.evasiveManeuver = b.evasiveManeuver;
         this.exhaustColor = b.exhaustColor;
         this.flightSoundId = b.flightSoundId;
+        this.flightSoundRange = b.flightSoundRange;
+        this.flightSoundBasePitch = b.flightSoundBasePitch;
+        this.flightSoundSpeedPitch = b.flightSoundSpeedPitch;
         this.damageResponseId = b.damageResponseId;
         this.downedAction = b.downedAction;
         this.downedActionPicker = b.downedActionPicker;
@@ -258,6 +264,9 @@ public final class MissilePreset {
         if (flightSoundId != null) {
             b.flightSound(flightSoundId);
         }
+        b.flightSoundRange(flightSoundRange)
+                .flightSoundBasePitch(flightSoundBasePitch)
+                .flightSoundSpeedPitch(flightSoundSpeedPitch);
         if (damageResponseId != null) {
             b.damageResponse(damageResponseId);
         }
@@ -337,6 +346,9 @@ public final class MissilePreset {
         private boolean evasiveManeuver = false;
         private int exhaustColor = MissileEntity.DEFAULT_EXHAUST_COLOR;
         private ResourceLocation flightSoundId = null;      // null = WF-B's default missile_flight loop
+        private double flightSoundRange = MissileEntity.DEFAULT_FLIGHT_SOUND_RANGE;
+        private float flightSoundBasePitch = 1.0f;
+        private double flightSoundSpeedPitch = 0.0;
         private ResourceLocation damageResponseId = null;   // null = standard (take damage as dealt)
         private MissileEntity.DownedAction downedAction = MissileEntity.DownedAction.CRASH;
         private DownedActionPicker downedActionPicker = null; // non-null = roll the action per launch
@@ -510,6 +522,31 @@ public final class MissilePreset {
          */
         public Builder flightSound(ResourceLocation soundId) {
             this.flightSoundId = soundId;
+            return this;
+        }
+
+        /**
+         * Distance (blocks) at which this missile's flight loop fades to silence and the server broadcasts it —
+         * independent of view/render distance (see {@link MissileEntity.Builder#flightSoundRange}). Default
+         * {@link MissileEntity#DEFAULT_FLIGHT_SOUND_RANGE}.
+         */
+        public Builder flightSoundRange(double blocks) {
+            this.flightSoundRange = blocks;
+            return this;
+        }
+
+        /** Idle engine pitch of the flight loop (see {@link MissileEntity.Builder#flightSoundBasePitch}). */
+        public Builder flightSoundBasePitch(float pitch) {
+            this.flightSoundBasePitch = pitch;
+            return this;
+        }
+
+        /**
+         * Engine "rev": added flight-loop pitch per block/tick of the missile's own speed (see
+         * {@link MissileEntity.Builder#flightSoundSpeedPitch}). Default 0 = constant pitch (the drone exception).
+         */
+        public Builder flightSoundSpeedPitch(double perBlockPerTick) {
+            this.flightSoundSpeedPitch = perBlockPerTick;
             return this;
         }
 

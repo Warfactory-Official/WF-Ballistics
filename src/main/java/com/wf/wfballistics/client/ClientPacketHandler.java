@@ -1,10 +1,12 @@
 package com.wf.wfballistics.client;
 
 import com.wf.wfballistics.aef.standard.ExplosionEffectStandard;
+import com.wf.wfballistics.client.fx.MissileAudioClient;
 import com.wf.wfballistics.client.fx.WFEffects;
 import com.wf.wfballistics.network.AuxParticlePacket;
 import com.wf.wfballistics.network.ExplosionBlockFXPacket;
 import com.wf.wfballistics.network.ExplosionKnockbackPacket;
+import com.wf.wfballistics.network.MissileFlightAudioPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -37,6 +39,12 @@ public final class ClientPacketHandler {
         ClientLevel level = Minecraft.getInstance().level;
         if (level != null) {
             WFEffects.dispatch(pkt.effect(), level, pkt.x(), pkt.y(), pkt.z(), pkt.data());
+        }
+    }
+
+    public static void handleMissileAudio(MissileFlightAudioPacket pkt) {
+        if (Minecraft.getInstance().level != null) {
+            MissileAudioClient.upsert(pkt);
         }
     }
 }

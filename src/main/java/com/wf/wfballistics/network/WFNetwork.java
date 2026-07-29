@@ -47,6 +47,8 @@ public final class WFNetwork {
                 ExplosionBlockFXPacket::encode, ExplosionBlockFXPacket::decode, ExplosionBlockFXPacket::handle);
         clientbound(AuxParticlePacket.class,
                 AuxParticlePacket::encode, AuxParticlePacket::decode, AuxParticlePacket::handle);
+        clientbound(MissileFlightAudioPacket.class,
+                MissileFlightAudioPacket::encode, MissileFlightAudioPacket::decode, MissileFlightAudioPacket::handle);
         serverbound(SpawnMissilePacket.class,
                 SpawnMissilePacket::encode, SpawnMissilePacket::decode, SpawnMissilePacket::handle);
     }

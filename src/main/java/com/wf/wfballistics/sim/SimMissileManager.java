@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.WFBallistics;
+import com.wf.wfballistics.network.MissileFlightAudioPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
@@ -63,6 +64,13 @@ public final class SimMissileManager {
                                 sm.id, sm.pos);
                         dead.add(sm);
                     }
+                }
+                // Long-range flight audio for offloaded missiles: the same heartbeat a live entity sends, so a
+                // missile cruising past while sim-offloaded is still heard. Keyed by UUID, so the sound is
+                // continuous across the offload↔onload handoff.
+                if (!dead.contains(sm) && now % MissileFlightAudioPacket.UPDATE_INTERVAL == 0) {
+                    Vec3 vel = sm.pos.subtract(oldPos.get(sm)).scale(1.0 / dt);
+                    MissileFlightAudioPacket.broadcastSim(level, sm, vel);
                 }
             }
         }
