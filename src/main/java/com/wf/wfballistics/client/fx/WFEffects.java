@@ -10,7 +10,6 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundEvent;
@@ -181,14 +180,14 @@ public final class WFEffects {
      */
     private static void spawnDebrisAndSound(ClientLevel level, double x, double y, double z, CompoundTag data) {
         BlockState surface = nearbySurface(level, x, y, z);
-        if (surface != null) {
+        if (surface != null && !surface.isAir()) {
             int debris = data.contains("debris") ? data.getInt("debris") : 15;
+            ParticleEngine engine = Minecraft.getInstance().particleEngine;
             for (int i = 0; i < debris; i++) {
-                level.addParticle(new BlockParticleOption(ParticleTypes.BLOCK, surface),
-                        x, y + 0.1, z,
-                        level.random.nextGaussian() * 0.2,
-                        0.5 + level.random.nextDouble() * 0.7,
-                        level.random.nextGaussian() * 0.2);
+                double vx = level.random.nextGaussian() * 0.25;
+                double vy = 0.35 + level.random.nextDouble() * 0.5;
+                double vz = level.random.nextGaussian() * 0.25;
+                engine.add(new BlockShrapnelParticle(level, x, y + 0.1, z, vx, vy, vz, surface));
             }
         }
 
