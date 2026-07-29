@@ -1,7 +1,6 @@
 package com.wf.wfballistics.client.fx;
 
 import com.wf.wfballistics.MissileEntity;
-import com.wf.wfballistics.WFSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.sounds.AbstractTickableSoundInstance;
 import net.minecraft.client.resources.sounds.SoundInstance;
@@ -26,7 +25,7 @@ public final class MissileFlightSound extends AbstractTickableSoundInstance {
     private boolean primed;
 
     public MissileFlightSound(MissileEntity missile) {
-        super(WFSounds.MISSILE_FLIGHT.get(), SoundSource.HOSTILE, RandomSource.create());
+        super(missile.getFlightSound(), SoundSource.HOSTILE, RandomSource.create());
         this.missile = missile;
         this.looping = true;
         this.delay = 0;
