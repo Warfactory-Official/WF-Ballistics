@@ -1,7 +1,7 @@
 package com.wf.wfballistics;
 
-import com.wf.wfballistics.client.render.MissileAttitude;
-import com.wf.wfballistics.client.render.MissileAttitudeRegistry;
+import com.wf.wfballistics.attitude.MissileAttitude;
+import com.wf.wfballistics.attitude.MissileAttitudeRegistry;
 import dev.engine_room.flywheel.api.task.Plan;
 import dev.engine_room.flywheel.api.task.TaskExecutor;
 import dev.engine_room.flywheel.api.visual.DynamicVisual;
@@ -26,6 +26,10 @@ import java.util.List;
 public class MissileVisual extends AbstractEntityVisual<Projectile> implements DynamicVisual {
 
     private static final float ORIENTATION_SMOOTHING = 0.3f;
+    // Extra slerp per radian the model currently trails the true heading. The hitbox OBB snaps straight to
+    // the heading (no smoothing), so on a hard pivot a fixed slerp leaves the model lagging behind its own
+    // box; this pulls the model onto the heading fast when the error is large while keeping cruise smooth.
+    private static final float ORIENTATION_CATCHUP = 1.5f;
     // Banking: the missile rolls into horizontal turns so mid-flight looks dynamic instead of rigid.
     private static final float BANK_GAIN = 7.0f;       // roll per (rad/tick) of heading yaw change
     private static final float MAX_BANK = 0.6f;        // ~34 degrees of maximum roll
@@ -149,7 +153,12 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
             Vector3f heading = new Vector3f((float) hx, (float) hy, (float) hz).normalize();
             Quaternionf target = attitude.orientation(heading);
             if (orientationInit) {
-                orientation.slerp(target, ORIENTATION_SMOOTHING);
+                // Scale the catch-up by how far the model currently is from the true heading: gentle cruise
+                // turns stay smooth, but a hard dive/turn snaps on so the model doesn't trail its hitbox.
+                float cos = Math.abs(orientation.dot(target));
+                float angle = (float) (2.0 * Math.acos(Math.min(1.0f, cos)));
+                float t = Mth.clamp(ORIENTATION_SMOOTHING + angle * ORIENTATION_CATCHUP, ORIENTATION_SMOOTHING, 1.0f);
+                orientation.slerp(target, t);
             } else {
                 orientation.set(target);
                 orientationInit = true;

@@ -1,4 +1,4 @@
-package com.wf.wfballistics.client.render;
+package com.wf.wfballistics.attitude;
 
 import org.joml.Quaternionf;
 import org.joml.Vector3f;

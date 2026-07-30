@@ -129,10 +129,17 @@ public final class RemoteMissileFlightSound extends AbstractTickableSoundInstanc
         float distFade = (float) Mth.clamp(1.0 - dist / this.range, 0.0, 1.0);
         this.volume = MAX_VOLUME * distFade * stalenessFade();
 
-        // Engine pitch: idle base plus a rev proportional to the missile's OWN speed (speedPitch); 0 keeps it
-        // constant (the loitering-drone exception). Then multiplied by the closing-motion Doppler factor.
+        // Engine pitch: idle base plus a rev proportional to the missile's OWN speed (speedPitch). A speedPitch
+        // of 0 is the constant-note drone/loiter class: it opts out of the engine rev AND of the closing-motion
+        // Doppler factor below, so the loop holds a steady pitch instead of revving up as it closes and dives.
+        // Rocket engines (speedPitch > 0) still get the Doppler shift.
         double ownSpeed = Math.sqrt(this.velX * this.velX + this.velY * this.velY + this.velZ * this.velZ);
         double enginePitch = this.basePitch + this.speedPitch * ownSpeed;
+
+        if (this.speedPitch == 0.0) {
+            this.pitch = (float) Mth.clamp(enginePitch, MIN_PITCH, MAX_PITCH);
+            return;
+        }
 
         if (!this.primed) {
             this.prevListenerX = lx;
