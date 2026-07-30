@@ -1,9 +1,8 @@
 package com.wf.wfballistics.sim;
 
 /**
- * Tunables for the missile chunk-loading + off-world simulation system. Plain constants for now
- * (the mod has no config file yet); centralised here so they are easy to promote to a
- * {@code ForgeConfigSpec} later.
+ * Tunables for the missile chunk-loading + off-world simulation system. Centralised here as plain static
+ * fields; the ones worth adjusting are overridden from {@code WFConfig} on config (re)load.
  */
 public final class MissileSimConfig {
     /**
@@ -25,13 +24,13 @@ public final class MissileSimConfig {
     /**
      * Ticks a missile must spend in CRUISE before it is allowed to offload to simulation (~5s).
      */
-    public static final int CRUISE_SIM_DELAY_TICKS = 100;
+    public static int CRUISE_SIM_DELAY_TICKS = 100;
 
     // --- Stage 2: off-world simulation ---
     /**
      * Horizontal distance to target at which a simulated missile is respawned for its terminal run.
      */
-    public static final double DESTINATION_RANGE = 1000.0;
+    public static double DESTINATION_RANGE = 1000.0;
     /**
      * Clamp on the per-tick gametime delta so a long gap (restart/lag) can't teleport a missile.
      */
@@ -43,13 +42,16 @@ public final class MissileSimConfig {
     /**
      * A simulated missile becomes real slightly before crossing a listener boundary, by this margin.
      */
-    public static final double LISTENER_SPAWN_MARGIN = 16.0;
+    public static double LISTENER_SPAWN_MARGIN = 16.0;
 
     // --- Listeners ---
     /**
-     * Radius around each online player that pulls a passing simulated missile back into existence.
+     * Radius around each online player within which a missile stays a real, tracked, rendered entity (a passing
+     * simulated missile rematerializes here). Defaults to 512 to match the missile's tracking range so a departing
+     * missile stays visible to the edge of view distance instead of vanishing mid-flight; lower it to cut the
+     * ticking / chunk-loading cost. Overridable via {@code WFConfig}.
      */
-    public static final double PLAYER_LISTENER_RANGE = 160.0;
+    public static double PLAYER_LISTENER_RANGE = 512.0;
     /**
      * Default range of the debug listener block.
      */

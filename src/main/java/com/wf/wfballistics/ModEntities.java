@@ -19,10 +19,11 @@ public class ModEntities {
     public static final RegistryObject<EntityType<MissileEntity>> STEALTH_MISSILE =
             ENTITY_TYPES.register("missile", () -> EntityType.Builder.of(MissileEntity::new, MobCategory.MISC)
                     .sized(2.0F, 2.0F)
-                    // 20 chunks = 320 blocks so the missile is still RENDERED out past 300 blocks (capped by the
-                    // player's/server's view distance). Flight AUDIO no longer depends on tracking — it is pushed
-                    // by the server independently of view distance; see MissileFlightAudioPacket.
-                    .clientTrackingRange(20)
+                    // 32 chunks = 512 blocks, the vanilla max view distance, so the missile is tracked (and, with
+                    // MissileEntity#shouldRenderAtSqrDistance returning true, rendered) as far as the client can see;
+                    // the effective range is min(this, serverViewDistance*16), horizontal only. Flight AUDIO no longer
+                    // depends on tracking - it is pushed by the server independently; see MissileFlightAudioPacket.
+                    .clientTrackingRange(32)
                     .build("missile")
             );
 

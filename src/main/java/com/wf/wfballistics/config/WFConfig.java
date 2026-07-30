@@ -42,6 +42,11 @@ public final class WFConfig {
     public static final ForgeConfigSpec.IntValue DEFAULT_FUEL_TICKS;
     // --- Incendiary ---
     public static final ForgeConfigSpec.BooleanValue FIRE_BOMBLETS_AS_FIREBALLS;
+    // --- Off-world simulation ---
+    public static final ForgeConfigSpec.DoubleValue SIM_PLAYER_KEEP_RANGE;
+    public static final ForgeConfigSpec.DoubleValue SIM_TERMINAL_RANGE;
+    public static final ForgeConfigSpec.DoubleValue SIM_SPAWN_MARGIN;
+    public static final ForgeConfigSpec.IntValue SIM_CRUISE_DELAY_TICKS;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -124,6 +129,30 @@ public final class WFConfig {
                 .define("fireBombletsAsFireballs", false);
         b.pop();
 
+        b.comment("Off-world missile simulation: when a cruising missile is swapped between a real, ticking,",
+                        "rendered entity and a lightweight off-world sim. Larger ranges keep missiles real (and",
+                        "visible) farther out at the cost of more ticking + chunk-loading; smaller ranges favour",
+                        "performance.")
+                .push("simulation");
+        SIM_PLAYER_KEEP_RANGE = b
+                .comment("Radius (blocks) around each player within which a missile stays a real, tracked, rendered",
+                        "entity. Defaults to 512 to match the missile's tracking range (32 chunks) so a departing",
+                        "missile stays visible to the edge of view distance instead of vanishing mid-flight. Lower",
+                        "it to reduce how many missiles tick and force-load chunks near players.")
+                .defineInRange("playerKeepRange", 512.0, 16.0, 4096.0);
+        SIM_TERMINAL_RANGE = b
+                .comment("Horizontal distance (blocks) to its target at which a simulated missile respawns for its",
+                        "terminal run, independent of any nearby player.")
+                .defineInRange("terminalRange", 1000.0, 0.0, 100000.0);
+        SIM_SPAWN_MARGIN = b
+                .comment("Missiles rematerialize this many blocks before crossing a keep-range boundary, so they are",
+                        "already live by the time they enter view (no spawn pop-in).")
+                .defineInRange("spawnMargin", 16.0, 0.0, 512.0);
+        SIM_CRUISE_DELAY_TICKS = b
+                .comment("Ticks a missile must cruise before it may offload to the sim at all (20 ticks = 1s).")
+                .defineInRange("cruiseDelayTicks", 100, 0, 1_000_000);
+        b.pop();
+
         SPEC = b.build();
     }
 
@@ -156,5 +185,9 @@ public final class WFConfig {
         MissileSimConfig.BATTERY_RELOAD_TICKS = BATTERY_RELOAD_TICKS.get();
         MissileEntity.DEFAULT_FUEL_TICKS = DEFAULT_FUEL_TICKS.get();
         com.wf.wfballistics.warhead.FireCluster.asFireballs = FIRE_BOMBLETS_AS_FIREBALLS.get();
+        MissileSimConfig.PLAYER_LISTENER_RANGE = SIM_PLAYER_KEEP_RANGE.get();
+        MissileSimConfig.DESTINATION_RANGE = SIM_TERMINAL_RANGE.get();
+        MissileSimConfig.LISTENER_SPAWN_MARGIN = SIM_SPAWN_MARGIN.get();
+        MissileSimConfig.CRUISE_SIM_DELAY_TICKS = SIM_CRUISE_DELAY_TICKS.get();
     }
 }
