@@ -31,7 +31,7 @@ public class ModEntities {
     public static final RegistryObject<EntityType<BombletEntity>> BOMBLET =
             ENTITY_TYPES.register("bomblet", () -> EntityType.Builder.<BombletEntity>of(BombletEntity::new, MobCategory.MISC)
                     .sized(0.3F, 0.3F)
-                    .clientTrackingRange(6)
+                    .clientTrackingRange(8)
                     .updateInterval(1)
                     .fireImmune()
                     .build("bomblet")
