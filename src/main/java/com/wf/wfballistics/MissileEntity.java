@@ -396,8 +396,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         super.tick();
 
         if (this.level().isClientSide) {
-            // Keep the AABB wrapping the oriented model each frame so culling / F3+B stay correct;
-            // the client doesn't run the flight logic below and never calls move().
+            Vec3 dm = this.getDeltaMovement();
+            if (dm.lengthSqr() > 1.0E-8) {
+                this.setPos(this.getX() + dm.x, this.getY() + dm.y, this.getZ() + dm.z);
+            }
+            // Keep the AABB wrapping the oriented model each frame so culling / F3+B stay correct.
             this.setBoundingBox(this.makeBoundingBox());
             return;
         }

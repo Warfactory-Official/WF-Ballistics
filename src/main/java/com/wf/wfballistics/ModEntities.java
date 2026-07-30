@@ -24,6 +24,7 @@ public class ModEntities {
                     // the effective range is min(this, serverViewDistance*16), horizontal only. Flight AUDIO no longer
                     // depends on tracking - it is pushed by the server independently; see MissileFlightAudioPacket.
                     .clientTrackingRange(32)
+                    .updateInterval(1)
                     .build("missile")
             );
 
