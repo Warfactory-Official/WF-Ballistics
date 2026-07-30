@@ -28,6 +28,8 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
@@ -825,6 +827,12 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         double hy = ext.x * Math.abs(ax[0].y) + ext.y * Math.abs(ax[1].y) + ext.z * Math.abs(ax[2].y);
         double hz = ext.x * Math.abs(ax[0].z) + ext.y * Math.abs(ax[1].z) + ext.z * Math.abs(ax[2].z);
         return new AABB(c.x - hx, c.y - hy, c.z - hz, c.x + hx, c.y + hy, c.z + hz);
+    }
+
+    @Override
+    @OnlyIn(Dist.CLIENT)
+    public boolean shouldRenderAtSqrDistance(double distance) {
+        return true;
     }
 
     @Override
