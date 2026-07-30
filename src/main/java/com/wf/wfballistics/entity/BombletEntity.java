@@ -14,6 +14,8 @@ import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
  * A bomblet: a small, tumbling orange fragment flung out by a fragmentation warhead (see
@@ -139,6 +141,12 @@ public class BombletEntity extends Projectile implements WarheadCarrier {
         this.detonated = true; // set before the blast: it can hit/hurt this bomblet before discard() runs
         this.detonation.detonate(this, pos);
         this.discard();
+    }
+
+    @Override
+    @OnlyIn(Dist.CLIENT)
+    public boolean shouldRenderAtSqrDistance(double distance) {
+        return true;
     }
 
     @Override
