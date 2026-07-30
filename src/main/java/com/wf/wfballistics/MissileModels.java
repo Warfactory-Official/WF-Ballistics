@@ -24,7 +24,7 @@ public final class MissileModels {
      */
     public static final ResourceLocation DEFAULT = new ResourceLocation(WFBallistics.MODID, "v2");
     // Per-model orientation style ("attitude") id — how the model rotates to its heading (missile vs drone).
-    // Resolved to a strategy client-side (see client.render.MissileAttitudeRegistry). Default = "missile".
+    // Resolved to a strategy shared by render + hitbox (see attitude.MissileAttitudeRegistry). Default = "missile".
     public static final String DEFAULT_ATTITUDE = "missile";
     // Continuous spin speed for the Shahed pusher propeller (degrees per tick). Purely visual.
     private static final float SHAHED_ROTOR_SPEED = 45.0f;

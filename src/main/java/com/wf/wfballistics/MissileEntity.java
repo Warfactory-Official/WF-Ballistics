@@ -1,6 +1,8 @@
 package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
+import com.wf.wfballistics.attitude.MissileAttitude;
+import com.wf.wfballistics.attitude.MissileAttitudeRegistry;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.entity.OBBEntity;
@@ -46,7 +48,9 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Quaterniond;
+import org.joml.Quaternionf;
 import org.joml.Vector3d;
+import org.joml.Vector3f;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -790,7 +794,15 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         Quaterniond rot = new Quaterniond();
         if (lenSq > 1.0E-8) {
             double inv = 1.0 / Math.sqrt(lenSq);
-            rot.rotationTo(0.0, 1.0, 0.0, move.x * inv, move.y * inv, move.z * inv);
+            // Orient the hitbox with the SAME per-model attitude the render uses (nose-to-velocity for
+            // missiles, belly-down/wings-level for winged drones) so the OBB tracks the drawn model. Using a
+            // bare rotationTo here instead left a drone's box free-rolled to the shortest-arc angle — wrong
+            // for a level-flying airframe, and flipped to a mirrored box on a near-vertical dive (antiparallel
+            // rotationTo degenerates to a 180 deg turn about an arbitrary axis). See MissileAttitudeRegistry.
+            MissileAttitude attitude = MissileAttitudeRegistry.get(MissileModels.attitudeId(modelId));
+            Quaternionf q = attitude.orientation(
+                    new Vector3f((float) (move.x * inv), (float) (move.y * inv), (float) (move.z * inv)));
+            rot.set(q.x, q.y, q.z, q.w);
         }
         // else: identity rotation (nose points straight up), which matches the ASCEND launch pose.
 

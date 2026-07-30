@@ -1,4 +1,4 @@
-package com.wf.wfballistics.client.render;
+package com.wf.wfballistics.attitude;
 
 import org.joml.Matrix3f;
 import org.joml.Quaternionf;
