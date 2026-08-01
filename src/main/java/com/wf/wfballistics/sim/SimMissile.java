@@ -42,6 +42,7 @@ public final class SimMissile {
     public ResourceLocation cruiseStageId = null;
     public ResourceLocation attackStageId = null;
     public int fragmentCount = MissileEntity.DEFAULT_FRAGMENT_COUNT;
+    public int impactPreloadRadius = MissileEntity.DEFAULT_IMPACT_PRELOAD_RADIUS;
     public int splitDepth = 0;
     public long swarmId = 0L;
     public UUID controlId = null;
@@ -85,6 +86,7 @@ public final class SimMissile {
         sm.cruiseStageId = m.getCruiseStageId();
         sm.attackStageId = m.getAttackStageId();
         sm.fragmentCount = m.getFragmentCount();
+        sm.impactPreloadRadius = m.getImpactPreloadRadius();
         sm.splitDepth = m.getSplitDepth();
         sm.swarmId = m.getSwarmId();
         sm.controlId = m.getControlId();
@@ -145,6 +147,9 @@ public final class SimMissile {
         }
         if (tag.contains("FragmentCount")) {
             sm.fragmentCount = tag.getInt("FragmentCount");
+        }
+        if (tag.contains("ImpactPreloadRadius")) {
+            sm.impactPreloadRadius = tag.getInt("ImpactPreloadRadius");
         }
         if (tag.contains("SplitDepth")) {
             sm.splitDepth = tag.getInt("SplitDepth");
@@ -226,6 +231,7 @@ public final class SimMissile {
                 .cruiseStage(this.cruiseStageId)
                 .attackStage(this.attackStageId)
                 .fragmentCount(this.fragmentCount)
+                .impactPreloadRadius(this.impactPreloadRadius)
                 .splitDepth(this.splitDepth)
                 .swarmId(this.swarmId)
                 .commander(this.commander)
@@ -289,6 +295,7 @@ public final class SimMissile {
             tag.putString("AttackStage", attackStageId.toString());
         }
         tag.putInt("FragmentCount", fragmentCount);
+        tag.putInt("ImpactPreloadRadius", impactPreloadRadius);
         tag.putInt("SplitDepth", splitDepth);
         tag.putLong("SwarmId", swarmId);
         if (controlId != null) {

@@ -5,10 +5,12 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
+import com.wf.wfballistics.api.MissileData;
+import com.wf.wfballistics.api.WFBallisticsAPI;
 import com.wf.wfballistics.compat.WarforgeCompat;
+import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.item.MissilePreset;
 import com.wf.wfballistics.item.MissilePresetRegistry;
-import com.wf.wfballistics.sim.MissileListenerRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.sim.SimMissileManager;
 import com.wf.wfballistics.sim.SimMissileRegistry;
@@ -30,7 +32,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.level.LevelEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
@@ -54,13 +55,6 @@ public final class WFServerEvents {
         }
         if (event.level instanceof ServerLevel level) {
             SimMissileManager.tick(level);
-        }
-    }
-
-    @SubscribeEvent
-    public static void onLevelUnload(LevelEvent.Unload event) {
-        if (event.getLevel() instanceof ServerLevel level) {
-            MissileListenerRegistry.clear(level);
         }
     }
 
@@ -94,6 +88,19 @@ public final class WFServerEvents {
                                 .executes(ctx -> interceptUuid(ctx.getSource(), UuidArgument.getUuid(ctx, "target")))))
                 .then(Commands.literal("list")
                         .executes(ctx -> listMissiles(ctx.getSource())))
+                .then(Commands.literal("simlist")
+                        .executes(ctx -> simList(ctx.getSource())))
+                .then(Commands.literal("debug")
+                        .executes(ctx -> debugStatus(ctx.getSource()))
+                        .then(Commands.literal("on")
+                                .executes(ctx -> setDebug(ctx.getSource(), true)))
+                        .then(Commands.literal("off")
+                                .executes(ctx -> setDebug(ctx.getSource(), false))))
+                .then(Commands.literal("track")
+                        .then(Commands.literal("latest")
+                                .executes(ctx -> trackLatest(ctx.getSource())))
+                        .then(Commands.argument("target", UuidArgument.uuid())
+                                .executes(ctx -> trackUuid(ctx.getSource(), UuidArgument.getUuid(ctx, "target")))))
                 .then(Commands.literal("retarget")
                         .executes(ctx -> retarget(ctx.getSource())))
                 .then(Commands.literal("swarm")
@@ -190,6 +197,83 @@ public final class WFServerEvents {
             src.sendSuccess(() -> comp, false);
         }
         return total;
+    }
+
+    /**
+     * Lists every missile currently in off-world simulation for the player's dimension, nearest-to-target first,
+     * with the honest fuel picture: powered range vs. distance and whether it will actually reach under power.
+     * Each line is click-to-track for the debug logger.
+     */
+    private static int simList(CommandSourceStack src) throws CommandSyntaxException {
+        ServerPlayer player = src.getPlayerOrException();
+        ServerLevel level = player.serverLevel();
+        List<MissileData> sims = WFBallisticsAPI.listSimMissiles(level);
+        if (sims.isEmpty()) {
+            src.sendSuccess(() -> Component.literal("No missiles in off-world simulation."), false);
+            return 0;
+        }
+        sims.sort(Comparator.comparingDouble(MissileData::horizontalDistance));
+        int total = sims.size();
+        src.sendSuccess(() -> Component.literal(total + " simulated missile(s), nearest target first "
+                + "(click a line to track it):").withStyle(ChatFormatting.GOLD), false);
+        int limit = Math.min(total, 40);
+        for (int i = 0; i < limit; i++) {
+            MissileData d = sims.get(i);
+            boolean reach = d.canReach();
+            String eta = reach ? String.format("ETA ~%.0fs", d.etaTicks() / 20.0) : "WON'T REACH";
+            String line = String.format("• %s  %s  dist %dm  spd %.1f  fuel %d (range %dm)  %s  %s",
+                    d.model(), d.phase(), (int) d.horizontalDistance(), d.speed(),
+                    d.fuel(), (int) d.poweredRange(), eta, d.id());
+            ChatFormatting colour = reach ? ChatFormatting.YELLOW : ChatFormatting.RED;
+            Component comp = Component.literal(line).withStyle(s -> s
+                    .withColor(colour)
+                    .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND,
+                            "/wfballistics track " + d.id())));
+            src.sendSuccess(() -> comp, false);
+        }
+        return total;
+    }
+
+    private static int debugStatus(CommandSourceStack src) {
+        String tracking = MissileDebug.latest() != null ? " (latest " + MissileDebug.latest() + ")" : "";
+        src.sendSuccess(() -> Component.literal("Missile debug logging: "
+                + (MissileDebug.enabled() ? "ON" : "OFF") + tracking), false);
+        return 1;
+    }
+
+    private static int setDebug(CommandSourceStack src, boolean on) {
+        MissileDebug.setEnabled(on);
+        src.sendSuccess(() -> Component.literal("Missile debug logging " + (on ? "enabled" : "disabled")
+                + ". New missiles are auto-tracked; watch the server log."), true);
+        return 1;
+    }
+
+    private static int trackLatest(CommandSourceStack src) {
+        UUID latest = MissileDebug.latest();
+        if (latest == null) {
+            src.sendFailure(Component.literal("No missile tracked yet. Enable debug then launch one."));
+            return 0;
+        }
+        MissileDebug.track(latest);
+        src.sendSuccess(() -> Component.literal("Tracking latest missile " + latest), true);
+        return 1;
+    }
+
+    private static int trackUuid(CommandSourceStack src, UUID id) throws CommandSyntaxException {
+        ServerPlayer player = src.getPlayerOrException();
+        ServerLevel level = player.serverLevel();
+        if (level.getEntity(id) instanceof MissileEntity m) {
+            WFBallisticsAPI.openTelemetry(m);
+        } else if (SimMissileRegistry.get(level).getById(id) != null) {
+            WFBallisticsAPI.openTelemetry(id, level.getGameTime());
+        } else {
+            src.sendFailure(Component.literal("No missile with UUID " + id + " in this dimension."));
+            return 0;
+        }
+        MissileDebug.track(id);
+        String hint = MissileDebug.enabled() ? "" : " Enable output with /wfballistics debug on.";
+        src.sendSuccess(() -> Component.literal("Tracking missile " + id + "." + hint), true);
+        return 1;
     }
 
     /**

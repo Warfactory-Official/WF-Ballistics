@@ -34,6 +34,15 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
     private static final float BANK_GAIN = 7.0f;       // roll per (rad/tick) of heading yaw change
     private static final float MAX_BANK = 0.6f;        // ~34 degrees of maximum roll
     private static final float BANK_SMOOTHING = 0.12f; // eases the roll toward its per-tick target
+    // The raw per-tick heading yaw is dominated by client/server position-sync noise. A missile's roll is
+    // invisible, but on a winged drone that noise becomes a visible wing-rock, so the turn rate driving the
+    // roll is low-passed (only a sustained turn banks) and a small noise floor is gated out.
+    private static final float TURN_RATE_SMOOTHING = 0.2f;
+    private static final float BANK_DEADZONE = 0.004f;
+    // Every-tick position sync carries small per-tick control + quantization noise, most visible as the nose
+    // bobbing up and down on near-level cruise. The heading feeding the model orientation is low-passed so that
+    // jitter is filtered out while a sustained climb/dive still accumulates through it and pitches the nose.
+    private static final float HEADING_SMOOTHING = 0.3f;
     private final TransformedInstance modelInstance;
     // Spinning parts (propellers/rotors), one instance each, spun continuously in updatePosition.
     private final TransformedInstance[] rotorInstances;
@@ -52,7 +61,10 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
     private double curZ;
     private int lastPosTick = -1;
     private boolean orientationInit = false;
+    private final Vector3f smoothedHeading = new Vector3f(0.0f, 1.0f, 0.0f);
+    private boolean headingInit = false;
     private float prevHeadingYaw = Float.NaN;
+    private float turnRate = 0f;
     private float targetBank = 0f;
     private float bank = 0f;
 
@@ -124,15 +136,45 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
 
             lastPosTick = entity.tickCount;
 
-            // Bank into turns: measure how far the heading yawed this tick and roll proportionally.
+            // Bank into turns: roll proportional to a low-passed heading turn rate so only a sustained turn
+            // banks the airframe, keeping position-sync noise from rocking the wings.
             double thx = curX - prevX, thz = curZ - prevZ;
             if (thx * thx + thz * thz > 1.0E-8) {
                 float yaw = (float) Mth.atan2(thx, thz);
                 if (!Float.isNaN(prevHeadingYaw)) {
                     float dYaw = wrapRadians(yaw - prevHeadingYaw);
-                    targetBank = Mth.clamp(-dYaw * BANK_GAIN, -MAX_BANK, MAX_BANK);
+                    turnRate += (dYaw - turnRate) * TURN_RATE_SMOOTHING;
                 }
                 prevHeadingYaw = yaw;
+            } else {
+                turnRate -= turnRate * TURN_RATE_SMOOTHING;
+            }
+
+            float effectiveTurn = turnRate;
+            if (Math.abs(effectiveTurn) <= BANK_DEADZONE) {
+                effectiveTurn = 0f;
+            } else {
+                effectiveTurn -= Math.signum(effectiveTurn) * BANK_DEADZONE;
+            }
+            targetBank = Mth.clamp(-effectiveTurn * BANK_GAIN, -MAX_BANK, MAX_BANK);
+
+            // Low-pass the heading used for orientation once per tick, so per-tick sync noise doesn't reach the
+            // model. Prefer the position delta; fall back to velocity when the missile barely moved this tick.
+            double rhx = curX - prevX, rhy = curY - prevY, rhz = curZ - prevZ;
+            if (rhx * rhx + rhy * rhy + rhz * rhz < 1.0E-8) {
+                Vec3 dm = entity.getDeltaMovement();
+                rhx = dm.x;
+                rhy = dm.y;
+                rhz = dm.z;
+            }
+            if (rhx * rhx + rhy * rhy + rhz * rhz > 1.0E-8) {
+                Vector3f raw = new Vector3f((float) rhx, (float) rhy, (float) rhz).normalize();
+                if (headingInit) {
+                    smoothedHeading.lerp(raw, HEADING_SMOOTHING).normalize();
+                } else {
+                    smoothedHeading.set(raw);
+                    headingInit = true;
+                }
             }
         }
 
@@ -142,16 +184,8 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         float renderZ = (float) (Mth.lerp(partialTick, prevZ, curZ) - origin.getZ());
 
 
-        double hx = curX - prevX, hy = curY - prevY, hz = curZ - prevZ;
-        if (hx * hx + hy * hy + hz * hz < 1.0E-8) {
-            hx = entity.getDeltaMovement().x;
-            hy = entity.getDeltaMovement().y;
-            hz = entity.getDeltaMovement().z;
-        }
-
-        if (hx * hx + hy * hy + hz * hz > 1.0E-8) {
-            Vector3f heading = new Vector3f((float) hx, (float) hy, (float) hz).normalize();
-            Quaternionf target = attitude.orientation(heading);
+        if (headingInit) {
+            Quaternionf target = attitude.orientation(new Vector3f(smoothedHeading));
             if (orientationInit) {
                 // Scale the catch-up by how far the model currently is from the true heading: gentle cruise
                 // turns stay smooth, but a hard dive/turn snaps on so the model doesn't trail its hitbox.

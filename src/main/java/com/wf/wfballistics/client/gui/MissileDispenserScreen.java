@@ -78,6 +78,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     private EditBox speedBox;
     private EditBox turnRateBox;
     private EditBox healthBox;
+    private EditBox fuelBox;
 
     public MissileDispenserScreen(MissileDispenserMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
@@ -213,8 +214,9 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         y += BOX_H + ROW_GAP;
 
         y += LABEL_H;
-        turnRateBox = makeBox(x, y, HALF, prev(turnRateBox, seed != null ? num(seed.turnRate) : "0"), "Turn rate (0=auto)");
-        healthBox = makeBox(x + HALF + GAP, y, HALF, prev(healthBox, seed != null ? num(seed.health) : Float.toString(MissileEntity.DEFAULT_HEALTH)), "Health");
+        turnRateBox = makeBox(x, y, THIRD, prev(turnRateBox, seed != null ? num(seed.turnRate) : "0"), "Turn (0=auto)");
+        healthBox = makeBox(x + THIRD + GAP, y, THIRD, prev(healthBox, seed != null ? num(seed.health) : Float.toString(MissileEntity.DEFAULT_HEALTH)), "Health");
+        fuelBox = makeBox(x + 2 * (THIRD + GAP), y, THIRD, prev(fuelBox, seed != null ? Integer.toString(seed.fuelTicks) : "0"), "Fuel (0=auto)");
         y += BOX_H + ROW_GAP;
 
         // Toggle row.
@@ -269,6 +271,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         c.altitudeParam = parseDouble(altitudeBox.getValue(), 24.0);
         c.fragmentCount = (int) Math.round(parseDouble(fragmentBox.getValue(), 24.0));
         c.cruiseSpeed = parseDouble(speedBox.getValue(), 1.0);
+        c.fuelTicks = Math.max(0, (int) Math.round(parseDouble(fuelBox.getValue(), 0.0)));
         c.turnRate = parseDouble(turnRateBox.getValue(), 0.0);
         c.health = (float) parseDouble(healthBox.getValue(), MissileEntity.DEFAULT_HEALTH);
         c.startInCruise = startInCruise;
@@ -308,6 +311,30 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         return String.format("ETA ~%.1fs", ticks / 20.0);
     }
 
+    /**
+     * Honest fuel check: with an explicit (non-auto) fuel value, warn when the powered range falls short of the
+     * target so the ETA above isn't promising an arrival the tank can't pay for.
+     */
+    private String fuelWarning() {
+        if (targetX == null || fuelBox == null) {
+            return "";
+        }
+        int fuel = Math.max(0, (int) Math.round(parseDouble(fuelBox.getValue(), 0.0)));
+        if (fuel <= 0) {
+            return "";
+        }
+        double speed = parseDouble(speedBox.getValue(), 1.0);
+        Vec3 from = Vec3.atCenterOf(menu.pos());
+        double dx = parseDouble(targetX.getValue(), menu.pos().getX()) - from.x;
+        double dz = parseDouble(targetZ.getValue(), menu.pos().getZ()) - from.z;
+        double horiz = Math.sqrt(dx * dx + dz * dz);
+        double range = fuel * speed;
+        if (range >= horiz) {
+            return "";
+        }
+        return String.format("LOW FUEL: powers %dm of %dm", (int) range, (int) horiz);
+    }
+
     @Override
     protected void renderBg(GuiGraphics gg, float partialTick, int mouseX, int mouseY) {
         gg.fill(leftPos, topPos, leftPos + imageWidth, topPos + imageHeight, 0xF0101018);
@@ -331,6 +358,11 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         for (int i = 0; i < editBoxes.size(); i++) {
             EditBox box = editBoxes.get(i);
             gg.drawString(this.font, editHints.get(i), box.getX(), box.getY() - LABEL_H + 1, 0x9090A8, false);
+        }
+        String warn = fuelWarning();
+        if (!warn.isEmpty()) {
+            gg.drawString(this.font, warn, leftPos + imageWidth - PAD - this.font.width(warn),
+                    topPos + imageHeight - 11, 0xFFFF6060, false);
         }
 
         this.renderTooltip(gg, mouseX, mouseY);

@@ -15,6 +15,9 @@ import net.minecraftforge.common.world.ForgeChunkManager;
 public final class MissileChunkLoader {
     private LongOpenHashSet ticking = new LongOpenHashSet();
     private LongOpenHashSet nonTicking = new LongOpenHashSet();
+    private final LongOpenHashSet targetPreload = new LongOpenHashSet();
+    private long targetCenter = Long.MAX_VALUE;
+    private int targetRadius = -1;
 
     private static void force(ServerLevel level, MissileEntity missile, long chunkKey, boolean add, boolean ticking) {
         ForgeChunkManager.forceChunk(level, WFBallistics.MODID, missile,
@@ -64,12 +67,36 @@ public final class MissileChunkLoader {
         }
     }
 
+    public void setTargetPreload(Vec3 center, int chunkRadius) {
+        if (center == null || chunkRadius <= 0) {
+            this.targetPreload.clear();
+            this.targetCenter = Long.MAX_VALUE;
+            this.targetRadius = -1;
+            return;
+        }
+        int cx = SectionPos.blockToSectionCoord(center.x);
+        int cz = SectionPos.blockToSectionCoord(center.z);
+        long key = ChunkPos.asLong(cx, cz);
+        if (key == this.targetCenter && chunkRadius == this.targetRadius) {
+            return;
+        }
+        this.targetCenter = key;
+        this.targetRadius = chunkRadius;
+        this.targetPreload.clear();
+        for (int ox = -chunkRadius; ox <= chunkRadius; ox++) {
+            for (int oz = -chunkRadius; oz <= chunkRadius; oz++) {
+                this.targetPreload.add(ChunkPos.asLong(cx + ox, cz + oz));
+            }
+        }
+    }
+
     public void update(MissileEntity missile, ServerLevel level, Vec3 pos, Vec3 vel, boolean loadFan) {
         long ownChunk = missile.chunkPosition().toLong();
 
         LongOpenHashSet desiredTicking = new LongOpenHashSet();
         desiredTicking.add(ownChunk);
         collectSweptTicking(desiredTicking, pos, vel);
+        desiredTicking.addAll(this.targetPreload);
 
 
         LongOpenHashSet desiredNonTicking = new LongOpenHashSet();
@@ -114,5 +141,8 @@ public final class MissileChunkLoader {
         }
         ticking.clear();
         nonTicking.clear();
+        targetPreload.clear();
+        targetCenter = Long.MAX_VALUE;
+        targetRadius = -1;
     }
 }

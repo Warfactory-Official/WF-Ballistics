@@ -1,9 +1,14 @@
 package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
+import com.wf.wfballistics.api.MissileEventType;
+import com.wf.wfballistics.api.MissileTelemetry;
+import com.wf.wfballistics.api.MissileTelemetryService;
 import com.wf.wfballistics.attitude.MissileAttitude;
 import com.wf.wfballistics.attitude.MissileAttitudeRegistry;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
+import com.wf.wfballistics.chunk.DetonationChunkGuard;
+import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.entity.OBBEntity;
 import com.wf.wfballistics.flight.*;
@@ -67,6 +72,12 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private static final int LOG_INTERVAL = 4;
 
     public static final int DEFAULT_FRAGMENT_COUNT = 24;
+
+    // Chunk radius force-loaded (ticking) around the aim point once the missile enters its terminal run, so the
+    // warhead detonates into loaded terrain even in otherwise-unloaded chunks. 4 = a 9x9 chunk area, the
+    // smallest centred square that fully contains the largest ~50-block blast even when it lands off-centre.
+    // Per-missile via the Builder / preset; 0 disables it (the missile relies on the flight fan alone).
+    public static final int DEFAULT_IMPACT_PRELOAD_RADIUS = 4;
 
     // Default exhaust/trail tint: the hot RGB (0xRRGGBB) the client-side plume fades from as it cools. An
     // orange rocket flame, matching the legacy hard-coded trail colour. Per-missile via the Builder.
@@ -156,6 +167,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private final List<OBB> obbList = List.of(this.obb);
     // Forces the chunks the missile needs while flying (own chunk ticking + non-ticking look-ahead fan).
     private final MissileChunkLoader chunkLoader = new MissileChunkLoader();
+    // Opt-in flight telemetry: null unless this missile is being tracked (debug on, or opened via the API).
+    // Cached reference so the per-event record is a field read, not a UUID map lookup.
+    private MissileTelemetry telemetry;
+    private boolean telemetryInit;
+    private boolean fuelOutRecorded;
     // Transform (position + heading) the OBB was last built for; refreshObb() skips recomputation while
     // these are unchanged, so the repeated getOBBs() calls during a hit-check don't rebuild it each time.
     private double obbX = Double.NaN, obbY, obbZ, obbDx, obbDy, obbDz;
@@ -195,6 +211,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private ResourceLocation detonationId = WarheadRegistry.defaultId();
     // Number of bomblets the FRAGMENTATION warhead scatters; per-missile, set via the Builder.
     private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
+    // Chunk radius force-loaded around the aim point during the terminal run (see DEFAULT_IMPACT_PRELOAD_RADIUS).
+    private int impactPreloadRadius = DEFAULT_IMPACT_PRELOAD_RADIUS;
     private WarheadRegistry.Detonation detonation = WarheadRegistry.STANDARD;
     // Per-missile damage response (resolved from its id, like the warhead), letting a preset resist/scale
     // incoming damage by source. Default = take damage as dealt.
@@ -413,8 +431,23 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         Vec3 currentPos = this.position();
 
+        this.initTelemetry();
+
+        // Wake any nearby missile listener (turret/CIWS) even if its chunk is unloaded, so a base's defenses
+        // engage a missile crossing an otherwise-unloaded region. Interceptors and downed missiles aren't
+        // engaged by turrets, so they don't wake them.
+        if (!this.interceptor && !this.downed) {
+            MissileListenerRegistry.get(serverLevel).noteThreat(currentPos, serverLevel.getGameTime());
+        }
 
         if (this.fuel <= 0) {
+            // Out of fuel: latch the impact-area preload once so the ground under the crash is force-loaded
+            // (same system the terminal run uses), then fall ballistically and detonate into loaded terrain.
+            if (!this.fuelOutRecorded && !this.downed) {
+                this.fuelOutRecorded = true;
+                this.chunkLoader.setTargetPreload(currentPos, Math.max(1, this.impactPreloadRadius));
+                this.recordEvent(MissileEventType.FUEL_OUT, "ballistic");
+            }
             if (this.downed) {
                 this.tickDowned(serverLevel, currentPos);
             } else {
@@ -446,6 +479,12 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         boolean loadFan = this.cruiseMode == CruiseMode.TERRAIN_FOLLOW
                 || this.phase == Phase.ATTACK
                 || horizontalDist < MissileSimConfig.FAN_TERMINAL_RANGE;
+        // Terminal impact preload: once armed and closing on the aim point, force-load a target-centred block of
+        // chunks so the warhead detonates into loaded terrain even where the moving flight fan doesn't reach
+        // (the far side of the impact). Interceptors have no such blast, so they skip it.
+        boolean preloadTarget = !this.interceptor && this.isArmed() && this.impactPreloadRadius > 0
+                && (this.phase == Phase.ATTACK || horizontalDist < MissileSimConfig.FAN_TERMINAL_RANGE);
+        this.chunkLoader.setTargetPreload(preloadTarget ? targetPos : null, this.impactPreloadRadius);
         this.chunkLoader.update(this, serverLevel, currentPos, this.getDeltaMovement(), loadFan);
 
         // Guidance: delegate "how it flies" to the active flight stage for this phase.
@@ -469,6 +508,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             this.brokeFormation = true;
             this.setTarget(this.saturationAim(commander.getTarget()));
             this.phase = Phase.ATTACK;
+            this.recordEvent(MissileEventType.ATTACK, "saturation break");
             commander = null;
         }
         boolean inFormation = commander != null && commander != this && commander.isAlive();
@@ -481,6 +521,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             Phase next = this.flightProfile.stage(this.phase).next(this, ctx);
             if (next != null) {
                 this.phase = next;
+                this.recordEvent(phaseEvent(next), "");
             }
             this.cruiseTicks = (this.phase == Phase.CRUISE) ? this.cruiseTicks + 1 : 0;
 
@@ -622,6 +663,66 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     private static String f1(double v) {
         return String.format("%.1f", v);
+    }
+
+    public MissileTelemetry telemetry() {
+        return this.telemetry;
+    }
+
+    public void attachTelemetry(MissileTelemetry telemetry) {
+        this.telemetry = telemetry;
+        this.telemetryInit = true;
+        this.recordSpawnIfFresh();
+    }
+
+    public void openTelemetry() {
+        if (this.level().isClientSide) {
+            return;
+        }
+        this.attachTelemetry(MissileTelemetryService.open(this.getUUID(), this.level().getGameTime()));
+    }
+
+    private void initTelemetry() {
+        if (this.telemetryInit) {
+            return;
+        }
+        this.telemetryInit = true;
+        MissileTelemetry existing = MissileTelemetryService.get(this.getUUID());
+        if (existing != null) {
+            // An addon-opened empty queue is a fresh launch; a non-empty one is a rematerialised missile (the
+            // sim path records its ONLOAD, not a SPAWN), which recordSpawnIfFresh skips.
+            this.telemetry = existing;
+        } else if (MissileDebug.enabled() || MissileTelemetryService.autoOpen()) {
+            this.telemetry = MissileTelemetryService.open(this.getUUID(), this.level().getGameTime());
+            if (MissileDebug.enabled()) {
+                MissileDebug.markLatest(this.getUUID());
+            }
+        }
+        this.recordSpawnIfFresh();
+    }
+
+    // Records the SPAWN marker exactly once, for a just-launched missile whose queue is still empty. A mid-flight
+    // attach (e.g. /track, or an addon opening telemetry on an in-flight missile) is not a launch, so it's skipped.
+    private void recordSpawnIfFresh() {
+        if (this.telemetry != null && this.telemetry.total() == 0 && this.tickCount <= 1) {
+            this.recordEvent(MissileEventType.SPAWN, "");
+        }
+    }
+
+    public void recordEvent(MissileEventType type, String detail) {
+        if (this.level().isClientSide) {
+            return;
+        }
+        MissileTelemetryService.record(this.telemetry, this.getUUID(), type,
+                this.level().getGameTime(), this.position(), false, detail);
+    }
+
+    private static MissileEventType phaseEvent(Phase phase) {
+        return switch (phase) {
+            case ASCEND -> MissileEventType.ASCEND;
+            case CRUISE -> MissileEventType.CRUISE;
+            case ATTACK -> MissileEventType.ATTACK;
+        };
     }
 
     /**
@@ -1105,6 +1206,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     public int getFragmentCount() {
         return this.fragmentCount;
+    }
+
+    public int getImpactPreloadRadius() {
+        return this.impactPreloadRadius;
     }
 
     @Override
@@ -1794,6 +1899,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         tag.putString("AttackStage", this.attackStageId.toString());
         tag.putInt("LoiterTicks", this.loiterTicks);
         tag.putInt("FragmentCount", this.fragmentCount);
+        tag.putInt("ImpactPreloadRadius", this.impactPreloadRadius);
         tag.putInt("SplitDepth", this.splitDepth);
         tag.putLong("SwarmId", this.swarmId);
         tag.putBoolean("Commander", this.commander);
@@ -1946,6 +2052,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             this.fragmentCount = tag.getInt("FragmentCount");
         }
 
+        if (tag.contains("ImpactPreloadRadius")) {
+            this.impactPreloadRadius = tag.getInt("ImpactPreloadRadius");
+        }
+
         if (tag.contains("SplitDepth")) {
             this.splitDepth = tag.getInt("SplitDepth");
         }
@@ -2020,6 +2130,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     private void onMissileImpact(HitResult hitResult) {
+        this.recordEvent(MissileEventType.IMPACTED, hitResult.getType().toString());
         // Missile-vs-missile: this was an interception, not a strike on the target. Neutralise both missiles
         // with the (cheap) intercept effect rather than running two full open-air warhead blasts in one tick.
         // A hit on any other entity (or a block) is a real impact and detonates normally.
@@ -2049,13 +2160,22 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return;
         }
         this.detonated = true; // set before the blast: it can hurt() this missile before discard() runs
-        if (this.level() instanceof ServerLevel sl) {
-            this.chunkLoader.releaseAll(this, sl);
-        }
+        this.recordEvent(intercepted ? MissileEventType.INTERCEPTED : MissileEventType.DETONATED, "");
+        // Run the warhead while the impact-preload chunks are still held, then release: the blast (and any
+        // effect entities it spawns) lands into loaded terrain instead of racing the chunk teardown.
         if (intercepted) {
             WarheadRegistry.getIntercept(this.detonationId).detonate(this, pos);
         } else {
             this.detonation.detonate(this, pos);
+        }
+        if (this.level() instanceof ServerLevel sl) {
+            // For a real warhead blast, keep the impact area loaded for a grace window after we release our own
+            // tickets, so any multi-tick effect it spawned (fire boxes, gas cloud, ...) isn't frozen by a chunk
+            // unload the instant this missile is discarded. A neutralised intercept fizzle needs no such hold.
+            if (!intercepted) {
+                DetonationChunkGuard.hold(sl, pos, Math.max(1, this.impactPreloadRadius));
+            }
+            this.chunkLoader.releaseAll(this, sl);
         }
         this.discard();
     }
@@ -2073,6 +2193,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return;
         }
         this.health -= amount;
+        this.recordEvent(MissileEventType.DAMAGED, "dmg=" + f1(amount) + " hp=" + f1(this.health));
         if (this.health <= 0.0f) {
             // Shot down (CIWS / interceptor fire): cut power and let it fall out of the sky rather than
             // air-bursting on the spot — it fizzles (neutralised) where it crashes (see shootDown).
@@ -2119,6 +2240,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 this.downed = true;
                 this.fuel = 0;
                 this.downedGrace = DOWNED_REHIT_GRACE;
+                this.recordEvent(MissileEventType.DESTROYED, "shot down: " + action);
             }
         }
     }
@@ -2223,6 +2345,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private ResourceLocation cruiseStageId = null;
         private ResourceLocation attackStageId = null;
         private int fragmentCount = DEFAULT_FRAGMENT_COUNT;
+        private int impactPreloadRadius = DEFAULT_IMPACT_PRELOAD_RADIUS;
         private double cruiseSpeed = CRUISE_SPEED;
         private Double ascentSpeed = null;
         private Double attackAngle = null;
@@ -2334,6 +2457,15 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
          */
         public Builder fragmentCount(int fragmentCount) {
             this.fragmentCount = fragmentCount;
+            return this;
+        }
+
+        /**
+         * Chunk radius force-loaded around the aim point during the terminal run so the warhead detonates into
+         * loaded terrain (see {@link #DEFAULT_IMPACT_PRELOAD_RADIUS}). 0 disables it.
+         */
+        public Builder impactPreloadRadius(int chunkRadius) {
+            this.impactPreloadRadius = Math.max(0, chunkRadius);
             return this;
         }
 
@@ -2650,6 +2782,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             }
             missile.rebuildFlightProfile();
             missile.fragmentCount = this.fragmentCount;
+            missile.impactPreloadRadius = this.impactPreloadRadius;
             // Recursive-frag payload + defaults so a "recursive_frag" missile picked from the dispenser GUI
             // just works: it gets a split depth and, unless the launcher set one, an airburst altitude to
             // split at. Non-recursive missiles are unaffected (depth 0, swarm 0).
