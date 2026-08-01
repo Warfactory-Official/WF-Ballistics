@@ -5,7 +5,9 @@ import com.wf.wfballistics.MissileEntity.Phase;
 import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.compat.WarforgeCompat;
+import com.wf.wfballistics.flight.ArrivalEstimator;
 import com.wf.wfballistics.flight.FlightStageRegistry;
+import com.wf.wfballistics.flight.LoiterStage;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -25,6 +27,8 @@ public final class LaunchConfig {
     public double altitudeParam = 24.0;
     public int fragmentCount = MissileEntity.DEFAULT_FRAGMENT_COUNT;
     public double cruiseSpeed = MissileEntity.CRUISE_SPEED;
+    // Ticks of powered flight. 0 (or less) means auto-size to reach the target under power (see spawn()).
+    public int fuelTicks = 0;
     public double turnRate;
     public float health = MissileEntity.DEFAULT_HEALTH;
     public boolean startInCruise;
@@ -44,6 +48,7 @@ public final class LaunchConfig {
         b.writeDouble(altitudeParam);
         b.writeVarInt(fragmentCount);
         b.writeDouble(cruiseSpeed);
+        b.writeVarInt(fuelTicks);
         b.writeDouble(turnRate);
         b.writeFloat(health);
         b.writeBoolean(startInCruise);
@@ -65,6 +70,7 @@ public final class LaunchConfig {
         c.altitudeParam = b.readDouble();
         c.fragmentCount = b.readVarInt();
         c.cruiseSpeed = b.readDouble();
+        c.fuelTicks = b.readVarInt();
         c.turnRate = b.readDouble();
         c.health = b.readFloat();
         c.startInCruise = b.readBoolean();
@@ -86,6 +92,7 @@ public final class LaunchConfig {
         tag.putDouble("AltitudeParam", altitudeParam);
         tag.putInt("FragmentCount", fragmentCount);
         tag.putDouble("CruiseSpeed", cruiseSpeed);
+        tag.putInt("FuelTicks", fuelTicks);
         tag.putDouble("TurnRate", turnRate);
         tag.putFloat("Health", health);
         tag.putBoolean("StartInCruise", startInCruise);
@@ -113,6 +120,7 @@ public final class LaunchConfig {
         c.altitudeParam = tag.getDouble("AltitudeParam");
         c.fragmentCount = tag.getInt("FragmentCount");
         c.cruiseSpeed = tag.getDouble("CruiseSpeed");
+        c.fuelTicks = tag.getInt("FuelTicks");
         c.turnRate = tag.getDouble("TurnRate");
         c.health = tag.getFloat("Health");
         c.startInCruise = tag.getBoolean("StartInCruise");
@@ -136,13 +144,23 @@ public final class LaunchConfig {
         int frags = Math.max(0, fragmentCount);
         float hp = health > 0.0f ? health : MissileEntity.DEFAULT_HEALTH;
 
+        // Fuel is ticks of powered flight. 0/auto sizes it to actually reach the target under power; a positive
+        // value is honoured verbatim (and may deliberately run the missile dry mid-flight).
+        Vec3 target = new Vec3(targetX, targetY, targetZ);
+        double cruiseAltitudeY = highAltitude ? altitudeParam : pos.getY() + altitudeParam;
+        int loiter = FlightStageRegistry.keyOf(LoiterStage.INSTANCE).equals(cruiseStageId) ? LoiterStage.LOITER_TICKS : 0;
+        int fuel = fuelTicks > 0 ? fuelTicks
+                : ArrivalEstimator.fuelToReach(Vec3.atCenterOf(pos), target, speed,
+                MissileEntity.ascentSpeedFor(speed), cruiseAltitudeY, loiter);
+
         MissileEntity.Builder builder = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
-                .target(new Vec3(targetX, targetY, targetZ))
+                .target(target)
                 .model(model)
                 .detonation(warhead)
                 .explosionOffset(explosionOffset)
                 .fragmentCount(frags)
                 .cruiseSpeed(speed)
+                .fuel(MissileEntity.FuelType.SOLID, fuel)
                 .health(hp)
                 .controlId(dispenser.getControlId())
                 .teamId(WarforgeCompat.factionClaiming(level, pos))

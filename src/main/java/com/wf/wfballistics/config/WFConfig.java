@@ -47,6 +47,8 @@ public final class WFConfig {
     public static final ForgeConfigSpec.DoubleValue SIM_TERMINAL_RANGE;
     public static final ForgeConfigSpec.DoubleValue SIM_SPAWN_MARGIN;
     public static final ForgeConfigSpec.IntValue SIM_CRUISE_DELAY_TICKS;
+    // --- Debug ---
+    public static final ForgeConfigSpec.BooleanValue DEBUG_LOGGING;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -153,6 +155,13 @@ public final class WFConfig {
                 .defineInRange("cruiseDelayTicks", 100, 0, 1_000_000);
         b.pop();
 
+        b.comment("Debugging.").push("debug");
+        DEBUG_LOGGING = b
+                .comment("Log detailed per-missile flight telemetry to the server log and auto-track new missiles.",
+                        "Toggle at runtime with /wfballistics debug on|off; list off-world tracks with simlist.")
+                .define("missileLogging", false);
+        b.pop();
+
         SPEC = b.build();
     }
 
@@ -189,5 +198,6 @@ public final class WFConfig {
         MissileSimConfig.DESTINATION_RANGE = SIM_TERMINAL_RANGE.get();
         MissileSimConfig.LISTENER_SPAWN_MARGIN = SIM_SPAWN_MARGIN.get();
         MissileSimConfig.CRUISE_SIM_DELAY_TICKS = SIM_CRUISE_DELAY_TICKS.get();
+        com.wf.wfballistics.debug.MissileDebug.configureDefault(DEBUG_LOGGING.get());
     }
 }

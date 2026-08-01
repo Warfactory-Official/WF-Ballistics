@@ -33,6 +33,7 @@ public final class MissilePreset {
     private final double turnRate;       // <= 0 = model-size default
     private final float health;
     private final int fragmentCount;
+    private final int impactPreloadRadius;
     private final float explosionOffset;
     private final int splitDepth;
     private final boolean interceptor;
@@ -69,6 +70,7 @@ public final class MissilePreset {
         this.turnRate = b.turnRate;
         this.health = b.health;
         this.fragmentCount = b.fragmentCount;
+        this.impactPreloadRadius = b.impactPreloadRadius;
         this.explosionOffset = b.explosionOffset;
         this.splitDepth = b.splitDepth;
         this.interceptor = b.interceptor;
@@ -138,6 +140,10 @@ public final class MissilePreset {
 
     public int fragmentCount() {
         return fragmentCount;
+    }
+
+    public int impactPreloadRadius() {
+        return impactPreloadRadius;
     }
 
     public float explosionOffset() {
@@ -240,6 +246,7 @@ public final class MissilePreset {
                 .cruiseSpeed(cruiseSpeed)
                 .health(health)
                 .fragmentCount(fragmentCount)
+                .impactPreloadRadius(impactPreloadRadius)
                 .explosionOffset(explosionOffset);
         if (highAltitude) {
             b.highAltitude(altitudeParam);
@@ -343,6 +350,7 @@ public final class MissilePreset {
         private double turnRate = 0.0;
         private float health = MissileEntity.DEFAULT_HEALTH;
         private int fragmentCount = MissileEntity.DEFAULT_FRAGMENT_COUNT;
+        private int impactPreloadRadius = MissileEntity.DEFAULT_IMPACT_PRELOAD_RADIUS;
         private float explosionOffset = 0.0f;
         private int splitDepth = 0;
         private boolean interceptor = false;
@@ -410,6 +418,16 @@ public final class MissilePreset {
 
         public Builder fragmentCount(int fragmentCount) {
             this.fragmentCount = fragmentCount;
+            return this;
+        }
+
+        /**
+         * Chunk radius force-loaded around the aim point during the terminal run so the warhead detonates into
+         * loaded terrain (see {@link MissileEntity#DEFAULT_IMPACT_PRELOAD_RADIUS}). Default 4 (a 9x9 area);
+         * raise it for a very large warhead, or set 0 to disable and rely on the flight fan alone.
+         */
+        public Builder impactPreloadRadius(int chunkRadius) {
+            this.impactPreloadRadius = Math.max(0, chunkRadius);
             return this;
         }
 

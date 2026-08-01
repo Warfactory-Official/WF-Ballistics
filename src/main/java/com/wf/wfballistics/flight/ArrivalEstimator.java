@@ -34,4 +34,15 @@ public final class ArrivalEstimator {
         double total = climb + transit + descent + Math.max(0, loiterTicks);
         return (int) Math.round(Math.max(0.0, total));
     }
+
+    /**
+     * Ticks of powered flight needed to actually reach the target: the estimated flight time plus 25% headroom
+     * and a small fixed buffer, so a missile auto-fuelled to this value arrives under power instead of running
+     * dry and coasting the last leg. Fuel burns at 1 tick of flight per tick.
+     */
+    public static int fuelToReach(Vec3 from, Vec3 target, double cruiseSpeed, double ascentSpeed,
+                                  double cruiseAltitude, int loiterTicks) {
+        int est = estimateTicks(from, target, cruiseSpeed, ascentSpeed, cruiseAltitude, loiterTicks);
+        return (int) Math.ceil(est * 1.25) + 40;
+    }
 }

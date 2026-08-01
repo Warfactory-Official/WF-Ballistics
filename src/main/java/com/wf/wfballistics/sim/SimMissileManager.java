@@ -4,6 +4,10 @@ import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.WFBallistics;
+import com.wf.wfballistics.api.MissileEventType;
+import com.wf.wfballistics.api.MissileTelemetryService;
+import com.wf.wfballistics.chunk.DetonationChunkGuard;
+import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.network.MissileFlightAudioPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -27,13 +31,22 @@ public final class SimMissileManager {
     }
 
     public static void tick(ServerLevel level) {
+        long now = level.getGameTime();
         SimMissileRegistry reg = SimMissileRegistry.get(level);
         List<SimMissile> all = new ArrayList<>(reg.view());
+
+        MissileListenerRegistry listeners = MissileListenerRegistry.get(level);
+        for (SimMissile sm : all) {
+            listeners.noteThreat(sm.pos, now);
+        }
+        listeners.tickWakeups(level, now);
+
+        DetonationChunkGuard.tick(level, now);
+        MissileDebug.tickLatest(level, now);
+
         if (all.isEmpty()) {
             return;
         }
-
-        long now = level.getGameTime();
         Map<UUID, SimMissile> byId = new HashMap<>();
         for (SimMissile sm : all) {
             byId.put(sm.id, sm);
@@ -60,8 +73,16 @@ public final class SimMissileManager {
                         sm.swarmMembers.removeIf(mem -> mem.fuel <= 0);
                     }
                     if (sm.fuel <= 0) {
-                        LOGGER.debug("[wfballistics] simulated missile {} ran out of fuel and crashed near {}",
+                        // Ran dry off-world. Rather than silently deleting it, rematerialize it as a real
+                        // entity with an empty tank at its current position so it falls ballistically and
+                        // detonates into loaded terrain (spawnOne force-loads the spawn chunk; the entity's own
+                        // fuel<=0 branch keeps the impact area held and the detonation guard finishes the blast).
+                        sm.fuel = 0;
+                        MissileTelemetryService.record(sm.id, MissileEventType.FUEL_OUT, now, sm.pos, true,
+                                "ballistic respawn");
+                        LOGGER.debug("[wfballistics] simulated missile {} ran out of fuel; respawning to crash near {}",
                                 sm.id, sm.pos);
+                        respawn(level, sm, sm.pos);
                         dead.add(sm);
                     }
                 }
@@ -161,6 +182,8 @@ public final class SimMissileManager {
             dead.add(interceptor); // spent whether it hits or misses
             if (hit) {
                 dead.add(target);
+                MissileTelemetryService.record(target.id, MissileEventType.INTERCEPTED, level.getGameTime(),
+                        target.pos, true, "sim intercept");
                 LOGGER.debug("[wfballistics] simulated interception SUCCESS on {}", target.id);
             } else {
                 LOGGER.debug("[wfballistics] simulated interception MISS on {}", target.id);
@@ -210,8 +233,8 @@ public final class SimMissileManager {
     private static Vec3 firstListenerSpawnPos(ServerLevel level, Vec3 p0, Vec3 p1) {
         double bestT = Double.MAX_VALUE;
 
-        for (IMissileListener l : MissileListenerRegistry.get(level).valid()) {
-            double t = RayMath.segmentSphereEntry(p0, p1, l.listenerCenter(), l.listenerRange());
+        for (MissileListenerRegistry.ListenerView l : MissileListenerRegistry.get(level).views()) {
+            double t = RayMath.segmentSphereEntry(p0, p1, l.center(), l.range());
             if (!Double.isNaN(t) && t < bestT) {
                 bestT = t;
             }
@@ -238,9 +261,9 @@ public final class SimMissileManager {
     }
 
     public static boolean nearAnyListener(ServerLevel level, Vec3 pos) {
-        for (IMissileListener l : MissileListenerRegistry.get(level).valid()) {
-            double r = l.listenerRange() + MissileSimConfig.LISTENER_SPAWN_MARGIN;
-            if (l.listenerCenter().distanceToSqr(pos) <= r * r) {
+        for (MissileListenerRegistry.ListenerView l : MissileListenerRegistry.get(level).views()) {
+            double r = l.range() + MissileSimConfig.LISTENER_SPAWN_MARGIN;
+            if (l.center().distanceToSqr(pos) <= r * r) {
                 return true;
             }
         }
@@ -259,6 +282,7 @@ public final class SimMissileManager {
         }
         SimMissile sm = SimMissile.fromEntity(missile);
         SimMissileRegistry.get(level).add(sm);
+        missile.recordEvent(MissileEventType.OFFLOAD, "to sim");
         LOGGER.debug("[wfballistics] missile {} offloaded to simulation at {}", sm.id, sm.pos);
         missile.discard(); // triggers chunk release via MissileEntity#remove
     }
@@ -281,6 +305,7 @@ public final class SimMissileManager {
             lead.swarmMembers.add(member);
         }
         SimMissileRegistry.get(level).add(lead);
+        commander.recordEvent(MissileEventType.OFFLOAD, "swarm to sim");
         LOGGER.debug("[wfballistics] swarm {} ({} members) offloaded as one object at {}",
                 commander.getSwarmId(), lead.swarmMembers.size() + 1, lead.pos);
         for (MissileEntity sub : subordinates) {
@@ -300,9 +325,14 @@ public final class SimMissileManager {
         MissileEntity m = sm.toEntity(level, spawnPos);
         ChunkPos cp = m.chunkPosition();
         // Force the spawn chunk (ticking) before adding so there is a loaded chunk to place into; the
-        // entity's own MissileChunkLoader takes over from its first tick and eventually releases it.
+        // entity's own MissileChunkLoader takes over from its first tick and eventually releases it. The
+        // forceChunk ticket only takes effect next tick, so synchronously load the chunk first: without it a
+        // missile rematerialising into an unloaded chunk (e.g. a listener boundary crossed before the offload
+        // dwell elapsed) would be added to a not-yet-loaded chunk and sit dormant until the ticket resolves.
         ForgeChunkManager.forceChunk(level, WFBallistics.MODID, m, cp.x, cp.z, true, true);
+        level.getChunk(cp.x, cp.z);
         level.addFreshEntity(m);
+        MissileTelemetryService.record(sm.id, MissileEventType.ONLOAD, level.getGameTime(), spawnPos, false, "from sim");
         LOGGER.debug("[wfballistics] simulated missile {} respawned at {}", sm.id, spawnPos);
     }
 

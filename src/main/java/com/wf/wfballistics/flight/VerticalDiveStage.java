@@ -19,7 +19,7 @@ public final class VerticalDiveStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        return AttackStage.guideAngled(missile, ctx, missile.resolveDiveAngle(ctx), DIVE_SPEED);
+        return AttackStage.guideDive(missile, ctx, DIVE_SPEED);
     }
 
     @Override
