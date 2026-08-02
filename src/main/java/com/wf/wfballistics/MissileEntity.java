@@ -1254,6 +1254,13 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
+     * @return the stage that will fly the terminal ATTACK phase (independent of the current phase).
+     */
+    public FlightStage attackStage() {
+        return this.flightProfile.stage(Phase.ATTACK);
+    }
+
+    /**
      * Rough remaining time-to-impact (ticks) from the current position, target and speed, accounting for the
      * climb, transit, terminal descent and any remaining loiter time. See {@link ArrivalEstimator}.
      */

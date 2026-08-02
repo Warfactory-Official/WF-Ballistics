@@ -280,6 +280,11 @@ public final class AttackStage implements FlightStage {
     }
 
     @Override
+    public boolean needsPitchoverLead() {
+        return true;
+    }
+
+    @Override
     public String id() {
         return "attack";
     }

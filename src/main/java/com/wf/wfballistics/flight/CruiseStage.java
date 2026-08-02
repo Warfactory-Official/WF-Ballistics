@@ -71,11 +71,12 @@ public final class CruiseStage implements FlightStage {
     }
 
     /**
-     * The horizontal range at which to hand off to the terminal attack: the point where the missile must begin
-     * its pitch-over to reach the aim on the resolved dive angle without a turn tighter than its radius. That is
-     * the straight-dive horizontal ({@code height/tan}) plus the pitch-over lead ({@code r·tan(theta/2)}, r =
-     * cruise speed / turn rate), so the terminal stage can fly the dive at full speed. Floored at
-     * {@link #BRAKING_RANGE}.
+     * The horizontal range at which to hand off to the terminal attack: the straight-dive horizontal
+     * ({@code height/tan}) plus, only for a terminal stage that flies a curved pitch-over (see
+     * {@link FlightStage#needsPitchoverLead}), the pitch-over lead ({@code r·tan(theta/2)}, r = terminal speed /
+     * turn rate) so that stage can reach the aim on the resolved dive angle without a turn tighter than its
+     * radius. A stage that dives straight in adds no lead, so its handoff (and its terminal evasion) doesn't
+     * start out ahead of the real descent. Floored at {@link #BRAKING_RANGE}.
      */
     private static double handoffRange(MissileEntity missile, FlightContext ctx) {
         double theta = Math.toRadians(missile.resolveDiveAngle(ctx));
@@ -84,9 +85,13 @@ public final class CruiseStage implements FlightStage {
         if (tan <= 1.0e-4 || height <= 0.0) {
             return BRAKING_RANGE;
         }
-        double turnRate = missile.getMaxTurnRate();
-        double radius = turnRate > 1.0e-4 ? AttackStage.terminalSpeed(missile) / turnRate : 0.0;
-        double required = height / tan + radius * Math.tan(theta / 2.0);
+        double lead = 0.0;
+        if (missile.attackStage().needsPitchoverLead()) {
+            double turnRate = missile.getMaxTurnRate();
+            double radius = turnRate > 1.0e-4 ? AttackStage.terminalSpeed(missile) / turnRate : 0.0;
+            lead = radius * Math.tan(theta / 2.0);
+        }
+        double required = height / tan + lead;
         return Math.max(BRAKING_RANGE, required);
     }
 
