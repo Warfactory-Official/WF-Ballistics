@@ -28,6 +28,16 @@ public interface FlightStage {
     }
 
     /**
+     * @return true if this terminal stage flies a curved level-run -> pitch-over -> dive trajectory (like
+     * {@link AttackStage}) and so needs {@link CruiseStage} to hand off early enough to fit that pitch-over. A
+     * stage that pure-pursues straight onto the dive line and dives immediately (no pitch-over) returns false so
+     * the handoff isn't pulled out ahead of the real terminal descent.
+     */
+    default boolean needsPitchoverLead() {
+        return false;
+    }
+
+    /**
      * @return a short stable id (for debugging / logging).
      */
     String id();
