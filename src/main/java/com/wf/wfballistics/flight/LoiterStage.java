@@ -1,33 +1,42 @@
 package com.wf.wfballistics.flight;
 
 import com.wf.wfballistics.MissileEntity;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Loitering-munition cruise: fly to the target area, then orbit it at cruise altitude for {@link #LOITER_TICKS}
- * ticks (a drone holding over its objective) before handing off to the terminal attack. Drop this into the
- * cruise slot in place of {@link CruiseStage} to turn a missile into a loitering drone. The orbit timer is
- * per-missile state kept on the entity so it persists.
+ * Loitering-munition cruise: fly to the target area, then orbit it at cruise altitude for a per-variant number
+ * of ticks before handing off to the terminal attack. Register tuned variants with {@link #of} rather than
+ * subclassing; each is a distinct registry id (see {@link FlightStageRegistry}), so persistence stays id-only.
+ * The orbit timer is per-missile state kept on the entity so it persists.
  */
 public final class LoiterStage implements FlightStage {
 
-    public static final LoiterStage INSTANCE = new LoiterStage();
-    /**
-     * How long (ticks) to loiter on-station before diving (~10s at 20 TPS).
-     */
-    public static final int LOITER_TICKS = 200;
-    /**
-     * Horizontal radius (blocks) the drone orbits the target at.
-     */
-    private static final double ORBIT_RADIUS = 24.0;
-    /**
-     * Altitude-hold gain toward the safe altitude.
-     */
     private static final double ALTITUDE_GAIN = 0.1;
 
-    private LoiterStage() {
+    private final String id;
+    private final double orbitRadius;
+    private final int loiterTicks;
+
+    private LoiterStage(String id, double orbitRadius, int loiterTicks) {
+        this.id = id;
+        this.orbitRadius = orbitRadius;
+        this.loiterTicks = loiterTicks;
+    }
+
+    public static LoiterStage of(String id, double orbitRadius, int loiterTicks) {
+        return new LoiterStage(id, orbitRadius, loiterTicks);
+    }
+
+    public int loiterTicks() {
+        return loiterTicks;
+    }
+
+    public static int loiterTicksOf(ResourceLocation cruiseStageId) {
+        return FlightStageRegistry.get(MissileEntity.Phase.CRUISE, cruiseStageId) instanceof LoiterStage ls
+                ? ls.loiterTicks() : 0;
     }
 
     @Override
@@ -38,16 +47,13 @@ public final class LoiterStage implements FlightStage {
         double dist = ctx.horizontalDist();
         double vx;
         double vz;
-        if (dist > ORBIT_RADIUS + 4.0) {
-            // Still inbound: close on the target like a normal cruise.
+        if (dist > orbitRadius + 4.0) {
             vx = ctx.nx() * maxSpeed;
             vz = ctx.nz() * maxSpeed;
         } else {
-            // On station: circle the target (tangent = radial rotated 90 degrees) with a gentle radius
-            // correction, and count up the loiter timer that gates the dive.
             double tx = -ctx.nz();
             double tz = ctx.nx();
-            double radialErr = Mth.clamp((dist - ORBIT_RADIUS) / ORBIT_RADIUS, -1.0, 1.0);
+            double radialErr = Mth.clamp((dist - orbitRadius) / orbitRadius, -1.0, 1.0);
             vx = (tx + ctx.nx() * radialErr) * maxSpeed;
             vz = (tz + ctx.nz() * radialErr) * maxSpeed;
             missile.setLoiterTicks(missile.getLoiterTicks() + 1);
@@ -59,14 +65,14 @@ public final class LoiterStage implements FlightStage {
     @Nullable
     public MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
         if (missile.hasDesignatedTarget()) {
-            boolean onStation = ctx.horizontalDist() <= ORBIT_RADIUS + 6.0;
+            boolean onStation = ctx.horizontalDist() <= orbitRadius + 6.0;
             return (missile.hasLiveDesignatedTarget() && onStation) ? MissileEntity.Phase.ATTACK : null;
         }
-        return missile.getLoiterTicks() >= LOITER_TICKS ? MissileEntity.Phase.ATTACK : null;
+        return missile.getLoiterTicks() >= loiterTicks ? MissileEntity.Phase.ATTACK : null;
     }
 
     @Override
     public String id() {
-        return "loiter";
+        return id;
     }
 }

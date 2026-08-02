@@ -31,6 +31,7 @@ public final class MissilePreset {
     private final double altitudeParam; // cruiseAltitude (high) or terrainClearance (terrain follow)
     private final double cruiseSpeed;
     private final double turnRate;       // <= 0 = model-size default
+    private final double approachJoinCap; // directional-strike join ceiling (blocks)
     private final float health;
     private final int fragmentCount;
     private final int impactPreloadRadius;
@@ -68,6 +69,7 @@ public final class MissilePreset {
         this.altitudeParam = b.altitudeParam;
         this.cruiseSpeed = b.cruiseSpeed;
         this.turnRate = b.turnRate;
+        this.approachJoinCap = b.approachJoinCap;
         this.health = b.health;
         this.fragmentCount = b.fragmentCount;
         this.impactPreloadRadius = b.impactPreloadRadius;
@@ -132,6 +134,10 @@ public final class MissilePreset {
 
     public double turnRate() {
         return turnRate;
+    }
+
+    public double approachJoinCap() {
+        return approachJoinCap;
     }
 
     public float health() {
@@ -256,6 +262,7 @@ public final class MissilePreset {
         if (turnRate > 0.0) {
             b.turnRate(turnRate);
         }
+        b.approachJoinCap(approachJoinCap);
         if (splitDepth > 0) {
             b.splitDepth(splitDepth);
         }
@@ -348,6 +355,7 @@ public final class MissilePreset {
         private double altitudeParam = 24.0;
         private double cruiseSpeed = MissileEntity.CRUISE_SPEED;
         private double turnRate = 0.0;
+        private double approachJoinCap = MissileEntity.DEFAULT_APPROACH_JOIN_CAP;
         private float health = MissileEntity.DEFAULT_HEALTH;
         private int fragmentCount = MissileEntity.DEFAULT_FRAGMENT_COUNT;
         private int impactPreloadRadius = MissileEntity.DEFAULT_IMPACT_PRELOAD_RADIUS;
@@ -408,6 +416,16 @@ public final class MissilePreset {
 
         public Builder turnRate(double radiansPerTick) {
             this.turnRate = radiansPerTick;
+            return this;
+        }
+
+        /**
+         * Ceiling (blocks) on how far out a directional strike joins its attack line (see
+         * {@link com.wf.wfballistics.flight.ApproachStage}). The join scales with range up to this cap;
+         * default {@link MissileEntity#DEFAULT_APPROACH_JOIN_CAP}.
+         */
+        public Builder approachJoinCap(double blocks) {
+            this.approachJoinCap = blocks;
             return this;
         }
 

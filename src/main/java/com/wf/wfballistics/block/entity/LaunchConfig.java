@@ -36,6 +36,13 @@ public final class LaunchConfig {
     public ResourceLocation ascentStageId;
     public ResourceLocation cruiseStageId;
     public ResourceLocation attackStageId;
+    // Directional strike: horizontal direction from the target toward the approach side. (0,0) = unconstrained.
+    public double attackApproachX;
+    public double attackApproachZ;
+    // Terminal attack profile name (see AttackProfile): SPEED, BALANCED, or LOFT.
+    public String attackProfile = "SPEED";
+    // Per-missile ceiling (blocks) on the directional-strike join distance (see ApproachStage).
+    public double approachJoinCap = MissileEntity.DEFAULT_APPROACH_JOIN_CAP;
 
     public void write(FriendlyByteBuf b) {
         b.writeResourceLocation(modelId);
@@ -56,6 +63,10 @@ public final class LaunchConfig {
         b.writeResourceLocation(ascentStageId);
         b.writeResourceLocation(cruiseStageId);
         b.writeResourceLocation(attackStageId);
+        b.writeDouble(attackApproachX);
+        b.writeDouble(attackApproachZ);
+        b.writeUtf(attackProfile);
+        b.writeDouble(approachJoinCap);
     }
 
     public static LaunchConfig read(FriendlyByteBuf b) {
@@ -78,6 +89,10 @@ public final class LaunchConfig {
         c.ascentStageId = b.readResourceLocation();
         c.cruiseStageId = b.readResourceLocation();
         c.attackStageId = b.readResourceLocation();
+        c.attackApproachX = b.readDouble();
+        c.attackApproachZ = b.readDouble();
+        c.attackProfile = b.readUtf();
+        c.approachJoinCap = b.readDouble();
         return c;
     }
 
@@ -106,6 +121,10 @@ public final class LaunchConfig {
         if (attackStageId != null) {
             tag.putString("AttackStage", attackStageId.toString());
         }
+        tag.putDouble("AttackApproachX", attackApproachX);
+        tag.putDouble("AttackApproachZ", attackApproachZ);
+        tag.putString("AttackProfile", attackProfile);
+        tag.putDouble("ApproachJoinCap", approachJoinCap);
     }
 
     public static LaunchConfig load(CompoundTag tag) {
@@ -134,6 +153,14 @@ public final class LaunchConfig {
         if (tag.contains("AttackStage")) {
             c.attackStageId = FlightStageRegistry.parse(Phase.ATTACK, tag.getString("AttackStage"));
         }
+        c.attackApproachX = tag.getDouble("AttackApproachX");
+        c.attackApproachZ = tag.getDouble("AttackApproachZ");
+        if (tag.contains("AttackProfile")) {
+            c.attackProfile = tag.getString("AttackProfile");
+        }
+        if (tag.contains("ApproachJoinCap")) {
+            c.approachJoinCap = tag.getDouble("ApproachJoinCap");
+        }
         return c;
     }
 
@@ -148,10 +175,12 @@ public final class LaunchConfig {
         // value is honoured verbatim (and may deliberately run the missile dry mid-flight).
         Vec3 target = new Vec3(targetX, targetY, targetZ);
         double cruiseAltitudeY = highAltitude ? altitudeParam : pos.getY() + altitudeParam;
-        int loiter = FlightStageRegistry.keyOf(LoiterStage.INSTANCE).equals(cruiseStageId) ? LoiterStage.LOITER_TICKS : 0;
+        int loiter = LoiterStage.loiterTicksOf(cruiseStageId);
+        Vec3 approachDir = (attackApproachX != 0.0 || attackApproachZ != 0.0)
+                ? new Vec3(attackApproachX, 0.0, attackApproachZ) : null;
         int fuel = fuelTicks > 0 ? fuelTicks
                 : ArrivalEstimator.fuelToReach(Vec3.atCenterOf(pos), target, speed,
-                MissileEntity.ascentSpeedFor(speed), cruiseAltitudeY, loiter);
+                MissileEntity.ascentSpeedFor(speed), cruiseAltitudeY, loiter, approachDir, approachJoinCap);
 
         MissileEntity.Builder builder = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
                 .target(target)
@@ -178,6 +207,11 @@ public final class LaunchConfig {
         if (turnRate > 0.0) {
             builder.turnRate(turnRate);
         }
+        if (attackApproachX != 0.0 || attackApproachZ != 0.0) {
+            builder.attackFrom(attackApproachX, attackApproachZ);
+        }
+        builder.attackProfile(com.wf.wfballistics.flight.AttackProfile.byName(attackProfile));
+        builder.approachJoinCap(approachJoinCap);
         if (startInCruise) {
             builder.startInCruise();
         }

@@ -30,6 +30,16 @@ public final class CruiseStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
+        double maxSpeed = missile.getCruiseSpeed();
+        double vy = verticalVelocity(missile, ctx);
+        return new Vec3(ctx.nx() * maxSpeed, vy, ctx.nz() * maxSpeed);
+    }
+
+    /**
+     * Eased, deadbanded vertical guidance toward the terrain-safe (or fixed) cruise altitude. Shared with
+     * {@link ApproachStage} so a directional run holds the same smooth altitude while it steers horizontally.
+     */
+    public static double verticalVelocity(MissileEntity missile, FlightContext ctx) {
         // Ease the guidance altitude toward the freshly scanned safe height so terrain-sample noise doesn't
         // turn into constant vertical twitching. cruiseTargetY is per-missile memory kept on the entity.
         double targetY = missile.getCruiseTargetY();
@@ -51,8 +61,7 @@ public final class CruiseStage implements FlightStage {
             double corrected = error - Math.copySign(ALTITUDE_DEADBAND, error);
             desiredVy = Mth.clamp(corrected / DAMPENING_RANGE, -maxSpeed, maxSpeed);
         }
-        double vy = Mth.lerp(VERTICAL_SMOOTHING, missile.getDeltaMovement().y, desiredVy);
-        return new Vec3(ctx.nx() * maxSpeed, vy, ctx.nz() * maxSpeed);
+        return Mth.lerp(VERTICAL_SMOOTHING, missile.getDeltaMovement().y, desiredVy);
     }
 
     @Override
@@ -62,18 +71,22 @@ public final class CruiseStage implements FlightStage {
     }
 
     /**
-     * The horizontal range at which to hand off to the terminal attack: the range where the resolved dive
-     * approach line becomes reachable from the current altitude (so a shallow angle gets room to descend onto
-     * it), floored at {@link #BRAKING_RANGE}. Steep dives resolve to roughly the brake range.
+     * The horizontal range at which to hand off to the terminal attack: the point where the missile must begin
+     * its pitch-over to reach the aim on the resolved dive angle without a turn tighter than its radius. That is
+     * the straight-dive horizontal ({@code height/tan}) plus the pitch-over lead ({@code r·tan(theta/2)}, r =
+     * cruise speed / turn rate), so the terminal stage can fly the dive at full speed. Floored at
+     * {@link #BRAKING_RANGE}.
      */
     private static double handoffRange(MissileEntity missile, FlightContext ctx) {
         double theta = Math.toRadians(missile.resolveDiveAngle(ctx));
         double tan = Math.tan(theta);
-        if (tan <= 1.0e-4) {
+        double height = missile.getY() - ctx.target().y;
+        if (tan <= 1.0e-4 || height <= 0.0) {
             return BRAKING_RANGE;
         }
-        double height = missile.getY() - ctx.target().y;
-        double required = height > 0.0 ? height / tan : BRAKING_RANGE;
+        double turnRate = missile.getMaxTurnRate();
+        double radius = turnRate > 1.0e-4 ? AttackStage.terminalSpeed(missile) / turnRate : 0.0;
+        double required = height / tan + radius * Math.tan(theta / 2.0);
         return Math.max(BRAKING_RANGE, required);
     }
 

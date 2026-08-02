@@ -34,6 +34,16 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     private static final List<ResourceLocation> CRUISE_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.CRUISE));
     private static final List<ResourceLocation> ATTACK_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.ATTACK));
     private static final String[] CRUISE_LABELS = {"Terrain Follow", "High Altitude"};
+    // Directional strike: the side the missile comes in from. Index 0 = Auto (unconstrained); the rest are the
+    // approach-from directions as MC world vectors (east=+X, south=+Z).
+    private static final String[] ATTACK_DIR_LABELS = {"Auto", "N", "NE", "E", "SE", "S", "SW", "W", "NW"};
+    private static final double[][] ATTACK_DIRS = {
+            {0.0, 0.0}, {0.0, -1.0}, {0.707, -0.707}, {1.0, 0.0}, {0.707, 0.707},
+            {0.0, 1.0}, {-0.707, 0.707}, {-1.0, 0.0}, {-0.707, -0.707}
+    };
+    // Terminal attack profile (see AttackProfile).
+    private static final String[] PROFILE_LABELS = {"Speed", "Balanced", "Loft"};
+    private static final String[] PROFILE_VALUES = {"SPEED", "BALANCED", "LOFT"};
 
     private static final int PAD = 8;
     private static final int W_FULL = 204;               // imageWidth - 2*PAD
@@ -55,6 +65,8 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     private int ascentStageIndex; // index into ASCENT_STAGES (0 = the phase default)
     private int cruiseStageIndex;
     private int attackStageIndex;
+    private int attackDirIndex; // 0 = Auto, else index into ATTACK_DIR_LABELS/ATTACK_DIRS
+    private int profileIndex; // index into PROFILE_LABELS/PROFILE_VALUES
     private boolean startInCruise;
     private boolean startArmed;
 
@@ -67,6 +79,8 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     private Button ascentStageButton;
     private Button cruiseStageButton;
     private Button attackStageButton;
+    private Button attackDirButton;
+    private Button profileButton;
     private Button inCruiseButton;
     private Button armedButton;
     private EditBox targetX;
@@ -83,7 +97,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     public MissileDispenserScreen(MissileDispenserMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
         this.imageWidth = 220;
-        this.imageHeight = 274;
+        this.imageHeight = 300;
         this.modelIndex = Math.max(0, MODELS.indexOf(MissileModels.DEFAULT));
         this.warheadIndex = Math.max(0, WARHEADS.indexOf(WarheadRegistry.defaultId()));
     }
@@ -136,7 +150,37 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
             this.attackStageIndex = Math.max(0, ATTACK_STAGES.indexOf(c.attackStageId));
             this.startInCruise = c.startInCruise;
             this.startArmed = c.startArmed;
+            this.attackDirIndex = attackDirIndexFromVec(c.attackApproachX, c.attackApproachZ);
+            this.profileIndex = Math.max(0, indexOf(PROFILE_VALUES, c.attackProfile));
         }
+    }
+
+    private static int indexOf(String[] arr, String value) {
+        for (int i = 0; i < arr.length; i++) {
+            if (arr[i].equalsIgnoreCase(value)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static int attackDirIndexFromVec(double x, double z) {
+        double h = Math.sqrt(x * x + z * z);
+        if (h < 1.0E-4) {
+            return 0;
+        }
+        double nx = x / h;
+        double nz = z / h;
+        int best = 0;
+        double bestDot = -Double.MAX_VALUE;
+        for (int i = 1; i < ATTACK_DIRS.length; i++) {
+            double dot = nx * ATTACK_DIRS[i][0] + nz * ATTACK_DIRS[i][1];
+            if (dot > bestDot) {
+                bestDot = dot;
+                best = i;
+            }
+        }
+        return best;
     }
 
     @Override
@@ -219,6 +263,17 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         fuelBox = makeBox(x + 2 * (THIRD + GAP), y, THIRD, prev(fuelBox, seed != null ? Integer.toString(seed.fuelTicks) : "0"), "Fuel (0=auto)");
         y += BOX_H + ROW_GAP;
 
+        // Directional strike (side to approach from) + terminal attack profile, sharing one row.
+        attackDirButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
+            attackDirIndex = (attackDirIndex + 1) % ATTACK_DIR_LABELS.length;
+            refreshButtonLabels();
+        }).bounds(x, y, HALF, BTN_H).build());
+        profileButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
+            profileIndex = (profileIndex + 1) % PROFILE_LABELS.length;
+            refreshButtonLabels();
+        }).bounds(x + HALF + GAP, y, HALF, BTN_H).build());
+        y += BTN_H + ROW_GAP;
+
         // Toggle row.
         inCruiseButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
             startInCruise = !startInCruise;
@@ -255,6 +310,8 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         ascentStageButton.setMessage(Component.literal("A:" + stageLabel(ASCENT_STAGES, ascentStageIndex)));
         cruiseStageButton.setMessage(Component.literal("C:" + stageLabel(CRUISE_STAGES, cruiseStageIndex)));
         attackStageButton.setMessage(Component.literal("T:" + stageLabel(ATTACK_STAGES, attackStageIndex)));
+        attackDirButton.setMessage(Component.literal("From: " + ATTACK_DIR_LABELS[attackDirIndex]));
+        profileButton.setMessage(Component.literal("Term: " + PROFILE_LABELS[profileIndex]));
         inCruiseButton.setMessage(Component.literal("Launch: " + (startInCruise ? "Cruise" : "Ascend")));
         armedButton.setMessage(Component.literal("Pre-armed: " + (startArmed ? "Yes" : "No")));
     }
@@ -279,6 +336,9 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         c.ascentStageId = stageAt(ASCENT_STAGES, ascentStageIndex);
         c.cruiseStageId = stageAt(CRUISE_STAGES, cruiseStageIndex);
         c.attackStageId = stageAt(ATTACK_STAGES, attackStageIndex);
+        c.attackApproachX = ATTACK_DIRS[attackDirIndex][0];
+        c.attackApproachZ = ATTACK_DIRS[attackDirIndex][1];
+        c.attackProfile = PROFILE_VALUES[profileIndex];
         return c;
     }
 
@@ -304,10 +364,12 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         double altitude = parseDouble(altitudeBox.getValue(), 24.0);
         boolean highAltitude = cruiseIndex == 1;
         double cruiseAltitudeY = highAltitude ? altitude : menu.pos().getY() + altitude;
-        boolean loiter = FlightStageRegistry.keyOf(LoiterStage.INSTANCE).equals(stageAt(CRUISE_STAGES, cruiseStageIndex));
-        int loiterTicks = loiter ? LoiterStage.LOITER_TICKS : 0;
+        int loiterTicks = LoiterStage.loiterTicksOf(stageAt(CRUISE_STAGES, cruiseStageIndex));
+        Vec3 approachDir = attackDirIndex > 0
+                ? new Vec3(ATTACK_DIRS[attackDirIndex][0], 0.0, ATTACK_DIRS[attackDirIndex][1]) : null;
         int ticks = ArrivalEstimator.estimateTicks(Vec3.atCenterOf(menu.pos()),
-                new Vec3(tx, ty, tz), speed, MissileEntity.ascentSpeedFor(speed), cruiseAltitudeY, loiterTicks);
+                new Vec3(tx, ty, tz), speed, MissileEntity.ascentSpeedFor(speed), cruiseAltitudeY, loiterTicks,
+                approachDir, MissileEntity.DEFAULT_APPROACH_JOIN_CAP);
         return String.format("ETA ~%.1fs", ticks / 20.0);
     }
 
@@ -325,9 +387,12 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         }
         double speed = parseDouble(speedBox.getValue(), 1.0);
         Vec3 from = Vec3.atCenterOf(menu.pos());
-        double dx = parseDouble(targetX.getValue(), menu.pos().getX()) - from.x;
-        double dz = parseDouble(targetZ.getValue(), menu.pos().getZ()) - from.z;
-        double horiz = Math.sqrt(dx * dx + dz * dz);
+        Vec3 tgt = new Vec3(parseDouble(targetX.getValue(), menu.pos().getX()), 0.0,
+                parseDouble(targetZ.getValue(), menu.pos().getZ()));
+        Vec3 approachDir = attackDirIndex > 0
+                ? new Vec3(ATTACK_DIRS[attackDirIndex][0], 0.0, ATTACK_DIRS[attackDirIndex][1]) : null;
+        double horiz = com.wf.wfballistics.flight.ApproachStage.approachHorizontalDistance(from, tgt, approachDir,
+                MissileEntity.DEFAULT_APPROACH_JOIN_CAP);
         double range = fuel * speed;
         if (range >= horiz) {
             return "";

@@ -3,6 +3,7 @@ package com.wf.wfballistics.sim;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileModels;
 import com.wf.wfballistics.ModEntities;
+import com.wf.wfballistics.flight.AttackProfile;
 import com.wf.wfballistics.flight.FlightStageRegistry;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.nbt.CompoundTag;
@@ -61,6 +62,11 @@ public final class SimMissile {
     public float evasion = 0.0f;
     public boolean commander = false;
     public Vec3 formationOffset = Vec3.ZERO;
+
+    // approach side
+    public Vec3 attackApproachDir = null;
+    public AttackProfile attackProfile = AttackProfile.SPEED;
+    public double approachJoinCap = MissileEntity.DEFAULT_APPROACH_JOIN_CAP;
     public final List<SimMissile> swarmMembers = new ArrayList<>();
 
     public static SimMissile fromEntity(MissileEntity m) {
@@ -100,6 +106,9 @@ public final class SimMissile {
         sm.stealth = m.isStealth();
         sm.evasion = m.getEvasion();
         sm.commander = m.isCommander();
+        sm.attackApproachDir = m.getAttackApproachDir();
+        sm.attackProfile = m.getAttackProfile();
+        sm.approachJoinCap = m.getApproachJoinCap();
         sm.role = Role.NORMAL;
         return sm;
     }
@@ -195,6 +204,15 @@ public final class SimMissile {
         }
         sm.commander = tag.getBoolean("Commander");
         sm.formationOffset = getVec(tag, "FormationOffset");
+        if (tag.contains("AttackApproachX")) {
+            sm.attackApproachDir = new Vec3(tag.getDouble("AttackApproachX"), 0.0, tag.getDouble("AttackApproachZ"));
+        }
+        if (tag.contains("AttackProfile")) {
+            sm.attackProfile = com.wf.wfballistics.flight.AttackProfile.byName(tag.getString("AttackProfile"));
+        }
+        if (tag.contains("ApproachJoinCap")) {
+            sm.approachJoinCap = tag.getDouble("ApproachJoinCap");
+        }
         if (tag.contains("SwarmMembers")) {
             ListTag memberList = tag.getList("SwarmMembers", Tag.TAG_COMPOUND);
             for (int i = 0; i < memberList.size(); i++) {
@@ -250,6 +268,12 @@ public final class SimMissile {
         if (this.role == Role.INTERCEPTOR && this.interceptTarget != null) {
             b.interceptor(true).lockTarget(this.interceptTarget).interceptChance(this.interceptChance);
         }
+
+        if (this.attackApproachDir != null) {
+            b.attackFrom(this.attackApproachDir.x, this.attackApproachDir.z);
+        }
+        b.attackProfile(this.attackProfile);
+        b.approachJoinCap(this.approachJoinCap);
 
         if (this.flightSoundId != null) {
             b.flightSound(this.flightSoundId);
@@ -318,6 +342,12 @@ public final class SimMissile {
         tag.putFloat("Evasion", evasion);
         tag.putBoolean("Commander", commander);
         putVec(tag, "FormationOffset", formationOffset);
+        if (attackApproachDir != null) {
+            tag.putDouble("AttackApproachX", attackApproachDir.x);
+            tag.putDouble("AttackApproachZ", attackApproachDir.z);
+        }
+        tag.putString("AttackProfile", attackProfile.name());
+        tag.putDouble("ApproachJoinCap", approachJoinCap);
         if (!swarmMembers.isEmpty()) {
             ListTag memberList = new ListTag();
             for (SimMissile mem : swarmMembers) {
