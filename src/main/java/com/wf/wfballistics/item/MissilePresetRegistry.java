@@ -124,7 +124,7 @@ public final class MissilePresetRegistry {
                 .evasiveManeuver().build());
 
         register(MissilePreset.builder(rl("marv"), MissileModels.rl("atlas_thermo"), WarheadRegistry.rl("standard"))
-                .highAltitude(280.0).cruiseSpeed(7.0).health(70.0f)
+                .highAltitude(280.0).cruiseSpeed(7.0).turnRate(0.35).health(70.0f)
                 .accel(0.5, 0.6).fuel(MissileEntity.FuelType.SOLID, 1800).evasion(0.6f)
                 .evasiveManeuver().build());
 

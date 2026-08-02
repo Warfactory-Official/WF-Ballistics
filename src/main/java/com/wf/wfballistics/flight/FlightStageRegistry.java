@@ -14,7 +14,11 @@ public final class FlightStageRegistry {
     static {
         register(Phase.ASCEND, AscentStage.INSTANCE);
         register(Phase.CRUISE, CruiseStage.INSTANCE);
-        register(Phase.CRUISE, LoiterStage.INSTANCE);
+        register(Phase.CRUISE, ApproachStage.INSTANCE);
+        register(Phase.CRUISE, LoiterStage.of("loiter", 24.0, 200));
+        register(Phase.CRUISE, LoiterStage.of("loiter_close", 12.0, 200));
+        register(Phase.CRUISE, LoiterStage.of("loiter_wide", 48.0, 300));
+        register(Phase.CRUISE, LoiterStage.of("loiter_recon", 64.0, 600));
         register(Phase.ATTACK, AttackStage.INSTANCE);
         register(Phase.ATTACK, VerticalDiveStage.INSTANCE);
         register(Phase.ASCEND, InterceptStage.INSTANCE);

@@ -1,5 +1,6 @@
 package com.wf.wfballistics.flight;
 
+import com.wf.wfballistics.MissileEntity;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -23,9 +24,19 @@ public final class ArrivalEstimator {
      */
     public static int estimateTicks(Vec3 from, Vec3 target, double cruiseSpeed, double ascentSpeed,
                                     double cruiseAltitude, int loiterTicks) {
-        double dx = target.x - from.x;
-        double dz = target.z - from.z;
-        double horiz = Math.sqrt(dx * dx + dz * dz);
+        return estimateTicks(from, target, cruiseSpeed, ascentSpeed, cruiseAltitude, loiterTicks, null,
+                MissileEntity.DEFAULT_APPROACH_JOIN_CAP);
+    }
+
+    /**
+     * As {@link #estimateTicks(Vec3, Vec3, double, double, double, int)}, but charging for the longer curved run
+     * of a directional strike: {@code approachDir} (from the target toward the commanded approach side, or null
+     * for a straight-in attack) makes the transit follow {@link ApproachStage#approachHorizontalDistance}, with
+     * {@code approachCap} the per-missile join ceiling.
+     */
+    public static int estimateTicks(Vec3 from, Vec3 target, double cruiseSpeed, double ascentSpeed,
+                                    double cruiseAltitude, int loiterTicks, Vec3 approachDir, double approachCap) {
+        double horiz = ApproachStage.approachHorizontalDistance(from, target, approachDir, approachCap);
         double speed = Math.max(0.05, cruiseSpeed);
 
         double climb = Math.max(0.0, cruiseAltitude - from.y) / Math.max(0.05, ascentSpeed);
@@ -42,7 +53,19 @@ public final class ArrivalEstimator {
      */
     public static int fuelToReach(Vec3 from, Vec3 target, double cruiseSpeed, double ascentSpeed,
                                   double cruiseAltitude, int loiterTicks) {
-        int est = estimateTicks(from, target, cruiseSpeed, ascentSpeed, cruiseAltitude, loiterTicks);
+        return fuelToReach(from, target, cruiseSpeed, ascentSpeed, cruiseAltitude, loiterTicks, null,
+                MissileEntity.DEFAULT_APPROACH_JOIN_CAP);
+    }
+
+    /**
+     * As {@link #fuelToReach(Vec3, Vec3, double, double, double, int)}, but sizing the tank for the longer curved
+     * run of a directional strike (see {@code approachDir}, {@code approachCap}), so the detour doesn't leave it
+     * coasting dry.
+     */
+    public static int fuelToReach(Vec3 from, Vec3 target, double cruiseSpeed, double ascentSpeed,
+                                  double cruiseAltitude, int loiterTicks, Vec3 approachDir, double approachCap) {
+        int est = estimateTicks(from, target, cruiseSpeed, ascentSpeed, cruiseAltitude, loiterTicks, approachDir,
+                approachCap);
         return (int) Math.ceil(est * 1.25) + 40;
     }
 }

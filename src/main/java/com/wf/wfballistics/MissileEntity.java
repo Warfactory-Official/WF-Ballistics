@@ -12,6 +12,7 @@ import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.entity.OBBEntity;
 import com.wf.wfballistics.flight.*;
+import org.jetbrains.annotations.Nullable;
 import com.wf.wfballistics.fx.ExplosionCreator;
 import com.wf.wfballistics.network.MissileFlightAudioPacket;
 import com.wf.wfballistics.sim.IMissileListener;
@@ -101,6 +102,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public static final double DEFAULT_DECELERATION = 0.25;
     /** Default distance (blocks) at which a missile's flight loop fades to silence and the server broadcasts it. */
     public static final double DEFAULT_FLIGHT_SOUND_RANGE = 300.0;
+    /** Default ceiling (blocks) on how far out a directional strike joins its attack line (see ApproachStage). */
+    public static final double DEFAULT_APPROACH_JOIN_CAP = 1500.0;
     private static final double DIVE_ACCELERATION = 1.5;
     // Ballistic fall (out of fuel): downward accel, terminal speed, and a light horizontal drag so momentum
     // (inertia) carries the missile forward as it arcs down instead of being zeroed.
@@ -205,6 +208,17 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private double attackAngle = Double.NaN;
     private double minDiveAngle = DEFAULT_MIN_DIVE_ANGLE;
     private double maxDiveAngle = DEFAULT_MAX_DIVE_ANGLE;
+    // Directional strike: normalized horizontal direction FROM the target toward the side the missile should
+    // approach from ("attack from the west"). null = no constraint (hit from wherever it arrives). When set,
+    // the cruise phase runs ApproachStage to swing onto this bearing before the terminal dive.
+    private Vec3 attackApproachDir = null;
+    // How the terminal attack trades speed/steepness/path when the preferred dive angle won't fit the turn
+    // radius (see AttackProfile). Default SPEED = never shed speed.
+    private AttackProfile attackProfile = AttackProfile.SPEED;
+    // Ceiling (blocks) on the directional-strike join distance: the approach joins its attack line at a fraction
+    // of the range to the target, clamped up to this cap (see ApproachStage). Per-missile so a type can pivot
+    // farther/nearer out; default DEFAULT_APPROACH_JOIN_CAP.
+    private double approachJoinCap = DEFAULT_APPROACH_JOIN_CAP;
     // Airburst fuze: while diving, detonate in the air once the missile is within this many
     // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
     private float explosionOffset = 0.0f;
@@ -414,10 +428,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         super.tick();
 
         if (this.level().isClientSide) {
-            Vec3 dm = this.getDeltaMovement();
-            if (dm.lengthSqr() > 1.0E-8) {
-                this.setPos(this.getX() + dm.x, this.getY() + dm.y, this.getZ() + dm.z);
-            }
             // Keep the AABB wrapping the oriented model each frame so culling / F3+B stay correct.
             this.setBoundingBox(this.makeBoundingBox());
             return;
@@ -1089,6 +1099,64 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
+     * @return the normalized horizontal direction from the target toward the commanded approach side, or
+     * {@code null} for an unconstrained strike. See {@link #attackApproachDir}.
+     */
+    @Nullable
+    public Vec3 getAttackApproachDir() {
+        return this.attackApproachDir;
+    }
+
+    public AttackProfile getAttackProfile() {
+        return this.attackProfile;
+    }
+
+    public void setAttackProfile(AttackProfile profile) {
+        this.attackProfile = profile == null ? AttackProfile.SPEED : profile;
+    }
+
+    public double getApproachJoinCap() {
+        return this.approachJoinCap;
+    }
+
+    public void setApproachJoinCap(double cap) {
+        this.approachJoinCap = cap;
+    }
+
+    /**
+     * @return the horizontal direction the terminal run should travel (into the target), i.e. the negation of
+     * {@link #getAttackApproachDir()}, or {@code null} for an unconstrained strike.
+     */
+    @Nullable
+    public Vec3 getAttackTravelDir() {
+        return this.attackApproachDir == null ? null
+                : new Vec3(-this.attackApproachDir.x, 0.0, -this.attackApproachDir.z);
+    }
+
+    /**
+     * Set the side the missile approaches the target from (a horizontal direction from target to approach
+     * origin); normalized, and null/near-zero clears the constraint. Setting it switches the cruise stage to
+     * {@link ApproachStage} so the bearing maneuver runs.
+     */
+    public void setAttackApproachDir(@Nullable Vec3 dir) {
+        if (dir == null) {
+            this.attackApproachDir = null;
+            return;
+        }
+        double h = Math.sqrt(dir.x * dir.x + dir.z * dir.z);
+        if (h < 1.0E-4) {
+            this.attackApproachDir = null;
+            return;
+        }
+        this.attackApproachDir = new Vec3(dir.x / h, 0.0, dir.z / h);
+        ResourceLocation approach = FlightStageRegistry.rl(ApproachStage.INSTANCE.id());
+        if (!approach.equals(this.cruiseStageId) && FlightStageRegistry.exists(Phase.CRUISE, approach)) {
+            this.cruiseStageId = approach;
+            this.rebuildFlightProfile();
+        }
+    }
+
+    /**
      * The dive angle (degrees below horizontal) the terminal stages should fly this tick. An explicitly set
      * {@link #getAttackAngle() attack angle} wins outright; otherwise the missile raycasts each candidate angle
      * in [{@link #minDiveAngle}, {@link #maxDiveAngle}] and takes the one nearest the straight-line shot to the
@@ -1193,11 +1261,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         double cruiseAltitudeY = (this.cruiseMode == CruiseMode.HIGH_ALTITUDE)
                 ? this.cruiseAltitude
                 : this.getY() + this.terrainClearance;
-        int loiterRemaining = FlightStageRegistry.keyOf(LoiterStage.INSTANCE).equals(this.cruiseStageId)
-                ? Math.max(0, LoiterStage.LOITER_TICKS - this.loiterTicks)
-                : 0;
+        int loiterRemaining = Math.max(0, LoiterStage.loiterTicksOf(this.cruiseStageId) - this.loiterTicks);
         return ArrivalEstimator.estimateTicks(this.position(), this.getTarget(), this.cruiseSpeed,
-                this.getAscentSpeed(), cruiseAltitudeY, loiterRemaining);
+                this.getAscentSpeed(), cruiseAltitudeY, loiterRemaining, this.getAttackApproachDir(),
+                this.approachJoinCap);
     }
 
     public ResourceLocation getDetonationId() {
@@ -1885,6 +1952,12 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
         tag.putDouble("MinDiveAngle", this.minDiveAngle);
         tag.putDouble("MaxDiveAngle", this.maxDiveAngle);
+        if (this.attackApproachDir != null) {
+            tag.putDouble("AttackApproachX", this.attackApproachDir.x);
+            tag.putDouble("AttackApproachZ", this.attackApproachDir.z);
+        }
+        tag.putString("AttackProfile", this.attackProfile.name());
+        tag.putDouble("ApproachJoinCap", this.approachJoinCap);
         tag.putString("ModelId", this.getModelId().toString());
         tag.putInt("ExhaustColor", this.getExhaustColor());
         tag.putString("FlightSound", this.entityData.get(FLIGHT_SOUND));
@@ -1999,6 +2072,19 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         if (tag.contains("MaxDiveAngle")) {
             this.maxDiveAngle = tag.getDouble("MaxDiveAngle");
+        }
+
+        if (tag.contains("AttackApproachX")) {
+            this.setAttackApproachDir(new Vec3(tag.getDouble("AttackApproachX"), 0.0,
+                    tag.getDouble("AttackApproachZ")));
+        }
+
+        if (tag.contains("AttackProfile")) {
+            this.attackProfile = AttackProfile.byName(tag.getString("AttackProfile"));
+        }
+
+        if (tag.contains("ApproachJoinCap")) {
+            this.approachJoinCap = tag.getDouble("ApproachJoinCap");
         }
 
         if (tag.contains("ModelId")) {
@@ -2351,6 +2437,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private Double attackAngle = null;
         private Double minDiveAngle = null;
         private Double maxDiveAngle = null;
+        private Vec3 attackApproachDir = null; // null = no directional-strike constraint
+        private AttackProfile attackProfile = AttackProfile.SPEED;
+        private double approachJoinCap = DEFAULT_APPROACH_JOIN_CAP;
         private Double maxTurnRate = null; // null = keep the model-size default
         private ResourceLocation modelId = MissileModels.DEFAULT;
         private int exhaustColor = DEFAULT_EXHAUST_COLOR;
@@ -2508,6 +2597,38 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         public Builder diveAngleRange(double minDegrees, double maxDegrees) {
             this.minDiveAngle = minDegrees;
             this.maxDiveAngle = maxDegrees;
+            return this;
+        }
+
+        /**
+         * Strike the target from a commanded side: {@code (dirX, dirZ)} is the horizontal direction from the
+         * target toward where the missile should come in from ("attack from the west" = a westward vector). The
+         * missile swings onto that bearing before the terminal dive (see {@link ApproachStage}); the shortest
+         * turn-radius-feasible way there - overfly-and-loop or arc-around - is chosen automatically. A zero
+         * vector leaves the strike unconstrained.
+         */
+        public Builder attackFrom(double dirX, double dirZ) {
+            double h = Math.sqrt(dirX * dirX + dirZ * dirZ);
+            this.attackApproachDir = h < 1.0E-4 ? null : new Vec3(dirX / h, 0.0, dirZ / h);
+            return this;
+        }
+
+        /**
+         * Pick how the terminal attack trades speed for a steep dive when the preferred angle won't fit the
+         * turn radius (see {@link AttackProfile}). Default {@link AttackProfile#SPEED}.
+         */
+        public Builder attackProfile(AttackProfile profile) {
+            this.attackProfile = profile == null ? AttackProfile.SPEED : profile;
+            return this;
+        }
+
+        /**
+         * Ceiling (blocks) on how far out a directional strike joins its attack line (see
+         * {@link ApproachStage}). The join scales with range and is clamped up to this cap; default
+         * {@link #DEFAULT_APPROACH_JOIN_CAP}.
+         */
+        public Builder approachJoinCap(double cap) {
+            this.approachJoinCap = cap;
             return this;
         }
 
@@ -2781,6 +2902,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 missile.attackStageId = this.attackStageId;
             }
             missile.rebuildFlightProfile();
+            if (this.attackApproachDir != null) {
+                missile.setAttackApproachDir(this.attackApproachDir);
+            }
+            missile.attackProfile = this.attackProfile;
+            missile.approachJoinCap = this.approachJoinCap;
             missile.fragmentCount = this.fragmentCount;
             missile.impactPreloadRadius = this.impactPreloadRadius;
             // Recursive-frag payload + defaults so a "recursive_frag" missile picked from the dispenser GUI
