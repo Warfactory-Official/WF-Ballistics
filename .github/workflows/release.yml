@@ -65,6 +65,7 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.tag }}
+          make_latest: false
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: build/libs/wfballistics-${{ steps.version.outputs.version }}-all.jar
