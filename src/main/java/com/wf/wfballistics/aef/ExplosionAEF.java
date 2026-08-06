@@ -12,6 +12,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 /**
  * A composable replacement for {@link net.minecraft.world.level.Explosion} — the core of the
@@ -66,8 +67,14 @@ public class ExplosionAEF {
     // SFX are deliberately plural and granular (bang, smoke, flash, ...) so they can be mixed per blast.
     private IExplosionSFX[] sfx;
     // When false (default), the blast respects WarForge land claims (protected blocks survive, unless the
-    // chunk is in an active siege zone). Set true for a blast that should flatten claimed land regardless.
+    // chunk's actual rules permit destruction — e.g. an active siege zone). Set true for a blast that should
+    // flatten claimed land regardless.
     private boolean bypassClaims = false;
+    // The faction this blast is attributed to (a missile's owning faction / teamId), or null when
+    // unattributed. Claim filtering is evaluated from this faction's perspective so the blast respects the
+    // real chunk rules (it may breach a claim it is besieging, is stopped by claims it may not) instead of
+    // blindly stopping at any claim.
+    private UUID igniterFaction = null;
 
     public ExplosionAEF(Level level, double x, double y, double z, float size) {
         this(level, x, y, z, size, null);
@@ -105,11 +112,13 @@ public class ExplosionAEF {
         if (processBlocks) affectedBlocks = blockAllocator.allocate(this, level, posX, posY, posZ, size);
         if (processEntities) affectedPlayers = entityProcessor.process(this, level, posX, posY, posZ, size);
 
-        // Respect WarForge land claims unless this blast bypasses them: drop protected positions before the
-        // block processor destroys anything. WarForge already permits destruction in active siege zones, so a
-        // besieged base can still be hit. No-op when WarForge isn't installed.
+        // Respect WarForge land claims unless this blast bypasses them: drop the positions this blast's
+        // owning faction may not destroy before the block processor destroys anything. Evaluated from that
+        // faction's perspective (see igniterFaction), so a besieged base can still be hit while unrelated
+        // claims survive — the real chunk rules, not a blanket "any claim stops the blast". No-op when
+        // WarForge isn't installed.
         if (processBlocks && !this.bypassClaims) {
-            WarforgeCompat.filterClaimProtected(level, affectedBlocks);
+            WarforgeCompat.filterClaimProtected(level, this.igniterFaction, affectedBlocks);
         }
 
         // 3 + 4: apply effects.
@@ -158,6 +167,17 @@ public class ExplosionAEF {
      */
     public ExplosionAEF bypassClaims(boolean bypassClaims) {
         this.bypassClaims = bypassClaims;
+        return this;
+    }
+
+    /**
+     * Attribute this blast to a WarForge faction (typically a missile's {@code teamId}) so claim filtering is
+     * evaluated from that faction's perspective — it may breach a claim it is actively besieging and is
+     * stopped by claims it may not touch. Pass {@code null} (the default) for an unattributed blast, which is
+     * treated as a foe to every claim.
+     */
+    public ExplosionAEF igniterFaction(UUID igniterFaction) {
+        this.igniterFaction = igniterFaction;
         return this;
     }
 

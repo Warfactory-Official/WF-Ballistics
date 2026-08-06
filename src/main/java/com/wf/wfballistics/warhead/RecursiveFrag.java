@@ -100,7 +100,7 @@ public final class RecursiveFrag {
         if (source instanceof MissileEntity missile && missile.getSplitDepth() > 0) {
             split(missile, pos);
         } else {
-            leafBlast(level, pos);
+            leafBlast(level, pos, source.igniterFactionId());
         }
     }
 
@@ -190,8 +190,11 @@ public final class RecursiveFrag {
         return String.format("%.1f", v);
     }
 
-    private static void leafBlast(Level level, Vec3 pos) {
-        new ExplosionAEF(level, pos.x, pos.y, pos.z, LEAF_BLAST_RADIUS).makeStandard().explode();
+    private static void leafBlast(Level level, Vec3 pos, java.util.UUID igniterFaction) {
+        new ExplosionAEF(level, pos.x, pos.y, pos.z, LEAF_BLAST_RADIUS)
+                .makeStandard()
+                .igniterFaction(igniterFaction)
+                .explode();
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     }
 }

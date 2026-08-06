@@ -35,6 +35,7 @@ public final class WarheadRegistry {
         xnt.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
         xnt.setEntityProcessor(new EntityProcessorCross());
         xnt.setPlayerProcessor(new PlayerProcessorStandard());
+        xnt.igniterFaction(source.igniterFactionId());
         xnt.explode();
         ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
     };
@@ -62,13 +63,14 @@ public final class WarheadRegistry {
         }
         new ExplosionAEF(level, pos.x, pos.y, pos.z, SHAPED_CHARGE_SIZE)
                 .makeShapedCharge(source.angle())
+                .igniterFaction(source.igniterFactionId())
                 .explode();
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     };
 
     public static final Detonation MININUKE = (source, pos) ->
             MiniNuke.detonate(source.level(), pos,
-                    MiniNuke.medium());
+                    MiniNuke.medium(), source.igniterFactionId());
 
     public static final Detonation FRAGMENTATION = (source, pos) -> {
         Level level = source.level();
