@@ -55,10 +55,10 @@ public final class WarforgeCompat {
         return WarforgeApi.areFactionsFriendly(a, b);
     }
 
-    public static void filterClaimProtected(Level level, Collection<BlockPos> positions) {
+    public static void filterClaimProtected(Level level, UUID igniterFaction, Collection<BlockPos> positions) {
         if (!claimProtectionEnabled || !LOADED || level == null || positions == null || positions.isEmpty()) {
             return;
         }
-        WarforgeApi.filterClaimProtected(level, positions);
+        WarforgeApi.filterClaimProtected(level, igniterFaction, positions);
     }
 }

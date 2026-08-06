@@ -8,6 +8,8 @@ import com.wf.wfballistics.entity.EntityNukeTorex;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.UUID;
+
 /**
  * The mini-nuke ("muke") system: a compact nuclear blast — a fire-leaving, drop-free crater, an
  * obstruction-checked entity kill radius, and a small mushroom cloud. Port of HBM's {@code ExplosionNukeSmall}
@@ -26,6 +28,14 @@ public final class MiniNuke {
     }
 
     public static void detonate(Level level, Vec3 center, MukeParams p) {
+        detonate(level, center, p, null);
+    }
+
+    /**
+     * @param igniterFaction the WarForge faction the blast is attributed to (a missile's {@code teamId}), or
+     *                       {@code null} when unattributed — see {@link ExplosionAEF#igniterFaction}.
+     */
+    public static void detonate(Level level, Vec3 center, MukeParams p, UUID igniterFaction) {
         if (level.isClientSide) {
             return;
         }
@@ -47,6 +57,7 @@ public final class MiniNuke {
             new ExplosionAEF(level, center.x, center.y, center.z, p.blastRadius)
                     .setBlockAllocator(new BlockAllocatorStandard(p.resolution))
                     .setBlockProcessor(processor)
+                    .igniterFaction(igniterFaction)
                     .explode();
         }
 

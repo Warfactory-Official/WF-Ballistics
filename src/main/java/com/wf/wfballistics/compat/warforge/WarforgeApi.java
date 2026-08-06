@@ -32,7 +32,31 @@ public final class WarforgeApi {
         return fa != null && (fa.isAllyOf(b) || fa.isInTruceWith(b));
     }
 
-    public static void filterClaimProtected(Level level, Collection<BlockPos> positions) {
-        ExplosionProtection.filter(level, NULL_UUID, positions);
+    // Drop the blocks the owning faction is not allowed to blow up under the real WarForge chunk rules,
+    // leaving the rest for the blast. igniterFaction is the blast's owning faction (a missile's teamId), or
+    // null for an unattributed blast. This respects siege/war/safe zones and faction standing from that
+    // faction's perspective (it may breach a claim it is besieging, is stopped by claims it may not touch)
+    // instead of blindly stopping at any claim.
+    public static void filterClaimProtected(Level level, UUID igniterFaction, Collection<BlockPos> positions) {
+        ExplosionProtection.filter(level, actingPlayerFor(igniterFaction), positions);
+    }
+
+    // WarForge evaluates explosion protection from an acting *player's* perspective (it resolves that player
+    // to their faction internally). Map the blast's owning faction to one of its members — its leader — so
+    // the real chunk rules are applied as if that faction set the blast off. Falls back to the null igniter
+    // (an unattributed foe, protected everywhere but active siege zones) when the blast has no faction, the
+    // faction no longer exists, or it has no members.
+    private static UUID actingPlayerFor(UUID igniterFaction) {
+        if (igniterFaction == null || igniterFaction.equals(NULL_UUID)) {
+            return NULL_UUID;
+        }
+        Faction faction = WarForgeMod.FACTIONS.getFaction(igniterFaction);
+        if (faction == null) {
+            return NULL_UUID;
+        }
+        // getLeaderId() returns Faction.nullUuid (not Java null) when the faction has no leader; either way
+        // an empty/leaderless faction falls back to the unattributed igniter.
+        UUID leader = faction.getLeaderId();
+        return (leader == null || leader.equals(NULL_UUID)) ? NULL_UUID : leader;
     }
 }

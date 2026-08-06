@@ -32,6 +32,7 @@ public final class FireWarhead {
                 .withRangeMod(2F)
                 .withDamageMod(new CustomDamageHandlerAmat(BURN_TICKS)));
         xnt.setPlayerProcessor(new PlayerProcessorStandard());
+        xnt.igniterFaction(source.igniterFactionId());
         xnt.explode();
         ExplosionCreator.composeEffectStandard(level, pos.x, pos.y, pos.z);
         FireUtil.spawn(level, pos, 10, 1.2f, 15 * 20 * 20, 0);

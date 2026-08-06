@@ -838,6 +838,12 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         this.teamId = teamId;
     }
 
+    /** A missile's warhead blast is attributed to the missile's owning faction (see {@link #getTeamId}). */
+    @Override
+    public UUID igniterFactionId() {
+        return this.teamId;
+    }
+
     /**
      * A non-zero pick radius so {@code MixinProjectileUtil} inflates the target OBB when another missile
      * sweeps through it — makes fast crossing intercepts land reliably instead of needing a pixel-perfect
