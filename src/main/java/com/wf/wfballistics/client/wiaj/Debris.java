@@ -143,19 +143,21 @@ public class Debris {
         }
 
         MeshData rendered = builder.build(); // @Nullable — null when no vertices were emitted
-        byteBuilder.close();
         if (rendered == null || !any) {
             if (rendered != null) {
                 rendered.close();
             }
+            byteBuilder.close();
             this.buffer = null;
             return;
         }
         this.buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
         this.buffer.bind();
+        // upload() consumes and closes the MeshData; the backing ByteBufferBuilder must stay open until then,
+        // then be closed afterwards (closing it earlier invalidates the MeshData -> "Buffer is no longer valid").
         this.buffer.upload(rendered);
-        rendered.close();
         VertexBuffer.unbind();
+        byteBuilder.close();
     }
 
 
