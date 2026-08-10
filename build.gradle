@@ -1,9 +1,12 @@
 plugins {
+    id 'java-library'
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
-    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
-    id 'org.spongepowered.mixin' version '0.7.+'
+    // ModDevGradle 2 — NeoForge's own single-version build plugin. Replaces ForgeGradle +
+    // the SpongePowered MixinGradle plugin (both removed: NeoForge bundles Mixin/MixinExtras and
+    // uses MojMap at runtime, so no reobf/refmap step is needed).
+    id 'net.neoforged.moddev' version '2.0.143'
 }
 
 version = mod_version
@@ -13,16 +16,14 @@ base {
     archivesName = mod_id
 }
 
-// Mojang ships Java 17 to end users in 1.18+, so your mod should target Java 17.
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
-
-jarJar.enable()
+// Mojang ships Java 21 to end users in 1.21.1, so this mod targets Java 21.
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
 
-// MC 1.20.1 (LWJGL 3.3.1) bundles OpenAL Soft 1.21.1, which has no PipeWire backend and garbles
-// audio on most launches on PipeWire systems. Prefer the system OpenAL Soft (native PipeWire
-// backend) when installed. No-ops on Windows/macOS or when absent, so it is safe for other builds.
+// MC bundles an OpenAL Soft with no PipeWire backend, which garbles audio on most PipeWire systems.
+// Prefer the system OpenAL Soft (native PipeWire backend) when installed. No-ops on Windows/macOS or
+// when absent, so it is safe for other builds. Wired into the client run below.
 def systemOpenAl = [
         '/usr/lib/libopenal.so.1',
         '/usr/lib64/libopenal.so.1',
@@ -33,273 +34,168 @@ if (systemOpenAl != null) {
     logger.lifecycle "OpenAL: overriding bundled LWJGL native with system ${systemOpenAl}"
 }
 
-minecraft {
-    // The mappings can be changed at any time and must be in the following format.
-    // Channel:   Version:
-    // official   MCVersion             Official field/method names from Mojang mapping files
-    // parchment  YYYY.MM.DD-MCVersion  Open community-sourced parameter names and javadocs layered on top of official
-    //
-    // You must be aware of the Mojang license when using the 'official' or 'parchment' mappings.
-    // See more information here: https://github.com/MinecraftForge/MCPConfig/blob/master/Mojang.md
-    //
-    // Parchment is an unofficial project maintained by ParchmentMC, separate from MinecraftForge
-    // Additional setup is needed to use their mappings: https://parchmentmc.org/docs/getting-started
-    //
-    // Use non-default mappings at your own risk. They may not always work.
-    // Simply re-run your setup task after changing the mappings to update your workspace.
-    mappings channel: mapping_channel, version: mapping_version
-
-    // When true, this property will have all Eclipse/IntelliJ IDEA run configurations run the "prepareX" task for the given run configuration before launching the game.
-    // In most cases, it is not necessary to enable.
-    // enableEclipsePrepareRuns = true
-    // enableIdeaPrepareRuns = true
-
-    // This property allows configuring Gradle's ProcessResources task(s) to run on IDE output locations before launching the game.
-    // It is REQUIRED to be set to true for this template to function.
-    // See https://docs.gradle.org/current/dsl/org.gradle.language.jvm.tasks.ProcessResources.html
-    copyIdeResources = true
-
-    // When true, this property will add the folder name of all declared run configurations to generated IDE run configurations.
-    // The folder name can be set on a run configuration using the "folderName" property.
-    // By default, the folder name of a run configuration is the name of the Gradle project containing it.
-    // generateRunFolders = true
-
-    // This property enables access transformers for use in development.
-    // They will be applied to the Minecraft artifact.
-    // The access transformer file can be anywhere in the project.
-    // However, it must be at "META-INF/accesstransformer.cfg" in the final mod jar to be loaded by Forge.
-    // This default location is a best practice to automatically put the file in the right place in the final jar.
-    // See https://docs.minecraftforge.net/en/latest/advanced/accesstransformers/ for more information.
-    // accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
-
-    // Default run configurations.
-    // These can be tweaked, removed, or duplicated as needed.
-    runs {
-        // applies to all the run configs below
-        configureEach {
-            workingDirectory project.file('run')
-
-            // Recommended logging data for a userdev environment
-            // The markers can be added/remove as needed separated by commas.
-            // "SCAN": For mods scan.
-            // "REGISTRIES": For firing of registry events.
-            // "REGISTRYDUMP": For getting the contents of all registries.
-            property 'forge.logging.markers', 'REGISTRIES'
-
-            // Recommended logging level for the console
-            // You can set various levels here.
-            // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
-            property 'forge.logging.console.level', 'debug'
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
-        }
-
-        client {
-            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
-            property 'forge.enabledGameTestNamespaces', mod_id
-
-            if (systemOpenAl != null) {
-                property 'org.lwjgl.openal.libname', systemOpenAl.absolutePath
-            }
-
-            // Required for flywheel
-            property 'mixin.env.remapRefMap', 'true'
-            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
-        }
-
-        server {
-            property 'forge.enabledGameTestNamespaces', mod_id
-            args '--nogui'
-        }
-
-        // This run config launches GameTestServer and runs all registered gametests, then exits.
-        // By default, the server will crash when no gametests are provided.
-        // The gametest system is also enabled by default for other run configs under the /test command.
-        gameTestServer {
-            property 'forge.enabledGameTestNamespaces', mod_id
-        }
-
-        data {
-            // example of overriding the workingDirectory set in configureEach above
-            workingDirectory project.file('run-data')
-
-            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-        }
-    }
+sourceSets.main.resources {
+    // Include resources generated by data generators.
+    srcDir 'src/generated/resources'
+    // Dev-only authoring sources — never ship them in the jar.
+    exclude 'assets/wfballistics/raw_models/**'
+    exclude '**/*.bbmodel'
+    exclude 'src/generated/**/.cache'
 }
 
-// Include resources generated by data generators.
-sourceSets.main.resources { srcDir 'src/generated/resources' }
-
 repositories {
-    // Put repositories for dependencies here
-    // ForgeGradle automatically adds the Forge maven and Maven Central for you
-
-    // If you have mod jar dependencies in ./libs, you can declare them as a repository like so.
-    // See https://docs.gradle.org/current/userguide/declaring_repositories.html#sub:flat_dir_resolver
-    // flatDir {
-    //     dir 'libs'
-    // }
-
     maven {
-        name "createmod maven"
-        url "https://maven.createmod.net/"
+        name = 'NeoForged'
+        url = 'https://maven.neoforged.net/releases'
+    }
+    maven {
+        name = 'createmod maven' // the new Engine-Room Flywheel
+        url = 'https://maven.createmod.net'
+    }
+    maven {
+        name = 'ParchmentMC'
+        url = 'https://maven.parchmentmc.org'
+    }
+    maven {
+        // CurseMaven — hosts curse.maven:* artifacts (spark, WarForge). Scoped to the curse.maven group.
+        name = 'CurseMaven'
+        url = 'https://cursemaven.com'
+        content { includeGroup 'curse.maven' }
     }
 
-    maven {
-        // CurseMaven — hosts curse.maven:* artifacts (e.g. spark, WarForge). Scoped to the curse.maven
-        // group so it is not queried for anything else.
-        name "Cursemaven"
-        url "https://cursemaven.com"
-        content {
-            includeGroup "curse.maven"
-        }
-    }
-
-    // --- Optional GregTech Modern integration (compile-only) ---
-    maven {
-        name "GTCEu Maven"
-        url "https://maven.gtceu.com"
-        content { includeGroup "com.gregtechceu.gtceu" }
-    }
-    maven {
-        name "FirstDark Maven" // LDLib (bundles ModularUI)
-        url "https://maven.firstdark.dev/snapshots"
-        content { includeGroupAndSubgroups "com.lowdragmc" }
-    }
-    maven {
-        name "tterrag Maven" // Registrate
-        url "https://maven.tterrag.com/"
-        content { includeGroup "com.tterrag.registrate" }
-    }
-    maven {
-        name "toma Maven" // Configuration
-        url "https://repo.repsy.io/mvn/toma/public/"
-        content { includeGroup "dev.toma.configuration" }
-    }
-    // ForgeGradle's deobf resolves GregTech's own (mod) dependency tree even for a compile-only use, so these
-    // must be reachable: AE2, JEI, KubeJS/Rhino, Architectury.
-    maven { name "ModMaven"; url "https://modmaven.dev" }
-    maven { name "BlameJared"; url "https://maven.blamejared.com" }
-    maven { name "Latvian"; url "https://maven.latvian.dev/releases" }
-    maven { name "Architectury"; url "https://maven.architectury.dev/" }
-    maven { name "Shedaniel"; url "https://maven.shedaniel.me/" }
+    // --- Repos for the compile-only integrations (kept from the Forge build; re-enable with the
+    //     corresponding dependencies once their 1.21.1 coordinates are confirmed) ---
+    maven { name = 'GTCEu Maven'; url = 'https://maven.gtceu.com'; content { includeGroup 'com.gregtechceu.gtceu' } }
+    maven { name = 'FirstDark Maven'; url = 'https://maven.firstdark.dev/snapshots'; content { includeGroupAndSubgroups 'com.lowdragmc' } }
+    maven { name = 'tterrag Maven'; url = 'https://maven.tterrag.com/'; content { includeGroup 'com.tterrag.registrate' } }
+    maven { name = 'toma Maven'; url = 'https://repo.repsy.io/mvn/toma/public/'; content { includeGroup 'dev.toma.configuration' } }
+    maven { name = 'ModMaven'; url = 'https://modmaven.dev' }
+    maven { name = 'BlameJared'; url = 'https://maven.blamejared.com' }
+    maven { name = 'Latvian'; url = 'https://maven.latvian.dev/releases' }
+    maven { name = 'Architectury'; url = 'https://maven.architectury.dev/' }
+    maven { name = 'Shedaniel'; url = 'https://maven.shedaniel.me/' }
 
     mavenCentral()
 }
 
-mixin {
-    add sourceSets.main, "${mod_id}.refmap.json"
-    config "${mod_id}.mixins.json"
+neoForge {
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+
+    // Access Transformers are auto-detected at src/main/resources/META-INF/accesstransformer.cfg.
+    // (None ship today; uncomment to make it explicit if one is added.)
+    // accessTransformers = project.files('src/main/resources/META-INF/accesstransformer.cfg')
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            if (systemOpenAl != null) {
+                systemProperty 'org.lwjgl.openal.libname', systemOpenAl.absolutePath
+            }
+        }
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+        gameTestServer {
+            type = 'gameTestServer'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+        data {
+            data()
+            gameDirectory = project.file('run-data')
+            programArguments.addAll '--mod', project.mod_id, '--all',
+                    '--output', file('src/generated/resources/').absolutePath,
+                    '--existing', file('src/main/resources/').absolutePath
+        }
+        configureEach {
+            gameDirectory = project.file('run')
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+// 'localRuntime' is present for dev-time testing but is NOT published as a dependency of this mod.
+configurations {
+    localRuntime
+    runtimeClasspath.extendsFrom localRuntime
 }
 
 dependencies {
-    // MixinExtras — companion annotation processor for the Mixin toolchain
-    implementation annotationProcessor("io.github.llamalad7:mixinextras-common:0.4.0")
-    annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
+    // --- Flywheel (Engine-Room, NeoForge 1.21.1) ---------------------------------------------
+    // compileOnly API for types at compile time; the full jar is present in dev via localRuntime.
+    // Flywheel is declared a required dependency in neoforge.mods.toml, so it is NOT jar-in-jar'd
+    // (ships separately, avoids clashing with the copy Create bundles).
+    compileOnly "dev.engine-room.flywheel:flywheel-neoforge-api-1.21.1:${flywheel_version}"
+    localRuntime "dev.engine-room.flywheel:flywheel-neoforge-1.21.1:${flywheel_version}"
 
-    compileOnly fg.deobf("dev.engine-room.flywheel:flywheel-forge-api-${minecraft_version}:${flywheel_version}")
-    // Dev run: plain runtimeOnly so FML discovers flywheel as a mod in the workspace. A jarJar-only dep is
-    // embedded for the production jar but is NOT loaded in the dev environment (JiJ only unpacks from a built
-    // jar), which leaves flywheel [MISSING] in-dev. Keep both: runtimeOnly for dev, jarJar for the shipped jar.
-    runtimeOnly fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}")
-    jarJar(fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}")) {
-        jarJar.ranged(it, flywheel_version_range)
-    }
-    runtimeOnly fg.deobf("curse.maven:spark-361579:4738952")
+    // --- spark profiler (runtime-only) -------------------------------------------------------
+    // TODO(port): find the spark file id for NeoForge 1.21.1 on CurseForge, then:
+    // localRuntime "curse.maven:spark-361579:<neo_1.21.1_file_id>"
 
+    // --- Compile-only integrations (Java compat code depends on these; disabled until their
+    //     1.21.1 coordinates are confirmed — see porting-resources/00-PORTING-PLAYBOOK.md OQ list) ---
+    // TODO(port): GregTechCEu Modern 1.21.1 coordinate + repo
+    // compileOnly("com.gregtechceu.gtceu:gtceu-1.21.1:<ver>") { transitive = false }
+    // TODO(port): LDLib 1.21.1
+    // compileOnly("com.lowdragmc.ldlib:ldlib-neoforge-1.21.1:<ver>") { exclude group: 'appeng'; exclude group: 'dev.latvian.mods'; exclude group: 'mezz.jei' }
+    // TODO(port): Registrate 1.21.1
+    // compileOnly("com.tterrag.registrate:Registrate:MC1.21.1-<ver>") { transitive = false }
+    // TODO(port): WarForge Factions — confirm the NeoForge 1.21.1 project/file id on CurseForge
+    // compileOnly "curse.maven:warforge-factions-remaintained-1340172:<neo_1.21.1_file_id>"
 
-    compileOnly(fg.deobf("com.gregtechceu.gtceu:gtceu-1.20.1:7.5.3")) { transitive = false }
-
-    compileOnly(fg.deobf("com.lowdragmc.ldlib:ldlib-forge-1.20.1:1.0.40.b")) {
-        exclude group: "appeng"
-        exclude group: "dev.latvian.mods"
-        exclude group: "mezz.jei"
-    }
-    compileOnly(fg.deobf("com.tterrag.registrate:Registrate:MC1.20-1.3.11")) { transitive = false }
-
-    // Optional WarForge Factions integration.
-    compileOnly fg.deobf("curse.maven:warforge-factions-remaintained-1340172:8324861")
-
-
-    // Specify the version of Minecraft to use.
-    // Any artifact can be supplied so long as it has a "userdev" classifier artifact and is a compatible patcher artifact.
-    // The "userdev" classifier will be requested and setup by ForgeGradle.
-    // If the group id is "net.minecraft" and the artifact id is one of ["client", "server", "joined"],
-    // then special handling is done to allow a setup of a vanilla dependency without the use of an external repository.
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-
-    // Example mod dependency with JEI - using fg.deobf() ensures the dependency is remapped to your development mappings
-    // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
-    // compileOnly fg.deobf("mezz.jei:jei-${mc_version}-common-api:${jei_version}")
-    // compileOnly fg.deobf("mezz.jei:jei-${mc_version}-forge-api:${jei_version}")
-    // runtimeOnly fg.deobf("mezz.jei:jei-${mc_version}-forge:${jei_version}")
-
-    // Example mod dependency using a mod jar from ./libs with a flat dir repository
-    // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
-    // The group id is ignored when searching -- in this case, it is "blank"
-    // implementation fg.deobf("blank:coolmod-${mc_version}:${coolmod_version}")
-
-    // For more info:
-    // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
-    // http://www.gradle.org/docs/current/userguide/dependency_management.html
+    // --- Mixin ------------------------------------------------------------------------------
+    // NeoForge bundles Mixin (0.8.x) + MixinExtras and puts them on the compile classpath via the
+    // neoForge dependency, so no explicit dependency or annotation processor is required. If the
+    // mixin phase hits "cannot find symbol" for org.spongepowered.asm.* add a compileOnly here.
 }
 
-// This block of code expands all declared replace properties in the specified resource targets.
-// A missing property will result in an error. Properties are expanded using ${} Groovy notation.
-// When "copyIdeResources" is enabled, this will also run before the game launches in IDE environments.
-// See https://docs.gradle.org/current/dsl/org.gradle.language.jvm.tasks.ProcessResources.html
-tasks.named('processResources', ProcessResources).configure {
+// Expand ${...} tokens in src/main/templates (notably META-INF/neoforge.mods.toml) and feed the
+// result into the main source set. Mirrors the official MDK's generateModMetadata task.
+var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
     var replaceProperties = [
-            minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
-            forge_version: forge_version, forge_version_range: forge_version_range,
-            flywheel_version_range: flywheel_version_range,
-            loader_version_range: loader_version_range,
-            mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
-            mod_authors: mod_authors, mod_description: mod_description,
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
+            loader_version_range   : loader_version_range,
+            flywheel_version_range : flywheel_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description,
     ]
     inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
 
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand replaceProperties + [project: project]
-    }
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
 }
 
-// Example for how to get properties into the manifest for reading at runtime.
-tasks.named('jar', Jar).configure {
-    manifest {
-        attributes([
-                'Specification-Title'     : mod_id,
-                'Specification-Vendor'    : mod_authors,
-                'Specification-Version'   : '1', // We are version 1 of ourselves
-                'Implementation-Title'    : project.name,
-                'Implementation-Version'  : project.jar.archiveVersion,
-                'Implementation-Vendor'   : mod_authors,
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-
-                "MixinConfigs": "wfballistics.mixins.json"
-        ])
-    }
-
-    // This is the preferred method to reobfuscate your jar file
-    finalizedBy 'reobfJar'
-}
-
-// However if you are in a multi-project build, dev time needs unobfed jar files, so you can delay the obfuscation until publishing by doing:
-// tasks.named('publish').configure {
-//     dependsOn 'reobfJar'
-// }
-
-// Example configuration to allow publishing using the maven-publish plugin
 publishing {
     publications {
         register('mavenJava', MavenPublication) {
-            artifact jar
+            from components.java
         }
     }
     repositories {
@@ -309,6 +205,9 @@ publishing {
     }
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
 }

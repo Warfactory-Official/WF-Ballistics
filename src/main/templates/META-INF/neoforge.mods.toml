@@ -1,0 +1,66 @@
+# WF Ballistics — NeoForge mod metadata. Tokens (${...}) are expanded by the
+# generateModMetadata task in build.gradle from gradle.properties.
+modLoader = "javafml"
+loaderVersion = "${loader_version_range}"
+license = "${mod_license}"
+issueTrackerURL = "https://github.com/Warfactory-Official/WF-Ballistics/issues"
+
+[[mods]]
+modId = "wfballistics"
+version = "${mod_version}"
+displayName = "${mod_name}"
+authors = "${mod_authors}"
+description = '''${mod_description}'''
+
+# Mixin configs are declared to FML here on NeoForge (no MANIFEST MixinConfigs attribute).
+[[mixins]]
+config = "wfballistics.mixins.json"
+
+# --- Required: NeoForge ---
+[[dependencies.wfballistics]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neo_version_range}"
+ordering = "NONE"
+side = "BOTH"
+
+# --- Required: Minecraft ---
+[[dependencies.wfballistics]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_version_range}"
+ordering = "NONE"
+side = "BOTH"
+
+# --- Required: Flywheel (instanced rendering) ---
+[[dependencies.wfballistics]]
+modId = "flywheel"
+type = "required"
+versionRange = "${flywheel_version_range}"
+ordering = "AFTER"
+side = "CLIENT"
+
+# Optional integration: when Superb Warfare is present, WF missiles are folded into its
+# superbwarfare:destroyable_projectile tag so its missiles, anti-air and radar can lock onto them.
+[[dependencies.wfballistics]]
+modId = "superbwarfare"
+type = "optional"
+versionRange = "*"
+ordering = "AFTER"
+side = "BOTH"
+
+# Optional integration: the EMP warhead drains and disables GregTech machines.
+[[dependencies.wfballistics]]
+modId = "gtceu"
+type = "optional"
+versionRange = "*"
+ordering = "AFTER"
+side = "BOTH"
+
+# Optional integration: WarForge faction friend-or-foe + claim-aware explosions.
+[[dependencies.wfballistics]]
+modId = "warforge"
+type = "optional"
+versionRange = "*"
+ordering = "AFTER"
+side = "BOTH"
