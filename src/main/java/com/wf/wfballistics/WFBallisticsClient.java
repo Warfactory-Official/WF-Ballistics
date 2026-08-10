@@ -16,18 +16,18 @@ import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.EntityRenderersEvent;
-import net.minecraftforge.client.event.ModelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import org.slf4j.Logger;
 
 import java.util.Map;
 
-// This annotation tells Forge to only execute this class on the physical Client game instance
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+// This annotation tells NeoForge to only execute this class on the physical Client game instance
+@EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class WFBallisticsClient {
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -64,7 +64,7 @@ public class WFBallisticsClient {
 
     @SubscribeEvent
     public static void onModifyBakingResult(ModelEvent.ModifyBakingResult event) {
-        Map<ResourceLocation, BakedModel> models = event.getModels();
+        Map<ModelResourceLocation, BakedModel> models = event.getModels();
         BakedModel template = missileItemTemplate(models);
         if (template == null) {
             return;
@@ -74,7 +74,7 @@ public class WFBallisticsClient {
         }
     }
 
-    private static BakedModel missileItemTemplate(Map<ResourceLocation, BakedModel> models) {
+    private static BakedModel missileItemTemplate(Map<ModelResourceLocation, BakedModel> models) {
         for (MissilePreset preset : MissilePresetRegistry.all()) {
             BakedModel model = models.get(missileItemModel(preset.id().getPath()));
             if (model != null && model.isCustomRenderer()) {
@@ -85,7 +85,7 @@ public class WFBallisticsClient {
     }
 
     private static ModelResourceLocation missileItemModel(String presetId) {
-        return new ModelResourceLocation(WFBallistics.MODID, "missile_" + presetId, "inventory");
+        return ModelResourceLocation.inventory(ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "missile_" + presetId));
     }
 
     @SubscribeEvent

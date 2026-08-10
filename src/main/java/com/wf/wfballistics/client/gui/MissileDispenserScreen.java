@@ -414,7 +414,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
 
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(gg); // dim the world behind the panel
+        this.renderBackground(gg, mouseX, mouseY, partialTick); // dim the world behind the panel
         super.render(gg, mouseX, mouseY, partialTick);
 
         gg.drawString(this.font, this.title, leftPos + PAD, topPos + 4, 0xE0E0F0, false);

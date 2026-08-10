@@ -119,8 +119,8 @@ public class Debris {
     public void bake() {
         this.baked = true;
 
-        BufferBuilder builder = new BufferBuilder(2048);
-        builder.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);
+        ByteBufferBuilder byteBuilder = new ByteBufferBuilder(2048);
+        BufferBuilder builder = new BufferBuilder(byteBuilder, VertexFormat.Mode.QUADS, DefaultVertexFormat.BLOCK);
         BlockRenderDispatcher blockRenderer = Minecraft.getInstance().getBlockRenderer();
         RandomSource random = RandomSource.create();
         PoseStack local = new PoseStack();
@@ -142,15 +142,19 @@ public class Debris {
             }
         }
 
-        BufferBuilder.RenderedBuffer rendered = builder.end();
-        if (!any) {
-            rendered.release();
+        MeshData rendered = builder.build(); // @Nullable — null when no vertices were emitted
+        byteBuilder.close();
+        if (rendered == null || !any) {
+            if (rendered != null) {
+                rendered.close();
+            }
             this.buffer = null;
             return;
         }
         this.buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
         this.buffer.bind();
         this.buffer.upload(rendered);
+        rendered.close();
         VertexBuffer.unbind();
     }
 

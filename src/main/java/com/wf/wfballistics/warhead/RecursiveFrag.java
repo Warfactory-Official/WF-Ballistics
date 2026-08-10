@@ -39,7 +39,7 @@ public final class RecursiveFrag {
     /**
      * Registered warhead id (also selectable from the dispenser GUI).
      */
-    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "recursive_frag");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "recursive_frag");
     // DEBUG: logs the split geometry so it's clear whether the child aim points land on ground or in mid-air.
     private static final Logger LOGGER = LogUtils.getLogger();
     /**

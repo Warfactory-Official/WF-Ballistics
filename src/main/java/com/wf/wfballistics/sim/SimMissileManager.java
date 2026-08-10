@@ -3,7 +3,6 @@ package com.wf.wfballistics.sim;
 import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileModels;
-import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.api.MissileEventType;
 import com.wf.wfballistics.api.MissileTelemetryService;
 import com.wf.wfballistics.chunk.DetonationChunkGuard;
@@ -13,7 +12,6 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.world.ForgeChunkManager;
 import org.slf4j.Logger;
 
 import java.util.*;
@@ -329,7 +327,7 @@ public final class SimMissileManager {
         // forceChunk ticket only takes effect next tick, so synchronously load the chunk first: without it a
         // missile rematerialising into an unloaded chunk (e.g. a listener boundary crossed before the offload
         // dwell elapsed) would be added to a not-yet-loaded chunk and sit dormant until the ticket resolves.
-        ForgeChunkManager.forceChunk(level, WFBallistics.MODID, m, cp.x, cp.z, true, true);
+        MissileListenerRegistry.CHUNK_TICKET.forceChunk(level, m, cp.x, cp.z, true, true);
         level.getChunk(cp.x, cp.z);
         level.addFreshEntity(m);
         MissileTelemetryService.record(sm.id, MissileEventType.ONLOAD, level.getGameTime(), spawnPos, false, "from sim");

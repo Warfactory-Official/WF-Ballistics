@@ -4,10 +4,10 @@ import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.event.entity.EntityJoinLevelEvent;
-import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -17,11 +17,11 @@ import java.util.concurrent.ConcurrentHashMap;
  * cluster) that share a non-zero {@code swarmId}. Members of one swarm never collide with each other, spread
  * apart in flight (separation steering), and share a colour in the debug overlay.
  *
- * <p>Membership is maintained server-side from Forge join/leave events, mirroring {@link
+ * <p>Membership is maintained server-side from join/leave events, mirroring {@link
  * com.wf.wfballistics.entity.OBBEntityTracker}: an O(1) per-swarm set so a member can find its neighbours
  * without scanning every entity in the level. {@code swarmId == 0} means "not in a swarm" and is never tracked.
  */
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID)
+@EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.GAME)
 public final class SwarmManager {
 
     // level -> (swarmId -> members). Server-side only; the client never queries membership.

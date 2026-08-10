@@ -112,7 +112,7 @@ public class ModelGalleryScreen extends Screen {
 
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(gg);
+        this.renderBackground(gg, mouseX, mouseY, partialTick);
 
         RenderSystem.enableDepthTest();
         Lighting.setupFor3DItems();
@@ -245,9 +245,8 @@ public class ModelGalleryScreen extends Screen {
                 float nx = (byte) (n & 0xFF) / 127.0f;
                 float ny = (byte) ((n >> 8) & 0xFF) / 127.0f;
                 float nz = (byte) ((n >> 16) & 0xFF) / 127.0f;
-                vc.vertex(mat, x, y, z)
-                        .color(nx * 0.5f + 0.5f, ny * 0.5f + 0.5f, nz * 0.5f + 0.5f, 1.0f)
-                        .endVertex();
+                vc.addVertex(mat, x, y, z)
+                        .setColor(nx * 0.5f + 0.5f, ny * 0.5f + 0.5f, nz * 0.5f + 0.5f, 1.0f);
             }
         }
     }
@@ -316,12 +315,12 @@ public class ModelGalleryScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
         if (focused != null) {
-            zoom = Mth.clamp(zoom * (delta > 0 ? 1.1f : 0.9f), 0.2f, 6.0f);
+            zoom = Mth.clamp(zoom * (scrollY > 0 ? 1.1f : 0.9f), 0.2f, 6.0f);
             return true;
         }
-        this.scrollRow = Math.max(0, Math.min(maxScrollRow(), this.scrollRow - (int) Math.signum(delta)));
+        this.scrollRow = Math.max(0, Math.min(maxScrollRow(), this.scrollRow - (int) Math.signum(scrollY)));
         return true;
     }
 

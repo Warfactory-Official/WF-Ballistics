@@ -9,18 +9,18 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.level.LevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class EMPBeams {
 
     private static final int MAX_ACTIVE = 512;
@@ -72,8 +72,8 @@ public final class EMPBeams {
     }
 
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || ACTIVE.isEmpty()) {
+    public static void onClientTick(ClientTickEvent.Post event) {
+        if (ACTIVE.isEmpty()) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
@@ -101,7 +101,7 @@ public final class EMPBeams {
         }
 
         Vec3 cam = event.getCamera().getPosition();
-        float partialTick = event.getPartialTick();
+        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         PoseStack pose = event.getPoseStack();
         pose.pushPose();
         pose.translate(-cam.x, -cam.y, -cam.z);
@@ -177,10 +177,10 @@ public final class EMPBeams {
                                  double x1, double y1, double z1, double x2, double y2, double z2,
                                  double x3, double y3, double z3, double x4, double y4, double z4,
                                  int r, int g, int b, int a) {
-            c.vertex(m, (float) x1, (float) y1, (float) z1).color(r, g, b, a).endVertex();
-            c.vertex(m, (float) x2, (float) y2, (float) z2).color(r, g, b, a).endVertex();
-            c.vertex(m, (float) x3, (float) y3, (float) z3).color(r, g, b, a).endVertex();
-            c.vertex(m, (float) x4, (float) y4, (float) z4).color(r, g, b, a).endVertex();
+            c.addVertex(m, (float) x1, (float) y1, (float) z1).setColor(r, g, b, a);
+            c.addVertex(m, (float) x2, (float) y2, (float) z2).setColor(r, g, b, a);
+            c.addVertex(m, (float) x3, (float) y3, (float) z3).setColor(r, g, b, a);
+            c.addVertex(m, (float) x4, (float) y4, (float) z4).setColor(r, g, b, a);
         }
 
         private static int lerp(int from, int to, float t) {

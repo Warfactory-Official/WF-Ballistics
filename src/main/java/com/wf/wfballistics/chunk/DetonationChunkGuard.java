@@ -3,10 +3,11 @@ package com.wf.wfballistics.chunk;
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.world.ForgeChunkManager;
+import net.neoforged.neoforge.common.world.chunk.TicketController;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -21,6 +22,13 @@ import java.util.List;
 public final class DetonationChunkGuard {
 
     public static final int DEFAULT_GRACE_TICKS = 60;
+
+    // Shared TicketController for all WF-Ballistics block-owned forced chunks.
+    // Registered via RegisterTicketControllersEvent in WFServerEvents (MOD bus).
+    public static final TicketController CONTROLLER = new TicketController(
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "chunk_guard"),
+            WFChunkValidation::validateTickets
+    );
 
     private static final List<Hold> HOLDS = new ArrayList<>();
 
@@ -44,7 +52,7 @@ public final class DetonationChunkGuard {
                 int x = cx + ox;
                 int z = cz + oz;
                 chunks[i++] = ChunkPos.asLong(x, z);
-                ForgeChunkManager.forceChunk(level, WFBallistics.MODID, owner, x, z, true, true);
+                CONTROLLER.forceChunk(level, owner, x, z, true, true);
             }
         }
         HOLDS.add(new Hold(level, owner, chunks, level.getGameTime() + ticks));
@@ -61,7 +69,7 @@ public final class DetonationChunkGuard {
                 continue;
             }
             for (long key : h.chunks) {
-                ForgeChunkManager.forceChunk(level, WFBallistics.MODID, h.owner,
+                CONTROLLER.forceChunk(level, h.owner,
                         ChunkPos.getX(key), ChunkPos.getZ(key), false, true);
             }
             it.remove();

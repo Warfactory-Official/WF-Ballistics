@@ -172,7 +172,7 @@ public final class OBBRenderer {
             ny /= len;
             nz /= len;
         }
-        buffer.vertex(pose, (float) x0, (float) y0, (float) z0).color(r, g, b, a).normal(normal, nx, ny, nz).endVertex();
-        buffer.vertex(pose, (float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(normal, nx, ny, nz).endVertex();
+        buffer.addVertex(pose, (float) x0, (float) y0, (float) z0).setColor(r, g, b, a).setNormal(normal, nx, ny, nz);
+        buffer.addVertex(pose, (float) x1, (float) y1, (float) z1).setColor(r, g, b, a).setNormal(normal, nx, ny, nz);
     }
 }

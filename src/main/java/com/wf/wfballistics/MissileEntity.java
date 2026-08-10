@@ -36,9 +36,9 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
@@ -968,10 +968,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     @Override
-    protected void defineSynchedData() {
-        this.entityData.define(MODEL_ID, MissileModels.DEFAULT.toString());
-        this.entityData.define(EXHAUST_COLOR, DEFAULT_EXHAUST_COLOR);
-        this.entityData.define(FLIGHT_SOUND, "");
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        super.defineSynchedData(builder);
+        builder.define(MODEL_ID, MissileModels.DEFAULT.toString());
+        builder.define(EXHAUST_COLOR, DEFAULT_EXHAUST_COLOR);
+        builder.define(FLIGHT_SOUND, "");
     }
 
     public ResourceLocation getModelId() {
@@ -1002,7 +1003,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (id != null && !id.isEmpty()) {
             ResourceLocation rl = ResourceLocation.tryParse(id);
             if (rl != null) {
-                SoundEvent event = ForgeRegistries.SOUND_EVENTS.getValue(rl);
+                SoundEvent event = BuiltInRegistries.SOUND_EVENT.get(rl);
                 if (event != null) {
                     return event;
                 }

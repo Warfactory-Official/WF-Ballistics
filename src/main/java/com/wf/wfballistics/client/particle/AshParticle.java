@@ -75,11 +75,10 @@ public class AshParticle extends TextureSheetParticle {
             float bz = corner[i][1];
             float rx = bx * cos - bz * sin;
             float rz = bx * sin + bz * cos;
-            buffer.vertex(x + rx, y, z + rz)
-                    .uv(uv[i][0], uv[i][1])
-                    .color(this.rCol, this.gCol, this.bCol, this.alpha)
-                    .uv2(light)
-                    .endVertex();
+            buffer.addVertex(x + rx, y, z + rz)
+                    .setUv(uv[i][0], uv[i][1])
+                    .setColor(this.rCol, this.gCol, this.bCol, this.alpha)
+                    .setLight(light);
         }
     }
 

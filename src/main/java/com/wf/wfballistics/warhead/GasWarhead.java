@@ -21,7 +21,7 @@ public final class GasWarhead {
     /**
      * Registered warhead id (also selectable from the dispenser GUI).
      */
-    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "gas");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "gas");
 
     private GasWarhead() {
     }

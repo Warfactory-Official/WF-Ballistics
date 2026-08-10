@@ -1,7 +1,6 @@
 package com.wf.wfballistics.chunk;
 
 import com.wf.wfballistics.MissileEntity;
-import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -9,7 +8,6 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.world.ForgeChunkManager;
 
 
 public final class MissileChunkLoader {
@@ -20,7 +18,8 @@ public final class MissileChunkLoader {
     private int targetRadius = -1;
 
     private static void force(ServerLevel level, MissileEntity missile, long chunkKey, boolean add, boolean ticking) {
-        ForgeChunkManager.forceChunk(level, WFBallistics.MODID, missile,
+        // Entity-UUID owned tickets via the shared WF controller.
+        DetonationChunkGuard.CONTROLLER.forceChunk(level, missile.getUUID(),
                 ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey), add, ticking);
     }
 

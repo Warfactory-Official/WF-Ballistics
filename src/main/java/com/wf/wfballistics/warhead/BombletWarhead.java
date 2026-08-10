@@ -10,8 +10,8 @@ import net.minecraft.world.phys.Vec3;
 
 public final class BombletWarhead {
 
-    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "bomblet");
-    public static final ResourceLocation FIRE_ID = new ResourceLocation(WFBallistics.MODID, "bomblet_fire");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "bomblet");
+    public static final ResourceLocation FIRE_ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "bomblet_fire");
 
     public static final float BLAST_RADIUS = 4.0f;
     public static final float MAX_DAMAGE = 40.0f;

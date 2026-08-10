@@ -9,8 +9,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
-import net.minecraftforge.common.capabilities.ForgeCapabilities;
-import net.minecraftforge.energy.IEnergyStorage;
+import net.neoforged.neoforge.capabilities.Capabilities;
+import net.neoforged.neoforge.energy.IEnergyStorage;
 
 import java.util.Set;
 
@@ -40,7 +40,9 @@ public class BlockProcessorEMP implements IBlockProcessor {
     }
 
     private static boolean extract(BlockEntity be, Direction side) {
-        IEnergyStorage energy = be.getCapability(ForgeCapabilities.ENERGY, side).resolve().orElse(null);
+        Level level = be.getLevel();
+        if (level == null) return false;
+        IEnergyStorage energy = level.getCapability(Capabilities.EnergyStorage.BLOCK, be.getBlockPos(), side);
         if (energy != null && energy.canExtract()) {
             int stored = energy.getEnergyStored();
             if (stored > 0) {

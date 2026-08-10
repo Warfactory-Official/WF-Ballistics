@@ -9,6 +9,7 @@ import com.wf.wfballistics.sim.MissileListenerRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -215,8 +216,8 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag) {
-        super.saveAdditional(tag);
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
         if (this.controlId != null) {
             tag.putUUID("ControlId", this.controlId);
         }
@@ -224,8 +225,8 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
     }
 
     @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
         if (tag.hasUUID("ControlId")) {
             this.controlId = tag.getUUID("ControlId");
         }

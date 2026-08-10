@@ -14,8 +14,9 @@ import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
 
 /**
  * A bomblet: a small, tumbling orange fragment flung out by a fragmentation warhead (see
@@ -150,7 +151,7 @@ public class BombletEntity extends Projectile implements WarheadCarrier {
     }
 
     @Override
-    protected void defineSynchedData() {
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
         // No synced state: position/velocity ride the vanilla spawn + tracker packets, and the cube is a
         // fixed-colour render.
     }

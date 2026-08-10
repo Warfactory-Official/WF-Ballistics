@@ -2,14 +2,16 @@ package com.wf.wfballistics.sim;
 
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.world.ForgeChunkManager;
+import net.neoforged.neoforge.common.world.chunk.TicketController;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -43,6 +45,16 @@ public final class MissileListenerRegistry extends SavedData {
     // entity a couple of ticks to load and start tracking before the missile is in firing range.
     private static final double WAKE_MARGIN = MissileSimConfig.LISTENER_SPAWN_MARGIN;
 
+    /**
+     * TODO(port): ForgeChunkManager — register this TicketController via RegisterTicketControllersEvent on the
+     * mod event bus (net.neoforged.neoforge.common.world.chunk.RegisterTicketControllersEvent) so NeoForge
+     * recognises it before any forceChunk call is made.  Without registration every forceChunk call throws
+     * IllegalArgumentException at runtime.  See TicketController / RegisterTicketControllersEvent in
+     * net.neoforged.neoforge.common.world.chunk.
+     */
+    public static final TicketController CHUNK_TICKET = new TicketController(
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "missile_listener"));
+
     private final Map<BlockPos, BlockRecord> blockRecords = new HashMap<>();
     private final Map<UUID, IMissileListener> entityListeners = new HashMap<>();
     // BlockPos of block listeners we currently hold a wakeup chunk ticket for (transient).
@@ -52,7 +64,10 @@ public final class MissileListenerRegistry extends SavedData {
     private boolean reconciled = false;
 
     public static MissileListenerRegistry get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(MissileListenerRegistry::load, MissileListenerRegistry::new, NAME);
+        return level.getDataStorage().computeIfAbsent(
+                new SavedData.Factory<>(MissileListenerRegistry::new,
+                        (tag, reg) -> MissileListenerRegistry.load(tag)),
+                NAME);
     }
 
     public static MissileListenerRegistry load(CompoundTag tag) {
@@ -68,7 +83,7 @@ public final class MissileListenerRegistry extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
+    public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         ListTag list = new ListTag();
         for (BlockRecord r : blockRecords.values()) {
             CompoundTag t = new CompoundTag();
@@ -197,7 +212,7 @@ public final class MissileListenerRegistry extends SavedData {
 
     private static void setForced(ServerLevel level, BlockPos pos, boolean add) {
         ChunkPos cp = new ChunkPos(pos);
-        ForgeChunkManager.forceChunk(level, WFBallistics.MODID, pos, cp.x, cp.z, add, true);
+        CHUNK_TICKET.forceChunk(level, pos, cp.x, cp.z, add, true);
     }
 
     public record ListenerView(Vec3 center, double range) {

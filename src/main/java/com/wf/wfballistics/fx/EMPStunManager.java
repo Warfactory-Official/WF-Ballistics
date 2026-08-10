@@ -3,16 +3,16 @@ package com.wf.wfballistics.fx;
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.server.ServerStoppingEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID)
+@EventBusSubscriber(modid = WFBallistics.MODID)
 public final class EMPStunManager {
 
     private static final int EMIT_INTERVAL = 12;
@@ -37,8 +37,8 @@ public final class EMPStunManager {
     }
 
     @SubscribeEvent
-    public static void onServerTick(TickEvent.ServerTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || STUNS.isEmpty()) {
+    public static void onServerTick(ServerTickEvent.Post event) {
+        if (STUNS.isEmpty()) {
             return;
         }
         Iterator<Stun> it = STUNS.iterator();

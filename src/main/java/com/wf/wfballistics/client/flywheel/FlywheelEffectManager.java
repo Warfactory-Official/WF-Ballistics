@@ -7,11 +7,11 @@ import dev.engine_room.flywheel.lib.visualization.VisualizationHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.level.LevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +24,7 @@ import java.util.List;
  * <p>{@link #isAvailable} lets callers fall back to vanilla rendering when the Flywheel backend is off
  * (e.g. the user selected the off/batched backend), since instanced effects only draw under it.
  */
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class FlywheelEffectManager {
 
     private static final List<WFFlywheelEffect> ACTIVE = new ArrayList<>();
@@ -51,8 +51,7 @@ public final class FlywheelEffectManager {
     }
 
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
+    public static void onClientTick(ClientTickEvent.Post event) {
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.isPaused() || mc.level == null) return;

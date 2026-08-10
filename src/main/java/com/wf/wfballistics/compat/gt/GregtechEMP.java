@@ -1,5 +1,7 @@
 package com.wf.wfballistics.compat.gt;
 
+// TODO(port): GregTech 1.21.1 — GTCapabilityHelper, IControllable, IEnergyContainer, IMaintenanceMachine
+//             not on classpath yet (compile-only dependency disabled).
 import com.gregtechceu.gtceu.api.capability.GTCapabilityHelper;
 import com.gregtechceu.gtceu.api.capability.IControllable;
 import com.gregtechceu.gtceu.api.capability.IEnergyContainer;

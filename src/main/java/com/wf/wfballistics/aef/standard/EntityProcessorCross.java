@@ -9,12 +9,12 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.enchantment.ProtectionEnchantment;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.event.ForgeEventFactory;
+import net.neoforged.neoforge.event.EventHooks;
 
 import java.util.HashMap;
 import java.util.List;
@@ -89,7 +89,7 @@ public class EntityProcessorCross implements IEntityProcessor {
 
         AABB area = new AABB(x - size - 1, y - size - 1, z - size - 1, x + size + 1, y + size + 1, z + size + 1);
         List<Entity> list = level.getEntities(allowSelfDamage ? null : explosion.exploder, area);
-        ForgeEventFactory.onExplosionDetonate(level, explosion.compat, list, size);
+        EventHooks.onExplosionDetonate(level, explosion.compat, list, size);
 
         Vec3[] nodes = buildNodes(x, y, z);
 
@@ -120,7 +120,7 @@ public class EntityProcessorCross implements IEntityProcessor {
             damageMap.merge(entity, dmg, Math::max);
 
             double enchKnockback = entity instanceof LivingEntity living
-                    ? ProtectionEnchantment.getExplosionKnockbackAfterDampener(living, knockback)
+                    ? knockback * (1.0 - living.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE))
                     : knockback;
 
             if (shouldDealKnockback(entity)) {

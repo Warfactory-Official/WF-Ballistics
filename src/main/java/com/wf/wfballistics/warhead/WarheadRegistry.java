@@ -123,7 +123,7 @@ public final class WarheadRegistry {
     }
 
     public static ResourceLocation rl(String path) {
-        return new ResourceLocation(WFBallistics.MODID, path);
+        return ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, path);
     }
 
     public static ResourceLocation parse(String id) {
