@@ -389,7 +389,10 @@ public final class WFServerEvents {
 
         @SubscribeEvent
         public static void onRegisterTicketControllers(RegisterTicketControllersEvent event) {
+            // Every TicketController used for forceChunk must be registered here, or forceChunk throws.
             event.register(DetonationChunkGuard.CONTROLLER);
+            event.register(com.wf.wfballistics.sim.MissileListenerRegistry.CHUNK_TICKET);
+            event.register(com.wf.wfballistics.entity.EntityExplosionChunkLoading.CHUNK_TICKET);
         }
     }
 }

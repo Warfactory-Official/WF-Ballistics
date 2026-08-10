@@ -19,9 +19,12 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(EntityRenderDispatcher.class)
 public class MixinEntityRenderDispatcher {
 
-    @Inject(method = "renderHitbox(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;Lnet/minecraft/world/entity/Entity;F)V",
+    // 1.21: renderHitbox gained red/green/blue/alpha float params (the 4th float, named `red` in Mojmap, is
+    // the partialTick in the main render path).
+    @Inject(method = "renderHitbox(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;Lnet/minecraft/world/entity/Entity;FFFF)V",
             at = @At("RETURN"))
-    private static void wfballistics$renderHitbox(PoseStack pMatrixStack, VertexConsumer pBuffer, Entity pEntity, float pPartialTicks, CallbackInfo ci) {
+    private static void wfballistics$renderHitbox(PoseStack pMatrixStack, VertexConsumer pBuffer, Entity pEntity,
+                                                  float pPartialTicks, float green, float blue, float alpha, CallbackInfo ci) {
         if (pEntity instanceof OBBEntity obbEntity && !obbEntity.enableAABB()) {
             OBBRenderer.render(pEntity, obbEntity.getOBBs(), pMatrixStack, pBuffer, 0, 1, 0, 1, pPartialTicks);
             // Swept-collision debug overlay: corridor + substep body ghosts (see OBBRenderer#renderSweep).

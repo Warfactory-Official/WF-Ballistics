@@ -194,7 +194,10 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         Matrix4f pose = poseEntry.pose();
         Matrix3f normal = poseEntry.normal();
 
-        if (consumer instanceof BufferBuilder bb
+        // The unsafe direct-buffer fast path requires MixinBufferBuilder (DirectBufferAccess) to be applied.
+        // On 1.21.1 that mixin is disabled (BufferBuilder was rewritten around ByteBufferBuilder), so this
+        // guard fails and we take the safe per-cloudlet path below. See mixin/MixinBufferBuilder.
+        if (consumer instanceof BufferBuilder bb && consumer instanceof DirectBufferAccess
                 && DefaultVertexFormat.NEW_ENTITY.getVertexSize() == VERTEX_STRIDE) {
             tessellateAllUnsafe(bb, cloud, pose, normal, partialTick);
         } else {
