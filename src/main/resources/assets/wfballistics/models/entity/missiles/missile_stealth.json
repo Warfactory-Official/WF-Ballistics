@@ -1,5 +1,5 @@
 {
-  "loader": "forge:obj",
+  "loader": "neoforge:obj",
   "emissive_ambient": false,
   "model": "wfballistics:raw_models/missiles/missile_stealth.obj",
   "flip_v": true,
