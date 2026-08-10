@@ -41,6 +41,7 @@ public class ExplosionNukeGeneric {
     }
 
     public static boolean isObstructed(Level level, Vec3 start, Vec3 end) {
-        return level.clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, (Entity) null)).getType() == HitResult.Type.MISS;
+        return level.clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
+                net.minecraft.world.phys.shapes.CollisionContext.empty())).getType() == HitResult.Type.MISS;
     }
 }
