@@ -4,23 +4,22 @@ import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.damage.DamageClass;
 import com.wf.wfballistics.damage.WFDamageSources;
 import net.minecraft.world.damagesource.DamageSource;
-import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraftforge.event.AttachCapabilitiesEvent;
-import net.minecraftforge.event.entity.living.LivingDeathEvent;
-import net.minecraftforge.event.entity.living.LivingEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.tick.EntityTickEvent;
 
 /**
- * Drives the custom-fire lifecycle: attaches the capability to every living entity, burns them each tick,
- * and routes fire deaths to the cremation effect.
+ * Drives the custom-fire lifecycle: burns living entities each tick and routes fire deaths to the cremation
+ * effect. The per-entity {@link WFFireData} is a NeoForge data attachment (see {@link WFFire}), created
+ * lazily on first access — no explicit attach step is needed.
  *
  * <p>While an entity has custom fire it is also kept visually on fire (vanilla fire ticks are topped up) so
  * players see it burning, and it takes {@link FireType#damage} on a fixed interval rather than vanilla's
  * faster fire-tick cadence — that slower, heavier burn is what makes custom fire read as "hotter".
  */
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID)
+@EventBusSubscriber(modid = WFBallistics.MODID)
 public final class FireHandler {
 
     /**
@@ -32,17 +31,8 @@ public final class FireHandler {
     }
 
     @SubscribeEvent
-    public static void attach(AttachCapabilitiesEvent<Entity> event) {
-        if (event.getObject() instanceof LivingEntity) {
-            WFFireProvider provider = new WFFireProvider();
-            event.addCapability(WFFire.ID, provider);
-            event.addListener(provider::invalidate);
-        }
-    }
-
-    @SubscribeEvent
-    public static void tick(LivingEvent.LivingTickEvent event) {
-        LivingEntity entity = event.getEntity();
+    public static void tick(EntityTickEvent.Post event) {
+        if (!(event.getEntity() instanceof LivingEntity entity)) return;
         if (entity.level().isClientSide) return;
 
         WFFireData fire = WFFire.get(entity);

@@ -1,12 +1,12 @@
 package com.wf.wfballistics.item;
 
 import com.wf.wfballistics.WFBallistics;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.Item;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -19,9 +19,9 @@ import java.util.Map;
 public final class ModItems {
 
     public static final DeferredRegister<Item> ITEMS =
-            DeferredRegister.create(ForgeRegistries.ITEMS, WFBallistics.MODID);
+            DeferredRegister.create(Registries.ITEM, WFBallistics.MODID);
 
-    private static final Map<ResourceLocation, RegistryObject<MissileItem>> MISSILE_ITEMS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, DeferredHolder<Item, MissileItem>> MISSILE_ITEMS = new LinkedHashMap<>();
 
     static {
         // Presets must exist before we enumerate them into items (both happen before the registry freezes).
@@ -35,7 +35,7 @@ public final class ModItems {
     private ModItems() {
     }
 
-    public static Collection<RegistryObject<MissileItem>> missileItems() {
+    public static Collection<DeferredHolder<Item, MissileItem>> missileItems() {
         return MISSILE_ITEMS.values();
     }
 
