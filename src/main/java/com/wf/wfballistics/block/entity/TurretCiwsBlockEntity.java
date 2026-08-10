@@ -58,7 +58,7 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
 
     private static boolean hasLineOfSight(ServerLevel sl, Vec3 from, Vec3 to) {
         BlockHitResult res = sl.clip(new ClipContext(from, to,
-                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, null));
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, (net.minecraft.world.entity.Entity) null));
         return res.getType() == HitResult.Type.MISS;
     }
 

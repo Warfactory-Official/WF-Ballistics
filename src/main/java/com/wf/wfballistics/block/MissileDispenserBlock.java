@@ -1,9 +1,9 @@
 package com.wf.wfballistics.block;
 
+import com.mojang.serialization.MapCodec;
 import com.wf.wfballistics.block.entity.MissileDispenserBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Player;
@@ -22,8 +22,15 @@ import org.jetbrains.annotations.Nullable;
  * re-fires the stored configuration.
  */
 public class MissileDispenserBlock extends BaseEntityBlock {
+    public static final MapCodec<MissileDispenserBlock> CODEC = simpleCodec(MissileDispenserBlock::new);
+
     public MissileDispenserBlock(Properties props) {
         super(props);
+    }
+
+    @Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
     }
 
     @Nullable
@@ -38,8 +45,8 @@ public class MissileDispenserBlock extends BaseEntityBlock {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player,
-                                 InteractionHand hand, BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
+                                               BlockHitResult hit) {
         if (!level.isClientSide) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MenuProvider provider && player instanceof ServerPlayer serverPlayer) {

@@ -5,8 +5,7 @@
   "compatibilityLevel": "JAVA_21",
   "plugin": "com.wf.wfballistics.mixin.WFMixinPlugin",
   "mixins": [
-    "MixinProjectileUtil",
-    "gt.MixinNotifiableEnergyContainer"
+    "MixinProjectileUtil"
   ],
   "client": [
     "MixinBufferBuilder",

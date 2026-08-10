@@ -41,7 +41,7 @@ public final class FireCluster {
         Vec3 axis = new Vec3(0.0, -1.0, 0.0);
         for (int i = 0; i < count; i++) {
             Vec3 dir = FragmentationUtil.randomConeVector(rng, axis, HALF_ANGLE);
-            SmallFireball fireball = new SmallFireball(level, pos.x, pos.y, pos.z, dir.x, dir.y, dir.z);
+            SmallFireball fireball = new SmallFireball(level, pos.x, pos.y, pos.z, new Vec3(dir.x, dir.y, dir.z));
             fireball.setPos(pos.x, pos.y, pos.z);
             level.addFreshEntity(fireball);
         }

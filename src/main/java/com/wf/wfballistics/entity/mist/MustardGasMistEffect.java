@@ -4,6 +4,7 @@ import com.wf.wfballistics.entity.MistEntity;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 
@@ -23,10 +24,11 @@ public class MustardGasMistEffect implements MistEffect {
         if (living.tickCount % 20 == 0) {
             living.hurt(mist.level().damageSources().magic(), (float) (1.5 * intensity));
             // Blistering corrodes whatever the victim is wearing.
-            for (ItemStack stack : living.getArmorSlots()) {
+            for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST,
+                    EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
+                ItemStack stack = living.getItemBySlot(slot);
                 if (!stack.isEmpty() && stack.isDamageableItem()) {
-                    stack.hurtAndBreak(1, living, e -> {
-                    });
+                    stack.hurtAndBreak(1, living, slot);
                 }
             }
         }

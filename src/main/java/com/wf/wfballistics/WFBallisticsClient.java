@@ -11,7 +11,6 @@ import dev.engine_room.flywheel.api.visual.EntityVisual;
 import dev.engine_room.flywheel.api.visualization.EntityVisualizer;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.api.visualization.VisualizerRegistry;
-import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
@@ -19,6 +18,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
+import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
@@ -89,13 +89,14 @@ public class WFBallisticsClient {
     }
 
     @SubscribeEvent
+    public static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
+        event.register(ModMenus.MISSILE_DISPENSER.get(), MissileDispenserScreen::new);
+    }
+
+    @SubscribeEvent
     public static void onClientSetup(final FMLClientSetupEvent event) {
 
         event.enqueueWork(() -> {
-            MenuScreens.register(
-                    ModMenus.MISSILE_DISPENSER.get(),
-                    MissileDispenserScreen::new);
-
             EntityVisualizer<MissileEntity> visualizer = new EntityVisualizer<MissileEntity>() {
                 @Override
                 public EntityVisual<? super MissileEntity> createVisual(VisualizationContext ctx, MissileEntity entity, float partialTick) {

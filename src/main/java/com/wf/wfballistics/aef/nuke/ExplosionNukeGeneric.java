@@ -27,7 +27,7 @@ public class ExplosionNukeGeneric {
                     double damage = maxDamage * (radius - dist) / radius;
                     // The source mod used a dedicated radiation damage source here; we fall back to generic for now.
                     entity.hurt(level.damageSources().generic(), (float) damage);
-                    entity.setSecondsOnFire(5);
+                    entity.igniteForSeconds(5);
                     Vec3 knock = eyePosition.subtract(pos).normalize().scale(0.2D);
                     entity.addDeltaMovement(knock);
                 }
@@ -41,6 +41,6 @@ public class ExplosionNukeGeneric {
     }
 
     public static boolean isObstructed(Level level, Vec3 start, Vec3 end) {
-        return level.clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, null)).getType() == HitResult.Type.MISS;
+        return level.clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, (Entity) null)).getType() == HitResult.Type.MISS;
     }
 }
