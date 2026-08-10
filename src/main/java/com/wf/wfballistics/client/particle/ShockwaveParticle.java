@@ -23,7 +23,7 @@ public class ShockwaveParticle extends Particle {
     }
 
     private static void emit(VertexConsumer buffer, double x, double y, double z, float u, float v, float a, int light) {
-        buffer.vertex(x, y, z).uv(u, v).color(1.0F, 1.0F, 1.0F, a).uv2(light).endVertex();
+        buffer.addVertex((float) x, (float) y, (float) z).setUv(u, v).setColor(1.0F, 1.0F, 1.0F, a).setLight(light);
     }
 
     @Override

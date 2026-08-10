@@ -6,7 +6,7 @@ import net.minecraft.client.particle.ParticleRenderType;
 import net.minecraft.client.particle.TextureSheetParticle;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.client.extensions.common.IClientBlockExtensions;
+import net.neoforged.neoforge.client.extensions.common.IClientBlockExtensions;
 
 /**
  * A block chip flung from an explosion. Unlike vanilla {@link net.minecraft.client.particle.TerrainParticle},

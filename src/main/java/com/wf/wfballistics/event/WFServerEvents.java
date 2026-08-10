@@ -7,6 +7,7 @@ import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.api.MissileData;
 import com.wf.wfballistics.api.WFBallisticsAPI;
+import com.wf.wfballistics.chunk.DetonationChunkGuard; // used in ModBusEvents
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.item.MissilePreset;
@@ -30,10 +31,11 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.world.chunk.RegisterTicketControllersEvent;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.tick.LevelTickEvent;
 
 import java.util.Comparator;
 import java.util.List;
@@ -43,17 +45,14 @@ import java.util.UUID;
 /**
  * Server-side global driver for the missile simulation system.
  */
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID)
+@EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.GAME)
 public final class WFServerEvents {
     private WFServerEvents() {
     }
 
     @SubscribeEvent
-    public static void onLevelTick(TickEvent.LevelTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) {
-            return;
-        }
-        if (event.level instanceof ServerLevel level) {
+    public static void onLevelTick(LevelTickEvent.Post event) {
+        if (event.getLevel() instanceof ServerLevel level) {
             SimMissileManager.tick(level);
         }
     }
@@ -375,5 +374,22 @@ public final class WFServerEvents {
         }
         m.moveTo(spawn.x, spawn.y, spawn.z, player.getYRot(), 0.0f);
         level.addFreshEntity(m);
+    }
+
+    // --- MOD bus subscribers ---
+
+    /**
+     * Inner class on the MOD bus for events that must be registered there.
+     * RegisterTicketControllersEvent fires on the MOD bus.
+     */
+    @EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.MOD)
+    public static final class ModBusEvents {
+        private ModBusEvents() {
+        }
+
+        @SubscribeEvent
+        public static void onRegisterTicketControllers(RegisterTicketControllersEvent event) {
+            event.register(DetonationChunkGuard.CONTROLLER);
+        }
     }
 }

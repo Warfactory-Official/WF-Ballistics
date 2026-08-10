@@ -88,7 +88,7 @@ public final class ObjBounds {
             JsonObject json = JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
             JsonElement modelEl = json.get("model");
             if (modelEl == null) return null;
-            ResourceLocation objId = new ResourceLocation(modelEl.getAsString());
+            ResourceLocation objId = ResourceLocation.parse(modelEl.getAsString());
             return "/assets/" + objId.getNamespace() + "/" + objId.getPath();
         } catch (Exception e) {
             return null;

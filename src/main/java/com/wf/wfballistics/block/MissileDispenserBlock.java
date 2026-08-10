@@ -1,7 +1,6 @@
 package com.wf.wfballistics.block;
 
 import com.wf.wfballistics.block.entity.MissileDispenserBlockEntity;
-import com.wf.wfballistics.block.entity.MissileDispenserBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -15,7 +14,6 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
-import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -46,7 +44,7 @@ public class MissileDispenserBlock extends BaseEntityBlock {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MenuProvider provider && player instanceof ServerPlayer serverPlayer) {
                 // Hands the block pos to the client menu constructor (read back in MissileDispenserMenu).
-                NetworkHooks.openScreen(serverPlayer, provider, pos);
+                serverPlayer.openMenu(provider, buf -> buf.writeBlockPos(pos));
             }
         }
         return InteractionResult.sidedSuccess(level.isClientSide);

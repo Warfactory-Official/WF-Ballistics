@@ -13,10 +13,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
@@ -32,7 +32,7 @@ import org.joml.Matrix4f;
  * <p>Off by default; toggle with the {@code debug.showMissileTargets} client config
  * ({@link WFClientConfig#SHOW_MISSILE_TARGETS}).
  */
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class MissileTargetDebugRenderer {
 
     private MissileTargetDebugRenderer() {
@@ -62,7 +62,7 @@ public final class MissileTargetDebugRenderer {
         }
 
         Vec3 cam = event.getCamera().getPosition();
-        float partialTick = event.getPartialTick();
+        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
         PoseStack pose = event.getPoseStack();
         pose.pushPose();
         pose.translate(-cam.x, -cam.y, -cam.z);
@@ -112,7 +112,7 @@ public final class MissileTargetDebugRenderer {
             ny /= len;
             nz /= len;
         }
-        buffer.vertex(mat, (float) x0, (float) y0, (float) z0).color(r, g, b, a).normal(norm, nx, ny, nz).endVertex();
-        buffer.vertex(mat, (float) x1, (float) y1, (float) z1).color(r, g, b, a).normal(norm, nx, ny, nz).endVertex();
+        buffer.addVertex(mat, (float) x0, (float) y0, (float) z0).setColor(r, g, b, a).setNormal(norm, nx, ny, nz);
+        buffer.addVertex(mat, (float) x1, (float) y1, (float) z1).setColor(r, g, b, a).setNormal(norm, nx, ny, nz);
     }
 }

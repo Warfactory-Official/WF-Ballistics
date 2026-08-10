@@ -3,7 +3,7 @@ package com.wf.wfballistics.compat;
 import com.wf.wfballistics.compat.warforge.WarforgeApi;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.fml.ModList;
+import net.neoforged.fml.ModList;
 
 import java.util.Collection;
 import java.util.UUID;

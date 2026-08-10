@@ -22,7 +22,7 @@ public final class MissileModels {
     /**
      * Id used when a requested one is unknown or unset.
      */
-    public static final ResourceLocation DEFAULT = new ResourceLocation(WFBallistics.MODID, "v2");
+    public static final ResourceLocation DEFAULT = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "v2");
     // Per-model orientation style ("attitude") id — how the model rotates to its heading (missile vs drone).
     // Resolved to a strategy shared by render + hitbox (see attitude.MissileAttitudeRegistry). Default = "missile".
     public static final String DEFAULT_ATTITUDE = "missile";
@@ -97,14 +97,14 @@ public final class MissileModels {
     }
 
     private static void reg(String id, String modelName) {
-        BY_ID.put(rl(id), new ResourceLocation(WFBallistics.MODID, "entity/missiles/" + modelName));
+        BY_ID.put(rl(id), ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "entity/missiles/" + modelName));
     }
 
     /**
      * @return the {@link ResourceLocation} key for a model's short path under the mod namespace.
      */
     public static ResourceLocation rl(String id) {
-        return new ResourceLocation(WFBallistics.MODID, id);
+        return ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, id);
     }
 
     /**
@@ -197,7 +197,7 @@ public final class MissileModels {
      */
     public static void rotor(String id, String rotorModelName, float axisX, float axisY, float axisZ,
                              float degreesPerTick) {
-        ResourceLocation model = new ResourceLocation(WFBallistics.MODID, "entity/missiles/" + rotorModelName);
+        ResourceLocation model = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "entity/missiles/" + rotorModelName);
         ROTORS.computeIfAbsent(rl(id), k -> new ArrayList<>())
                 .add(new Rotor(model, new Vector3f(axisX, axisY, axisZ).normalize(), degreesPerTick));
     }

@@ -30,7 +30,7 @@ public final class FlightStageRegistry {
     }
 
     public static ResourceLocation rl(String path) {
-        return new ResourceLocation(WFBallistics.MODID, path);
+        return ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, path);
     }
 
     public static ResourceLocation keyOf(FlightStage stage) {

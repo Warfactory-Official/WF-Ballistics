@@ -4,9 +4,7 @@ import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.WFSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -18,10 +16,9 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.entity.IEntityAdditionalSpawnData;
-import net.minecraftforge.network.NetworkHooks;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
+import net.neoforged.neoforge.entity.IEntityWithComplexSpawn;
 
 import java.util.ArrayList;
 
@@ -29,7 +26,7 @@ import java.util.ArrayList;
  * Toroidial Convection Simulation Explosion Effect
  * Tor                             Ex
  */
-public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnData {
+public class EntityNukeTorex extends Entity implements IEntityWithComplexSpawn {
 
     public static final EntityDataAccessor<Float> DATA_SCALE = SynchedEntityData.defineId(EntityNukeTorex.class, EntityDataSerializers.FLOAT);
     public static final EntityDataAccessor<Byte> DATA_TYPE = SynchedEntityData.defineId(EntityNukeTorex.class, EntityDataSerializers.BYTE);
@@ -348,25 +345,22 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
     }
 
     @Override
-    protected void defineSynchedData() {
-        this.entityData.define(DATA_SCALE, 1F);
-        this.entityData.define(DATA_TYPE, (byte) 0);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(DATA_SCALE, 1F);
+        builder.define(DATA_TYPE, (byte) 0);
     }
 
-    @Override
-    public Packet<ClientGamePacketListener> getAddEntityPacket() {
-        // Forge spawn packet so writeSpawnData/readSpawnData carry the elapsed age to each new tracker.
-        return NetworkHooks.getEntitySpawningPacket(this);
-    }
+    // getAddEntityPacket() is removed: IEntityWithComplexSpawn is detected automatically by NeoForge's
+    // entity spawn handling; no override needed.
 
     @Override
-    public void writeSpawnData(FriendlyByteBuf buffer) {
+    public void writeSpawnData(RegistryFriendlyByteBuf buffer) {
         // The server's current age at the moment this client begins tracking (0 for present-from-start).
         buffer.writeVarInt(this.tickCount);
     }
 
     @Override
-    public void readSpawnData(FriendlyByteBuf additionalData) {
+    public void readSpawnData(RegistryFriendlyByteBuf additionalData) {
         this.spawnAge = additionalData.readVarInt();
     }
 

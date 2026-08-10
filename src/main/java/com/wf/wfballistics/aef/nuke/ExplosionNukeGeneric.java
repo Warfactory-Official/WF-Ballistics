@@ -36,7 +36,8 @@ public class ExplosionNukeGeneric {
     }
 
     private static boolean isExplosionExempt(Entity entity) {
-        return entity.ignoreExplosion();
+        // 1.21: ignoreExplosion(Explosion) requires an Explosion argument; pass null for no context.
+        return entity.ignoreExplosion(null);
     }
 
     public static boolean isObstructed(Level level, Vec3 start, Vec3 end) {

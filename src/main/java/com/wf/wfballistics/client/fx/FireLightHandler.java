@@ -2,13 +2,13 @@ package com.wf.wfballistics.client.fx;
 
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.entity.FireLingeringEntity;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
-import net.minecraftforge.event.level.LevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class FireLightHandler {
 
     private FireLightHandler() {

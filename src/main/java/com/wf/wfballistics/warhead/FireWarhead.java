@@ -11,7 +11,7 @@ import net.minecraft.world.phys.Vec3;
 
 public final class FireWarhead {
 
-    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "fire");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "fire");
 
     private static final float BLAST_RADIUS = 8F;
     private static final int BLAST_RESOLUTION = 24;

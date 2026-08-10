@@ -12,7 +12,7 @@ import net.minecraft.world.phys.Vec3;
 
 public final class FireCluster {
 
-    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "fire_cluster");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "fire_cluster");
     private static final double HALF_ANGLE = Math.toRadians(60.0);
     private static final double SPEED = 1.2;
     private static final double SPEED_JITTER = 0.4;

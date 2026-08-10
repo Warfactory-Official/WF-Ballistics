@@ -10,6 +10,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityDimensions;
@@ -20,9 +21,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.AABB;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.List;
 
@@ -106,13 +104,13 @@ public class MistEntity extends Entity {
     }
 
     @Override
-    protected void defineSynchedData() {
-        this.entityData.define(RADIUS, 1F);
-        this.entityData.define(HEIGHT, 1F);
-        this.entityData.define(FLUID, "");
-        this.entityData.define(BOX_X, 0F);
-        this.entityData.define(BOX_Y, 0F);
-        this.entityData.define(BOX_Z, 0F);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(RADIUS, 1F);
+        builder.define(HEIGHT, 1F);
+        builder.define(FLUID, "");
+        builder.define(BOX_X, 0F);
+        builder.define(BOX_Y, 0F);
+        builder.define(BOX_Z, 0F);
     }
 
     /**
@@ -169,9 +167,8 @@ public class MistEntity extends Entity {
                 }
             }
         } else {
-            // Particles are spawned only on the client; routed through DistExecutor so the dedicated
-            // server never classloads the client FX code.
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> MistClientFX.spawn(this));
+            // isClientSide is already true here; call directly (DistExecutor is gone in NeoForge).
+            MistClientFX.spawn(this);
         }
     }
 
@@ -218,12 +215,12 @@ public class MistEntity extends Entity {
     public Fluid getFluid() {
         String id = this.entityData.get(FLUID);
         if (id.isEmpty()) return Fluids.EMPTY;
-        Fluid fluid = ForgeRegistries.FLUIDS.getValue(new ResourceLocation(id));
+        Fluid fluid = BuiltInRegistries.FLUID.get(ResourceLocation.parse(id));
         return fluid == null ? Fluids.EMPTY : fluid;
     }
 
     public MistEntity setFluid(Fluid fluid) {
-        ResourceLocation key = ForgeRegistries.FLUIDS.getKey(fluid);
+        ResourceLocation key = BuiltInRegistries.FLUID.getKey(fluid);
         this.entityData.set(FLUID, key == null ? "" : key.toString());
         return this;
     }
@@ -279,7 +276,7 @@ public class MistEntity extends Entity {
 
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
-        setFluid(ForgeRegistries.FLUIDS.getValue(new ResourceLocation(tag.getString("fluid"))));
+        setFluid(BuiltInRegistries.FLUID.get(ResourceLocation.parse(tag.getString("fluid"))));
         setArea(tag.getFloat("radius"), tag.getFloat("height"));
         this.maxAge = tag.getInt("maxAge");
         if (tag.contains("effectInterval")) {
@@ -292,7 +289,7 @@ public class MistEntity extends Entity {
 
     @Override
     protected void addAdditionalSaveData(CompoundTag tag) {
-        ResourceLocation key = ForgeRegistries.FLUIDS.getKey(getFluid());
+        ResourceLocation key = BuiltInRegistries.FLUID.getKey(getFluid());
         tag.putString("fluid", key == null ? "" : key.toString());
         tag.putFloat("radius", getRadius());
         tag.putFloat("height", getMistHeight());

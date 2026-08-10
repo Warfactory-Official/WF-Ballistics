@@ -5,16 +5,16 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundSource;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 import java.util.ArrayList;
 import java.util.List;
 
 
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class ClientSoundScheduler {
 
     public static final double SPEED_OF_SOUND = 8.575;
@@ -46,8 +46,8 @@ public final class ClientSoundScheduler {
     }
 
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || PENDING.isEmpty()) {
+    public static void onClientTick(ClientTickEvent.Post event) {
+        if (PENDING.isEmpty()) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();

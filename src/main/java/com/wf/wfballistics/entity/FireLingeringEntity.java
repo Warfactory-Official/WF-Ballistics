@@ -11,8 +11,6 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
@@ -60,13 +58,13 @@ public class FireLingeringEntity extends Entity {
     }
 
     @Override
-    protected void defineSynchedData() {
-        this.entityData.define(TYPE, 0);
-        this.entityData.define(WIDTH, 1F);
-        this.entityData.define(HEIGHT, 1F);
-        this.entityData.define(BOX_X, 0F);
-        this.entityData.define(BOX_Y, 0F);
-        this.entityData.define(BOX_Z, 0F);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(TYPE, 0);
+        builder.define(WIDTH, 1F);
+        builder.define(HEIGHT, 1F);
+        builder.define(BOX_X, 0F);
+        builder.define(BOX_Y, 0F);
+        builder.define(BOX_Z, 0F);
     }
 
     public boolean isBox() {
@@ -134,7 +132,8 @@ public class FireLingeringEntity extends Entity {
                 }
             }
         } else {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> FireClientFX.tick(this));
+            // isClientSide is already true here; call directly (DistExecutor is gone in NeoForge).
+            FireClientFX.tick(this);
         }
     }
 

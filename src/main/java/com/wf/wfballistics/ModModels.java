@@ -13,17 +13,17 @@ public class ModModels {
 
     // Flat billboard quad instanced for GPU-batched particle clouds (see client.flywheel).
     public static final PartialModel INSTANCED_QUAD = PartialModel.of(
-            new ResourceLocation(WFBallistics.MODID, "effect/instanced_quad")
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "effect/instanced_quad")
     );
     // Cremation skeleton bones, instanced per body part (see client.flywheel.SkeletonBoneEffect).
     public static final PartialModel BONE_SKULL = PartialModel.of(
-            new ResourceLocation(WFBallistics.MODID, "effect/bone_skull")
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "effect/bone_skull")
     );
     public static final PartialModel BONE_TORSO = PartialModel.of(
-            new ResourceLocation(WFBallistics.MODID, "effect/bone_torso")
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "effect/bone_torso")
     );
     public static final PartialModel BONE_LIMB = PartialModel.of(
-            new ResourceLocation(WFBallistics.MODID, "effect/bone_limb")
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "effect/bone_limb")
     );
     private static final Map<ResourceLocation, PartialModel> MISSILES = new HashMap<>();
     // Baked models for spinning parts, keyed by the rotor mesh's model location (see MissileModels.Rotor).

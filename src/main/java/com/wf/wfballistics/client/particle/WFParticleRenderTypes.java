@@ -25,18 +25,13 @@ public final class WFParticleRenderTypes {
      */
     public static final ParticleRenderType ADDITIVE = new ParticleRenderType() {
         @Override
-        public void begin(BufferBuilder buffer, TextureManager textureManager) {
+        public BufferBuilder begin(Tesselator tesselator, TextureManager textureManager) {
             RenderSystem.depthMask(false);
             RenderSystem.enableBlend();
             RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
             RenderSystem.setShader(GameRenderer::getParticleShader);
             RenderSystem.setShaderTexture(0, TextureAtlas.LOCATION_PARTICLES);
-            buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.PARTICLE);
-        }
-
-        @Override
-        public void end(Tesselator tesselator) {
-            tesselator.end();
+            return tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.PARTICLE);
         }
 
         @Override
@@ -45,23 +40,19 @@ public final class WFParticleRenderTypes {
         }
     };
     public static final ResourceLocation SHOCKWAVE_TEXTURE =
-            new ResourceLocation(WFBallistics.MODID, "textures/particle/shockwave.png");
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "textures/particle/shockwave.png");
     public static final ParticleRenderType SHOCKWAVE = new ParticleRenderType() {
         @Override
-        public void begin(BufferBuilder buffer, TextureManager textureManager) {
+        public BufferBuilder begin(Tesselator tesselator, TextureManager textureManager) {
+            // Re-enable cull from any prior invocation of this type (1.21 has no end() hook).
+            RenderSystem.enableCull();
             RenderSystem.depthMask(false);
             RenderSystem.disableCull();
             RenderSystem.enableBlend();
             RenderSystem.blendFunc(GlStateManager.SourceFactor.SRC_ALPHA, GlStateManager.DestFactor.ONE);
             RenderSystem.setShader(GameRenderer::getParticleShader);
             RenderSystem.setShaderTexture(0, SHOCKWAVE_TEXTURE);
-            buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.PARTICLE);
-        }
-
-        @Override
-        public void end(Tesselator tesselator) {
-            tesselator.end();
-            RenderSystem.enableCull();
+            return tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.PARTICLE);
         }
 
         @Override

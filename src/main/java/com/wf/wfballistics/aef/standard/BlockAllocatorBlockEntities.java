@@ -39,7 +39,7 @@ public class BlockAllocatorBlockEntities implements IBlockAllocator {
                 if (chunk == null) {
                     continue;
                 }
-                for (BlockPos pos : chunk.getBlockEntitiesPos()) {
+                for (BlockPos pos : chunk.getBlockEntities().keySet()) {
                     double dx = pos.getX() + 0.5 - x;
                     double dy = pos.getY() + 0.5 - y;
                     double dz = pos.getZ() + 0.5 - z;

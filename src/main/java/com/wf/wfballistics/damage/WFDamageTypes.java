@@ -23,6 +23,6 @@ public final class WFDamageTypes {
     }
 
     private static ResourceKey<DamageType> key(String name) {
-        return ResourceKey.create(Registries.DAMAGE_TYPE, new ResourceLocation(WFBallistics.MODID, name));
+        return ResourceKey.create(Registries.DAMAGE_TYPE, ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, name));
     }
 }

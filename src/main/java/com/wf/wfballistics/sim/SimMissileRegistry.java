@@ -1,5 +1,6 @@
 package com.wf.wfballistics.sim;
 
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -20,7 +21,10 @@ public final class SimMissileRegistry extends SavedData {
     private final List<SimMissile> missiles = new ArrayList<>();
 
     public static SimMissileRegistry get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(SimMissileRegistry::load, SimMissileRegistry::new, NAME);
+        return level.getDataStorage().computeIfAbsent(
+                new SavedData.Factory<>(SimMissileRegistry::new,
+                        (tag, reg) -> SimMissileRegistry.load(tag)),
+                NAME);
     }
 
     public static SimMissileRegistry load(CompoundTag tag) {
@@ -33,7 +37,7 @@ public final class SimMissileRegistry extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
+    public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         ListTag list = new ListTag();
         for (SimMissile sm : missiles) {
             list.add(sm.save());
