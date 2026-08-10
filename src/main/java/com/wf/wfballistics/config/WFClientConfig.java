@@ -1,20 +1,20 @@
 package com.wf.wfballistics.config;
 
-import net.minecraftforge.common.ForgeConfigSpec;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 
 public final class WFClientConfig {
 
-    public static final ForgeConfigSpec SPEC;
+    public static final ModConfigSpec SPEC;
 
     // --- Translucent terrain ---
-    public static final ForgeConfigSpec.BooleanValue SOLID_TRANSLUCENT;
+    public static final ModConfigSpec.BooleanValue SOLID_TRANSLUCENT;
 
     // --- Debug ---
-    public static final ForgeConfigSpec.BooleanValue SHOW_MISSILE_TARGETS;
+    public static final ModConfigSpec.BooleanValue SHOW_MISSILE_TARGETS;
 
     static {
-        ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
+        ModConfigSpec.Builder b = new ModConfigSpec.Builder();
 
         b.comment("Rendering options.").push("rendering");
         SOLID_TRANSLUCENT = b

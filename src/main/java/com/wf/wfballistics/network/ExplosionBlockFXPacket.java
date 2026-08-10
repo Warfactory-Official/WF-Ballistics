@@ -1,23 +1,34 @@
 package com.wf.wfballistics.network;
 
-import com.wf.wfballistics.client.ClientPacketHandler;
+import com.wf.wfballistics.WFBallistics;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.network.NetworkEvent;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
 
 /**
  * The data the client needs to reproduce the standard explosion's visuals: the epicentre, the radius, and
  * the positions of the blocks that were broken (so debris and smoke can radiate outward from each one).
  */
-public record ExplosionBlockFXPacket(double x, double y, double z, float size, List<BlockPos> blocks) {
+public record ExplosionBlockFXPacket(double x, double y, double z, float size, List<BlockPos> blocks)
+        implements CustomPacketPayload {
 
-    public static void encode(ExplosionBlockFXPacket pkt, FriendlyByteBuf buf) {
+    public static final Type<ExplosionBlockFXPacket> TYPE =
+            new Type<>(ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "explosion_block_fx"));
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, ExplosionBlockFXPacket> STREAM_CODEC =
+            StreamCodec.of(ExplosionBlockFXPacket::encode, ExplosionBlockFXPacket::decode);
+
+    @Override
+    public Type<ExplosionBlockFXPacket> type() {
+        return TYPE;
+    }
+
+    private static void encode(RegistryFriendlyByteBuf buf, ExplosionBlockFXPacket pkt) {
         buf.writeDouble(pkt.x);
         buf.writeDouble(pkt.y);
         buf.writeDouble(pkt.z);
@@ -34,7 +45,7 @@ public record ExplosionBlockFXPacket(double x, double y, double z, float size, L
         }
     }
 
-    public static ExplosionBlockFXPacket decode(FriendlyByteBuf buf) {
+    private static ExplosionBlockFXPacket decode(RegistryFriendlyByteBuf buf) {
         double x = buf.readDouble();
         double y = buf.readDouble();
         double z = buf.readDouble();
@@ -60,11 +71,5 @@ public record ExplosionBlockFXPacket(double x, double y, double z, float size, L
 
     private static int unzigzag(int v) {
         return (v >>> 1) ^ -(v & 1);
-    }
-
-    public static void handle(ExplosionBlockFXPacket pkt, Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() ->
-                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientPacketHandler.handleBlockFX(pkt)));
-        ctx.get().setPacketHandled(true);
     }
 }

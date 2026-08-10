@@ -5,57 +5,57 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.level.material.MapColor;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 public class ModBlocks {
     public static final DeferredRegister<Block> BLOCKS =
-            DeferredRegister.create(ForgeRegistries.BLOCKS, WFBallistics.MODID);
+            DeferredRegister.create(Registries.BLOCK, WFBallistics.MODID);
     public static final DeferredRegister<Item> ITEMS =
-            DeferredRegister.create(ForgeRegistries.ITEMS, WFBallistics.MODID);
+            DeferredRegister.create(Registries.ITEM, WFBallistics.MODID);
 
-    public static final RegistryObject<Block> MISSILE_LISTENER_DEBUG =
+    public static final DeferredHolder<Block, Block> MISSILE_LISTENER_DEBUG =
             BLOCKS.register("missile_listener_debug", () -> new MissileListenerDebugBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.0f)));
 
-    public static final RegistryObject<Item> MISSILE_LISTENER_DEBUG_ITEM =
+    public static final DeferredHolder<Item, Item>MISSILE_LISTENER_DEBUG_ITEM =
             ITEMS.register("missile_listener_debug", () ->
                     new BlockItem(MISSILE_LISTENER_DEBUG.get(), new Item.Properties()));
 
-    public static final RegistryObject<Block> MISSILE_DISPENSER =
+    public static final DeferredHolder<Block, Block>MISSILE_DISPENSER =
             BLOCKS.register("missile_dispenser", () -> new MissileDispenserBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.0f)));
 
-    public static final RegistryObject<Item> MISSILE_DISPENSER_ITEM =
+    public static final DeferredHolder<Item, Item>MISSILE_DISPENSER_ITEM =
             ITEMS.register("missile_dispenser", () ->
                     new BlockItem(MISSILE_DISPENSER.get(), new Item.Properties()));
 
-    public static final RegistryObject<Block> TURRET_CIWS =
+    public static final DeferredHolder<Block, Block>TURRET_CIWS =
             BLOCKS.register("turret_ciws", () -> new TurretCiwsBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).requiresCorrectToolForDrops()));
 
-    public static final RegistryObject<Item> TURRET_CIWS_ITEM =
+    public static final DeferredHolder<Item, Item>TURRET_CIWS_ITEM =
             ITEMS.register("turret_ciws", () ->
                     new BlockItem(TURRET_CIWS.get(), new Item.Properties()));
 
-    public static final RegistryObject<Block> TURRET_INTERCEPTOR =
+    public static final DeferredHolder<Block, Block>TURRET_INTERCEPTOR =
             BLOCKS.register("turret_interceptor", () -> new TurretInterceptorBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).requiresCorrectToolForDrops(),
                     false));
 
-    public static final RegistryObject<Item> TURRET_INTERCEPTOR_ITEM =
+    public static final DeferredHolder<Item, Item>TURRET_INTERCEPTOR_ITEM =
             ITEMS.register("turret_interceptor", () ->
                     new BlockItem(TURRET_INTERCEPTOR.get(), new Item.Properties()));
 
-    public static final RegistryObject<Block> TURRET_INTERCEPTOR_SUPERSONIC =
+    public static final DeferredHolder<Block, Block>TURRET_INTERCEPTOR_SUPERSONIC =
             BLOCKS.register("turret_interceptor_supersonic", () -> new TurretInterceptorBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).requiresCorrectToolForDrops(),
                     true));
 
-    public static final RegistryObject<Item> TURRET_INTERCEPTOR_SUPERSONIC_ITEM =
+    public static final DeferredHolder<Item, Item>TURRET_INTERCEPTOR_SUPERSONIC_ITEM =
             ITEMS.register("turret_interceptor_supersonic", () ->
                     new BlockItem(TURRET_INTERCEPTOR_SUPERSONIC.get(), new Item.Properties()));
 

@@ -3,10 +3,10 @@ package com.wf.wfballistics.client.particle;
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.particles.SimpleParticleType;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.RegistryObject;
+import net.minecraft.core.registries.Registries;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 /**
  * Registers the mod's {@link ParticleType}s. Even though the particles are usually spawned directly (for
@@ -18,21 +18,21 @@ import net.minecraftforge.registries.RegistryObject;
 public final class WFParticles {
 
     public static final DeferredRegister<ParticleType<?>> PARTICLE_TYPES =
-            DeferredRegister.create(ForgeRegistries.PARTICLE_TYPES, WFBallistics.MODID);
+            DeferredRegister.create(Registries.PARTICLE_TYPE, WFBallistics.MODID);
 
-    public static final RegistryObject<SimpleParticleType> EXPLOSION_SMALL =
+    public static final DeferredHolder<ParticleType<?>, SimpleParticleType>EXPLOSION_SMALL =
             PARTICLE_TYPES.register("explosion_small", () -> new SimpleParticleType(true) {
             });
-    public static final RegistryObject<SimpleParticleType> ROCKET_FLAME =
+    public static final DeferredHolder<ParticleType<?>, SimpleParticleType>ROCKET_FLAME =
             PARTICLE_TYPES.register("rocket_flame", () -> new SimpleParticleType(true) {
             });
-    public static final RegistryObject<SimpleParticleType> FLAME =
+    public static final DeferredHolder<ParticleType<?>, SimpleParticleType>FLAME =
             PARTICLE_TYPES.register("flame", () -> new SimpleParticleType(true) {
             });
-    public static final RegistryObject<SimpleParticleType> ASH =
+    public static final DeferredHolder<ParticleType<?>, SimpleParticleType>ASH =
             PARTICLE_TYPES.register("ash", () -> new SimpleParticleType(false) {
             });
-    public static final RegistryObject<SimpleParticleType> MIST =
+    public static final DeferredHolder<ParticleType<?>, SimpleParticleType>MIST =
             PARTICLE_TYPES.register("mist", () -> new SimpleParticleType(false) {
             });
 

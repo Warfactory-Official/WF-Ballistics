@@ -1,22 +1,19 @@
 package com.wf.wfballistics;
 
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.config.ModConfig;
-import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
-import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 
-// The value here should match an entry in the META-INF/mods.toml file
+// The value here should match an entry in the META-INF/neoforge.mods.toml file
 @Mod(WFBallistics.MODID)
 public class WFBallistics {
     // Define mod id in a common place for everything to reference
     public static final String MODID = "wfballistics";
 
-    public WFBallistics(FMLJavaModLoadingContext context) {
-        IEventBus modEventBus = context.getModEventBus();
-
+    // FML injects IEventBus (the mod event bus) and ModContainer into the mod constructor.
+    public WFBallistics(IEventBus modEventBus, ModContainer modContainer) {
         // Register the commonSetup method for modloading
         modEventBus.addListener(this::commonSetup);
 
@@ -29,22 +26,25 @@ public class WFBallistics {
         com.wf.wfballistics.client.particle.WFParticles.register(modEventBus);
         com.wf.wfballistics.fluid.WFFluids.register(modEventBus);
         com.wf.wfballistics.WFSounds.register(modEventBus);
+        // Per-entity fire state is now a NeoForge data attachment (see fire/WFFire); register its type.
+        com.wf.wfballistics.fire.WFFire.register(modEventBus);
 
-        modEventBus.register(com.wf.wfballistics.config.WFConfig.class);
-        ModLoadingContext.get().registerConfig(
+        // Config: explicit listener (replaces modEventBus.register(WFConfig.class)) + registerConfig on the container.
+        modEventBus.addListener(com.wf.wfballistics.config.WFConfig::onLoad);
+        modContainer.registerConfig(
                 ModConfig.Type.COMMON, com.wf.wfballistics.config.WFConfig.SPEC);
-        ModLoadingContext.get().registerConfig(
+        modContainer.registerConfig(
                 ModConfig.Type.CLIENT, com.wf.wfballistics.config.WFClientConfig.SPEC);
-
-        MinecraftForge.EVENT_BUS.register(this);
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
-            com.wf.wfballistics.network.WFNetwork.register();
+            // Networking now registers via RegisterPayloadHandlersEvent (see network/WFPayloadRegistrar);
+            // no explicit call here.
             com.wf.wfballistics.entity.mist.MistEffects.bootstrap();
-            net.minecraftforge.common.world.ForgeChunkManager.setForcedChunkLoadingCallback(
-                    MODID, com.wf.wfballistics.chunk.WFChunkValidation::validate);
+            // TODO(port): forced-chunk validation. Forge's ForgeChunkManager.setForcedChunkLoadingCallback
+            //   is replaced by a TicketController registered from RegisterTicketControllersEvent
+            //   (net.neoforged.neoforge.common.world.chunk). Handled in the chunk package during porting.
         });
     }
 }

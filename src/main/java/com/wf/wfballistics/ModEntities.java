@@ -1,22 +1,22 @@
 package com.wf.wfballistics;
 
 import com.wf.wfballistics.entity.*;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 public class ModEntities {
     // 1. Create the DeferredRegister for Entity Types
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
-            DeferredRegister.create(ForgeRegistries.ENTITY_TYPES, WFBallistics.MODID);
+            DeferredRegister.create(Registries.ENTITY_TYPE, WFBallistics.MODID);
 
     // 2. Register your specific entity
     // Replace 'YourEntityClass::new' with your actual custom entity class constructor later
     // Fallback size only: MissileEntity#makeBoundingBox fits the real AABB to the oriented model each tick.
-    public static final RegistryObject<EntityType<MissileEntity>> STEALTH_MISSILE =
+    public static final DeferredHolder<EntityType<?>, EntityType<MissileEntity>> STEALTH_MISSILE =
             ENTITY_TYPES.register("missile", () -> EntityType.Builder.of(MissileEntity::new, MobCategory.MISC)
                     .sized(2.0F, 2.0F)
                     // 32 chunks = 512 blocks, the vanilla max view distance, so the missile is tracked (and, with
@@ -28,7 +28,7 @@ public class ModEntities {
                     .build("missile")
             );
 
-    public static final RegistryObject<EntityType<BombletEntity>> BOMBLET =
+    public static final DeferredHolder<EntityType<?>, EntityType<BombletEntity>> BOMBLET =
             ENTITY_TYPES.register("bomblet", () -> EntityType.Builder.<BombletEntity>of(BombletEntity::new, MobCategory.MISC)
                     .sized(0.3F, 0.3F)
                     .clientTrackingRange(8)
@@ -38,7 +38,7 @@ public class ModEntities {
             );
 
     // Mist effect cloud: a stationary, fluid-imbued area entity.
-    public static final RegistryObject<EntityType<MistEntity>> MIST =
+    public static final DeferredHolder<EntityType<?>, EntityType<MistEntity>> MIST =
             ENTITY_TYPES.register("mist", () -> EntityType.Builder.of(MistEntity::new, MobCategory.MISC)
                     .sized(1.0F, 1.0F)
                     .clientTrackingRange(10)
@@ -47,7 +47,7 @@ public class ModEntities {
                     .build("mist")
             );
 
-    public static final RegistryObject<EntityType<FireLingeringEntity>> FIRE_LINGERING =
+    public static final DeferredHolder<EntityType<?>, EntityType<FireLingeringEntity>> FIRE_LINGERING =
             ENTITY_TYPES.register("fire_lingering", () -> EntityType.Builder.of(FireLingeringEntity::new, MobCategory.MISC)
                     .sized(1.0F, 1.0F)
                     .clientTrackingRange(10)
@@ -59,21 +59,20 @@ public class ModEntities {
             );
 
     // Nuclear detonation driver: a server-side, multi-tick ray explosion. Renders nothing.
-    public static final RegistryObject<EntityType<EntityNukeExplosionMK5>> NUKE_EXPLOSION =
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityNukeExplosionMK5>> NUKE_EXPLOSION =
             ENTITY_TYPES.register("nuke_explosion", () -> EntityType.Builder.<EntityNukeExplosionMK5>of(EntityNukeExplosionMK5::new, MobCategory.MISC)
                     .sized(1.0F, 1.0F)
                     .build("nuke_explosion")
             );
 
     // Torex: the toroidal-convection mushroom cloud effect. Large box, far tracking, never moves.
-    public static final RegistryObject<EntityType<EntityNukeTorex>> NUKE_TOREX =
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityNukeTorex>> NUKE_TOREX =
             ENTITY_TYPES.register("torex", () -> EntityType.Builder.<EntityNukeTorex>of(EntityNukeTorex::new, MobCategory.MISC)
                     .noSave()
                     .fireImmune()
                     .sized(20F, 40F)
                     .clientTrackingRange(64)
                     .updateInterval(Integer.MAX_VALUE)
-                    .setShouldReceiveVelocityUpdates(false)
                     .build("torex")
             );
 

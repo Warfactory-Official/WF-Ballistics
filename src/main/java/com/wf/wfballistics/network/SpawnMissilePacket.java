@@ -1,49 +1,48 @@
 package com.wf.wfballistics.network;
 
+import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.block.entity.LaunchConfig;
 import com.wf.wfballistics.block.entity.MissileDispenserBlockEntity;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.network.NetworkEvent;
-
-import java.util.function.Supplier;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 
-public class SpawnMissilePacket {
+public record SpawnMissilePacket(BlockPos pos, LaunchConfig config, boolean launch) implements CustomPacketPayload {
     // A generous cap so the debug launcher stays a launcher, not a remote artillery exploit.
     private static final double MAX_USE_DISTANCE_SQR = 64.0 * 64.0;
 
-    private final BlockPos pos;
-    private final LaunchConfig config;
-    private final boolean launch;
+    public static final Type<SpawnMissilePacket> TYPE =
+            new Type<>(ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "spawn_missile"));
 
-    public SpawnMissilePacket(BlockPos pos, LaunchConfig config, boolean launch) {
-        this.pos = pos;
-        this.config = config;
-        this.launch = launch;
+    public static final StreamCodec<RegistryFriendlyByteBuf, SpawnMissilePacket> STREAM_CODEC =
+            StreamCodec.of(
+                    (buf, m) -> {
+                        buf.writeBlockPos(m.pos);
+                        buf.writeBoolean(m.launch);
+                        m.config.write(buf);
+                    },
+                    buf -> {
+                        BlockPos pos = buf.readBlockPos();
+                        boolean launch = buf.readBoolean();
+                        return new SpawnMissilePacket(pos, LaunchConfig.read(buf), launch);
+                    });
+
+    @Override
+    public Type<SpawnMissilePacket> type() {
+        return TYPE;
     }
 
-    public static void encode(SpawnMissilePacket m, FriendlyByteBuf b) {
-        b.writeBlockPos(m.pos);
-        b.writeBoolean(m.launch);
-        m.config.write(b);
-    }
-
-    public static SpawnMissilePacket decode(FriendlyByteBuf b) {
-        BlockPos pos = b.readBlockPos();
-        boolean launch = b.readBoolean();
-        return new SpawnMissilePacket(pos, LaunchConfig.read(b), launch);
-    }
-
-    public static void handle(SpawnMissilePacket m, Supplier<NetworkEvent.Context> ctx) {
-        NetworkEvent.Context context = ctx.get();
-        context.enqueueWork(() -> {
-            ServerPlayer player = context.getSender();
-            if (player == null) {
+    public void handle(IPayloadContext ctx) {
+        ctx.enqueueWork(() -> {
+            if (!(ctx.player() instanceof ServerPlayer player)) {
                 return;
             }
             if (!player.getAbilities().instabuild && !player.hasPermissions(2)) {
@@ -52,22 +51,21 @@ public class SpawnMissilePacket {
             ServerLevel level = player.serverLevel();
 
             // Re-validate: the block must still exist and the player must be next to it.
-            if (!level.isLoaded(m.pos)) {
+            if (!level.isLoaded(pos)) {
                 return;
             }
-            BlockEntity be = level.getBlockEntity(m.pos);
+            BlockEntity be = level.getBlockEntity(pos);
             if (!(be instanceof MissileDispenserBlockEntity dispenser)) {
                 return;
             }
-            if (player.distanceToSqr(Vec3.atCenterOf(m.pos)) > MAX_USE_DISTANCE_SQR) {
+            if (player.distanceToSqr(Vec3.atCenterOf(pos)) > MAX_USE_DISTANCE_SQR) {
                 return;
             }
 
-            dispenser.setConfig(m.config);
-            if (m.launch) {
-                m.config.spawn(level, m.pos, dispenser);
+            dispenser.setConfig(config);
+            if (launch) {
+                config.spawn(level, pos, dispenser);
             }
         });
-        context.setPacketHandled(true);
     }
 }

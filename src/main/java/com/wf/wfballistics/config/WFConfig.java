@@ -3,9 +3,9 @@ package com.wf.wfballistics.config;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.sim.MissileSimConfig;
-import net.minecraftforge.common.ForgeConfigSpec;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.event.config.ModConfigEvent;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.event.config.ModConfigEvent;
+import net.neoforged.neoforge.common.ModConfigSpec;
 
 /**
  * Server/common config for the tunables most worth adjusting without recompiling: the WarForge integration
@@ -16,42 +16,42 @@ import net.minecraftforge.fml.event.config.ModConfigEvent;
  */
 public final class WFConfig {
 
-    public static final ForgeConfigSpec SPEC;
+    public static final ModConfigSpec SPEC;
 
     // --- WarForge integration ---
-    public static final ForgeConfigSpec.BooleanValue WARFORGE_FACTION_FOF;
-    public static final ForgeConfigSpec.BooleanValue WARFORGE_CLAIM_PROTECTION;
+    public static final ModConfigSpec.BooleanValue WARFORGE_FACTION_FOF;
+    public static final ModConfigSpec.BooleanValue WARFORGE_CLAIM_PROTECTION;
     // --- Interception ---
-    public static final ForgeConfigSpec.DoubleValue INTERCEPT_CHANCE;
-    public static final ForgeConfigSpec.DoubleValue INTERCEPT_CROSSING_FACTOR;
-    public static final ForgeConfigSpec.DoubleValue INTERCEPTOR_KILL_RADIUS;
-    public static final ForgeConfigSpec.DoubleValue INTERCEPTOR_ACQUIRE_RANGE;
-    public static final ForgeConfigSpec.DoubleValue SUPERSONIC_SPEED;
-    public static final ForgeConfigSpec.BooleanValue INTERCEPTOR_CHIP_MODE;
-    public static final ForgeConfigSpec.DoubleValue INTERCEPTOR_HIT_DAMAGE;
-    public static final ForgeConfigSpec.DoubleValue INTERCEPTOR_GRAZE_DAMAGE;
+    public static final ModConfigSpec.DoubleValue INTERCEPT_CHANCE;
+    public static final ModConfigSpec.DoubleValue INTERCEPT_CROSSING_FACTOR;
+    public static final ModConfigSpec.DoubleValue INTERCEPTOR_KILL_RADIUS;
+    public static final ModConfigSpec.DoubleValue INTERCEPTOR_ACQUIRE_RANGE;
+    public static final ModConfigSpec.DoubleValue SUPERSONIC_SPEED;
+    public static final ModConfigSpec.BooleanValue INTERCEPTOR_CHIP_MODE;
+    public static final ModConfigSpec.DoubleValue INTERCEPTOR_HIT_DAMAGE;
+    public static final ModConfigSpec.DoubleValue INTERCEPTOR_GRAZE_DAMAGE;
     // --- Stealth ---
-    public static final ForgeConfigSpec.DoubleValue STEALTH_DETECT_RANGE;
-    public static final ForgeConfigSpec.DoubleValue STEALTH_DETECT_CHANCE;
+    public static final ModConfigSpec.DoubleValue STEALTH_DETECT_RANGE;
+    public static final ModConfigSpec.DoubleValue STEALTH_DETECT_CHANCE;
     // --- Evasion ---
-    public static final ForgeConfigSpec.DoubleValue DIVE_EVASION_MULTIPLIER;
+    public static final ModConfigSpec.DoubleValue DIVE_EVASION_MULTIPLIER;
     // --- Batteries ---
-    public static final ForgeConfigSpec.IntValue BATTERY_MAGAZINE;
-    public static final ForgeConfigSpec.IntValue BATTERY_RELOAD_TICKS;
+    public static final ModConfigSpec.IntValue BATTERY_MAGAZINE;
+    public static final ModConfigSpec.IntValue BATTERY_RELOAD_TICKS;
     // --- Fuel ---
-    public static final ForgeConfigSpec.IntValue DEFAULT_FUEL_TICKS;
+    public static final ModConfigSpec.IntValue DEFAULT_FUEL_TICKS;
     // --- Incendiary ---
-    public static final ForgeConfigSpec.BooleanValue FIRE_BOMBLETS_AS_FIREBALLS;
+    public static final ModConfigSpec.BooleanValue FIRE_BOMBLETS_AS_FIREBALLS;
     // --- Off-world simulation ---
-    public static final ForgeConfigSpec.DoubleValue SIM_PLAYER_KEEP_RANGE;
-    public static final ForgeConfigSpec.DoubleValue SIM_TERMINAL_RANGE;
-    public static final ForgeConfigSpec.DoubleValue SIM_SPAWN_MARGIN;
-    public static final ForgeConfigSpec.IntValue SIM_CRUISE_DELAY_TICKS;
+    public static final ModConfigSpec.DoubleValue SIM_PLAYER_KEEP_RANGE;
+    public static final ModConfigSpec.DoubleValue SIM_TERMINAL_RANGE;
+    public static final ModConfigSpec.DoubleValue SIM_SPAWN_MARGIN;
+    public static final ModConfigSpec.IntValue SIM_CRUISE_DELAY_TICKS;
     // --- Debug ---
-    public static final ForgeConfigSpec.BooleanValue DEBUG_LOGGING;
+    public static final ModConfigSpec.BooleanValue DEBUG_LOGGING;
 
     static {
-        ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
+        ModConfigSpec.Builder b = new ModConfigSpec.Builder();
 
         b.comment("WarForge Factions integration (only has any effect when the 'warforge' mod is installed).")
                 .push("warforge");

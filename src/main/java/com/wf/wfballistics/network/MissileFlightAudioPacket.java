@@ -1,33 +1,42 @@
 package com.wf.wfballistics.network;
 
 import com.wf.wfballistics.MissileEntity;
+import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.WFSounds;
-import com.wf.wfballistics.client.ClientPacketHandler;
 import com.wf.wfballistics.sim.SimMissile;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
-import net.minecraftforge.network.NetworkEvent;
 
 import java.util.UUID;
-import java.util.function.Supplier;
 
 
 public record MissileFlightAudioPacket(UUID id, double x, double y, double z,
                                        float vx, float vy, float vz,
                                        ResourceLocation sound, float range,
-                                       float basePitch, float speedPitch) {
+                                       float basePitch, float speedPitch) implements CustomPacketPayload {
 
     /** Ticks between position/audio heartbeats for one missile. */
     public static final int UPDATE_INTERVAL = 3;
     /** Ticks without a heartbeat before the client stops a loop (must exceed {@link #UPDATE_INTERVAL}). */
     public static final int CLIENT_TIMEOUT = 8;
 
-    public static void encode(MissileFlightAudioPacket p, FriendlyByteBuf buf) {
+    public static final Type<MissileFlightAudioPacket> TYPE =
+            new Type<>(ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "missile_flight_audio"));
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, MissileFlightAudioPacket> STREAM_CODEC =
+            StreamCodec.of(MissileFlightAudioPacket::encode, MissileFlightAudioPacket::decode);
+
+    @Override
+    public Type<MissileFlightAudioPacket> type() {
+        return TYPE;
+    }
+
+    private static void encode(RegistryFriendlyByteBuf buf, MissileFlightAudioPacket p) {
         buf.writeUUID(p.id);
         buf.writeDouble(p.x);
         buf.writeDouble(p.y);
@@ -41,19 +50,12 @@ public record MissileFlightAudioPacket(UUID id, double x, double y, double z,
         buf.writeFloat(p.speedPitch);
     }
 
-    public static MissileFlightAudioPacket decode(FriendlyByteBuf buf) {
+    private static MissileFlightAudioPacket decode(RegistryFriendlyByteBuf buf) {
         return new MissileFlightAudioPacket(buf.readUUID(),
                 buf.readDouble(), buf.readDouble(), buf.readDouble(),
                 buf.readFloat(), buf.readFloat(), buf.readFloat(),
                 buf.readResourceLocation(), buf.readFloat(), buf.readFloat(), buf.readFloat());
     }
-
-    public static void handle(MissileFlightAudioPacket p, Supplier<NetworkEvent.Context> ctx) {
-        ctx.get().enqueueWork(() ->
-                DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> ClientPacketHandler.handleMissileAudio(p)));
-        ctx.get().setPacketHandled(true);
-    }
-
 
     /** Broadcast a live missile entity's flight audio to players within its range. Server only. */
     public static void broadcastEntity(MissileEntity m) {

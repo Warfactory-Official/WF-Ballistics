@@ -1,11 +1,12 @@
 package com.wf.wfballistics.fire;
 
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraftforge.common.util.INBTSerializable;
+import net.neoforged.neoforge.common.util.INBTSerializable;
 
 /**
  * Per-entity custom-fire state: how many ticks of burning remain and which {@link FireType} is active. Held
- * as a Forge capability (see {@link WFFire}) so it persists across saves and rides along with the entity.
+ * as a NeoForge data attachment (see {@link WFFire}) so it persists across saves and rides along with the entity.
  */
 public class WFFireData implements INBTSerializable<CompoundTag> {
 
@@ -52,7 +53,7 @@ public class WFFireData implements INBTSerializable<CompoundTag> {
     }
 
     @Override
-    public CompoundTag serializeNBT() {
+    public CompoundTag serializeNBT(HolderLookup.Provider provider) {
         CompoundTag tag = new CompoundTag();
         tag.putInt("ticks", ticks);
         tag.putByte("type", (byte) type.ordinal());
@@ -60,7 +61,7 @@ public class WFFireData implements INBTSerializable<CompoundTag> {
     }
 
     @Override
-    public void deserializeNBT(CompoundTag nbt) {
+    public void deserializeNBT(HolderLookup.Provider provider, CompoundTag nbt) {
         ticks = nbt.getInt("ticks");
         FireType[] types = FireType.values();
         type = types[Math.floorMod(nbt.getByte("type"), types.length)];
