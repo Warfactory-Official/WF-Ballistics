@@ -43,6 +43,17 @@ sourceSets.main.resources {
     exclude 'src/generated/**/.cache'
 }
 
+// TODO(port): GregTechCEu integration is temporarily excluded from compilation until the GregTech 1.21.1
+// Maven coordinate is confirmed and re-added as a compile-only dependency. GregtechCompat is stubbed so the
+// rest of the mod builds. Un-exclude these (and re-add the gt mixin) when GregTech is back on the classpath.
+sourceSets.main.java {
+    exclude 'com/wf/wfballistics/compat/gt/**'
+    exclude 'com/wf/wfballistics/mixin/gt/**'
+    // TODO(port): WarForge Factions integration excluded until its NeoForge 1.21.1 coordinate is confirmed.
+    // WarforgeCompat is stubbed so the rest of the mod builds. Un-exclude when WarForge is on the classpath.
+    exclude 'com/wf/wfballistics/compat/warforge/**'
+}
+
 repositories {
     maven {
         name = 'NeoForged'

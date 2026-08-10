@@ -969,7 +969,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
-        super.defineSynchedData(builder);
         builder.define(MODEL_ID, MissileModels.DEFAULT.toString());
         builder.define(EXHAUST_COLOR, DEFAULT_EXHAUST_COLOR);
         builder.define(FLIGHT_SOUND, "");

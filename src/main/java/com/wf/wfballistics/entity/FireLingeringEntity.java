@@ -128,7 +128,7 @@ public class FireLingeringEntity extends Entity {
                 if (e instanceof LivingEntity living) {
                     applyFire(living);
                 } else {
-                    e.setSecondsOnFire(4);
+                    e.igniteForSeconds(4);
                 }
             }
         } else {

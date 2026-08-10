@@ -93,7 +93,7 @@ public class Debris {
             Vec3 from = new Vec3(this.x, this.y, this.z);
             Vec3 to = new Vec3(this.x + this.vx, this.y + this.vy, this.z + this.vz);
             BlockHitResult hit = level.clip(new ClipContext(from, to,
-                    ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, null));
+                    ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, (net.minecraft.world.entity.Entity) null));
             if (hit.getType() != HitResult.Type.MISS) {
                 Vec3 loc = hit.getLocation();
                 this.x = loc.x;

@@ -112,7 +112,7 @@ public final class MissileTargetDebugRenderer {
             ny /= len;
             nz /= len;
         }
-        buffer.addVertex(mat, (float) x0, (float) y0, (float) z0).setColor(r, g, b, a).setNormal(norm, nx, ny, nz);
-        buffer.addVertex(mat, (float) x1, (float) y1, (float) z1).setColor(r, g, b, a).setNormal(norm, nx, ny, nz);
+        buffer.addVertex(mat, (float) x0, (float) y0, (float) z0).setColor(r, g, b, a).setNormal(nx, ny, nz);
+        buffer.addVertex(mat, (float) x1, (float) y1, (float) z1).setColor(r, g, b, a).setNormal(nx, ny, nz);
     }
 }

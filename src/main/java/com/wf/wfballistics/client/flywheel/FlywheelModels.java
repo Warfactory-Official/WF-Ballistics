@@ -21,7 +21,7 @@ public final class FlywheelModels {
             .build();
 
     private static final RendererReloadCache<PartialModel, Model> PARTICLE_MODEL =
-            new RendererReloadCache<>(partial -> BakedModelBuilder.create(partial.get())
+            new RendererReloadCache<>(partial -> new BakedModelBuilder(partial.get())
                     .materialFunc((renderType, shaded) -> PARTICLE)
                     .build());
 
@@ -31,7 +31,7 @@ public final class FlywheelModels {
             .build();
 
     private static final RendererReloadCache<PartialModel, Model> TRANSLUCENT_MODEL =
-            new RendererReloadCache<>(partial -> BakedModelBuilder.create(partial.get())
+            new RendererReloadCache<>(partial -> new BakedModelBuilder(partial.get())
                     .materialFunc((renderType, shaded) -> TRANSLUCENT)
                     .build());
 
