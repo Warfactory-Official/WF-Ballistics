@@ -43,12 +43,7 @@ sourceSets.main.resources {
     exclude 'src/generated/**/.cache'
 }
 
-// TODO(port): GregTechCEu integration is temporarily excluded from compilation until the GregTech 1.21.1
-// Maven coordinate is confirmed and re-added as a compile-only dependency. GregtechCompat is stubbed so the
-// rest of the mod builds. Un-exclude these (and re-add the gt mixin) when GregTech is back on the classpath.
 sourceSets.main.java {
-    exclude 'com/wf/wfballistics/compat/gt/**'
-    exclude 'com/wf/wfballistics/mixin/gt/**'
     // TODO(port): WarForge Factions integration excluded until its NeoForge 1.21.1 coordinate is confirmed.
     // WarforgeCompat is stubbed so the rest of the mod builds. Un-exclude when WarForge is on the classpath.
     exclude 'com/wf/wfballistics/compat/warforge/**'
@@ -157,12 +152,20 @@ dependencies {
     // TODO(port): find the spark file id for NeoForge 1.21.1 on CurseForge, then:
     // localRuntime "curse.maven:spark-361579:<neo_1.21.1_file_id>"
 
-    // --- Compile-only integrations (Java compat code depends on these; disabled until their
-    //     1.21.1 coordinates are confirmed — see porting-resources/00-PORTING-PLAYBOOK.md OQ list) ---
-    // TODO(port): GregTechCEu Modern 1.21.1 coordinate + repo
-    // compileOnly("com.gregtechceu.gtceu:gtceu-1.21.1:<ver>") { transitive = false }
-    // TODO(port): LDLib 1.21.1
-    // compileOnly("com.lowdragmc.ldlib:ldlib-neoforge-1.21.1:<ver>") { exclude group: 'appeng'; exclude group: 'dev.latvian.mods'; exclude group: 'mezz.jei' }
+    // --- GregTechCEu Modern (compile-only optional integration) — NeoForge 1.21.1 build via CurseMaven.
+    //     compileOnly (NOT implementation): the EMP-warhead integration compiles against GregTech but GregTech
+    //     is only loaded at runtime if the user installs it. transitive=false to avoid dragging GregTech's
+    //     whole dependency tree (AE2/LDLib/JEI/KubeJS) onto the classpath.
+    compileOnly("curse.maven:gregtechceu-modern-890405:6766269") { transitive = false }
+
+    // LDLib — GregTech's UI/syncdata library. Needed at COMPILE time because GregTech's public types
+    // (IMaintenanceMachine, MetaMachine, NotifiableEnergyContainer) extend LDLib interfaces (IUIHolder,
+    // IEnhancedManaged). compileOnly + transitive=false, same rationale as GregTech.
+    // Pinned to 1.0.35.a — the exact version GregTech 7.0.1 (file 6766269) was built against.
+    // Newer LDLib (1.0.41) dropped IEnhancedManaged, which GregTech's MetaMachine still implements.
+    compileOnly("com.lowdragmc.ldlib:ldlib-neoforge-1.21.1:1.0.35.a") { transitive = false }
+
+    // --- Other compile-only integrations (disabled until their 1.21.1 coordinates are confirmed) ---
     // TODO(port): Registrate 1.21.1
     // compileOnly("com.tterrag.registrate:Registrate:MC1.21.1-<ver>") { transitive = false }
     // TODO(port): WarForge Factions — confirm the NeoForge 1.21.1 project/file id on CurseForge
