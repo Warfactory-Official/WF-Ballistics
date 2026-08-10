@@ -1,5 +1,5 @@
-# WF Ballistics — NeoForge mod metadata. Tokens (${...}) are expanded by the
-# generateModMetadata task in build.gradle from gradle.properties.
+# WF Ballistics — NeoForge mod metadata.
+# The dollar-brace tokens below are expanded by the generateModMetadata task in build.gradle from gradle.properties.
 modLoader = "javafml"
 loaderVersion = "${loader_version_range}"
 license = "${mod_license}"
