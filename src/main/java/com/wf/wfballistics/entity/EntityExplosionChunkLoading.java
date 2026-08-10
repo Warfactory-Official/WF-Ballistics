@@ -10,10 +10,10 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.common.world.chunk.TicketController;
 
 public abstract class EntityExplosionChunkLoading extends Entity {
-    // TODO(port): TicketController — must be registered via RegisterTicketControllersEvent on the mod bus
-    //  before any forceChunk call is made. Move registration to WFBallistics main class or a dedicated
-    //  event subscriber. The controller replaces the old ForgeChunkManager.forceChunk(modid, entity, ...) calls.
-    static final TicketController CHUNK_TICKET = new TicketController(
+    // Replaces the old ForgeChunkManager.forceChunk(modid, entity, ...) calls. Registered on the mod bus via
+    // WFServerEvents.ModBusEvents#onRegisterTicketControllers (a TicketController must be registered before any
+    // forceChunk call, or forceChunk throws IllegalArgumentException).
+    public static final TicketController CHUNK_TICKET = new TicketController(
             ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "explosion"));
 
     ServerLevel serverLevel;

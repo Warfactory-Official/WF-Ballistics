@@ -2,7 +2,6 @@ package com.wf.wfballistics.mixin;
 
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.PoseStack;
 import com.wf.wfballistics.client.fx.WFDynamicLight;
 import com.wf.wfballistics.config.WFClientConfig;
 import net.minecraft.client.Minecraft;
@@ -21,13 +20,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(LevelRenderer.class)
 public abstract class MixinLevelRenderer {
 
+    // 1.21: renderChunkLayer -> renderSectionLayer; the PoseStack param is gone and there are now two
+    // Matrix4f (frustum + projection). It still calls RenderType#setupRenderState() at the top.
     @Inject(
-            method = "renderChunkLayer",
+            method = "renderSectionLayer",
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/client/renderer/RenderType;setupRenderState()V",
                     shift = At.Shift.AFTER))
-    private void wfballistics$solidifyTranslucent(RenderType renderType, PoseStack poseStack,
-                                                  double camX, double camY, double camZ, Matrix4f projection,
+    private void wfballistics$solidifyTranslucent(RenderType renderType,
+                                                  double camX, double camY, double camZ,
+                                                  Matrix4f frustumMatrix, Matrix4f projectionMatrix,
                                                   CallbackInfo ci) {
         if ((renderType != RenderType.translucent() && renderType != RenderType.tripwire())
                 || !wfballistics$solidTranslucentActive()) {
