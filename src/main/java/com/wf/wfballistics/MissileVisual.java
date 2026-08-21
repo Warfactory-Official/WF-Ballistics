@@ -1,5 +1,6 @@
 package com.wf.wfballistics;
 
+import com.wf.wfballistics.client.anim.RotorInstances;
 import com.wf.wfballistics.attitude.MissileAttitude;
 import com.wf.wfballistics.attitude.MissileAttitudeRegistry;
 import dev.engine_room.flywheel.api.task.Plan;
@@ -44,13 +45,24 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
     // jitter is filtered out while a sustained climb/dive still accumulates through it and pitches the nose.
     private static final float HEADING_SMOOTHING = 0.3f;
     private final TransformedInstance modelInstance;
-    // Spinning parts (propellers/rotors), one instance each, spun continuously in updatePosition.
-    private final TransformedInstance[] rotorInstances;
-    private final MissileModels.Rotor[] rotorSpecs;
-    private final Vector3f[] rotorPivots;
-    // How this model rotates to its heading (nose-to-velocity missile, level drone, ...) — a swappable strategy.
+    // Spinning parts (propellers/rotors), spun continuously in updatePosition.
+    private final RotorInstances rotors;
+    // How this model rotates to its heading (nose-to-velocity missile, level drone, ...): a swappable strategy.
     private final MissileAttitude attitude;
     private final Quaternionf orientation = new Quaternionf();
+    /**
+     * Per-frame scratch, owned per visual: flywheel updates visuals on several threads at once, so this
+     * cannot be shared between them.
+     */
+    private final Quaternionf targetOrientation = new Quaternionf();
+    private final Vector3f headingScratch = new Vector3f();
+    private final BlockPos.MutableBlockPos lightPos = new BlockPos.MutableBlockPos();
+    /**
+     * Light at the missile's block, resampled once a tick rather than once a frame: it is a chunk lookup,
+     * and nothing feeding it changes faster than a tick.
+     */
+    private int packedLight;
+    private int lightTick = Integer.MIN_VALUE;
     // Minecraft's oldPos and deltaMovement are both unreliable for this entity, so we track position
     // ourselves to smooth rendering across partial ticks.
     private double prevX;
@@ -79,25 +91,7 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
                 .instancer(InstanceTypes.TRANSFORMED, flywheelModel)
                 .createInstance();
 
-        // Spinning parts: each rotor is a separate mesh drawn as its own instance and spun in updatePosition.
-        // Data-driven from MissileModels#rotors; the pivot is the rotor mesh's own centre. No per-model code.
-        List<MissileModels.Rotor> rotors = MissileModels.rotors(modelId);
-        this.rotorInstances = new TransformedInstance[rotors.size()];
-        this.rotorSpecs = new MissileModels.Rotor[rotors.size()];
-        this.rotorPivots = new Vector3f[rotors.size()];
-        for (int i = 0; i < rotors.size(); i++) {
-            MissileModels.Rotor rotor = rotors.get(i);
-            var rotorModel = ModModels.rotor(rotor.model());
-            if (rotorModel == null) {
-                continue;
-            }
-            this.rotorSpecs[i] = rotor;
-            Vec3 pivot = MissileModels.rotorPivot(rotor.model());
-            this.rotorPivots[i] = new Vector3f((float) pivot.x, (float) pivot.y, (float) pivot.z);
-            this.rotorInstances[i] = context.instancerProvider()
-                    .instancer(InstanceTypes.TRANSFORMED, Models.partial(rotorModel))
-                    .createInstance();
-        }
+        this.rotors = RotorInstances.create(context, modelId);
 
         prevX = entity.getX();
         prevY = entity.getY();
@@ -168,11 +162,11 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
                 rhz = dm.z;
             }
             if (rhx * rhx + rhy * rhy + rhz * rhz > 1.0E-8) {
-                Vector3f raw = new Vector3f((float) rhx, (float) rhy, (float) rhz).normalize();
+                headingScratch.set((float) rhx, (float) rhy, (float) rhz).normalize();
                 if (headingInit) {
-                    smoothedHeading.lerp(raw, HEADING_SMOOTHING).normalize();
+                    smoothedHeading.lerp(headingScratch, HEADING_SMOOTHING).normalize();
                 } else {
-                    smoothedHeading.set(raw);
+                    smoothedHeading.set(headingScratch);
                     headingInit = true;
                 }
             }
@@ -185,7 +179,8 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
 
 
         if (headingInit) {
-            Quaternionf target = attitude.orientation(new Vector3f(smoothedHeading));
+            // Passed straight in: MissileAttitude is contracted not to modify the heading it is given.
+            Quaternionf target = attitude.orientation(smoothedHeading, targetOrientation);
             if (orientationInit) {
                 // Scale the catch-up by how far the model currently is from the true heading: gentle cruise
                 // turns stay smooth, but a hard dive/turn snaps on so the model doesn't trail its hitbox.
@@ -202,35 +197,22 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         // Ease the roll toward its per-tick target every frame so banking looks smooth.
         bank += (targetBank - bank) * BANK_SMOOTHING;
 
-        Matrix4f matrix = new Matrix4f()
-                .translate(renderX, renderY, renderZ)
+        // Built straight into the instance's own matrix; the rotors then read it as their parent transform.
+        Matrix4f matrix = this.modelInstance.pose;
+        matrix.translation(renderX, renderY, renderZ)
                 .rotate(orientation)
                 .rotateY(bank); // roll about the model's nose/long axis (local +Y)
 
-        BlockPos entityPos = BlockPos.containing(curX, curY, curZ);
-        int packedLight = LevelRenderer.getLightColor(entity.level(), entityPos);
+        if (entity.tickCount != lightTick) {
+            lightTick = entity.tickCount;
+            lightPos.set(Mth.floor(curX), Mth.floor(curY), Mth.floor(curZ));
+            packedLight = LevelRenderer.getLightColor(entity.level(), lightPos);
+        }
 
         this.modelInstance.light(packedLight);
-        this.modelInstance.setTransform(matrix);
         this.modelInstance.setChanged();
 
-        // Constant rotor spin: same body transform, with an extra rotation about the rotor's own pivot/axis.
-        for (int i = 0; i < rotorInstances.length; i++) {
-            TransformedInstance rotorInstance = rotorInstances[i];
-            if (rotorInstance == null) {
-                continue;
-            }
-            MissileModels.Rotor rotor = rotorSpecs[i];
-            Vector3f pivot = rotorPivots[i];
-            float angle = (float) Math.toRadians((entity.tickCount + partialTick) * rotor.degreesPerTick() % 360.0f);
-            Matrix4f rotorMatrix = new Matrix4f(matrix)
-                    .translate(pivot.x, pivot.y, pivot.z)
-                    .rotate(angle, rotor.axis().x, rotor.axis().y, rotor.axis().z)
-                    .translate(-pivot.x, -pivot.y, -pivot.z);
-            rotorInstance.light(packedLight);
-            rotorInstance.setTransform(rotorMatrix);
-            rotorInstance.setChanged();
-        }
+        this.rotors.update(matrix, entity.tickCount + partialTick, packedLight);
     }
 
     @Override
@@ -239,11 +221,7 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         if (this.modelInstance != null) {
             this.modelInstance.delete();
         }
-        for (TransformedInstance rotorInstance : rotorInstances) {
-            if (rotorInstance != null) {
-                rotorInstance.delete();
-            }
-        }
+        this.rotors.delete();
     }
 
     @Override

@@ -7,7 +7,7 @@ import org.jetbrains.annotations.Nullable;
 /**
  * One phase of a missile's flight (e.g. ascent, cruise, terminal attack). A stage is a stateless strategy: it
  * reads the missile plus the per-tick {@link FlightContext}, returns the desired velocity, and decides when the
- * flight should advance to another phase. Swapping a stage — a drone ascent curve, a different attack run —
+ * flight should advance to another phase. Swapping a stage (a drone ascent curve, a different attack run)
  * changes how the missile flies without touching {@link MissileEntity}. Compose stages into a
  * {@link FlightProfile}; keep any per-missile state on the entity so it persists.
  */

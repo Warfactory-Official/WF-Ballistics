@@ -22,7 +22,7 @@ import org.joml.Matrix4f;
 
 /**
  * Debug overlay: a green wire block at every missile's current aim point, plus a faint line from the missile
- * to it — so it's obvious where each missile (a recursive missilelet especially) is actually aiming, and
+ * to it, so it's obvious where each missile (a recursive missilelet especially) is actually aiming, and
  * whether that point is on solid ground or floating in empty air over a crater.
  *
  * <p>The aim point isn't synced to the client (it's server-only state on {@link MissileEntity}); rather than

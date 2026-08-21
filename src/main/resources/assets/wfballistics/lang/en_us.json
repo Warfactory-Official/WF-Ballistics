@@ -24,5 +24,11 @@
   "item.wfballistics.missile.model": "Airframe: %s",
   "item.wfballistics.missile.warhead": "Warhead: %s",
   "item.wfballistics.kerosene_bucket": "Kerosene Bucket",
-  "fluid_type.wfballistics.kerosene": "Kerosene"
+  "fluid_type.wfballistics.kerosene": "Kerosene",
+  "block.wfballistics.drone_pad": "Drone Pad",
+  "entity.wfballistics.drone": "Delivery Drone",
+  "entity.wfballistics.crate": "Cargo Crate",
+  "entity.wfballistics.missile": "Missile",
+  "entity.wfballistics.bomblet": "Bomblet",
+  "subtitles.wfballistics.drone.rotor_loop": "Drone whirrs"
 }

@@ -18,7 +18,7 @@ import java.util.List;
  * and tumbling to the ground where it settles and fades; the matching {@link SkeletonBoneVisual} draws them
  * as instanced meshes.
  *
- * <p>Built from a generic biped layout ({@link #biped}) scaled to the dead entity's height — so it diverges
+ * <p>Built from a generic biped layout ({@link #biped}) scaled to the dead entity's height, so it diverges
  * from HBM's per-mob bone tables, but works for any humanoid-ish entity without those mappings.
  */
 public class SkeletonBoneEffect implements WFFlywheelEffect {

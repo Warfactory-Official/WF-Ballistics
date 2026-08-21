@@ -21,7 +21,7 @@ public interface WarheadCarrier {
     }
 
     /**
-     * Unit direction the warhead is travelling at the moment it detonates — the jet axis for directional
+     * Unit direction the warhead is travelling at the moment it detonates: the jet axis for directional
      * warheads such as the shaped charge (see {@link WarheadRegistry#SHAPED_CHARGE}). Implementors return their
      * normalised velocity, falling back to straight down {@code (0,-1,0)} when effectively stationary.
      */

@@ -21,8 +21,8 @@ import net.neoforged.api.distmarker.OnlyIn;
 /**
  * A bomblet: a small, tumbling orange fragment flung out by a fragmentation warhead (see
  * {@link com.wf.wfballistics.util.FragmentationUtil}). It's a gravity-affected projectile that carries a
- * pluggable {@link WarheadRegistry.Detonation} — the exact same warhead interface
- * {@link com.wf.wfballistics.MissileEntity} uses — and goes off on the first thing it hits or when its fuse
+ * pluggable {@link WarheadRegistry.Detonation}, the exact same warhead interface
+ * {@link com.wf.wfballistics.MissileEntity} uses, and goes off on the first thing it hits or when its fuse
  * runs out, whichever comes first.
  *
  * <p>Because a burst spawns many of these at once, the payload is intentionally light: a small radius kill and
@@ -75,7 +75,7 @@ public class BombletEntity extends Projectile implements WarheadCarrier {
 
     @Override
     public Vec3 angle() {
-        // Travel direction at detonation — the jet axis for a directional warhead. Falls back to straight down.
+        // Travel direction at detonation: the jet axis for a directional warhead. Falls back to straight down.
         Vec3 v = this.getDeltaMovement();
         return v.lengthSqr() < 1.0e-8 ? new Vec3(0.0, -1.0, 0.0) : v.normalize();
     }

@@ -9,8 +9,8 @@ import java.lang.reflect.Field;
  *
  * <p>The original NTM port wrapped {@code jdk.internal.misc.Unsafe} via MethodHandles (with a javac plugin
  * to swallow the checked exceptions). This is backed by {@code sun.misc.Unsafe} instead, which exposes every
- * operation the renderer and the {@code BufferBuilder} mixin actually use — absolute-address
- * {@code putFloat}/{@code putInt}, {@code getLong(Object, long)}, and the field/array offset queries — with
+ * operation the renderer and the {@code BufferBuilder} mixin actually use (absolute-address
+ * {@code putFloat}/{@code putInt}, {@code getLong(Object, long)}, and the field/array offset queries) with
  * identical runtime behaviour and no compiler-plugin requirement.
  */
 public final class UnsafeHolder {

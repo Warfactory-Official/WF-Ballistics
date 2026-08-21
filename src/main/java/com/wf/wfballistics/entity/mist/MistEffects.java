@@ -15,8 +15,8 @@ import java.util.Map;
  * The lookup that decides what a fluid does as mist. Two ways to register, mirroring the "registry or tags"
  * choice:
  * <ul>
- *   <li>{@link #register(Fluid, MistEffect)} — bind a specific fluid (used for the built-in gases).</li>
- *   <li>{@link #register(TagKey, MistEffect)} — bind a whole {@code #namespace:tag} of fluids, so packs and
+ *   <li>{@link #register(Fluid, MistEffect)}: bind a specific fluid (used for the built-in gases).</li>
+ *   <li>{@link #register(TagKey, MistEffect)}: bind a whole {@code #namespace:tag} of fluids, so packs and
  *       other mods can opt their fluids into a behaviour without touching code.</li>
  * </ul>
  *

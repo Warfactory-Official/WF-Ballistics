@@ -14,7 +14,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Map;
 
 /**
- * An immutable, launch-ready missile configuration — the full {@link MissileEntity.Builder} minus the target,
+ * An immutable, launch-ready missile configuration: the full {@link MissileEntity.Builder} minus the target,
  * which is supplied at fire time. Registered in {@link MissilePresetRegistry}; each preset becomes a
  * {@link MissileItem} the player can carry and launch.
  *
@@ -305,7 +305,7 @@ public final class MissilePreset {
     }
 
     /**
-     * Picks a {@link MissileEntity.DownedAction} at launch time — call e.g. to roll a random / weighted shot-down
+     * Picks a {@link MissileEntity.DownedAction} at launch time: call e.g. to roll a random / weighted shot-down
      * behaviour per missile. Rolled once in {@link #build(Level, Vec3)} (so each launched missile decides its own
      * fate); the chosen action is then a plain enum on the entity and persists normally.
      *
@@ -588,7 +588,7 @@ public final class MissilePreset {
         }
 
         /**
-         * Distance (blocks) at which this missile's flight loop fades to silence and the server broadcasts it —
+         * Distance (blocks) at which this missile's flight loop fades to silence and the server broadcasts it:
          * independent of view/render distance (see {@link MissileEntity.Builder#flightSoundRange}). Default
          * {@link MissileEntity#DEFAULT_FLIGHT_SOUND_RANGE}.
          */
@@ -613,7 +613,7 @@ public final class MissilePreset {
         }
 
         /**
-         * How this missile responds to incoming damage, by {@code MissileDamageRegistry} id — e.g.
+         * How this missile responds to incoming damage, by {@code MissileDamageRegistry} id: e.g.
          * {@code explosion_only} to resist everything but blasts (see {@link MissileEntity.Builder#damageResponse}).
          * Unset takes damage as dealt.
          */
@@ -633,7 +633,7 @@ public final class MissilePreset {
         }
 
         /**
-         * Pick the shot-down behaviour per launch (see {@link DownedActionPicker}) — e.g. a weighted random roll.
+         * Pick the shot-down behaviour per launch (see {@link DownedActionPicker}): e.g. a weighted random roll.
          * Overrides any fixed {@link #downedAction(MissileEntity.DownedAction)}; {@code null} clears it.
          */
         public Builder downedAction(DownedActionPicker picker) {

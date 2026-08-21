@@ -9,7 +9,7 @@ import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
 /**
  * Gives every missile a Flywheel-instanced exhaust trail as it appears on the client. The example for "rocket
- * particles and similar repeating particles" — any flying entity can get a trail by spawning an
+ * particles and similar repeating particles": any flying entity can get a trail by spawning an
  * {@link InstancedTrailEffect} for it here (or wherever the entity is created client-side).
  */
 @EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)

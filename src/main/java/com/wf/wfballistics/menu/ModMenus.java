@@ -19,5 +19,8 @@ public class ModMenus {
     public static final DeferredHolder<MenuType<?>, MenuType<MissileDispenserMenu>> MISSILE_DISPENSER =
             MENUS.register("missile_dispenser", () -> IMenuTypeExtension.create(MissileDispenserMenu::new));
 
+    public static final DeferredHolder<MenuType<?>, MenuType<DronePadMenu>> DRONE_PAD =
+            MENUS.register("drone_pad", () -> IMenuTypeExtension.create(DronePadMenu::new));
+
 
 }

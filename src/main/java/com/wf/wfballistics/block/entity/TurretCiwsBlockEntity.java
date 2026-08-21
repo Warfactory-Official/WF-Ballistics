@@ -26,7 +26,7 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
      */
     public static final double RANGE = 64.0;
     /**
-     * Detection radius as a listener — larger than RANGE so sim missiles materialize before entering it.
+     * Detection radius as a listener: larger than RANGE so sim missiles materialize before entering it.
      */
     public static final double LISTENER_RANGE = 96.0;
     /**

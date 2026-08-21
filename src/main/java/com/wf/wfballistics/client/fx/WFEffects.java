@@ -21,7 +21,7 @@ import net.minecraft.world.level.block.state.BlockState;
 /**
  * Client-side registry of named, multi-particle effects. {@link com.wf.wfballistics.network.AuxParticlePacket}
  * carries an effect key + an NBT parameter blob; {@link #dispatch} fans that out into the actual particles.
- * Adding a new composite effect is one {@code case} here plus a server-side packet send — no new packet
+ * Adding a new composite effect is one {@code case} here plus a server-side packet send: no new packet
  * class, mirroring HBM's {@code HbmEffectNT} dispatcher.
  */
 public final class WFEffects {
@@ -163,7 +163,7 @@ public final class WFEffects {
 
     /**
      * The cremation skeleton: a biped bone pile rendered as Flywheel instances ({@link SkeletonBoneEffect}).
-     * Instanced-only — if the Flywheel backend is off there is no bone render (the ash burst still plays).
+     * Instanced-only, if the Flywheel backend is off there is no bone render (the ash burst still plays).
      */
     private static void skeleton(ClientLevel level, double x, double y, double z, CompoundTag data) {
         if (!com.wf.wfballistics.client.flywheel.FlywheelEffectManager.isAvailable(level)) return;

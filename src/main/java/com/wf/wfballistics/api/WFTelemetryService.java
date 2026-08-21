@@ -9,15 +9,15 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.UUID;
 
-public final class MissileTelemetryService {
+public final class WFTelemetryService {
 
     public static final int MAX_TRACKED = 128;
 
-    private static final LinkedHashMap<UUID, MissileTelemetry> TRACKED = new LinkedHashMap<>();
+    private static final LinkedHashMap<UUID, WFTelemetry> TRACKED = new LinkedHashMap<>();
 
     private static volatile boolean autoOpen = false;
 
-    private MissileTelemetryService() {
+    private WFTelemetryService() {
     }
 
     public static boolean autoOpen() {
@@ -28,8 +28,8 @@ public final class MissileTelemetryService {
         autoOpen = value;
     }
 
-    public static MissileTelemetry open(UUID id, long gameTime) {
-        MissileTelemetry existing = TRACKED.get(id);
+    public static WFTelemetry open(UUID id, long gameTime) {
+        WFTelemetry existing = TRACKED.get(id);
         if (existing != null) {
             return existing;
         }
@@ -40,12 +40,12 @@ public final class MissileTelemetryService {
                 it.remove();
             }
         }
-        MissileTelemetry created = new MissileTelemetry(id, gameTime);
+        WFTelemetry created = new WFTelemetry(id, gameTime);
         TRACKED.put(id, created);
         return created;
     }
 
-    public static MissileTelemetry get(UUID id) {
+    public static WFTelemetry get(UUID id) {
         return TRACKED.get(id);
     }
 
@@ -53,7 +53,7 @@ public final class MissileTelemetryService {
         return TRACKED.containsKey(id);
     }
 
-    public static Collection<MissileTelemetry> all() {
+    public static Collection<WFTelemetry> all() {
         return new ArrayList<>(TRACKED.values());
     }
 
@@ -65,7 +65,7 @@ public final class MissileTelemetryService {
         TRACKED.clear();
     }
 
-    public static void record(MissileTelemetry cached, UUID id, MissileEventType type, long gameTime, Vec3 pos,
+    public static void record(WFTelemetry cached, UUID id, WFEventType type, long gameTime, Vec3 pos,
                               boolean simulated, String detail) {
         if (cached != null) {
             cached.record(type, gameTime, pos, simulated, detail);
@@ -73,7 +73,7 @@ public final class MissileTelemetryService {
         MissileDebug.onEvent(id, type, gameTime, pos, simulated, detail);
     }
 
-    public static void record(UUID id, MissileEventType type, long gameTime, Vec3 pos, boolean simulated,
+    public static void record(UUID id, WFEventType type, long gameTime, Vec3 pos, boolean simulated,
                               String detail) {
         record(TRACKED.get(id), id, type, gameTime, pos, simulated, detail);
     }

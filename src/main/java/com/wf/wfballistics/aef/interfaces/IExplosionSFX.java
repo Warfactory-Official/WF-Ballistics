@@ -8,7 +8,7 @@ import net.minecraft.world.level.Level;
  * <p>
  * An explosion can carry several SFX entries ({@link ExplosionAEF#setSFX}); each one is a single concern
  * (the bang, the smoke cloud, the screen flash, ...) so effects can be mixed freely. Invoked server-side
- * after all gameplay stages — implementations are expected to broadcast a packet to nearby clients rather
+ * after all gameplay stages: implementations are expected to broadcast a packet to nearby clients rather
  * than spawn particles directly, since particles only exist client-side.
  */
 public interface IExplosionSFX {

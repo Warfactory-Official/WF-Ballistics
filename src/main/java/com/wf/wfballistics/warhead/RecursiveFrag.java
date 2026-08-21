@@ -22,7 +22,7 @@ import java.util.UUID;
 
 /**
  * Recursive fragmentation warhead: instead of exploding, a missile splits into a spread of smaller
- * <em>missilelets</em> that each fly their own terminal dive — and each of <em>those</em> splits again,
+ * <em>missilelets</em> that each fly their own terminal dive, and each of <em>those</em> splits again,
  * until the leaf generation finally detonates. A "double recursive" cluster: one missile becomes a swarm.
  *
  * <p>Splitting is driven by the missile's existing airburst fuze ({@link MissileEntity} detonates in the
@@ -31,7 +31,7 @@ import java.util.UUID;
  * generation; at zero the leaf missilelet does a real (small) blast.
  *
  * <p>Every missilelet in one launch shares a {@link MissileEntity#getSwarmId() swarm id}, so the family
- * never collides with itself (see {@link MissileEntity#canHitEntity}) — otherwise the cluster would
+ * never collides with itself (see {@link MissileEntity#canHitEntity}): otherwise the cluster would
  * detonate itself the instant it spawned, now that missile-vs-missile collision is live.
  */
 public final class RecursiveFrag {
@@ -52,7 +52,7 @@ public final class RecursiveFrag {
     private static final int MIN_CHILDREN = 2;
     private static final int MAX_CHILDREN = 5;
     /**
-     * Small submunition airframe the missilelets fly as — a scaled-down cluster warhead, distinct from (and
+     * Small submunition airframe the missilelets fly as: a scaled-down cluster warhead, distinct from (and
      * smaller than) the parent {@code cluster} model, since each missilelet only carries a fraction of the
      * original payload.
      */
@@ -66,7 +66,7 @@ public final class RecursiveFrag {
     private static final double SPREAD_LATERAL = 1.3;
     private static final float CHILD_HEALTH = 10.0f;
     /**
-     * Leaf (final generation) blast radius — kept small; a full cluster is many of these.
+     * Leaf (final generation) blast radius: kept small; a full cluster is many of these.
      */
     private static final float LEAF_BLAST_RADIUS = 4.0f;
 
@@ -147,8 +147,8 @@ public final class RecursiveFrag {
             double childX = target.x + hx * r;
             double childZ = target.z + hz * r;
             // Aim at the actual surface beneath each scattered point, not the parent's target altitude. Over
-            // uneven terrain a fixed Y leaves the aimpoint floating in mid-air, and the terminal dive — which
-            // pursues a carrot capped at the target and so can't be led below it — then orbits that empty point
+            // uneven terrain a fixed Y leaves the aimpoint floating in mid-air, and the terminal dive, which
+            // pursues a carrot capped at the target and so can't be led below it, then orbits that empty point
             // forever instead of coming down (confirmed by the tgtAGL/vy logs). Snapping to the ground makes
             // every missilelet dive onto real ground.
             int childGroundY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,

@@ -39,7 +39,7 @@ public final class InterceptStage implements FlightStage {
 
     /**
      * @return true once the missile has climbed {@link #CLEAR_MARGIN} above the tallest motion-blocking column
-     * within {@link #CLEAR_SCAN_RADIUS} — i.e. it has topped the silo shaft / depression walls around it.
+     * within {@link #CLEAR_SCAN_RADIUS}: i.e. it has topped the silo shaft / depression walls around it.
      */
     private static boolean clearedLaunchWalls(MissileEntity missile) {
         Level level = missile.level();

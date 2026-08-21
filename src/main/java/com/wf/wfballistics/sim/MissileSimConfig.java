@@ -92,11 +92,11 @@ public final class MissileSimConfig {
      */
     public static final double INTERCEPTOR_ENTITY_SPEED = 4.0;
     /**
-     * Default max heading change per tick (radians) for an in-world interceptor — nimble, near-pure pursuit.
+     * Default max heading change per tick (radians) for an in-world interceptor: nimble, near-pure pursuit.
      */
     public static final double INTERCEPTOR_TURN_RATE = 0.6;
     /**
-     * Default cruise speed for a supersonic interceptor — fast enough to actually run down a supersonic
+     * Default cruise speed for a supersonic interceptor: fast enough to actually run down a supersonic
      * missile (rather than only cross its path).
      */
     public static final double INTERCEPTOR_SUPERSONIC_ENTITY_SPEED = 9.0;
@@ -142,7 +142,7 @@ public final class MissileSimConfig {
      */
     public static double INTERCEPTOR_ACQUIRE_RANGE = 200.0;
     /**
-     * Interceptor battery magazine size — how many interceptors it can fire before it must reload. 0 (default)
+     * Interceptor battery magazine size: how many interceptors it can fire before it must reload. 0 (default)
      * means unlimited (no ammo logistics).
      */
     public static int BATTERY_MAGAZINE = 0;
@@ -152,12 +152,12 @@ public final class MissileSimConfig {
     public static int BATTERY_RELOAD_TICKS = 200;
     /**
      * Stealth missiles are seen by automatic detection (interceptor acquisition, batteries, CIWS) only within
-     * this short range (vs the detector's normal range) — the main effect of stealth: a tiny engagement window.
+     * this short range (vs the detector's normal range), the main effect of stealth: a tiny engagement window.
      */
     public static double STEALTH_DETECT_RANGE = 32.0;
     /**
      * Per-scan probability that a stealth missile within {@link #STEALTH_DETECT_RANGE} is actually detected, so
-     * a fast stealth missile usually slips through the brief window (but can be seen — it is not invisible).
+     * a fast stealth missile usually slips through the brief window (but can be seen: it is not invisible).
      */
     public static float STEALTH_DETECT_CHANCE = 0.25f;
     /**
@@ -166,7 +166,7 @@ public final class MissileSimConfig {
      */
     public static double DIVE_EVASION_MULTIPLIER = 1.5;
     /**
-     * Kill-chance multiplier for a "crossing" shot — when the interceptor is too slow to catch the target and
+     * Kill-chance multiplier for a "crossing" shot, when the interceptor is too slow to catch the target and
      * can only try to cross its flight path. Noticeably lower than a proper timed intercept, so a slow
      * interceptor is unreliable against a fast (e.g. supersonic/ballistic) missile it cannot run down.
      */
@@ -184,9 +184,22 @@ public final class MissileSimConfig {
      */
     public static float INTERCEPTOR_HIT_DAMAGE = 60.0f;
     /**
-     * Damage a missed intercept deals to the health pool in chip mode — many near-misses wear a missile down.
+     * Damage a missed intercept deals to the health pool in chip mode: many near-misses wear a missile down.
      */
     public static float INTERCEPTOR_GRAZE_DAMAGE = 8.0f;
+    /**
+     * Incoming projectile damage below this bounces off a missile instead of hurting it.
+     *
+     * <p>A missile is not a mob, and an archer should not be a missile defense system: at
+     * {@code DEFAULT_HEALTH} of 50 an ordinary bow downs one in five or six shots, which makes the whole
+     * interceptor and CIWS economy optional. A floor rather than outright projectile immunity because
+     * other mods' anti-air arrives through {@code MissileEntity#hurt} too, and anything built for the job
+     * hits far harder than a bow. Set to 0 to restore plain vanilla damage, or above any weapon's output
+     * to make missiles proof against projectiles entirely.
+     *
+     * <p>Does not affect this mod's own interceptors or CIWS, which call {@code damageMissile} directly.
+     */
+    public static float MIN_PROJECTILE_DAMAGE = 20.0f;
     /**
      * cruiseSpeed (blocks/tick) at or above which a missile is classed "supersonic". Interceptor batteries
      * use this to split responsibility: the normal battery engages subsonic missiles, the supersonic battery

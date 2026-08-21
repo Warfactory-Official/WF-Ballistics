@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Per-dimension persistent store of {@link SimMissile}s. Data only — advancement/spawn logic lives
+ * Per-dimension persistent store of {@link SimMissile}s. Data only: advancement/spawn logic lives
  * in {@link SimMissileManager}.
  */
 public final class SimMissileRegistry extends SavedData {

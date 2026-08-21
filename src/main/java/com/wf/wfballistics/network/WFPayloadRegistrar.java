@@ -35,5 +35,7 @@ public final class WFPayloadRegistrar {
 
         r.playToServer(SpawnMissilePacket.TYPE, SpawnMissilePacket.STREAM_CODEC,
                 (pkt, ctx) -> pkt.handle(ctx));
+        r.playToServer(DronePadConfigPacket.TYPE, DronePadConfigPacket.STREAM_CODEC,
+                (pkt, ctx) -> pkt.handle(ctx));
     }
 }

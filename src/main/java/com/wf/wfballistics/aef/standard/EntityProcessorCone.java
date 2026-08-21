@@ -6,7 +6,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Entity stage for a shaped charge — the counterpart to {@link BlockAllocatorShapedCharge}. It reuses all of
+ * Entity stage for a shaped charge: the counterpart to {@link BlockAllocatorShapedCharge}. It reuses all of
  * {@link EntityProcessorCross}'s falloff, line-of-sight and knockback logic but gates it to a forward cone:
  * only entities whose bearing from the charge lies within {@code halfAngle} of the jet {@code axis} are hit.
  * Anything beside or behind the charge is spared, so the jet is lethal in a line while the blast ignores the
@@ -38,7 +38,7 @@ public class EntityProcessorCone extends EntityProcessorCross {
     @Override
     protected boolean isWithinBlastShape(ExplosionAEF explosion, Entity entity, double x, double y, double z) {
         // Bearing from the charge to the entity's centre is inside the cone iff its angle to the axis is within
-        // the half-angle — i.e. the normalised dot with the axis is at least cos(halfAngle).
+        // the half-angle: i.e. the normalised dot with the axis is at least cos(halfAngle).
         Vec3 toEntity = entity.position().add(0, entity.getBbHeight() * 0.5, 0).subtract(x, y, z);
         double lenSqr = toEntity.lengthSqr();
         if (lenSqr < 1.0e-6) return true; // point-blank on the charge: always caught

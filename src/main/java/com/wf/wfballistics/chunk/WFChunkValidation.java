@@ -17,7 +17,7 @@ public final class WFChunkValidation {
      * {@link net.neoforged.neoforge.common.world.chunk.LoadingValidationCallback} implementation.
      *
      * Entity-owned tickets (missile UUID → chunks) are for a missile that no longer exists after a restart:
-     * drop all non-ticking ones — the live missile will re-add whatever it needs on the first tick.
+     * drop all non-ticking ones: the live missile will re-add whatever it needs on the first tick.
      *
      * Block-owned tickets (listener wakeups + detonation-guard holds) are transient: they're re-derived from
      * live state each session, so any surviving into a fresh load are stale. Drop them all so a crash or

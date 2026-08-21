@@ -11,7 +11,7 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * The settling cinders left when something is cremated. Dark, near-weightless flakes that drift down,
- * tumble until they land, and then linger for a long time before fading out — so a kill leaves a visible
+ * tumble until they land, and then linger for a long time before fading out, so a kill leaves a visible
  * scattering of ash on the ground rather than a single puff.
  */
 public class AshParticle extends TextureSheetParticle {

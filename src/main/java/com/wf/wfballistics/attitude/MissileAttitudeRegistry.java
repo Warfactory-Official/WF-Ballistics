@@ -19,6 +19,7 @@ public final class MissileAttitudeRegistry {
     static {
         register(DEFAULT_ID, NoseToVelocityAttitude.INSTANCE);
         register("drone", LevelDroneAttitude.INSTANCE);
+        register("copter", CopterAttitude.INSTANCE);
     }
 
     private MissileAttitudeRegistry() {

@@ -15,34 +15,34 @@ public final class WFBallisticsAPI {
     private WFBallisticsAPI() {
     }
 
-    public static MissileTelemetry openTelemetry(MissileEntity missile) {
+    public static WFTelemetry openTelemetry(MissileEntity missile) {
         if (missile.level().isClientSide) {
             return null;
         }
-        MissileTelemetry telemetry = MissileTelemetryService.open(missile.getUUID(), missile.level().getGameTime());
+        WFTelemetry telemetry = WFTelemetryService.open(missile.getUUID(), missile.level().getGameTime());
         missile.attachTelemetry(telemetry);
         return telemetry;
     }
 
-    public static MissileTelemetry openTelemetry(UUID id, long gameTime) {
-        return MissileTelemetryService.open(id, gameTime);
+    public static WFTelemetry openTelemetry(UUID id, long gameTime) {
+        return WFTelemetryService.open(id, gameTime);
     }
 
-    public static MissileTelemetry getTelemetry(UUID id) {
-        return MissileTelemetryService.get(id);
+    public static WFTelemetry getTelemetry(UUID id) {
+        return WFTelemetryService.get(id);
     }
 
     /**
      * Open a telemetry queue for every launched missile automatically, independent of the debug toggle. Lets an
      * addon flip one switch and then read {@link #getTelemetry} for any launch. Queues are bounded (oldest
-     * evicted past {@link MissileTelemetryService#MAX_TRACKED}), so consume them while the missile is live.
+     * evicted past {@link WFTelemetryService#MAX_TRACKED}), so consume them while the missile is live.
      */
     public static void setAutoTelemetry(boolean enabled) {
-        MissileTelemetryService.setAutoOpen(enabled);
+        WFTelemetryService.setAutoOpen(enabled);
     }
 
     public static boolean isAutoTelemetry() {
-        return MissileTelemetryService.autoOpen();
+        return WFTelemetryService.autoOpen();
     }
 
     public static MissileData getMissileData(ServerLevel level, UUID id) {

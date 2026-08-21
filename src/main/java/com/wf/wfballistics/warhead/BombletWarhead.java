@@ -31,7 +31,7 @@ public final class BombletWarhead {
             return;
         }
         ExplosionNukeGeneric.dealDamage(level, pos, BLAST_RADIUS, MAX_DAMAGE * 0.5f);
-        FireLingeringEntity.spawn(level, pos.x, pos.y, pos.z, 3.0f, 2.0f, 120, FireLingeringEntity.TYPE_DIESEL);
+        FireLingeringEntity.spawn(level, pos.x, pos.y, pos.z, 3.0f, 2.0f, 120, com.wf.wfballistics.fire.FireType.NORMAL);
         ExplosionSmallCreator.composeEffect(level, pos.x, pos.y, pos.z, 3, 1.0f, 0.6f);
     };
 

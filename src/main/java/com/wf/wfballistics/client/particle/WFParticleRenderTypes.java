@@ -16,7 +16,7 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * Custom {@link ParticleRenderType}s. 1.20's particle engine batches particles by render type, so giving
  * fire/flash particles their own additive type makes overlapping ones brighten where they stack (the glow
- * look) instead of just blending — which the stock translucent types can't do.
+ * look) instead of just blending, which the stock translucent types can't do.
  */
 public final class WFParticleRenderTypes {
 

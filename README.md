@@ -151,6 +151,25 @@ Standard ForgeGradle project:
 The built jar bundles Flywheel via `jarJar`. `spark` is a runtime-only profiling dependency (pulled from
 CurseMaven). Mappings are Mojang official for 1.20.1.
 
+### WarForge
+
+The WarForge integration compiles against `com.flansmod.warforge:warforge-remaintained` (see
+`warforge_version` in `gradle.properties`). The public maven still only carries the 1.20.1-era 2.1.0, so
+until the 1.21.1 build is published there, install it from a sibling checkout first:
+
+```bash
+cd ../WarForge-Remaintained && ./gradlew publishToMavenLocal
+```
+
+`-PwithWarforge` additionally puts WarForge (and its LDLib2 runtime dependency) on the dev run classpath,
+in their own `run-warforge/` game directory:
+
+```bash
+./gradlew runServer -PwithWarforge
+```
+
+It is off by default: a plain dev run is the "WarForge absent" path the compat layer also has to handle.
+
 ### Depending on it
 
 WF Ballistics publishes with `maven-publish` to `mcmodsrepo/`. In development, add the deobfuscated jar as

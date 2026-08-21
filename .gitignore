@@ -20,6 +20,8 @@ build
 # other
 eclipse
 run
+# dev run dir for `-PwithWarforge` runs (separate world, since WarForge stores faction state in the save)
+run-warforge
 
 # Files from Forge MDK
 forge*changelog.txt

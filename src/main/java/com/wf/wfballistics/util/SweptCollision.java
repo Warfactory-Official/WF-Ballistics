@@ -27,7 +27,7 @@ import java.util.function.Predicate;
  * block or entity hit and returned as a vanilla {@link HitResult}, so callers reuse their existing impact
  * handler unchanged.
  *
- * <p>Blocks are found with {@link Level#clip(ClipContext)} — a DDA that visits every cell along the ray,
+ * <p>Blocks are found with {@link Level#clip(ClipContext)}: a DDA that visits every cell along the ray,
  * so it never tunnels regardless of speed. The corridor is split into contiguous sub-segments only to
  * bound per-call setup and (in {@code OBB_SWEEP} mode) to sample the oriented body box. Entities are
  * found with a single {@link ProjectileUtil#getEntityHitResult} broadphase capped at the block hit, which
@@ -113,7 +113,7 @@ public final class SweptCollision {
         List<OBB> obbs = ((OBBEntity) self).getOBBs();
         Vec3 entityPos = self.position();               // post-move; sample offset is relative to it
         double bodyLen = noseForward > 1.0E-3 ? noseForward : moveDist;
-        double pitch = Math.min(maxSubstepDist, Math.max(0.5, bodyLen));
+        double pitch = Math.clamp(bodyLen, 0.5, maxSubstepDist);
         int n = Mth.clamp((int) Math.ceil(moveDist / pitch), 1, maxSubsteps);
 
         BlockPos.MutableBlockPos mp = new BlockPos.MutableBlockPos();

@@ -23,7 +23,7 @@ public final class MistClientFX {
 
     /**
      * Particles per block of cloud volume per tick, and the per-entity cap. Scaling by volume keeps the total
-     * density roughly constant whether a cloud is one big box or many small {@link MistEntity} cells — a
+     * density roughly constant whether a cloud is one big box or many small {@link MistEntity} cells: a
      * volumetric gas cloud is now typically a few big boxes, so the cap is generous enough that one big cell
      * still reads as dense fog rather than a sparse sprinkle.
      */

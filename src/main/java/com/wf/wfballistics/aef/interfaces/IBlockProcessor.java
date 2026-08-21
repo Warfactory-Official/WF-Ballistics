@@ -10,7 +10,7 @@ import java.util.Set;
  * Stage 3 of the explosion pipeline: applies an effect to every position chosen by the
  * {@link IBlockAllocator} (drop items, remove blocks, convert to fire/rubble, ...).
  * <p>
- * Runs server-side only. Implementations are free to remove entries from {@code affectedBlocks} — the
+ * Runs server-side only. Implementations are free to remove entries from {@code affectedBlocks}: the
  * standard SFX reads this set afterwards to spawn per-block debris particles, so a processor that wants
  * to suppress those particles can simply clear the set (see
  * {@link com.wf.wfballistics.aef.standard.BlockProcessorNoDamage}).

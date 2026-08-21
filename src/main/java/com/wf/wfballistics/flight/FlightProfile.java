@@ -8,8 +8,8 @@ import java.util.Map;
 
 /**
  * A composed flight: one {@link FlightStage} per {@link MissileEntity.Phase}. The missile runs the stage for
- * its current phase each tick (see {@link #stage}). Build new missile styles — a drone with a different ascent
- * curve, a new attack run — by composing a profile from different stages and registering it in
+ * its current phase each tick (see {@link #stage}). Build new missile styles (a drone with a different ascent
+ * curve, a new attack run) by composing a profile from different stages and registering it in
  * {@link FlightProfileRegistry}.
  */
 public final class FlightProfile {

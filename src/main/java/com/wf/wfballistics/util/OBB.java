@@ -15,12 +15,62 @@ import java.util.Optional;
  * {@code rotation}. Used to give elongated entities (missiles) an accurate, orientation-aware hitbox
  * instead of the coarse vanilla AABB.
  *
- * @param center   center of the box in world space
- * @param extents  half-length along each local axis
- * @param rotation orientation of the box
- * @param part     which sub-part of the entity this box represents
+ * <p>Not a record, despite reading like one: it caches its world axes (see {@link #getAxes}), and its
+ * components are mutated in place by {@link #setCenter} and friends rather than replaced. The accessors are
+ * named as a record's would be because it used to be one.
  */
-public record OBB(Vector3d center, Vector3d extents, Quaterniond rotation, Part part) {
+public final class OBB {
+
+    private final Vector3d center;
+    private final Vector3d extents;
+    private final Quaterniond rotation;
+    private final Part part;
+
+    /**
+     * The box's three local axes in world space, derived from {@link #rotation}.
+     *
+     * <p>Rebuilt only when the rotation actually differs from the one they were built from, which is what
+     * makes them worth caching: a single swept collision asks for these once per block in the swept volume,
+     * and the rotation does not change once per tick, let alone once per block.
+     *
+     * <p>Keyed on the quaternion's components rather than a dirty flag on purpose. {@link #move} hands the
+     * new box the <em>same</em> rotation object, so a flag set on one box would not be seen by the copies
+     * sharing its rotation; comparing the values cannot miss that.
+     */
+    private Vector3d[] axes;
+    private double axesX = Double.NaN;
+    private double axesY;
+    private double axesZ;
+    private double axesW;
+
+    /**
+     * @param center   center of the box in world space
+     * @param extents  half-length along each local axis
+     * @param rotation orientation of the box
+     * @param part     which sub-part of the entity this box represents
+     */
+    public OBB(Vector3d center, Vector3d extents, Quaterniond rotation, Part part) {
+        this.center = center;
+        this.extents = extents;
+        this.rotation = rotation;
+        this.part = part;
+    }
+
+    public Vector3d center() {
+        return this.center;
+    }
+
+    public Vector3d extents() {
+        return this.extents;
+    }
+
+    public Quaterniond rotation() {
+        return this.rotation;
+    }
+
+    public Part part() {
+        return this.part;
+    }
 
     /**
      * Separating-axis test between two OBBs.
@@ -39,19 +89,21 @@ public record OBB(Vector3d center, Vector3d extents, Quaterniond rotation, Part 
         Vector3d obbCenter = obb.center();
         Vector3d[] obbAxes = obb.getAxes();
         Vector3d obbHalfExtents = obb.extents();
-        Vector3d aabbCenter = vec3ToVector3d(aabb.getCenter());
-        Vector3d aabbHalfExtents = new Vector3d(aabb.getXsize() / 2, aabb.getYsize() / 2f, aabb.getZsize() / 2f);
+        // Straight off the box's bounds. This runs once per block in a missile's swept volume, so the two
+        // vectors the centre and half-extents used to be built into are worth not building.
         return Intersectiond.testObOb(
                 obbCenter.x, obbCenter.y, obbCenter.z,
                 obbAxes[0].x, obbAxes[0].y, obbAxes[0].z,
                 obbAxes[1].x, obbAxes[1].y, obbAxes[1].z,
                 obbAxes[2].x, obbAxes[2].y, obbAxes[2].z,
                 obbHalfExtents.x, obbHalfExtents.y, obbHalfExtents.z,
-                aabbCenter.x, aabbCenter.y, aabbCenter.z,
+                aabb.minX + 0.5 * (aabb.maxX - aabb.minX),
+                aabb.minY + 0.5 * (aabb.maxY - aabb.minY),
+                aabb.minZ + 0.5 * (aabb.maxZ - aabb.minZ),
                 1, 0, 0,
                 0, 1, 0,
                 0, 0, 1,
-                aabbHalfExtents.x, aabbHalfExtents.y, aabbHalfExtents.z
+                (aabb.maxX - aabb.minX) * 0.5, (aabb.maxY - aabb.minY) * 0.5, (aabb.maxZ - aabb.minZ) * 0.5
         );
     }
 
@@ -248,14 +300,27 @@ public record OBB(Vector3d center, Vector3d extents, Quaterniond rotation, Part 
     /**
      * @return the three world-space orthogonal axes of the box.
      */
+    /**
+     * @return the box's three local axes in world space.
+     *
+     * <p><b>Shared and mutable</b>: the array and its vectors belong to this box and are reused on the next
+     * call. Read them, don't keep or modify them.
+     */
     public Vector3d[] getAxes() {
-        Vector3d[] axes = new Vector3d[]{
-                new Vector3d(1, 0, 0),
-                new Vector3d(0, 1, 0),
-                new Vector3d(0, 0, 1)};
-        rotation.transform(axes[0]);
-        rotation.transform(axes[1]);
-        rotation.transform(axes[2]);
+        if (axes == null) {
+            // Allocated on demand, not in the constructor: move() mints a short-lived box per collision
+            // substep and plenty of those are never asked for their axes at all.
+            axes = new Vector3d[]{new Vector3d(), new Vector3d(), new Vector3d()};
+        }
+        if (rotation.x != axesX || rotation.y != axesY || rotation.z != axesZ || rotation.w != axesW) {
+            axesX = rotation.x;
+            axesY = rotation.y;
+            axesZ = rotation.z;
+            axesW = rotation.w;
+            rotation.transform(axes[0].set(1.0, 0.0, 0.0));
+            rotation.transform(axes[1].set(0.0, 1.0, 0.0));
+            rotation.transform(axes[2].set(0.0, 0.0, 1.0));
+        }
         return axes;
     }
 
