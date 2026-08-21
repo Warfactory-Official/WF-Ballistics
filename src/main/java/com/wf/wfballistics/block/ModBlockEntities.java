@@ -16,6 +16,10 @@ public class ModBlockEntities {
         BLOCK_ENTITIES.register(bus);
     }
 
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<DronePadBlockEntity>> DRONE_PAD =
+            BLOCK_ENTITIES.register("drone_pad", () -> BlockEntityType.Builder.of(
+                    DronePadBlockEntity::new, ModBlocks.DRONE_PAD.get()).build(null));
+
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<MissileListenerDebugBlockEntity>> MISSILE_LISTENER_DEBUG =
             BLOCK_ENTITIES.register("missile_listener_debug", () -> BlockEntityType.Builder.of(
                     MissileListenerDebugBlockEntity::new, ModBlocks.MISSILE_LISTENER_DEBUG.get()).build(null));

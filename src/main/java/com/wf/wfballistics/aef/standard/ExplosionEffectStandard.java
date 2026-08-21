@@ -24,7 +24,7 @@ public class ExplosionEffectStandard implements IExplosionSFX {
 
     /**
      * Spawns the explosion particles on the client. Each broken block emits a small explosion puff and a
-     * puff of smoke, kicked outward from the epicentre with a speed that falls off with distance — the
+     * puff of smoke, kicked outward from the epicentre with a speed that falls off with distance: the
      * classic "shrapnel" look.
      */
     public static void performClient(Level level, double x, double y, double z, float size, List<BlockPos> affectedBlocks) {

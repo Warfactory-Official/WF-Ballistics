@@ -11,8 +11,8 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 /**
- * The mod's dedicated creative tab, collecting every WF-Ballistics item — blocks/machines and the preset
- * missiles — onto one page.
+ * The mod's dedicated creative tab, collecting every WF-Ballistics item, blocks/machines and the preset
+ * missiles, onto one page.
  */
 public final class WFCreativeTabs {
 
@@ -27,6 +27,7 @@ public final class WFCreativeTabs {
                         // Blocks & machines.
                         output.accept(ModBlocks.MISSILE_DISPENSER_ITEM.get());
                         output.accept(ModBlocks.MISSILE_LISTENER_DEBUG_ITEM.get());
+                        output.accept(ModBlocks.DRONE_PAD_ITEM.get());
                         output.accept(ModBlocks.TURRET_CIWS_ITEM.get());
                         output.accept(ModBlocks.TURRET_INTERCEPTOR_ITEM.get());
                         output.accept(ModBlocks.TURRET_INTERCEPTOR_SUPERSONIC_ITEM.get());

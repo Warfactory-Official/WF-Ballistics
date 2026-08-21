@@ -18,7 +18,7 @@ import org.joml.Quaternionf;
  * The Flywheel visual for an {@link InstancedParticleEffect}: one {@link TransformedInstance} per puff,
  * sharing a single translucent instanced billboard-quad ({@link FlywheelModels#particleQuad()}).
  *
- * <p>Per frame ({@link #beginFrame}) each instance is billboarded toward the camera, scaled, and tinted —
+ * <p>Per frame ({@link #beginFrame}) each instance is billboarded toward the camera, scaled, and tinted:
  * just a transform + colour upload, no geometry rebuild. The quad is modelled in {@code [0,1]³} centred on
  * {@code (0.5, 0.5, 0.5)}, so the transform is {@code translate(world − renderOrigin) · cameraRotation ·
  * scale · translate(−½)}.

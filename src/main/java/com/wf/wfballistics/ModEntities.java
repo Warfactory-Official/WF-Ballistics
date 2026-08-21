@@ -1,5 +1,7 @@
 package com.wf.wfballistics;
 
+import com.wf.wfballistics.drone.CrateEntity;
+import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.entity.*;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
@@ -56,6 +58,26 @@ public class ModEntities {
                     .noSave()
                     .noSummon()
                     .build("fire_lingering")
+            );
+
+    // Autonomous rotor drone. Fallback size only: DroneEntity#makeBoundingBox fits the AABB to the
+    // oriented model each tick. Tracked as far as a missile so a delivery run is visible on approach.
+    public static final DeferredHolder<EntityType<?>, EntityType<DroneEntity>> DRONE =
+            ENTITY_TYPES.register("drone", () -> EntityType.Builder.<DroneEntity>of(DroneEntity::new, MobCategory.MISC)
+                    .sized(3.0F, 1.2F)
+                    .clientTrackingRange(16)
+                    .updateInterval(1)
+                    .build("drone")
+            );
+
+    // Cargo crate. Only ever exists loose in the world: a drone in flight holds its cargo as items and
+    // draws the crate itself, so there is no such thing as a crate riding along attached to something.
+    public static final DeferredHolder<EntityType<?>, EntityType<CrateEntity>> CRATE =
+            ENTITY_TYPES.register("crate", () -> EntityType.Builder.<CrateEntity>of(CrateEntity::new, MobCategory.MISC)
+                    .sized(CrateEntity.SIZE, CrateEntity.SIZE)
+                    .clientTrackingRange(10)
+                    .updateInterval(3)
+                    .build("crate")
             );
 
     // Nuclear detonation driver: a server-side, multi-tick ray explosion. Renders nothing.

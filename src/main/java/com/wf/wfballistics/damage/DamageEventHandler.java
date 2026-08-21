@@ -12,7 +12,7 @@ import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
  * event bus so it covers <em>all</em> living damage: this mod's weapons, vanilla mobs, other mods. With no armour
  * profiles registered it changes nothing.
  *
- * <p>Sources that bypass armour (void, {@code /kill}, starvation) are left alone — DT/DR is an armour-style
+ * <p>Sources that bypass armour (void, {@code /kill}, starvation) are left alone: DT/DR is an armour-style
  * mitigation and should not make those survivable.
  *
  * <p>Note: this reduction layers <em>on top of</em> vanilla armour/enchantment mitigation, which still runs

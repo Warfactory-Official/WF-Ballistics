@@ -28,7 +28,7 @@ public final class DebrisManager {
     private static final int MAX_ACTIVE = 256;
 
     /**
-     * Max chunks to tessellate per frame — spreads a burst of debris over a few frames instead of one hitch.
+     * Max chunks to tessellate per frame: spreads a burst of debris over a few frames instead of one hitch.
      */
     private static final int BAKE_BUDGET_PER_FRAME = 4;
 
@@ -92,7 +92,7 @@ public final class DebrisManager {
         renderType.setupRenderState();
         // 1.21 change: LevelRenderer applies the camera rotation to the GL model-view STACK and hands this event an
         // identity PoseStack (in 1.20.1 the PoseStack itself carried the camera rotation). Debris draws through
-        // VertexBuffer.drawWithShader, which takes an explicit model-view matrix and bypasses the GL stack — so unless
+        // VertexBuffer.drawWithShader, which takes an explicit model-view matrix and bypasses the GL stack, so unless
         // we fold the camera rotation in here, the debris renders in view space and moving/turning the camera drags it
         // around. The event's model-view matrix IS that camera-rotation (frustum) matrix.
         poseStack.pushPose();

@@ -30,12 +30,12 @@ import java.util.Optional;
  * </pre>
  *
  * <p><b>How it's applied:</b> {@link com.wf.wfballistics.damage.DamageEventHandler} runs this on every
- * {@code LivingHurtEvent}, so registered armour resists matching damage from any source — not just this
+ * {@code LivingHurtEvent}, so registered armour resists matching damage from any source: not just this
  * mod's weapons. With nothing registered the maths is a no-op, so it is safe to leave enabled. Piercing for
  * a specific hit is supplied through {@link EntityDamageUtil#dealDamage}, which stashes it in a thread-local
  * for the duration of that one {@code hurt} call.
  *
- * <p>This is intentionally a thin, in-memory registry (no JSON config) — register armour profiles from your
+ * <p>This is intentionally a thin, in-memory registry (no JSON config): register armour profiles from your
  * mod's setup; extend with set bonuses or a config loader as needed.
  */
 public final class DamageResistanceHandler {
@@ -143,7 +143,7 @@ public final class DamageResistanceHandler {
     }
 
     /**
-     * Picks a resistance category for a damage source — by this mod's classes first, then vanilla tags.
+     * Picks a resistance category for a damage source: by this mod's classes first, then vanilla tags.
      */
     public static String categoryFor(DamageSource source) {
         Optional<ResourceKey<DamageType>> key = source.typeHolder().unwrapKey();

@@ -1,6 +1,7 @@
 package com.wf.wfballistics.sim;
 
 import com.wf.wfballistics.WFBallistics;
+import com.wf.wfballistics.chunk.WFChunkValidation;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -46,14 +47,18 @@ public final class MissileListenerRegistry extends SavedData {
     private static final double WAKE_MARGIN = MissileSimConfig.LISTENER_SPAWN_MARGIN;
 
     /**
-     * TODO(port): ForgeChunkManager — register this TicketController via RegisterTicketControllersEvent on the
-     * mod event bus (net.neoforged.neoforge.common.world.chunk.RegisterTicketControllersEvent) so NeoForge
-     * recognises it before any forceChunk call is made.  Without registration every forceChunk call throws
-     * IllegalArgumentException at runtime.  See TicketController / RegisterTicketControllersEvent in
-     * net.neoforged.neoforge.common.world.chunk.
+     * Registered on the mod bus by {@code WFServerEvents.ModBusEvents#onRegisterTicketControllers}. A
+     * controller must be registered before any {@code forceChunk} call or that call throws
+     * {@link IllegalArgumentException}.
+     *
+     * <p>The validation callback covers what {@link #tickWakeups} cannot. That reconciles against
+     * {@code blockRecords}, so it can only release a ticket whose listener it still knows about; a ticket
+     * whose record was dropped while the server was down would never be released by anything. NeoForge also
+     * ignores controllers with a null callback entirely, reinstating their saved tickets untouched.
      */
     public static final TicketController CHUNK_TICKET = new TicketController(
-            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "missile_listener"));
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "missile_listener"),
+            WFChunkValidation::validateTickets);
 
     private final Map<BlockPos, BlockRecord> blockRecords = new HashMap<>();
     private final Map<UUID, IMissileListener> entityListeners = new HashMap<>();

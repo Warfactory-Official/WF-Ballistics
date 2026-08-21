@@ -10,9 +10,9 @@ import net.minecraft.world.entity.Entity;
  *
  * <p>An effect has three hooks, all optional to override beyond {@link #affect}:
  * <ul>
- *   <li>{@link #affect} — per entity standing in the cloud, every tick.</li>
- *   <li>{@link #areaTick} — once per tick for the whole cloud (radiation fields, igniting the cloud, ...).</li>
- *   <li>{@link #color} — the ARGB tint for the cloud's particles.</li>
+ *   <li>{@link #affect}: per entity standing in the cloud, every tick.</li>
+ *   <li>{@link #areaTick}: once per tick for the whole cloud (radiation fields, igniting the cloud, ...).</li>
+ *   <li>{@link #color}: the ARGB tint for the cloud's particles.</li>
  * </ul>
  *
  * <p>{@code intensity} is supplied to the per-tick hooks and falls linearly from 1 at spawn to 0 at the end

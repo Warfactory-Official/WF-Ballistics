@@ -190,8 +190,8 @@ public final class AttackStage implements FlightStage {
      * Shared terminal-dive guidance at the given approach speed (also used by {@link VerticalDiveStage}).
      * Safeguard: once the run has flown into its aim point while descending, stop re-resolving the dive angle
      * and just fly straight on the current heading until it hits something. Re-aiming every tick is what lets a
-     * missile that reaches an aim point it can't sit on — e.g. one left hanging in the air, or a low-agility
-     * drone that can't quite pull onto its target — orbit it forever; committing to the current (downward)
+     * missile that reaches an aim point it can't sit on (e.g. one left hanging in the air, or a low-agility
+     * drone that can't quite pull onto its target) orbit it forever; committing to the current (downward)
      * heading drives it into whatever is below.
      */
     static Vec3 guideDive(MissileEntity missile, FlightContext ctx, double approachSpeed) {

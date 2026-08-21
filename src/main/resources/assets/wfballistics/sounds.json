@@ -47,5 +47,15 @@
         "stream": false
       }
     ]
+  },
+  "drone.rotor_loop": {
+    "subtitle": "subtitles.wfballistics.drone.rotor_loop",
+    "sounds": [
+      {
+        "name": "wfballistics:drone/rotor_loop",
+        "stream": false,
+        "attenuation_distance": 64
+      }
+    ]
   }
 }

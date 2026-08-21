@@ -53,7 +53,7 @@ public final class WarheadRegistry {
      * Shaped charge (HEAT): fires a tight jet along the carrier's impact heading ({@link WarheadCarrier#angle()}),
      * drilling a deep, narrow shaft through hardened cover with only a shallow crater at the surface. On a
      * top-attack dive the heading points down-and-in, so it behaves as a downward penetrator; a shallow-angle
-     * strike drone instead punches sideways. Only blocks/entities in that forward cone are hit — see
+     * strike drone instead punches sideways. Only blocks/entities in that forward cone are hit: see
      * {@link com.wf.wfballistics.aef.standard.BlockAllocatorShapedCharge}.
      */
     public static final Detonation SHAPED_CHARGE = (source, pos) -> {

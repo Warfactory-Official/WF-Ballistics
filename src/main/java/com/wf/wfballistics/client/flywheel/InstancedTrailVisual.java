@@ -60,7 +60,7 @@ public class InstancedTrailVisual extends AbstractVisual implements SimpleDynami
 
         // Puffs from one emission section share age, life and scale, so their billboard matrix (rotation +
         // scale about the centre) is identical and only the translation differs. Rebuild that base matrix only
-        // when the scale actually changes and reuse it across the run — this skips the per-puff camera rotation
+        // when the scale actually changes and reuse it across the run: this skips the per-puff camera rotation
         // for the bulk of a trail.
         float baseScale = Float.NaN;
 

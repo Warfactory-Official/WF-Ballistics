@@ -2,7 +2,7 @@ package com.wf.wfballistics.aef.nuke;
 
 /**
  * Tunables for the multi-tick nuclear explosion (ported from HBM's {@code ConfigBomb}). Plain static fields
- * for now — wire them to a real Forge config if you want them user-editable.
+ * for now: wire them to a real Forge config if you want them user-editable.
  */
 public final class NukeConfig {
 

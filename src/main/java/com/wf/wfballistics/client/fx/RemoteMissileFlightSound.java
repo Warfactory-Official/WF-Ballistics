@@ -46,7 +46,7 @@ public final class RemoteMissileFlightSound extends AbstractTickableSoundInstanc
         this.y = this.curY;
         this.z = this.curZ;
         // Start at the right distance-based volume so there's no 1-tick silent gap. canStartSilent() (below)
-        // covers the case where this is exactly 0 (missile entering at the very edge of range) — otherwise the
+        // covers the case where this is exactly 0 (missile entering at the very edge of range): otherwise the
         // sound engine would cull a volume-zero sound at play time and it would never tick up.
         this.volume = distanceVolume();
     }

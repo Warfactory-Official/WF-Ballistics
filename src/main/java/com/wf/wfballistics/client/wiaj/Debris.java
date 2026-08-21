@@ -143,7 +143,7 @@ public class Debris {
             }
         }
 
-        MeshData rendered = builder.build(); // @Nullable — null when no vertices were emitted
+        MeshData rendered = builder.build(); // @Nullable: null when no vertices were emitted
         if (rendered == null || !any) {
             if (rendered != null) {
                 rendered.close();

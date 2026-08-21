@@ -25,11 +25,11 @@ import net.minecraft.world.phys.AABB;
 import java.util.List;
 
 /**
- * A stationary cloud of fluid hanging in the air — gas, spray or vapour. The cloud is "imbued" with a Forge
+ * A stationary cloud of fluid hanging in the air: gas, spray or vapour. The cloud is "imbued" with a Forge
  * {@link Fluid}; what it does to entities standing in it is looked up from {@link MistEffects} (a fluid →
  * behaviour registry that also honours fluid tags), so the entity itself carries no per-fluid logic.
  *
- * <p>The cloud is invisible server-side and renders nothing — its only presence is a dense puff of tinted
+ * <p>The cloud is invisible server-side and renders nothing: its only presence is a dense puff of tinted
  * particles spawned each tick on the client (see {@link MistClientFX}).
  *
  * <p>Spawn one with {@link #spawn}: it runs a quick wall check ({@link #fitToBounds}) and shrinks the cloud
@@ -174,8 +174,8 @@ public class MistEntity extends Entity {
 
     /**
      * Shrinks the cloud's radius so it doesn't poke through walls. Steps outward along each horizontal axis
-     * from the cloud's centre and clamps the radius to the nearest solid block. Cheap by design — four short
-     * ray walks — and meant to be run once at spawn.
+     * from the cloud's centre and clamps the radius to the nearest solid block. Cheap by design, four short
+     * ray walks, and meant to be run once at spawn.
      */
     public void fitToBounds() {
         float requested = getRadius();

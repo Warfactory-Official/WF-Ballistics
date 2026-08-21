@@ -1,9 +1,9 @@
 package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
-import com.wf.wfballistics.api.MissileEventType;
-import com.wf.wfballistics.api.MissileTelemetry;
-import com.wf.wfballistics.api.MissileTelemetryService;
+import com.wf.wfballistics.api.WFEventType;
+import com.wf.wfballistics.api.WFTelemetry;
+import com.wf.wfballistics.api.WFTelemetryService;
 import com.wf.wfballistics.attitude.MissileAttitude;
 import com.wf.wfballistics.attitude.MissileAttitudeRegistry;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
@@ -18,6 +18,7 @@ import com.wf.wfballistics.network.MissileFlightAudioPacket;
 import com.wf.wfballistics.sim.IMissileListener;
 import com.wf.wfballistics.sim.MissileListenerRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
+import net.minecraft.tags.DamageTypeTags;
 import com.wf.wfballistics.sim.SimMissileManager;
 import com.wf.wfballistics.swarm.SwarmManager;
 import com.wf.wfballistics.util.OBB;
@@ -121,7 +122,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // instantly re-detonating it. Long enough that a spin-out cooks off on its own (fuse <= SPINOUT_MAX_FUSE).
     private static final int DOWNED_REHIT_GRACE = 60;
     // Evasive boost: a short high-speed burst (extra speed, so an interceptor whiffs) bought with a chunk of
-    // fuel — deliberately inefficient, so repeated dodging drains the tank and a dry missile can't dodge.
+    // fuel: deliberately inefficient, so repeated dodging drains the tank and a dry missile can't dodge.
     private static final double BOOST_SPEED_MULT = 2.0;
     private static final int BOOST_DURATION = 8;
     private static final int BOOST_FUEL_COST = 150;
@@ -166,13 +167,21 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public static int DEFAULT_FUEL_TICKS = 1200;
     // Oriented bounding box that wraps the (elongated) missile model, giving projectiles an accurate,
     // rotation-aware hitbox instead of the coarse vanilla AABB. Kept live-updated in refreshObb().
+    /**
+     * Scratch for {@link #refreshObb}, which runs every tick for every missile that moved, and again for
+     * every hit-check that asks for the box. World-thread only.
+     */
+    private final Vector3f obbHeading = new Vector3f();
+    private final Quaternionf obbOrientation = new Quaternionf();
+    private final Quaterniond obbRotation = new Quaterniond();
+    private final Vector3d obbScratch = new Vector3d();
     private final OBB obb = new OBB(new Vector3d(), new Vector3d(), new Quaterniond(), OBB.Part.BODY);
     private final List<OBB> obbList = List.of(this.obb);
     // Forces the chunks the missile needs while flying (own chunk ticking + non-ticking look-ahead fan).
     private final MissileChunkLoader chunkLoader = new MissileChunkLoader();
     // Opt-in flight telemetry: null unless this missile is being tracked (debug on, or opened via the API).
     // Cached reference so the per-event record is a field read, not a UUID map lookup.
-    private MissileTelemetry telemetry;
+    private WFTelemetry telemetry;
     private boolean telemetryInit;
     private boolean fuelOutRecorded;
     // Transform (position + heading) the OBB was last built for; refreshObb() skips recomputation while
@@ -276,7 +285,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Launcher/control identity (see MissileDispenserBlockEntity): missiles sharing a non-null control id
     // (fired from the same launcher, or one recursive family) are friendly and never collide with each other.
     private UUID controlId = null;
-    // WarForge faction id (see WarforgeCompat): the "team" a missile belongs to — a player's faction, or the
+    // WarForge faction id (see WarforgeCompat). The "team" a missile belongs to: a player's faction, or the
     // faction claiming a launcher/battery's land. Missiles of the same / allied / truced faction are friendly,
     // which is what stops a faction's defenses engaging its own missiles across different launchers.
     private UUID teamId = null;
@@ -295,7 +304,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // how many consecutive ticks we've had no resolvable target (drives the give-up/fizzle timeout).
     private UUID currentTargetId = null;
     private int noTargetTicks = 0;
-    // Transient: set each tick by leadPoint — true when the interceptor cannot win a timed intercept (the
+    // Transient, set each tick by leadPoint: true when the interceptor cannot win a timed intercept (the
     // target outruns it) and is instead attempting to cross the target's flight path, which tryIntercept
     // rolls at a reduced chance.
     private boolean crossingShot = false;
@@ -308,7 +317,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Low-observable: a stealth missile is invisible to automatic detection (interceptor NEAREST acquisition,
     // interceptor batteries, CIWS). It can still be engaged only by manually locking its exact UUID.
     private boolean stealth = false;
-    // Evasion (0..1): chance to boost clear of an interception attempt — the "tier" that lets a better missile
+    // Evasion (0..1): chance to boost clear of an interception attempt, the "tier" that lets a better missile
     // escape interceptors more often. On a successful dodge the missile burns fuel for a speed burst that
     // turns the hit into a miss (see evadeBoost); the roll is amplified during the terminal dive.
     private float evasion = 0.0f;
@@ -383,7 +392,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
      * @return the target UUIDs already "claimed" by interceptors in {@code missiles}, from the perspective of
      * a claimant with entity id {@code selfId} (pass {@link Integer#MAX_VALUE} for a battery, which yields to
      * every interceptor). A LOCK interceptor always claims its lock target; a NEAREST interceptor claims its
-     * current target only against higher-id peers — so exactly one interceptor keeps a shared target and the
+     * current target only against higher-id peers, so exactly one interceptor keeps a shared target and the
      * rest divert to other threats (no dogpiling, and no two interceptors swapping off each other forever).
      */
     public static Set<UUID> claimedTargets(List<MissileEntity> missiles, int selfId) {
@@ -456,7 +465,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             if (!this.fuelOutRecorded && !this.downed) {
                 this.fuelOutRecorded = true;
                 this.chunkLoader.setTargetPreload(currentPos, Math.max(1, this.impactPreloadRadius));
-                this.recordEvent(MissileEventType.FUEL_OUT, "ballistic");
+                this.recordEvent(WFEventType.FUEL_OUT, "ballistic");
             }
             if (this.downed) {
                 this.tickDowned(serverLevel, currentPos);
@@ -508,7 +517,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         FlightContext ctx = new FlightContext(currentPos, targetPos, horizontalDist, nx, nz, safeAltitude);
 
         // Formation flight: a swarm subordinate with a live commander holds its wedge slot (throttling speed to
-        // maintain station) instead of flying the mission stages — the commander leads the strike. Everything
+        // maintain station) instead of flying the mission stages: the commander leads the strike. Everything
         // else (the commander, or a subordinate whose commander is gone) flies its own phased mission.
         MissileEntity commander = (this.swarmId != 0L && !this.commander && !this.brokeFormation)
                 ? SwarmManager.commander(serverLevel, this.swarmId) : null;
@@ -518,7 +527,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             this.brokeFormation = true;
             this.setTarget(this.saturationAim(commander.getTarget()));
             this.phase = Phase.ATTACK;
-            this.recordEvent(MissileEventType.ATTACK, "saturation break");
+            this.recordEvent(WFEventType.ATTACK, "saturation break");
             commander = null;
         }
         boolean inFormation = commander != null && commander != this && commander.isAlive();
@@ -637,10 +646,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * DEBUG: dump the flight state that explains a missilelet spinning instead of impacting — where it's
+     * DEBUG: dump the flight state that explains a missilelet spinning instead of impacting (where it's
      * aiming, how far the aim point sits above the actual ground beneath it ({@code tgtAGL} > 0 means it's
      * aiming at empty air, e.g. over a crater), the terminal-dive angle it resolved (and the range it picked
-     * from — a shallow {@code diveAng} is what turns a clean plunge into a long, orbiting approach), and the
+     * from) a shallow {@code diveAng} is what turns a clean plunge into a long, orbiting approach), and the
      * geometry (closing speed, horizontal turn radius vs. distance). Limited to swarm/recursive missiles and
      * throttled by {@link #LOG_INTERVAL}. Remove once the spin cause is settled.
      */
@@ -675,11 +684,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         return String.format("%.1f", v);
     }
 
-    public MissileTelemetry telemetry() {
+    public WFTelemetry telemetry() {
         return this.telemetry;
     }
 
-    public void attachTelemetry(MissileTelemetry telemetry) {
+    public void attachTelemetry(WFTelemetry telemetry) {
         this.telemetry = telemetry;
         this.telemetryInit = true;
         this.recordSpawnIfFresh();
@@ -689,7 +698,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (this.level().isClientSide) {
             return;
         }
-        this.attachTelemetry(MissileTelemetryService.open(this.getUUID(), this.level().getGameTime()));
+        this.attachTelemetry(WFTelemetryService.open(this.getUUID(), this.level().getGameTime()));
     }
 
     private void initTelemetry() {
@@ -697,13 +706,13 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return;
         }
         this.telemetryInit = true;
-        MissileTelemetry existing = MissileTelemetryService.get(this.getUUID());
+        WFTelemetry existing = WFTelemetryService.get(this.getUUID());
         if (existing != null) {
             // An addon-opened empty queue is a fresh launch; a non-empty one is a rematerialised missile (the
             // sim path records its ONLOAD, not a SPAWN), which recordSpawnIfFresh skips.
             this.telemetry = existing;
-        } else if (MissileDebug.enabled() || MissileTelemetryService.autoOpen()) {
-            this.telemetry = MissileTelemetryService.open(this.getUUID(), this.level().getGameTime());
+        } else if (MissileDebug.enabled() || WFTelemetryService.autoOpen()) {
+            this.telemetry = WFTelemetryService.open(this.getUUID(), this.level().getGameTime());
             if (MissileDebug.enabled()) {
                 MissileDebug.markLatest(this.getUUID());
             }
@@ -715,23 +724,23 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // attach (e.g. /track, or an addon opening telemetry on an in-flight missile) is not a launch, so it's skipped.
     private void recordSpawnIfFresh() {
         if (this.telemetry != null && this.telemetry.total() == 0 && this.tickCount <= 1) {
-            this.recordEvent(MissileEventType.SPAWN, "");
+            this.recordEvent(WFEventType.SPAWN, "");
         }
     }
 
-    public void recordEvent(MissileEventType type, String detail) {
+    public void recordEvent(WFEventType type, String detail) {
         if (this.level().isClientSide) {
             return;
         }
-        MissileTelemetryService.record(this.telemetry, this.getUUID(), type,
+        WFTelemetryService.record(this.telemetry, this.getUUID(), type,
                 this.level().getGameTime(), this.position(), false, detail);
     }
 
-    private static MissileEventType phaseEvent(Phase phase) {
+    private static WFEventType phaseEvent(Phase phase) {
         return switch (phase) {
-            case ASCEND -> MissileEventType.ASCEND;
-            case CRUISE -> MissileEventType.CRUISE;
-            case ATTACK -> MissileEventType.ATTACK;
+            case ASCEND -> WFEventType.ASCEND;
+            case CRUISE -> WFEventType.CRUISE;
+            case ATTACK -> WFEventType.ATTACK;
         };
     }
 
@@ -803,7 +812,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         // and they'd pass through one another. Allow missile-vs-missile explicitly so they collide/intercept
         // midair; everything else keeps the pickable requirement (this also keeps arrows from killing them).
         if (target instanceof MissileEntity other) {
-            // Interceptors never resolve missile hits by physical collision — they use the closest-approach
+            // Interceptors never resolve missile hits by physical collision: they use the closest-approach
             // roll in tryIntercept. Excluding both directions also stops a normal missile's own tick from
             // mutually detonating (and thus destroying) an interceptor's target without a roll being made.
             if (this.interceptor || other.interceptor) {
@@ -817,7 +826,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * @return true if {@code other} is on the same side — same swarm (frag family) or launcher (control id).
+     * @return true if {@code other} is on the same side: same swarm (frag family) or launcher (control id).
      */
     private boolean isFriendly(MissileEntity other) {
         if (SwarmManager.sameSwarm(this, other)) {
@@ -846,7 +855,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * A non-zero pick radius so {@code MixinProjectileUtil} inflates the target OBB when another missile
-     * sweeps through it — makes fast crossing intercepts land reliably instead of needing a pixel-perfect
+     * sweeps through it: makes fast crossing intercepts land reliably instead of needing a pixel-perfect
      * centerline crossing. Also lets look-at / raytrace targeting see the missile.
      */
     @Override
@@ -911,28 +920,28 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         Vec3 localCenter = MissileModels.center(modelId);
 
         double lenSq = move.lengthSqr();
-        Quaterniond rot = new Quaterniond();
+        Quaterniond rot = obbRotation.identity();
         if (lenSq > 1.0E-8) {
             double inv = 1.0 / Math.sqrt(lenSq);
             // Orient the hitbox with the SAME per-model attitude the render uses (nose-to-velocity for
             // missiles, belly-down/wings-level for winged drones) so the OBB tracks the drawn model. Using a
-            // bare rotationTo here instead left a drone's box free-rolled to the shortest-arc angle — wrong
+            // bare rotationTo here instead left a drone's box free-rolled to the shortest-arc angle: wrong
             // for a level-flying airframe, and flipped to a mirrored box on a near-vertical dive (antiparallel
             // rotationTo degenerates to a 180 deg turn about an arbitrary axis). See MissileAttitudeRegistry.
             MissileAttitude attitude = MissileAttitudeRegistry.get(MissileModels.attitudeId(modelId));
-            Quaternionf q = attitude.orientation(
-                    new Vector3f((float) (move.x * inv), (float) (move.y * inv), (float) (move.z * inv)));
+            obbHeading.set((float) (move.x * inv), (float) (move.y * inv), (float) (move.z * inv));
+            Quaternionf q = attitude.orientation(obbHeading, obbOrientation);
             rot.set(q.x, q.y, q.z, q.w);
         }
         // else: identity rotation (nose points straight up), which matches the ASCEND launch pose.
 
         // Box center = entity position + the rotated model-center offset (meshes sit base-at-origin).
-        Vector3d worldCenter = new Vector3d(localCenter.x, localCenter.y, localCenter.z);
+        Vector3d worldCenter = obbScratch.set(localCenter.x, localCenter.y, localCenter.z);
         rot.transform(worldCenter);
         worldCenter.add(x, y, z);
-
         this.obb.setCenter(worldCenter);
-        this.obb.setExtents(new Vector3d(dims.x * 0.5, dims.y * 0.5, dims.z * 0.5));
+
+        this.obb.setExtents(obbScratch.set(dims.x * 0.5, dims.y * 0.5, dims.z * 0.5));
         this.obb.updateRotation(rot);
     }
 
@@ -974,8 +983,28 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         builder.define(FLIGHT_SOUND, "");
     }
 
+    /**
+     * Memoised {@link #getModelId}. Resolving the id means validating and rebuilding a
+     * {@link ResourceLocation} out of the synced string, and the hitbox asks for it every tick, but the
+     * string only ever changes when the model does.
+     *
+     * <p>Held as one immutable pair so it can be replaced with a single reference write: the render thread
+     * and the client tick thread can both ask for this, and updating a key field and a value field
+     * separately could hand one of them a resolved id that does not match the string it was resolved from.
+     */
+    private record ModelRef(String raw, ResourceLocation id) {
+    }
+
+    private volatile ModelRef modelRef;
+
     public ResourceLocation getModelId() {
-        return MissileModels.parse(this.entityData.get(MODEL_ID));
+        String raw = this.entityData.get(MODEL_ID);
+        ModelRef ref = this.modelRef;
+        if (ref == null || !ref.raw().equals(raw)) {
+            ref = new ModelRef(raw, MissileModels.parse(raw));
+            this.modelRef = ref;
+        }
+        return ref.id();
     }
 
     public void setModelId(ResourceLocation id) {
@@ -1331,7 +1360,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     /**
      * Predictive deconfliction against nearby friendly missiles (same swarm or launcher). For each one whose
      * closest approach over the next {@link #AVOID_HORIZON} ticks would fall within {@link #AVOID_MIN_SEP}
-     * blocks, adds a small offset away from where it will be — both missiles compute it, so the pair veers
+     * blocks, adds a small offset away from where it will be: both missiles compute it, so the pair veers
      * apart (a "slight course offset": climb or a lateral shift), bounded by {@link #AVOID_STRENGTH}. Returns
      * {@link Vec3#ZERO} when nothing is actually on a collision course, so friendlies fly their normal path
      * until the moment they would ram.
@@ -1359,7 +1388,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             double sx = rpx + rvx * t, sy = rpy + rvy * t, sz = rpz + rvz * t;
             double miss = Math.sqrt(sx * sx + sy * sy + sz * sz);
             if (miss > AVOID_MIN_SEP) {
-                continue; // they already clear each other — no course change
+                continue; // they already clear each other: no course change
             }
             double urgency = (AVOID_MIN_SEP - miss) / AVOID_MIN_SEP; // 0..1, larger the tighter the miss
             if (miss > 1.0e-3) {
@@ -1370,7 +1399,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 oy -= sy * inv;
                 oz -= sz * inv;
             } else {
-                // Dead-on (no defined "away"): split sideways, deterministically by id — a shift in x/z.
+                // Dead-on (no defined "away"): split sideways, deterministically by id (a shift in x/z).
                 double clen = Math.sqrt(rvx * rvx + rvz * rvz);
                 double perpx = clen > 1.0e-4 ? -rvz / clen : 1.0;
                 double perpz = clen > 1.0e-4 ? rvx / clen : 0.0;
@@ -1435,7 +1464,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * @return this commander's live formation subordinates if the whole swarm is eligible to offload as one
-     * object (every member alive, still in formation, and clear of any listener), or null if not — in which
+     * object (every member alive, still in formation, and clear of any listener), or null if not: in which
      * case the swarm keeps flying in-world. An empty list (commander with no surviving members) is eligible.
      */
     private List<MissileEntity> formationSubordinates(ServerLevel level) {
@@ -1468,7 +1497,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Unpowered flight (out of fuel): no thrust or guidance — the missile keeps its horizontal momentum
+     * Unpowered flight (out of fuel), with no thrust or guidance: the missile keeps its horizontal momentum
      * (lightly dragged) while gravity pulls it down toward a terminal speed, so it arcs over and falls with
      * its inertia preserved. Still sweeps for an impact so it detonates when it hits the ground.
      */
@@ -1523,8 +1552,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Spin-out: the missile veers onto a random heading — turn-rate limited (via {@link #constrainTurn}), so it
-     * arcs out of control rather than snapping — sinking as it tumbles, and its warhead cooks off (a full
+     * Spin-out: the missile veers onto a random heading (turn-rate limited (via {@link #constrainTurn}), so it
+     * arcs out of control rather than snapping) sinking as it tumbles, and its warhead cooks off (a full
      * detonation) on impact or once a short random fuse elapses.
      */
     private void spinOut(ServerLevel level, Vec3 currentPos) {
@@ -1586,7 +1615,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     @Override
     public void remove(RemovalReason reason) {
         // Point-defence guard. Some mods "shoot down" a projectile by calling discard() on it OUTRIGHT rather
-        // than damaging it — e.g. Superb Warfare's CIWS (AutoAimableEntity.rayShoot) does, for any Projectile
+        // than damaging it: e.g. Superb Warfare's CIWS (AutoAimableEntity.rayShoot) does, for any Projectile
         // that isn't its own DestroyableProjectile, `causeAirExplode(); target.discard();`. That deletes the
         // missile in one frame with an airburst and skips our entire shoot-down/downed sequence (damageMissile
         // → shootDown never gets to matter). Intercept such an EXTERNAL discard of a live, armed, not-yet-
@@ -1598,10 +1627,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             if (!this.downed) {
                 this.shootDown();
             }
-            return; // veto the deletion — keep the (now downed) missile alive to coast to its own crash/fizzle
+            return; // veto the deletion: keep the (now downed) missile alive to coast to its own crash/fizzle
         }
         // Release forced chunks when the missile actually goes away (killed/discarded), but not on a
-        // plain chunk unload — those tickets persist so the missile resumes after a reload.
+        // plain chunk unload: those tickets persist so the missile resumes after a reload.
         if (!this.level().isClientSide && reason.shouldDestroy() && this.level() instanceof ServerLevel sl) {
             this.chunkLoader.releaseAll(this, sl);
             if (this.interceptor) {
@@ -1654,7 +1683,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * @return the missile this interceptor should home on: in LOCK mode the exact {@link #lockTargetId} (any
-     * side — an explicit override), in NEAREST mode the closest live, non-friendly, non-interceptor missile
+     * side: an explicit override), in NEAREST mode the closest live, non-friendly, non-interceptor missile
      * within {@link MissileSimConfig#INTERCEPTOR_ACQUIRE_RANGE}. Null when none is resolvable.
      */
     private MissileEntity resolveInterceptTarget(ServerLevel level, Vec3 currentPos) {
@@ -1727,7 +1756,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             this.crossingShot = false;
             return tPos.add(vt.scale(t));
         }
-        // Uncatchable — the target outruns us, so a stern chase can never connect. Aim at the nearest point on
+        // Uncatchable: the target outruns us, so a stern chase can never connect. Aim at the nearest point on
         // its forward flight path and try to cross it instead (a much lower-odds shot; see tryIntercept).
         this.crossingShot = true;
         double vlen2 = vt.lengthSqr();
@@ -1774,7 +1803,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 ? this.interceptChance * MissileSimConfig.INTERCEPTOR_CROSSING_HIT_FACTOR
                 : this.interceptChance;
         boolean kill = level.random.nextFloat() < chance;
-        // A higher-tier target can boost clear at the cost of fuel — but only if it can out-run THIS
+        // A higher-tier target can boost clear at the cost of fuel, but only if it can out-run THIS
         // interceptor (its speed decides the odds, see evadeBoost), so a fast interceptor still connects.
         if (kill && tgt.evadeBoost(this.getCruiseSpeed(), this.position())) {
             kill = false;
@@ -1785,7 +1814,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             // hits). A hit deals heavy damage, a miss a graze; damageMissile downs it when the pool empties.
             tgt.damageMissile(kill ? MissileSimConfig.INTERCEPTOR_HIT_DAMAGE : MissileSimConfig.INTERCEPTOR_GRAZE_DAMAGE);
         } else if (kill) {
-            // Binary mode: an interceptor is a guaranteed clean kill — force a full-warhead DETONATE regardless
+            // Binary mode, where an interceptor is a guaranteed clean kill: force a full-warhead DETONATE regardless
             // of the target's own rolled downed action (flak/CIWS use that; the dedicated interceptor overrides it).
             tgt.shootDown(DownedAction.DETONATE);
         }
@@ -1888,7 +1917,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
      * @return whether an automatic detector may see this missile this scan, at squared distance {@code distSq}.
      * A normal missile is always visible within the detector's own range; a stealth missile is visible only
      * within the short {@link MissileSimConfig#STEALTH_DETECT_RANGE} and then only with
-     * {@link MissileSimConfig#STEALTH_DETECT_CHANCE} probability per scan — hard to engage, not invisible.
+     * {@link MissileSimConfig#STEALTH_DETECT_CHANCE} probability per scan: hard to engage, not invisible.
      * Manual UUID locking bypasses this entirely.
      */
     public boolean detectableAt(double distSq, net.minecraft.util.RandomSource rand) {
@@ -2229,7 +2258,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     private void onMissileImpact(HitResult hitResult) {
-        this.recordEvent(MissileEventType.IMPACTED, hitResult.getType().toString());
+        this.recordEvent(WFEventType.IMPACTED, hitResult.getType().toString());
         // Missile-vs-missile: this was an interception, not a strike on the target. Neutralise both missiles
         // with the (cheap) intercept effect rather than running two full open-air warhead blasts in one tick.
         // A hit on any other entity (or a block) is a real impact and detonates normally.
@@ -2250,8 +2279,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Removes the missile, running either the full warhead {@link WarheadRegistry.Detonation} or — when
-     * {@code intercepted} — the (typically neutralised) {@link WarheadRegistry#getIntercept intercept effect}
+     * Removes the missile, running either the full warhead {@link WarheadRegistry.Detonation} or, when
+     * {@code intercepted}, the (typically neutralised) {@link WarheadRegistry#getIntercept intercept effect}
      * used when the missile is shot down / rammed mid-air instead of reaching its target.
      */
     private void detonate(Vec3 pos, boolean intercepted) {
@@ -2259,7 +2288,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return;
         }
         this.detonated = true; // set before the blast: it can hurt() this missile before discard() runs
-        this.recordEvent(intercepted ? MissileEventType.INTERCEPTED : MissileEventType.DETONATED, "");
+        this.recordEvent(intercepted ? WFEventType.INTERCEPTED : WFEventType.DETONATED, "");
         // Run the warhead while the impact-preload chunks are still held, then release: the blast (and any
         // effect entities it spawns) lands into loaded terrain instead of racing the chunk teardown.
         if (intercepted) {
@@ -2287,15 +2316,15 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (this.level().isClientSide || this.isRemoved() || this.detonated || amount <= 0.0f) {
             return;
         }
-        // While unarmed, absorb damage without cooking off — a stray hit shouldn't blow it up on the launcher.
+        // While unarmed, absorb damage without cooking off: a stray hit shouldn't blow it up on the launcher.
         if (!this.isArmed()) {
             return;
         }
         this.health -= amount;
-        this.recordEvent(MissileEventType.DAMAGED, "dmg=" + f1(amount) + " hp=" + f1(this.health));
+        this.recordEvent(WFEventType.DAMAGED, "dmg=" + f1(amount) + " hp=" + f1(this.health));
         if (this.health <= 0.0f) {
             // Shot down (CIWS / interceptor fire): cut power and let it fall out of the sky rather than
-            // air-bursting on the spot — it fizzles (neutralised) where it crashes (see shootDown).
+            // air-bursting on the spot: it fizzles (neutralised) where it crashes (see shootDown).
             this.shootDown();
         }
     }
@@ -2312,7 +2341,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * Shoot this missile down with an explicit {@link DownedAction}, overriding its per-launch rolled action.
-     * Used where the downing weapon dictates the outcome — e.g. an interceptor forces a clean full-warhead
+     * Used where the downing weapon dictates the outcome: e.g. an interceptor forces a clean full-warhead
      * {@code DETONATE} regardless of what the target rolled. The no-arg {@link #shootDown()} uses the rolled action
      * (flak / CIWS / external hits go through that).
      */
@@ -2339,7 +2368,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 this.downed = true;
                 this.fuel = 0;
                 this.downedGrace = DOWNED_REHIT_GRACE;
-                this.recordEvent(MissileEventType.DESTROYED, "shot down: " + action);
+                this.recordEvent(WFEventType.DESTROYED, "shot down: " + action);
             }
         }
     }
@@ -2353,8 +2382,12 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     @Override
     public boolean hurt(DamageSource source, float amount) {
-        // TODO: don't let stray projectiles (e.g. arrows) destroy the missile.
         if (this.level().isClientSide || this.isRemoved()) {
+            return false;
+        }
+        // Stray arrows and mob shots bounce off. See MissileSimConfig#MIN_PROJECTILE_DAMAGE: a floor rather
+        // than blanket projectile immunity, so other mods' anti-air (which also arrives here) still works.
+        if (source.is(DamageTypeTags.IS_PROJECTILE) && amount < MissileSimConfig.MIN_PROJECTILE_DAMAGE) {
             return false;
         }
         // Per-missile damage response: a preset can resist or scale incoming damage by source (e.g. a hardened
@@ -2392,7 +2425,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public enum DownedAction {
         /** Neutralised fizzle on the spot, in mid-air where it was hit (the original shot-down behaviour). */
         FIZZLE,
-        /** Instant FULL warhead blast in mid-air where it was hit — a real "detonated on the spot". */
+        /** Instant FULL warhead blast in mid-air where it was hit: a real "detonated on the spot". */
         DETONATE,
         /** Cut power and fall ballistically (light drag, momentum preserved); fizzles at the crash site. */
         CRASH,
@@ -2412,7 +2445,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * Propellant kind: SOLID is a preloaded charge; LIQUID is kerosene (see {@code WFFluids}). Burn behaviour
-     * is identical (ticks of thrust) — the type is carried for flavour and future tank/bucket refuelling.
+     * is identical (ticks of thrust): the type is carried for flavour and future tank/bucket refuelling.
      */
     public enum FuelType {
         SOLID,
@@ -2672,7 +2705,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Distance in blocks at which this missile's flight loop fades to silence — and, since the audio is
+         * Distance in blocks at which this missile's flight loop fades to silence, and, since the audio is
          * server-pushed independently of entity tracking, the radius the server broadcasts it to. Default
          * {@link #DEFAULT_FLIGHT_SOUND_RANGE}. Raise it for a loitering drone you should hear from far off.
          */
@@ -2688,7 +2721,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Added flight-loop pitch per block/tick of the missile's OWN speed — the engine "revs" as it flies
+         * Added flight-loop pitch per block/tick of the missile's OWN speed: the engine "revs" as it flies
          * faster. Default 0 keeps the pitch constant regardless of speed (the loitering-drone exception:
          * only Doppler from relative motion then shifts it).
          */
@@ -2709,7 +2742,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         /**
          * What this missile does when shot out of the sky (see {@link DownedAction}). Default {@link
-         * DownedAction#CRASH} — it falls and fizzles where it lands instead of air-bursting on the spot.
+         * DownedAction#CRASH}: it falls and fizzles where it lands instead of air-bursting on the spot.
          */
         public Builder downedAction(DownedAction action) {
             this.downedAction = (action != null) ? action : DownedAction.CRASH;
@@ -2870,7 +2903,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         /**
          * Low-observable: make this missile invisible to automatic detection (only a manual UUID lock can
-         * engage it — see {@link MissileEntity#isStealth}).
+         * engage it: see {@link MissileEntity#isStealth}).
          */
         public Builder stealth(boolean stealth) {
             this.stealth = stealth;
@@ -2878,7 +2911,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Evasion (0..1): how often this missile shrugs off an interception attempt — the tier that lets a
+         * Evasion (0..1): how often this missile shrugs off an interception attempt, the tier that lets a
          * better missile escape interceptors more often (amplified in its terminal dive). See
          * {@link MissileEntity#effectiveEvasion}.
          */

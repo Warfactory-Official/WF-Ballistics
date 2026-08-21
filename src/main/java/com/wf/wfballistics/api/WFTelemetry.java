@@ -8,17 +8,17 @@ import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
-public final class MissileTelemetry {
+public final class WFTelemetry {
 
     public static final int MAX_EVENTS = 256;
 
     private final UUID id;
     private final long openedAt;
-    private final ArrayDeque<MissileTelemetryEvent> events = new ArrayDeque<>();
-    private MissileTelemetryEvent latest;
+    private final ArrayDeque<WFTelemetryEvent> events = new ArrayDeque<>();
+    private WFTelemetryEvent latest;
     private int total;
 
-    MissileTelemetry(UUID id, long openedAt) {
+    WFTelemetry(UUID id, long openedAt) {
         this.id = id;
         this.openedAt = openedAt;
     }
@@ -35,8 +35,8 @@ public final class MissileTelemetry {
         return total;
     }
 
-    void record(MissileEventType type, long gameTime, Vec3 pos, boolean simulated, String detail) {
-        MissileTelemetryEvent event = new MissileTelemetryEvent(type, gameTime, pos.x, pos.y, pos.z, simulated,
+    void record(WFEventType type, long gameTime, Vec3 pos, boolean simulated, String detail) {
+        WFTelemetryEvent event = new WFTelemetryEvent(type, gameTime, pos.x, pos.y, pos.z, simulated,
                 detail == null ? "" : detail);
         if (events.size() >= MAX_EVENTS) {
             events.removeFirst();
@@ -46,11 +46,11 @@ public final class MissileTelemetry {
         total++;
     }
 
-    public MissileTelemetryEvent latest() {
+    public WFTelemetryEvent latest() {
         return latest;
     }
 
-    public List<MissileTelemetryEvent> events() {
+    public List<WFTelemetryEvent> events() {
         return Collections.unmodifiableList(new ArrayList<>(events));
     }
 }

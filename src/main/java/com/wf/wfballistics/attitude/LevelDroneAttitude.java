@@ -6,7 +6,7 @@ import org.joml.Vector3f;
 
 /**
  * Winged-drone attitude: the nose (model {@code +Y}) follows the heading (so the drone pitches to climb/dive),
- * but the airframe is held upright — its dorsal (top) side is kept pointing at world-up, so the wings stay
+ * but the airframe is held upright: its dorsal (top) side is kept pointing at world-up, so the wings stay
  * level and the belly stays down instead of the free roll a missile takes. Banking into turns is layered on
  * top by the visual.
  *
@@ -25,6 +25,11 @@ public final class LevelDroneAttitude implements MissileAttitude {
 
     private LevelDroneAttitude() {
     }
+
+    // No allocation-free orientation(heading, dest) override: this builds a full basis and JOML can only
+    // convert one to a quaternion via a Matrix3f, which would mean scratch state on a shared singleton that
+    // several flywheel threads use at once. The winged drones this attitude serves are a handful of models,
+    // so the default wrapper's allocation is left alone rather than made thread-unsafe to remove.
 
     @Override
     public Quaternionf orientation(Vector3f heading) {

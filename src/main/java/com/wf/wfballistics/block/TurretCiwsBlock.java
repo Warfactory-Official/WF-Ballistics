@@ -14,7 +14,7 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Close-in weapon system block: hosts a {@link TurretCiwsBlockEntity} that automatically shoots down nearby
- * missiles. Passive/automatic — no player interaction.
+ * missiles. Passive/automatic: no player interaction.
  */
 public class TurretCiwsBlock extends BaseEntityBlock {
     public static final MapCodec<TurretCiwsBlock> CODEC = simpleCodec(TurretCiwsBlock::new);

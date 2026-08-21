@@ -20,7 +20,7 @@ import java.util.Set;
  * <p>{@code resolution} is the classic vanilla 16; raising it produces a smoother, more spherical blast at
  * a roughly quadratic cost (only the cube's shell is iterated, so it scales with {@code resolution²}).
  *
- * <p>This allocator only collects positions — see {@link BlockProcessorStandard} for what happens to them.
+ * <p>This allocator only collects positions: see {@link BlockProcessorStandard} for what happens to them.
  */
 public class BlockAllocatorStandard implements IBlockAllocator {
 
@@ -68,7 +68,7 @@ public class BlockAllocatorStandard implements IBlockAllocator {
 
                         // Only collect real blocks: skipping air means a blast in open space doesn't
                         // allocate a throwaway BlockPos for every step of every ray (mid-air, that was
-                        // hundreds of thousands of short-lived objects per blast — a GC spike), and the
+                        // hundreds of thousands of short-lived objects per blast: a GC spike), and the
                         // block processor no longer has to re-scan and discard air positions afterwards.
                         if (power > 0.0F && !state.isAir() && canDestroy(explosion, level, cursor, state, power)) {
                             affectedBlocks.add(cursor.immutable());

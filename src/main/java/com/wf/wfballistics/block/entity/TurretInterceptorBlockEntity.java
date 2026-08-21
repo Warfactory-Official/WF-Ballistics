@@ -35,7 +35,7 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
      */
     public static final double RANGE = 200.0;
     /**
-     * Listener radius — larger than RANGE so simulated missiles materialize before entering engagement range.
+     * Listener radius: larger than RANGE so simulated missiles materialize before entering engagement range.
      */
     public static final double LISTENER_RANGE = 280.0;
     /**
@@ -159,7 +159,7 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
     private MissileEntity acquireTarget(ServerLevel sl, Vec3 muzzle) {
         AABB box = new AABB(this.worldPosition).inflate(RANGE);
         List<MissileEntity> nearby = sl.getEntitiesOfClass(MissileEntity.class, box, MissileEntity::isAlive);
-        // Don't launch at a missile another interceptor is already committed to — saves interceptors and
+        // Don't launch at a missile another interceptor is already committed to: saves interceptors and
         // spreads coverage across incoming threats.
         Set<UUID> claimed = MissileEntity.claimedTargets(nearby, Integer.MAX_VALUE);
         MissileEntity best = null;

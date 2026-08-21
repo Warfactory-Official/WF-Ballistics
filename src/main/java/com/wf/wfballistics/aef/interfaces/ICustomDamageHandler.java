@@ -4,7 +4,7 @@ import com.wf.wfballistics.aef.ExplosionAEF;
 import net.minecraft.world.entity.Entity;
 
 /**
- * An extra, non-lethal payload applied to every entity the blast damages — e.g. setting things on fire,
+ * An extra, non-lethal payload applied to every entity the blast damages: e.g. setting things on fire,
  * applying a status effect, or irradiating the target. Runs in addition to the normal blast damage, once
  * per affected entity.
  */

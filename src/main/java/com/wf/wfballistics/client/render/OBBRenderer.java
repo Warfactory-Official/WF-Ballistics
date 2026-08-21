@@ -78,7 +78,7 @@ public final class OBBRenderer {
      * Debug overlay for the continuous-collision sweep (shown with the OBB on F3+B). Draws the
      * nose-extended corridor the block DDA walks (red centerline) and the body OBB stepped along this
      * tick's movement at the same substep cadence the server uses ({@link MissileSimConfig}), so the
-     * swept volume — the thing that stops fast missiles tunnelling — is visible. Client-side, rebuilt
+     * swept volume, the thing that stops fast missiles tunnelling, is visible. Client-side, rebuilt
      * from the synced velocity; geometry only, it does not show the server's actual hit point.
      */
     public static void renderSweep(Entity entity, List<OBB> obbList, PoseStack poseStack, VertexConsumer buffer) {
@@ -126,7 +126,7 @@ public final class OBBRenderer {
 
     /**
      * Colour derived from a missile's swarm id (so distinct swarms are visually separable), or null when
-     * the entity isn't a swarmed missile — the caller then keeps its default colour.
+     * the entity isn't a swarmed missile: the caller then keeps its default colour.
      */
     private static float[] swarmTint(Entity entity) {
         if (!(entity instanceof MissileEntity missile)) {

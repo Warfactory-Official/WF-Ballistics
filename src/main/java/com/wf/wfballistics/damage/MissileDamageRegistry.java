@@ -20,7 +20,7 @@ public final class MissileDamageRegistry {
     /** Pass-through: the missile takes damage exactly as dealt (vanilla behaviour, the default). */
     public static final MissileDamageResponse STANDARD = (missile, source, amount) -> amount;
 
-    /** Immune to everything except explosion damage — the canonical "hardened, blast-only" airframe. */
+    /** Immune to everything except explosion damage: the canonical "hardened, blast-only" airframe. */
     public static final MissileDamageResponse EXPLOSION_ONLY = (missile, source, amount) ->
             source.is(DamageTypeTags.IS_EXPLOSION) ? amount : 0.0f;
 

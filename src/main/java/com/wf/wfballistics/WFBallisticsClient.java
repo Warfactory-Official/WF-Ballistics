@@ -1,8 +1,12 @@
 package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
+import com.wf.wfballistics.client.gui.DronePadScreen;
 import com.wf.wfballistics.client.gui.MissileDispenserScreen;
 import com.wf.wfballistics.client.render.BombletRenderer;
+import com.wf.wfballistics.client.render.CrateRenderer;
+import com.wf.wfballistics.client.render.DroneVisual;
+import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.client.render.EntityTorexRender;
 import com.wf.wfballistics.item.MissilePreset;
 import com.wf.wfballistics.item.MissilePresetRegistry;
@@ -42,7 +46,11 @@ public class WFBallisticsClient {
         event.registerEntityRenderer(ModEntities.BOMBLET.get(),
                 BombletRenderer::new);
 
-        // Mist clouds draw nothing themselves — they are pure particle effects (see MistClientFX).
+        // Drones draw through flywheel (see DroneVisual); crates use the standard block-ish renderer.
+        event.registerEntityRenderer(ModEntities.DRONE.get(), NoopRenderer::new);
+        event.registerEntityRenderer(ModEntities.CRATE.get(), CrateRenderer::new);
+
+        // Mist clouds draw nothing themselves: they are pure particle effects (see MistClientFX).
         event.registerEntityRenderer(ModEntities.MIST.get(),
                 NoopRenderer::new);
 
@@ -91,6 +99,7 @@ public class WFBallisticsClient {
     @SubscribeEvent
     public static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenus.MISSILE_DISPENSER.get(), MissileDispenserScreen::new);
+        event.register(ModMenus.DRONE_PAD.get(), DronePadScreen::new);
     }
 
     @SubscribeEvent
@@ -110,6 +119,19 @@ public class WFBallisticsClient {
             };
 
             VisualizerRegistry.setVisualizer(ModEntities.STEALTH_MISSILE.get(), visualizer);
+
+            VisualizerRegistry.setVisualizer(ModEntities.DRONE.get(), new EntityVisualizer<DroneEntity>() {
+                @Override
+                public EntityVisual<? super DroneEntity> createVisual(VisualizationContext ctx, DroneEntity entity,
+                                                                      float partialTick) {
+                    return new DroneVisual(ctx, entity);
+                }
+
+                @Override
+                public boolean skipVanillaRender(DroneEntity entity) {
+                    return true;
+                }
+            });
         });
     }
 }

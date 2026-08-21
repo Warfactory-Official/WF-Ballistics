@@ -16,7 +16,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Renders a {@link MissileItem} as the actual 3D missile model — the same baked OBJ the flying entity uses.
+ * Renders a {@link MissileItem} as the actual 3D missile model: the same baked OBJ the flying entity uses.
  * HBM-style: the model is scaled to stand in the item's unit space, and in the inventory it slowly spins on
  * its long axis so you can read the airframe.
  *

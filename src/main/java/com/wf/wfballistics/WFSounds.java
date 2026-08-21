@@ -23,6 +23,12 @@ public final class WFSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> EXPLOSION_LARGE_FAR = register("weapon.explosion_large_far");
     public static final DeferredHolder<SoundEvent, SoundEvent> SONIC_BOOM = register("weapon.sonic_boom");
     public static final DeferredHolder<SoundEvent, SoundEvent> MISSILE_FLIGHT = register("weapon.missile_flight");
+    /**
+     * A quadcopter holding an unladen hover, looped. Everything else about how a drone sounds (how far off
+     * it can be heard, how it revs, when it spools up) comes from {@code DroneRotorSound} and the
+     * {@code attenuation_distance} in {@code sounds.json}, not from here.
+     */
+    public static final DeferredHolder<SoundEvent, SoundEvent> DRONE_ROTOR_LOOP = register("drone.rotor_loop");
 
     private WFSounds() {
     }

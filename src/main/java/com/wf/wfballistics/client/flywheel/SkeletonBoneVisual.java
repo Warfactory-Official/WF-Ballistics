@@ -17,7 +17,7 @@ import org.joml.Matrix4f;
 /**
  * Flywheel visual for a {@link SkeletonBoneEffect}: one {@link TransformedInstance} per bone, drawn from the
  * shared per-part bone models. Each frame the bone is positioned, spun by its yaw, tumbled around its random
- * axis, and faded — a transform + colour upload, no geometry rebuild.
+ * axis, and faded: a transform + colour upload, no geometry rebuild.
  */
 public class SkeletonBoneVisual extends AbstractVisual implements SimpleDynamicVisual, EffectVisual<SkeletonBoneEffect> {
 

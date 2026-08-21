@@ -2,7 +2,7 @@ package com.wf.wfballistics.api;
 
 import net.minecraft.world.phys.Vec3;
 
-public record MissileTelemetryEvent(MissileEventType type, long gameTime, double x, double y, double z,
+public record WFTelemetryEvent(WFEventType type, long gameTime, double x, double y, double z,
                                     boolean simulated, String detail) {
 
     public Vec3 pos() {

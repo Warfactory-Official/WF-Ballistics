@@ -46,7 +46,7 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
 
     /**
      * Where the exhaust streams from. For a missile the mesh base sits at the entity origin and the model's
-     * +Y nose points along the heading, so the rear-face centre (the nozzle) is the entity position itself —
+     * +Y nose points along the heading, so the rear-face centre (the nozzle) is the entity position itself:
      * not the AABB centre, which drifts to a corner of the oriented box as the missile pitches. Generic
      * entities fall back to the vertical centre of their bounding box.
      */
@@ -108,7 +108,7 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
             // current) instead of the straight prev->current chord, so a sharp heading change rounds into a
             // visible arc rather than a hard kink in the trail. The fourth control point is extrapolated
             // straight ahead since the missile's next position isn't known yet. Falls back to the chord until
-            // enough history exists. "Not extremely accurate" by design — it just reads the flight's curvature.
+            // enough history exists. "Not extremely accurate" by design: it just reads the flight's curvature.
             boolean curve = hasPrev2;
             double p3x = ex + (ex - prevX);
             double p3y = ey + (ey - prevY);

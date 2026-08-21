@@ -11,13 +11,13 @@ import net.minecraft.world.phys.Vec3;
 import java.util.UUID;
 
 /**
- * The mini-nuke ("muke") system: a compact nuclear blast — a fire-leaving, drop-free crater, an
+ * The mini-nuke ("muke") system, a compact nuclear blast: a fire-leaving, drop-free crater, an
  * obstruction-checked entity kill radius, and a small mushroom cloud. Port of HBM's {@code ExplosionNukeSmall}
  * plus its {@code MukeParams} presets.
  *
  * <p>Adapted to WF: HBM's radiation payload and metal shrapnel are dropped (no such systems here), and HBM's
  * dedicated "Muke" mushroom particle maps to a small-scale {@link EntityNukeTorex}. Block destruction is
- * synchronous — cheap at mini-nuke radii — while the {@code miniNuke = false} "fatman" variant hands off to
+ * synchronous, cheap at mini-nuke radii, while the {@code miniNuke = false} "fatman" variant hands off to
  * the threaded, budget-per-tick {@link Nuke#detonate big-nuke} path.
  *
  * <pre>{@code MiniNuke.detonate(level, hitPos, MiniNuke.medium());}</pre>
@@ -33,7 +33,7 @@ public final class MiniNuke {
 
     /**
      * @param igniterFaction the WarForge faction the blast is attributed to (a missile's {@code teamId}), or
-     *                       {@code null} when unattributed — see {@link ExplosionAEF#igniterFaction}.
+     *                       {@code null} when unattributed: see {@link ExplosionAEF#igniterFaction}.
      */
     public static void detonate(Level level, Vec3 center, MukeParams p, UUID igniterFaction) {
         if (level.isClientSide) {
@@ -46,7 +46,7 @@ public final class MiniNuke {
             return;
         }
 
-        // Block destruction: a drop-free crater that leaves fire. No entity processor (NOHURT — the kill
+        // Block destruction: a drop-free crater that leaves fire. No entity processor (NOHURT: the kill
         // radius below handles damage) and no SFX (the mushroom below is the visual). Mini-nuke radii keep
         // the synchronous ray-march cheap.
         if (!p.safe) {
@@ -66,7 +66,7 @@ public final class MiniNuke {
             ExplosionNukeGeneric.dealDamage(level, center, p.killRadius);
         }
 
-        // Visual: a small mushroom cloud (flash + mushroom + shockwave clouds + boom) — WF's stand-in for
+        // Visual: a small mushroom cloud (flash + mushroom + shockwave clouds + boom), WF's stand-in for
         // HBM's "Muke" particle. The Torex clamps small scales, so a mini nuke gets a compact cloud.
         level.addFreshEntity(new EntityNukeTorex(level, center.add(0.0, 1.5, 0.0), p.blastRadius));
     }

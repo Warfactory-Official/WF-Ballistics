@@ -188,7 +188,7 @@ public class EntityProcessorCross implements IEntityProcessor {
 
     /**
      * Blast-shape gate, checked right after the spherical range cull. Return {@code false} to spare an entity
-     * whose position falls outside this blast's actual shape — e.g. beside or behind a shaped charge's forward
+     * whose position falls outside this blast's actual shape: e.g. beside or behind a shaped charge's forward
      * cone (see {@link EntityProcessorCone}). The default whole-sphere blast lets everything in range through.
      */
     protected boolean isWithinBlastShape(ExplosionAEF explosion, Entity entity, double x, double y, double z) {

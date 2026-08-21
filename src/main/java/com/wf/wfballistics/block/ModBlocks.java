@@ -25,6 +25,15 @@ public class ModBlocks {
             ITEMS.register("missile_listener_debug", () ->
                     new BlockItem(MISSILE_LISTENER_DEBUG.get(), new Item.Properties()));
 
+    // Drone launch/recovery pad: holds cargo + a mission, dispatches on a redstone edge, recharges drones
+    // parked on top.
+    public static final DeferredHolder<Block, Block> DRONE_PAD =
+            BLOCKS.register("drone_pad", () -> new DronePadBlock(
+                    BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.0f)));
+
+    public static final DeferredHolder<Item, Item> DRONE_PAD_ITEM =
+            ITEMS.register("drone_pad", () -> new BlockItem(DRONE_PAD.get(), new Item.Properties()));
+
     public static final DeferredHolder<Block, Block>MISSILE_DISPENSER =
             BLOCKS.register("missile_dispenser", () -> new MissileDispenserBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.0f)));

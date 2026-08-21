@@ -1,6 +1,6 @@
 package com.wf.wfballistics.chunk;
 
-import com.wf.wfballistics.MissileEntity;
+import net.minecraft.world.entity.Entity;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import it.unimi.dsi.fastutil.longs.LongIterator;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -17,9 +17,9 @@ public final class MissileChunkLoader {
     private long targetCenter = Long.MAX_VALUE;
     private int targetRadius = -1;
 
-    private static void force(ServerLevel level, MissileEntity missile, long chunkKey, boolean add, boolean ticking) {
+    private static void force(ServerLevel level, Entity flier, long chunkKey, boolean add, boolean ticking) {
         // Entity-UUID owned tickets via the shared WF controller.
-        DetonationChunkGuard.CONTROLLER.forceChunk(level, missile.getUUID(),
+        DetonationChunkGuard.CONTROLLER.forceChunk(level, flier.getUUID(),
                 ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey), add, ticking);
     }
 
@@ -89,8 +89,8 @@ public final class MissileChunkLoader {
         }
     }
 
-    public void update(MissileEntity missile, ServerLevel level, Vec3 pos, Vec3 vel, boolean loadFan) {
-        long ownChunk = missile.chunkPosition().toLong();
+    public void update(Entity flier, ServerLevel level, Vec3 pos, Vec3 vel, boolean loadFan) {
+        long ownChunk = flier.chunkPosition().toLong();
 
         LongOpenHashSet desiredTicking = new LongOpenHashSet();
         desiredTicking.add(ownChunk);
@@ -106,24 +106,24 @@ public final class MissileChunkLoader {
 
         for (long key : desiredTicking) {
             if (!ticking.contains(key)) {
-                force(level, missile, key, true, true);
+                force(level, flier, key, true, true);
             }
         }
         for (long key : desiredNonTicking) {
             if (!nonTicking.contains(key)) {
-                force(level, missile, key, true, false);
+                force(level, flier, key, true, false);
             }
         }
         for (LongIterator it = ticking.iterator(); it.hasNext(); ) {
             long key = it.nextLong();
             if (!desiredTicking.contains(key)) {
-                force(level, missile, key, false, true);
+                force(level, flier, key, false, true);
             }
         }
         for (LongIterator it = nonTicking.iterator(); it.hasNext(); ) {
             long key = it.nextLong();
             if (!desiredNonTicking.contains(key)) {
-                force(level, missile, key, false, false);
+                force(level, flier, key, false, false);
             }
         }
 
@@ -131,12 +131,12 @@ public final class MissileChunkLoader {
         this.nonTicking = desiredNonTicking;
     }
 
-    public void releaseAll(MissileEntity missile, ServerLevel level) {
+    public void releaseAll(Entity flier, ServerLevel level) {
         for (LongIterator it = ticking.iterator(); it.hasNext(); ) {
-            force(level, missile, it.nextLong(), false, true);
+            force(level, flier, it.nextLong(), false, true);
         }
         for (LongIterator it = nonTicking.iterator(); it.hasNext(); ) {
-            force(level, missile, it.nextLong(), false, false);
+            force(level, flier, it.nextLong(), false, false);
         }
         ticking.clear();
         nonTicking.clear();

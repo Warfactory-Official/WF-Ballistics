@@ -30,6 +30,7 @@ public final class WFConfig {
     public static final ModConfigSpec.BooleanValue INTERCEPTOR_CHIP_MODE;
     public static final ModConfigSpec.DoubleValue INTERCEPTOR_HIT_DAMAGE;
     public static final ModConfigSpec.DoubleValue INTERCEPTOR_GRAZE_DAMAGE;
+    public static final ModConfigSpec.DoubleValue MIN_PROJECTILE_DAMAGE;
     // --- Stealth ---
     public static final ModConfigSpec.DoubleValue STEALTH_DETECT_RANGE;
     public static final ModConfigSpec.DoubleValue STEALTH_DETECT_CHANCE;
@@ -84,7 +85,7 @@ public final class WFConfig {
                 .defineInRange("supersonicSpeed", 2.5, 0.5, 64.0);
         INTERCEPTOR_CHIP_MODE = b
                 .comment("If true, a proximity intercept damages the target's health pool (shared with CIWS)",
-                        "instead of a binary destroy/miss — interceptors + CIWS combine and missile toughness",
+                        "instead of a binary destroy/miss: interceptors + CIWS combine and missile toughness",
                         "(health) matters. If false, a successful roll destroys the target outright.")
                 .define("chipMode", false);
         INTERCEPTOR_HIT_DAMAGE = b
@@ -93,6 +94,14 @@ public final class WFConfig {
         INTERCEPTOR_GRAZE_DAMAGE = b
                 .comment("Chip mode: health damage a missed intercept deals.")
                 .defineInRange("grazeDamage", 8.0, 0.0, 100000.0);
+        b.pop();
+
+        b.comment("Missile toughness against incidental damage.").push("durability");
+        MIN_PROJECTILE_DAMAGE = b
+                .comment("Projectile hits weaker than this bounce off a missile instead of damaging it, so an",
+                        "archer cannot plink one out of the sky and bypass interceptors and CIWS entirely.",
+                        "Purpose-built anti-air hits far harder and is unaffected. 0 restores vanilla damage.")
+                .defineInRange("minProjectileDamage", 20.0, 0.0, 100000.0);
         b.pop();
 
         b.comment("Stealth missiles: reduced-observability, not invisible.").push("stealth");
@@ -187,6 +196,7 @@ public final class WFConfig {
         MissileSimConfig.INTERCEPTOR_CHIP_MODE = INTERCEPTOR_CHIP_MODE.get();
         MissileSimConfig.INTERCEPTOR_HIT_DAMAGE = INTERCEPTOR_HIT_DAMAGE.get().floatValue();
         MissileSimConfig.INTERCEPTOR_GRAZE_DAMAGE = INTERCEPTOR_GRAZE_DAMAGE.get().floatValue();
+        MissileSimConfig.MIN_PROJECTILE_DAMAGE = MIN_PROJECTILE_DAMAGE.get().floatValue();
         MissileSimConfig.STEALTH_DETECT_RANGE = STEALTH_DETECT_RANGE.get();
         MissileSimConfig.STEALTH_DETECT_CHANCE = STEALTH_DETECT_CHANCE.get().floatValue();
         MissileSimConfig.DIVE_EVASION_MULTIPLIER = DIVE_EVASION_MULTIPLIER.get();

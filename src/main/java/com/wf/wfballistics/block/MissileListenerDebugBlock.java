@@ -23,7 +23,7 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Debug block that acts as a missile listener (via its block entity) and, on right-click, launches a
- * simulated interceptor at the nearest simulated missile — a test harness for both listener respawns
+ * simulated interceptor at the nearest simulated missile: a test harness for both listener respawns
  * and simulated interception.
  */
 public class MissileListenerDebugBlock extends BaseEntityBlock {

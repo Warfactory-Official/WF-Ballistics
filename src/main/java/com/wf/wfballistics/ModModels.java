@@ -1,5 +1,8 @@
 package com.wf.wfballistics;
 
+import com.wf.wfballistics.anim.Rotor;
+import com.wf.wfballistics.anim.Rotors;
+import com.wf.wfballistics.drone.DroneModels;
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.model.BakedModel;
@@ -25,17 +28,34 @@ public class ModModels {
     public static final PartialModel BONE_LIMB = PartialModel.of(
             ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "effect/bone_limb")
     );
+    // The cargo crate, baked so a drone can draw the one it is carrying as part of its own instance rather
+    // than trailing a second entity behind it (see client.render.DroneVisual).
+    public static final PartialModel CRATE = PartialModel.of(
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "entity/crate")
+    );
     private static final Map<ResourceLocation, PartialModel> MISSILES = new HashMap<>();
-    // Baked models for spinning parts, keyed by the rotor mesh's model location (see MissileModels.Rotor).
-    private static final Map<ResourceLocation, PartialModel> ROTORS = new HashMap<>();
+    private static final Map<ResourceLocation, PartialModel> DRONES = new HashMap<>();
+    private static final Map<ResourceLocation, PartialModel> PARTS = new HashMap<>();
 
     static {
         for (ResourceLocation id : MissileModels.ids()) {
             MISSILES.put(id, PartialModel.of(MissileModels.model(id)));
-            for (MissileModels.Rotor rotor : MissileModels.rotors(id)) {
-                ROTORS.computeIfAbsent(rotor.model(), PartialModel::of);
+            // A missile's only moving parts are its props, so its rotor list is its part list.
+            for (Rotor rotor : Rotors.of(id)) {
+                bakePart(rotor.model());
             }
         }
+        for (ResourceLocation id : DroneModels.ids()) {
+            DRONES.put(id, PartialModel.of(DroneModels.model(id)));
+            // Drones declare their parts up front, rotors and jaws together, so bake the lot.
+            for (ResourceLocation part : DroneModels.parts(id)) {
+                bakePart(part);
+            }
+        }
+    }
+
+    private static void bakePart(ResourceLocation model) {
+        PARTS.computeIfAbsent(model, PartialModel::of);
     }
 
     /**
@@ -57,6 +77,14 @@ public class ModModels {
         return new RenderModel(baked, Math.max(1.0, MissileModels.length(key)), MissileModels.center(key));
     }
 
+    /**
+     * @return the baked airframe for a drone id, falling back to {@link DroneModels#DEFAULT}.
+     */
+    public static PartialModel drone(ResourceLocation id) {
+        PartialModel partial = DRONES.get(id);
+        return usableBaked(partial) != null ? partial : DRONES.get(DroneModels.DEFAULT);
+    }
+
     private static BakedModel usableBaked(PartialModel partial) {
         if (partial == null) {
             return null;
@@ -70,10 +98,10 @@ public class ModModels {
     }
 
     /**
-     * @return the baked model for a spinning part, or null if it wasn't registered.
+     * @return the baked model for a moving part (rotor disc, gripper jaw) or null if it wasn't registered.
      */
-    public static PartialModel rotor(ResourceLocation model) {
-        return ROTORS.get(model);
+    public static PartialModel part(ResourceLocation model) {
+        return PARTS.get(model);
     }
 
     public static void init() {

@@ -39,7 +39,7 @@ public final class FireClientFX {
     private static void spawnVanillaParticles(FireLingeringEntity fire) {
         Level level = fire.level();
         AABB box = fire.getBoundingBox();
-        FireType type = fire.getVariant() == FireLingeringEntity.TYPE_PHOSPHORUS ? FireType.PHOSPHORUS : FireType.NORMAL;
+        FireType type = fire.getFireType();
         double dx = box.maxX - box.minX;
         double dz = box.maxZ - box.minZ;
         int count = InstancedFlameEffect.flameCount(dx, dz);

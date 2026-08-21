@@ -3,8 +3,8 @@ package com.wf.wfballistics.sim;
 import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.MissileModels;
-import com.wf.wfballistics.api.MissileEventType;
-import com.wf.wfballistics.api.MissileTelemetryService;
+import com.wf.wfballistics.api.WFEventType;
+import com.wf.wfballistics.api.WFTelemetryService;
 import com.wf.wfballistics.chunk.DetonationChunkGuard;
 import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.network.MissileFlightAudioPacket;
@@ -76,7 +76,7 @@ public final class SimMissileManager {
                         // detonates into loaded terrain (spawnOne force-loads the spawn chunk; the entity's own
                         // fuel<=0 branch keeps the impact area held and the detonation guard finishes the blast).
                         sm.fuel = 0;
-                        MissileTelemetryService.record(sm.id, MissileEventType.FUEL_OUT, now, sm.pos, true,
+                        WFTelemetryService.record(sm.id, WFEventType.FUEL_OUT, now, sm.pos, true,
                                 "ballistic respawn");
                         LOGGER.debug("[wfballistics] simulated missile {} ran out of fuel; respawning to crash near {}",
                                 sm.id, sm.pos);
@@ -180,7 +180,7 @@ public final class SimMissileManager {
             dead.add(interceptor); // spent whether it hits or misses
             if (hit) {
                 dead.add(target);
-                MissileTelemetryService.record(target.id, MissileEventType.INTERCEPTED, level.getGameTime(),
+                WFTelemetryService.record(target.id, WFEventType.INTERCEPTED, level.getGameTime(),
                         target.pos, true, "sim intercept");
                 LOGGER.debug("[wfballistics] simulated interception SUCCESS on {}", target.id);
             } else {
@@ -280,7 +280,7 @@ public final class SimMissileManager {
         }
         SimMissile sm = SimMissile.fromEntity(missile);
         SimMissileRegistry.get(level).add(sm);
-        missile.recordEvent(MissileEventType.OFFLOAD, "to sim");
+        missile.recordEvent(WFEventType.OFFLOAD, "to sim");
         LOGGER.debug("[wfballistics] missile {} offloaded to simulation at {}", sm.id, sm.pos);
         missile.discard(); // triggers chunk release via MissileEntity#remove
     }
@@ -303,7 +303,7 @@ public final class SimMissileManager {
             lead.swarmMembers.add(member);
         }
         SimMissileRegistry.get(level).add(lead);
-        commander.recordEvent(MissileEventType.OFFLOAD, "swarm to sim");
+        commander.recordEvent(WFEventType.OFFLOAD, "swarm to sim");
         LOGGER.debug("[wfballistics] swarm {} ({} members) offloaded as one object at {}",
                 commander.getSwarmId(), lead.swarmMembers.size() + 1, lead.pos);
         for (MissileEntity sub : subordinates) {
@@ -330,7 +330,7 @@ public final class SimMissileManager {
         MissileListenerRegistry.CHUNK_TICKET.forceChunk(level, m, cp.x, cp.z, true, true);
         level.getChunk(cp.x, cp.z);
         level.addFreshEntity(m);
-        MissileTelemetryService.record(sm.id, MissileEventType.ONLOAD, level.getGameTime(), spawnPos, false, "from sim");
+        WFTelemetryService.record(sm.id, WFEventType.ONLOAD, level.getGameTime(), spawnPos, false, "from sim");
         LOGGER.debug("[wfballistics] simulated missile {} respawned at {}", sm.id, spawnPos);
     }
 

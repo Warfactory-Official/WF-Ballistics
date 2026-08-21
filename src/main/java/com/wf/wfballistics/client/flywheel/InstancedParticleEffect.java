@@ -10,7 +10,7 @@ import net.minecraft.world.level.LevelAccessor;
 /**
  * A cloud of billboard "puffs" rendered through Flywheel as GPU instances rather than vanilla particles.
  *
- * <p>This is a Flywheel {@link Effect} — Flywheel's particle analogue. The CPU only simulates the puffs
+ * <p>This is a Flywheel {@link Effect}: Flywheel's particle analogue. The CPU only simulates the puffs
  * (cheap structs) and the matching {@link InstancedParticleVisual} uploads one instanced quad per puff to
  * the GPU, so a whole cloud is one instanced draw call instead of the per-render-type buffer rebuild vanilla
  * does. Lifecycle (tick + removal) is driven by {@link InstancedParticleManager}.
