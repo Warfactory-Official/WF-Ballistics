@@ -2,10 +2,14 @@ package com.wf.wfballistics.config;
 
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.compat.WarforgeCompat;
+import com.wf.wfballistics.industry.IndustryConfig;
+import com.wf.wfballistics.industry.IndustryValues;
 import com.wf.wfballistics.sim.MissileSimConfig;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.ModConfigSpec;
+
+import java.util.List;
 
 /**
  * Server/common config for the tunables most worth adjusting without recompiling: the WarForge integration
@@ -48,6 +52,13 @@ public final class WFConfig {
     public static final ModConfigSpec.DoubleValue SIM_TERMINAL_RANGE;
     public static final ModConfigSpec.DoubleValue SIM_SPAWN_MARGIN;
     public static final ModConfigSpec.IntValue SIM_CRUISE_DELAY_TICKS;
+    // --- Industry tracking (glyphid aggression input) ---
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> INDUSTRY_MACHINES;
+    public static final ModConfigSpec.IntValue INDUSTRY_CELL_CHUNKS;
+    public static final ModConfigSpec.IntValue INDUSTRY_CLUSTER_GAP;
+    public static final ModConfigSpec.IntValue INDUSTRY_CLUSTER_MIN_VALUE;
+    public static final ModConfigSpec.IntValue INDUSTRY_RECOMPUTE_DELAY;
+    public static final ModConfigSpec.BooleanValue INDUSTRY_BACKFILL;
     // --- Glyphids ---
     public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
@@ -168,6 +179,42 @@ public final class WFConfig {
                 .defineInRange("cruiseDelayTicks", 100, 0, 1_000_000);
         b.pop();
 
+        b.comment("Industry tracking: what provokes the glyphids, and how bases are detected.",
+                        "Machines register on placement and on the one-off sweep each chunk gets when it first",
+                        "loads, so a base built before this feature existed still counts.")
+                .push("industry");
+        INDUSTRY_MACHINES = b
+                .comment("Blocks that provoke, and by how much.",
+                        "Format: \"registryId=value\" (value defaults to 1 if omitted).",
+                        "Dirty industry is meant to score far higher than clean: a diesel farm should draw",
+                        "attention long before an equivalent electric base does.",
+                        "wfcore overrides these at runtime when it is installed.")
+                .defineList("machines", IndustryValues.DEFAULTS, o -> o instanceof String);
+        INDUSTRY_CELL_CHUNKS = b
+                .comment("Region cell size in chunks. Provocation is accumulated per cell, and bases are",
+                        "detected by grouping neighbouring occupied cells. Larger cells are cheaper and",
+                        "coarser; changing this rebuilds the index on next load.")
+                .defineInRange("regionCellChunks", 32, 1, 512);
+        INDUSTRY_CLUSTER_GAP = b
+                .comment("How many empty cells may sit between two occupied ones before they count as",
+                        "separate bases. The cell-space equivalent of DBSCAN's eps.")
+                .defineInRange("clusterGapCells", 1, 0, 16);
+        INDUSTRY_CLUSTER_MIN_VALUE = b
+                .comment("Combined value a group of cells needs before it counts as a base rather than noise.",
+                        "The equivalent of DBSCAN's minPts, but measured in provocation, so one dirty plant",
+                        "outweighs a scattering of furnaces.")
+                .defineInRange("clusterMinValue", 50, 1, 1_000_000);
+        INDUSTRY_RECOMPUTE_DELAY = b
+                .comment("Ticks of quiet after the last change before bases are re-detected (off-thread).",
+                        "Debouncing matters: laying out a factory is hundreds of placements in a few seconds.")
+                .defineInRange("recomputeDelayTicks", 100, 1, 72_000);
+        INDUSTRY_BACKFILL = b
+                .comment("Sweep each chunk once, on its first load, for machines no placement event reported",
+                        "(worldgen, structures, KubeJS, AE2, /setblock, anything pre-existing).",
+                        "Only block entities are examined, so this is cheap.")
+                .define("chunkBackfill", true);
+        b.pop();
+
         b.comment("Glyphid swarm behaviour.").push("glyphids");
         GLYPHID_EXTENDED_TARGETING = b
                 .comment("Glyphids hunt players across 128 blocks instead of only the 16 around them.",
@@ -228,5 +275,8 @@ public final class WFConfig {
         MissileSimConfig.LISTENER_SPAWN_MARGIN = SIM_SPAWN_MARGIN.get();
         MissileSimConfig.CRUISE_SIM_DELAY_TICKS = SIM_CRUISE_DELAY_TICKS.get();
         com.wf.wfballistics.debug.MissileDebug.configureDefault(DEBUG_LOGGING.get());
+        IndustryValues.bake(INDUSTRY_MACHINES.get());
+        IndustryConfig.apply(INDUSTRY_CELL_CHUNKS.get(), INDUSTRY_CLUSTER_GAP.get(),
+                INDUSTRY_CLUSTER_MIN_VALUE.get(), INDUSTRY_RECOMPUTE_DELAY.get(), INDUSTRY_BACKFILL.get());
     }
 }

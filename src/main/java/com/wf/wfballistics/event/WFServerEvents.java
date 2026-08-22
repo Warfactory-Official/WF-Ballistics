@@ -11,6 +11,8 @@ import com.wf.wfballistics.chunk.DetonationChunkGuard; // used in ModBusEvents
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.debug.SwarmBench;
+import com.wf.wfballistics.industry.IndustryClusters;
+import com.wf.wfballistics.industry.IndustryDebug;
 import java.util.Set;
 import java.util.ArrayList;
 import net.minecraft.resources.ResourceLocation;
@@ -128,6 +130,9 @@ public final class WFServerEvents {
             // The build system's own housekeeping, kept out of the generic queue: whether the ground is
             // still ours, and holding the blocks being worked on loaded.
             com.wf.wfballistics.build.BuildManager.tick(level);
+            // Event-driven and debounced: this only dispatches a scan when industry actually
+            // changed and the world has since gone quiet.
+            IndustryClusters.tick(level);
             tickScenarios(level);
         }
     }
@@ -153,6 +158,7 @@ public final class WFServerEvents {
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
         DroneAiScheduler.shutdown();
+        IndustryClusters.clear();
     }
 
     @SubscribeEvent
@@ -226,6 +232,19 @@ public final class WFServerEvents {
                 .then(buildCommand())
                 .then(salvageCommand())
                 .then(jobCommand())
+                .then(Commands.literal("industry")
+                        .executes(ctx -> IndustryDebug.status(ctx.getSource()))
+                        .then(Commands.literal("bases")
+                                .executes(ctx -> IndustryDebug.bases(ctx.getSource())))
+                        .then(Commands.literal("cells")
+                                .executes(ctx -> IndustryDebug.cells(ctx.getSource())))
+                        .then(Commands.literal("here")
+                                .executes(ctx -> IndustryDebug.here(ctx.getSource())))
+                        .then(Commands.literal("rescan")
+                                .executes(ctx -> IndustryDebug.rescan(ctx.getSource(), 8))
+                                .then(Commands.argument("radiusChunks", IntegerArgumentType.integer(0, 32))
+                                        .executes(ctx -> IndustryDebug.rescan(ctx.getSource(),
+                                                IntegerArgumentType.getInteger(ctx, "radiusChunks"))))))
                 .then(Commands.literal("swarmbench")
                         .executes(ctx -> {
                             ctx.getSource().sendSuccess(
