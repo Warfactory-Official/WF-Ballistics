@@ -1,5 +1,7 @@
 package com.wf.wfballistics.colony;
 
+import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
+import com.wf.wfballistics.entity.glyphid.GlyphidTracker;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -16,6 +18,11 @@ import java.util.Locale;
  * exists because a strike cycle is otherwise tens of minutes of real time.
  */
 public final class ColonyDebug {
+
+    /**
+     * Lines a swarm report will print before it just gives totals.
+     */
+    private static final int BUG_REPORT_LIMIT = 16;
 
     private ColonyDebug() {
     }
@@ -101,6 +108,105 @@ public final class ColonyDebug {
                 rounds, rounds * ColonyConfig.colonyTickInterval() / 20.0 / 60.0,
                 coloniesBefore, colonies, warbandsBefore, warbands)), false);
         return colonies;
+    }
+
+    /**
+     * Report what every materialised glyphid thinks it is doing.
+     *
+     * <p>A swarm that arrives and then mills around looks identical from outside to one that arrives and
+     * marches, and the difference is whether it has a path. Without this the only way to tell them apart is
+     * to rebuild the mod with a print statement in it.
+     */
+    public static int bugs(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        var swarm = GlyphidTracker.glyphids(level);
+        if (swarm.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("No glyphids in this dimension."), false);
+            return 0;
+        }
+
+        int idle = 0;
+        int shown = 0;
+        for (EntityGlyphid bug : swarm) {
+            boolean pathing = !bug.getNavigation().isDone();
+            if (!pathing) {
+                idle++;
+            }
+            if (shown++ < BUG_REPORT_LIMIT) {
+                double dx = bug.taskX - bug.getX();
+                double dz = bug.taskZ - bug.getZ();
+                int distance = (int) Math.sqrt(dx * dx + dz * dz);
+                source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                        "  (%d, %d, %d) task %d, %d blocks out, %s, %.0f hp",
+                        (int) bug.getX(), (int) bug.getY(), (int) bug.getZ(),
+                        bug.getCurrentTask(), distance,
+                        pathing ? "pathing" : "no path", bug.getHealth())), false);
+            }
+        }
+        int total = swarm.size();
+        int stalled = idle;
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "%d glyphids, %d without a path%s", total, stalled,
+                total > BUG_REPORT_LIMIT ? " (first " + BUG_REPORT_LIMIT + " listed)" : "")), false);
+        return total;
+    }
+
+    /**
+     * Send a warband from the nearest colony at the caller, so an attack can be watched without waiting for
+     * one to be provoked and then to walk several thousand blocks.
+     */
+    public static int dispatch(CommandSourceStack source, int count) {
+        ServerLevel level = source.getLevel();
+        ColonyRegistry registry = ColonyRegistry.get(level);
+        Vec3 pos = source.getPosition();
+
+        Colony origin = registry.nearest(pos.x, pos.z);
+        if (origin == null) {
+            source.sendSuccess(() -> Component.literal(
+                    "No colonies to send one; found one first with 'colony found'."), false);
+            return 0;
+        }
+
+        Warband warband = new Warband(java.util.UUID.randomUUID(), origin.id, origin.x, origin.z,
+                (int) pos.x, (int) pos.z, count, origin.tier);
+        registry.add(warband);
+        source.sendSuccess(() -> Component.literal("Dispatched " + warband), false);
+        return count;
+    }
+
+    /**
+     * Materialise the nearest warband on the spot, ignoring the per-tick budget.
+     *
+     * <p>Reports what was placed against what is still owed, which is the invariant that matters: bodies
+     * that could not be placed stay in the record rather than being lost.
+     */
+    public static int materialise(CommandSourceStack source, int count) {
+        ServerLevel level = source.getLevel();
+        ColonyRegistry registry = ColonyRegistry.get(level);
+        Vec3 pos = source.getPosition();
+
+        Warband nearest = null;
+        double bestSq = Double.MAX_VALUE;
+        for (Warband warband : registry.warbands()) {
+            double dx = warband.x - pos.x;
+            double dz = warband.z - pos.z;
+            double distSq = dx * dx + dz * dz;
+            if (distSq < bestSq) {
+                bestSq = distSq;
+                nearest = warband;
+            }
+        }
+        if (nearest == null) {
+            source.sendSuccess(() -> Component.literal("No warbands in flight."), false);
+            return 0;
+        }
+
+        int before = nearest.count;
+        int spawned = WarbandMaterialiser.materialise(level, registry, nearest, count);
+        int owed = before - spawned;
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "Placed %d of %d; %d still owed to the record", spawned, before, owed)), false);
+        return spawned;
     }
 
     public static int clear(CommandSourceStack source) {

@@ -9,6 +9,7 @@ import com.wf.wfballistics.config.WFConfig;
 import com.wf.wfballistics.damage.WFDamageTypes;
 import com.wf.wfballistics.debug.SwarmProfiler;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidTargetGoal;
+import com.wf.wfballistics.entity.glyphid.ai.GlyphidTaskMoveGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidWanderGoal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -167,6 +168,9 @@ public class EntityGlyphid extends Monster {
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
         goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.0D, true));
+        // Same priority as wandering, and mutually exclusive with it: one runs under orders, the other only
+        // when idle.
+        goalSelector.addGoal(4, new GlyphidTaskMoveGoal(this, 1.0D));
         goalSelector.addGoal(4, new GlyphidWanderGoal(this, 1.0D));
         targetSelector.addGoal(1, new HurtByTargetGoal(this));
         targetSelector.addGoal(2, new GlyphidTargetGoal(this));
@@ -333,18 +337,28 @@ public class EntityGlyphid extends Monster {
      * Take a bite out of the dig site, then go back to whatever this bug was doing before.
      */
     protected void dig() {
+        digAt(taskX, taskY + 2, taskZ);
+        setCurrentTask(previousTask, previousWaypoint);
+    }
+
+    /**
+     * Chew one bite out of a spot, leaving this bug's orders alone. Separate from {@link #dig} so something
+     * blocked on its way somewhere can bite through without pretending to be on a dig task.
+     */
+    public void digAt(int x, int y, int z) {
         swing(InteractionHand.MAIN_HAND);
 
         long t = SwarmProfiler.begin();
-        ExplosionAEF blast = new ExplosionAEF(level(), taskX, taskY + 2, taskZ, blastSize, this);
+        long pathBefore = SwarmProfiler.accrued(SwarmProfiler.Phase.PATH);
+        ExplosionAEF blast = new ExplosionAEF(level(), x, y, z, blastSize, this);
         blast.setBlockAllocator(new BlockAllocatorGlyphidDig(blastResToDig, EntityGlyphid::isSpawnerBlock));
         blast.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
         blast.setEntityProcessor(null);
         blast.setPlayerProcessor(null);
         blast.explode();
-        SwarmProfiler.end(SwarmProfiler.Phase.DIG, t);
-
-        setCurrentTask(previousTask, previousWaypoint);
+        // Breaking a block makes ServerLevel synchronously recompute the path of every mob routed through it,
+        // so part of a dig is really other glyphids pathfinding. Charged to the search, not to the bite.
+        SwarmProfiler.endExcluding(SwarmProfiler.Phase.DIG, t, SwarmProfiler.Phase.PATH, pathBefore);
     }
 
     public @Nullable Player findTargetCandidate() {
@@ -363,7 +377,7 @@ public class EntityGlyphid extends Monster {
         return WFConfig.GLYPHID_EXTENDED_TARGETING.get();
     }
 
-    protected boolean canDig() {
+    public boolean canDig() {
         return WFConfig.GLYPHID_DIG.get();
     }
 

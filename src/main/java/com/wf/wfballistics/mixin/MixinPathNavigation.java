@@ -37,16 +37,25 @@ public abstract class MixinPathNavigation {
     @Unique
     private long wfballistics$navStart;
     @Unique
+    private long wfballistics$navPathBase;
+    @Unique
     private long wfballistics$pathStart;
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void wfballistics$navBegin(CallbackInfo ci) {
         wfballistics$navStart = wfballistics$profiled() ? SwarmProfiler.begin() : 0L;
+        wfballistics$navPathBase = SwarmProfiler.accrued(SwarmProfiler.Phase.PATH);
     }
 
+    /**
+     * Path following is reported exclusive of any search it triggers: {@code tick} recomputes a stale path
+     * through {@code createPath}, so charging both in full would count that search twice and make the two
+     * navigation phases add up to more than the AI step that contains them.
+     */
     @Inject(method = "tick", at = @At("RETURN"))
     private void wfballistics$navEnd(CallbackInfo ci) {
-        SwarmProfiler.end(SwarmProfiler.Phase.NAV, wfballistics$navStart);
+        SwarmProfiler.endExcluding(SwarmProfiler.Phase.NAV, wfballistics$navStart,
+                SwarmProfiler.Phase.PATH, wfballistics$navPathBase);
         wfballistics$navStart = 0L;
     }
 

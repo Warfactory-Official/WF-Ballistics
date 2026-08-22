@@ -64,6 +64,7 @@ public final class ColonyManager {
         }
         tickColonies(level, registry);
         tickWarbands(level, registry);
+        WarbandMaterialiser.tick(level);
     }
 
     private static void tickColonies(ServerLevel level, ColonyRegistry registry) {
@@ -235,29 +236,26 @@ public final class ColonyManager {
             return;
         }
         double speed = ColonyConfig.warbandSpeed();
-        List<Warband> arrived = new ArrayList<>();
         List<Warband> expired = new ArrayList<>();
 
         for (Warband warband : registry.warbands()) {
-            if (warband.advance(speed)) {
-                arrived.add(warband);
-            } else if (warband.age > WARBAND_MAX_AGE) {
+            boolean wasArrived = warband.arrived;
+            if (warband.advance(speed) && !wasArrived) {
+                LOGGER.debug("[wfballistics] {} reached its target", warband);
+            }
+            // An arrived warband is not removed: it waits on the target for somebody to turn up, and
+            // WarbandMaterialiser turns it into glyphids when they do. Only age retires it, so a target
+            // that is never visited cannot leak a record forever.
+            if (warband.age > WARBAND_MAX_AGE) {
                 expired.add(warband);
             }
         }
 
-        for (Warband warband : arrived) {
-            registry.remove(warband);
-            LOGGER.debug("[wfballistics] {} reached its target", warband);
-            // Turning the record into entities is the materialisation step, and it is the piece that has
-            // to conserve numbers and place bodies on real ground. Tracked separately; until it lands a
-            // warband simply completes its journey and disperses.
-        }
         for (Warband warband : expired) {
             registry.remove(warband);
             LOGGER.debug("[wfballistics] {} gave up", warband);
         }
-        if (!arrived.isEmpty() || !expired.isEmpty()) {
+        if (!expired.isEmpty()) {
             registry.setDirty();
         }
     }

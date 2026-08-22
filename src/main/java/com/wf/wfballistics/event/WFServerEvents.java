@@ -248,7 +248,19 @@ public final class WFServerEvents {
                         .then(Commands.literal("fastforward")
                                 .then(Commands.argument("rounds", IntegerArgumentType.integer(1, 100_000))
                                         .executes(ctx -> ColonyDebug.fastForward(ctx.getSource(),
-                                                IntegerArgumentType.getInteger(ctx, "rounds"))))))
+                                                IntegerArgumentType.getInteger(ctx, "rounds")))))
+                        .then(Commands.literal("bugs")
+                                .executes(ctx -> ColonyDebug.bugs(ctx.getSource())))
+                        .then(Commands.literal("dispatch")
+                                .executes(ctx -> ColonyDebug.dispatch(ctx.getSource(), 8))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 10_000))
+                                        .executes(ctx -> ColonyDebug.dispatch(ctx.getSource(),
+                                                IntegerArgumentType.getInteger(ctx, "count")))))
+                        .then(Commands.literal("materialise")
+                                .executes(ctx -> ColonyDebug.materialise(ctx.getSource(), 64))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 10_000))
+                                        .executes(ctx -> ColonyDebug.materialise(ctx.getSource(),
+                                                IntegerArgumentType.getInteger(ctx, "count"))))))
                 .then(Commands.literal("industry")
                         .executes(ctx -> IndustryDebug.status(ctx.getSource()))
                         .then(Commands.literal("bases")

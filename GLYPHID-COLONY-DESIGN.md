@@ -213,9 +213,89 @@ stable 100-round cycle.
 colony round rather than once per tick, under-reporting travel by the tick interval and making every
 strike look 20x slower than it is.
 
-### 8.7 Still open
+---
 
-- Materialisation (warband record → entities) is the piece that has to conserve counts and place bodies on
-  real ground. Tracked separately; a warband currently completes its journey and disperses.
+## 9. Implemented: materialisation
+
+The T2 → T0 step: a warband record becomes glyphids when somebody is there to be attacked by them.
+
+### 9.1 Conservation is structural, not checked
+
+`Warband.count` is the only ledger and `WarbandMaterialiser.materialise` holds the only line that debits it,
+by exactly the number of bodies that reached the world. A glyphid that could not be placed is still owed, so
+it is still in the record. Conservation is not a check made afterwards; it is that nothing else can spend a
+warband. The same property makes double-spending across two loaded regions impossible rather than guarded
+against — there is one record, debited on the server thread, and no copy of it anywhere.
+
+Verified: an 80-strong warband crossing a coastline materialised 0, then 72, then 4 at three different
+positions as the terrain allowed, ending with 4 still owed and exactly 76 entities in the world.
+
+### 9.2 Failing to place is normal
+
+Nothing is placed without a loaded chunk, a real surface height, no fluid at the feet, and a clear bounding
+box. All four failing is the expected case over water, and it costs nothing: the glyphid waits a tick. A
+warband over open ocean places nobody and loses nobody.
+
+This is also why materialisation is not part of `tickWarbands`: that is pure simulation and `fastForward`
+runs it thousands of times over. Fast-forwarding the simulation must not spawn entities.
+
+### 9.3 An arrived warband waits
+
+Reaching the target no longer disbands it. The base it came for is simply offline, so it sits there until
+somebody turns up, and only age retires it. Without this the attack would quietly evaporate on any base whose
+owner was logged out — which is every base the off-world simulation exists to threaten.
+
+### 9.4 Marching needed a goal that upstream does not have
+
+Upstream issues movement under orders from its async decision layer, which this port replaced, so a glyphid
+handed a destination stood in it. `GlyphidTaskMoveGoal` walks it there, in hops along the bearing rather than
+straight at a destination thousands of blocks away, and bites through what it cannot walk around.
+
+Three vanilla pathfinding behaviours shaped it, each found by measurement rather than by reading:
+
+1. **`createPath(pos, accuracy)` caps the path at the mob's follow range** (16 for a monster). A 24-block hop
+   came back as a stub that walked two blocks and stopped, and the swarm crawled at 0.26 blocks/s. Naming the
+   range explicitly — the same answer upstream reaches — got it to 2.07 blocks/s, which is the mob's actual
+   walk speed, so pathing stopped being the limiter at all.
+2. **The pathfinder almost never returns null.** When the target is unreachable it hands back a partial route
+   to the best node it found, so the expensive case is also the one that reads as success. Backing off
+   repaths on a null result therefore did nothing, measured: 27.6 vs 27.9 µs/entity, inside the noise.
+   Re-keying the backoff on *actual displacement* cut path search 39% and the whole tick 22%.
+3. **Breaking a block synchronously re-runs A\* for every mob routed through it.** `sendBlockUpdated` walks
+   `navigatingMobs` and recomputes inline, which couples every bite a digging swarm takes to every other
+   member's pathfinding.
+
+### 9.5 Cost, and what it argues for
+
+Same world, same staging, 80 marching glyphids, 200-tick window:
+
+| | no backoff | progress-keyed backoff |
+|---|---|---|
+| mean tick | 2.210 ms | 1.728 ms |
+| per entity | 27.6 µs | 21.6 µs |
+| path search | 1.246 ms (56%) | 0.765 ms (44%) |
+
+**Path search is the dominant term for a marching swarm** — 44% after the fix, against roughly nothing in the
+earlier idle-wandering baseline. That difference is the whole case for flow-field navigation: the earlier
+measurement said pathfinding was cheap because the swarm was not going anywhere.
+
+At 21.6 µs/entity a 300-strong assault costs about 6.5 ms/tick. Affordable, and still the largest single
+system in the tick.
+
+The profiler needed two corrections before any of this was trustworthy, both of them nesting errors that
+showed up as negative residuals: path search happens *inside* path following when the navigator recomputes,
+and inside digging via the block-update recompute above. Netting both out moved 76% of what looked like
+digging cost into path search, where it belongs.
+
+### 9.6 Still open
+
+- **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
+  indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
+  ones already walking can still drown their advance.
+- **The hop is terrain-blind.** It aims at a heightmap sample, which over water or a cliff is a spot the
+  pathfinder will not accept, and roughly 40% of a marching swarm is failing to make progress at any moment.
+  This is what the flow field is for.
 - `NestBuilder` is a hook: colonies materialise as data until the spawner block lands with the hive port.
 - Evolution (§7) is still not implemented — tier is distance-derived only, with no global progression.
+- Extended targeting acquires players at 128 blocks, but `MeleeAttackGoal` paths within follow range, so a
+  glyphid can see a target it cannot route to.
