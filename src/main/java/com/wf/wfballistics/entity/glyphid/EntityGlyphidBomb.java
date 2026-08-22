@@ -67,11 +67,15 @@ public class EntityGlyphidBomb extends ThrowableProjectile {
     }
 
     /**
-     * Heavier than a snowball so a bomb dropped from cruise altitude falls rather than drifting.
+     * Heavier than a snowball so a bomb dropped from cruise altitude falls rather than drifting. Public
+     * because the ground castes lob these on a ballistic arc and have to solve for the same number the bomb
+     * will actually fall at.
      */
+    public static final double GRAVITY = 0.06;
+
     @Override
     protected double getDefaultGravity() {
-        return 0.06;
+        return GRAVITY;
     }
 
     @Override

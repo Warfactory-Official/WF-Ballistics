@@ -1,7 +1,9 @@
 package com.wf.wfballistics.colony;
 
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
+import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidTracker;
+import com.wf.wfballistics.industry.IndustryApi;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -41,7 +43,55 @@ public final class ColonyDebug {
                 "spawn (%d, %d); safe radius %d, full strength at %d, max tier %d",
                 spawn.getX(), spawn.getZ(), ColonyConfig.safeRadius(),
                 ColonyConfig.fullStrengthDistance(), ColonyConfig.maxTier())), false);
+        reportEvolution(source, registry);
         return registry.colonies().size();
+    }
+
+    /**
+     * Read the evolution scalar, and what it has unlocked. Worth more than the bare number: the number only
+     * matters through the caste table.
+     */
+    public static int evolution(CommandSourceStack source) {
+        reportEvolution(source, ColonyRegistry.get(source.getLevel()));
+        return 1;
+    }
+
+    /**
+     * Set it outright. Evolution takes tens of hours to move on its own, which is not a test.
+     */
+    public static int evolution(CommandSourceStack source, double value) {
+        ColonyRegistry registry = ColonyRegistry.get(source.getLevel());
+        registry.setEvolution((float) value);
+        reportEvolution(source, registry);
+        return 1;
+    }
+
+    private static void reportEvolution(CommandSourceStack source, ColonyRegistry registry) {
+        float evolution = registry.evolution();
+        int pressure = IndustryApi.totalPressure(source.getLevel());
+
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "evolution %.4f; industry %d; colonies grow and muster at x%.2f",
+                evolution, pressure, Evolution.strength(evolution))), false);
+
+        StringBuilder castes = new StringBuilder();
+        for (GlyphidCaste caste : GlyphidCaste.VALUES) {
+            if (!caste.unlockedAt(evolution)) {
+                continue;
+            }
+            castes.append(castes.isEmpty() ? "" : ", ")
+                    .append(caste.lowerName())
+                    .append(String.format(Locale.ROOT, " %.0f%%", 100.0F * share(caste, evolution)));
+        }
+        source.sendSuccess(() -> Component.literal("  fielding: " + castes), false);
+    }
+
+    private static float share(GlyphidCaste caste, float evolution) {
+        float total = 0.0F;
+        for (GlyphidCaste other : GlyphidCaste.VALUES) {
+            total += other.weightAt(evolution);
+        }
+        return total <= 0.0F ? 0.0F : caste.weightAt(evolution) / total;
     }
 
     public static int list(CommandSourceStack source) {

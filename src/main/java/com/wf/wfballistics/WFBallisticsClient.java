@@ -8,6 +8,7 @@ import com.wf.wfballistics.client.render.CrateRenderer;
 import com.wf.wfballistics.client.render.DroneVisual;
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.client.render.EntityTorexRender;
+import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.item.MissilePreset;
 import com.wf.wfballistics.item.MissilePresetRegistry;
 import com.wf.wfballistics.menu.ModMenus;
@@ -59,7 +60,11 @@ public class WFBallisticsClient {
 
         // Glyphids have no models yet -- that is the model/flywheel port. A renderer still has to be bound
         // for every registered entity type or the client refuses to start, so they draw nothing until then.
-        event.registerEntityRenderer(ModEntities.GLYPHID.get(), NoopRenderer::new);
+        // Driven off the caste table rather than listed by hand, so adding a caste cannot leave a type
+        // unbound -- which is a client crash on join, and one that server-side testing never sees.
+        for (GlyphidCaste caste : GlyphidCaste.VALUES) {
+            event.registerEntityRenderer(caste.type(), NoopRenderer::new);
+        }
         event.registerEntityRenderer(ModEntities.GLYPHID_WAYPOINT.get(), NoopRenderer::new);
         event.registerEntityRenderer(ModEntities.GLYPHID_BOMB.get(), NoopRenderer::new);
 

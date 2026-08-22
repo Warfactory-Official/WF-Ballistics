@@ -59,6 +59,10 @@ public final class ColonyManager {
 
     public static void tick(ServerLevel level) {
         ColonyRegistry registry = ColonyRegistry.get(level);
+        // Ahead of the empty check on purpose: evolution has to keep rising while a player is building the
+        // industry that will eventually attract the first colony, not start from zero once one exists.
+        Evolution.tick(level, registry);
+
         if (registry.colonies().isEmpty() && registry.warbands().isEmpty()) {
             return;
         }
@@ -72,6 +76,8 @@ public final class ColonyManager {
         long now = level.getGameTime();
         IndustryRegistry industry = IndustryRegistry.get(level);
 
+        double strength = Evolution.strength(registry.evolution());
+
         // Copied because expansion appends to the list while we walk it.
         List<Colony> snapshot = new ArrayList<>(registry.colonies());
         for (Colony colony : snapshot) {
@@ -82,7 +88,7 @@ public final class ColonyManager {
 
             if (colony.population < colony.populationCap()) {
                 colony.population = Math.min(colony.populationCap(),
-                        colony.population + colony.growthPerSecond() * seconds);
+                        colony.population + colony.growthPerSecond() * strength * seconds);
             }
 
             int pressure = industry.pressureWithin(colony.x, colony.z, ColonyConfig.provocationRadius());
@@ -113,12 +119,13 @@ public final class ColonyManager {
         int interval = ColonyConfig.colonyTickInterval();
         IndustryRegistry industry = IndustryRegistry.get(level);
         double seconds = interval / 20.0;
+        double strength = Evolution.strength(registry.evolution());
 
         for (int round = 0; round < rounds; round++) {
             for (Colony colony : new ArrayList<>(registry.colonies())) {
                 if (colony.population < colony.populationCap()) {
                     colony.population = Math.min(colony.populationCap(),
-                            colony.population + colony.growthPerSecond() * seconds);
+                            colony.population + colony.growthPerSecond() * strength * seconds);
                 }
                 int pressure = industry.pressureWithin(colony.x, colony.z, ColonyConfig.provocationRadius());
                 if (pressure > 0) {
@@ -154,7 +161,8 @@ public final class ColonyManager {
             return;
         }
 
-        int size = Math.min(colony.warbandSize(), (int) colony.population);
+        int mustered = (int) Math.round(colony.warbandSize() * Evolution.strength(registry.evolution()));
+        int size = Math.min(mustered, (int) colony.population);
         if (size <= 0) {
             return;
         }
@@ -229,6 +237,32 @@ public final class ColonyManager {
         Colony colony = new Colony(UUID.randomUUID(), x, Colony.Y_UNRESOLVED, z, tier);
         colony.population = colony.populationCap() * 0.25;
         registry.add(colony);
+        return colony;
+    }
+
+    /**
+     * Found a colony on ground somebody is standing on: resolve its height and build it in the same step,
+     * rather than waiting for {@link #onChunkLoaded} to notice a chunk that is already loaded.
+     *
+     * <p>This is what a scout does when it settles, and it is the only path that creates a colony from
+     * inside the world rather than from the simulation.
+     *
+     * @return the new colony, or null if this position is not allowed one
+     */
+    public static @Nullable Colony settle(ServerLevel level, int x, int y, int z) {
+        ColonyRegistry registry = ColonyRegistry.get(level);
+        Colony colony = found(level, registry, x, z);
+        if (colony == null) {
+            return null;
+        }
+
+        colony.y = y;
+        if (nestBuilder != null) {
+            nestBuilder.build(level, colony);
+            colony.built = true;
+        }
+        registry.setDirty();
+        LOGGER.debug("[wfballistics] a scout settled {}", colony);
         return colony;
     }
 
