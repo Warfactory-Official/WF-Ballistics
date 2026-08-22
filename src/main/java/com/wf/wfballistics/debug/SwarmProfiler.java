@@ -53,11 +53,40 @@ public final class SwarmProfiler {
         PATH_MELEE("- for melee"),
         PATH_MARCH("- for the march"),
         BASE("base tick"),
-        FLUID("fluid push");
+        FLUID("fluid push"),
+        // The two below are a second cut of PATH -- by what it is doing rather than by who asked. They sit
+        // outside the tree, because a phase can only be subtracted from its parent once and the by-caller
+        // split already accounts for all of PATH.
+        PATH_ASTAR("the A* itself"),
+        PATH_NEIGHBORS("node expansion");
 
         private final String label;
 
         Phase(String label) {
+            this.label = label;
+        }
+
+        public String label() {
+            return label;
+        }
+    }
+
+    /**
+     * Things worth counting rather than timing.
+     *
+     * <p>Milliseconds say a phase is expensive; they never say <em>why</em>. A tick that spends twice as long
+     * pathfinding either ran twice as many searches or ran searches that were twice as deep, and those are
+     * different bugs with different fixes.
+     */
+    public enum Counter {
+        SEARCHES("path searches"),
+        NODES("nodes expanded"),
+        BYTES("bytes allocated"),
+        BLOCK_READS("block reads");
+
+        private final String label;
+
+        Counter(String label) {
             this.label = label;
         }
 
@@ -90,7 +119,12 @@ public final class SwarmProfiler {
             Phase.PATH.ordinal(),   // PATH_MARCH
             Phase.TICK.ordinal(),   // BASE
             Phase.BASE.ordinal(),   // FLUID
+            -1,                     // PATH_ASTAR -- reported in its own section, see searchReport()
+            -1,                     // PATH_NEIGHBORS
     };
+
+    private static final Counter[] COUNTERS = Counter.values();
+    private static final int COUNTER_COUNT = COUNTERS.length;
 
     /**
      * Nanos accumulated so far this tick, indexed by phase ordinal.
@@ -104,6 +138,9 @@ public final class SwarmProfiler {
      * Population sampled on each completed tick, so cost can be reported per entity as well as per tick.
      */
     private static final int[] populations = new int[WINDOW];
+
+    private static final long[] currentCounts = new long[COUNTER_COUNT];
+    private static final long[][] countHistory = new long[WINDOW][COUNTER_COUNT];
 
     private static boolean enabled;
     private static int cursor;
@@ -131,10 +168,23 @@ public final class SwarmProfiler {
         for (long[] tick : history) {
             Arrays.fill(tick, 0L);
         }
+        Arrays.fill(currentCounts, 0L);
+        for (long[] tick : countHistory) {
+            Arrays.fill(tick, 0L);
+        }
         Arrays.fill(populations, 0);
         cursor = 0;
         filled = 0;
         population = 0;
+    }
+
+    /**
+     * Add to a per-tick counter.
+     */
+    public static void count(Counter counter, long amount) {
+        if (enabled) {
+            currentCounts[counter.ordinal()] += amount;
+        }
     }
 
     /**
@@ -185,6 +235,22 @@ public final class SwarmProfiler {
     }
 
     /**
+     * True while a search a glyphid asked for is on the stack.
+     *
+     * <p>The pathfinder's internals are shared by every mob on the server and have no idea whose search they
+     * are running, so the gate has to be opened from the one place that does know.
+     */
+    private static boolean searching;
+
+    public static void setSearching(boolean value) {
+        searching = value;
+    }
+
+    public static boolean searching() {
+        return enabled && searching;
+    }
+
+    /**
      * Charge a path search, to {@link Phase#PATH} and to whichever goal claimed it.
      *
      * <p>Separate from {@link #end} because "pathfinding is a third of the tick" stopped being useful the
@@ -232,10 +298,12 @@ public final class SwarmProfiler {
             return;
         }
         System.arraycopy(current, 0, history[cursor], 0, PHASE_COUNT);
+        System.arraycopy(currentCounts, 0, countHistory[cursor], 0, COUNTER_COUNT);
         populations[cursor] = population;
         cursor = (cursor + 1) % WINDOW;
         filled = Math.min(filled + 1, WINDOW);
         Arrays.fill(current, 0L);
+        Arrays.fill(currentCounts, 0L);
         population = 0;
     }
 
@@ -328,7 +396,102 @@ public final class SwarmProfiler {
                 filled, mean, total, p95Millis(Phase.TICK), maxMillis(Phase.TICK),
                 mean > 0.0 ? String.format(Locale.ROOT, " (%.1f us/entity)", total * 1000.0 / mean) : ""));
         append(lines, Phase.TICK, 0, total);
+        searchReport(lines);
+        spikeReport(lines);
         return lines;
+    }
+
+    /**
+     * What a path search actually spends itself on, as opposed to who asked for it.
+     *
+     * <p>Split three ways because they fail differently. Node expansion is block-state reads through a chunk
+     * snapshot — memory-bound, and the only part that scales with how much terrain the search has to look at.
+     * The rest of the A* is heap operations and node bookkeeping. Setup is per-search overhead paid whether
+     * the search visits one node or five hundred, which is what makes cheap failed searches expensive.
+     */
+    private static void searchReport(List<String> lines) {
+        double path = meanMillis(Phase.PATH);
+        if (path <= 0.0) {
+            return;
+        }
+        double astar = meanMillis(Phase.PATH_ASTAR);
+        double neighbors = meanMillis(Phase.PATH_NEIGHBORS);
+        double searches = meanCount(Counter.SEARCHES);
+        double nodes = meanCount(Counter.NODES);
+
+        lines.add("");
+        lines.add(String.format(Locale.ROOT, "inside a path search (%.1f searches/tick, %.0f nodes/tick)",
+                searches, nodes));
+        lines.add(line("setup + chunk snapshot", 0, path - astar, Double.NaN, path));
+        lines.add(line("the A* itself", 0, astar, Double.NaN, path));
+        lines.add(line("- node expansion", 1, neighbors, Double.NaN, path));
+        lines.add(line("- heap + bookkeeping", 1, astar - neighbors, Double.NaN, path));
+        if (searches > 0.0) {
+            lines.add(String.format(Locale.ROOT, "  %.0f us per search, %.1f nodes per search%s",
+                    path * 1000.0 / searches, nodes / searches,
+                    nodes > 0.0 ? String.format(Locale.ROOT, ", %.0f ns per node expanded",
+                            neighbors * 1.0E6 / nodes) : ""));
+            double reads = meanCount(Counter.BLOCK_READS);
+            if (reads > 0.0) {
+                lines.add(String.format(Locale.ROOT,
+                        "  %.0f block reads per search, %.1f per node, %.1f ns per read",
+                        reads / searches, nodes > 0.0 ? reads / nodes : 0.0, neighbors * 1.0E6 / reads));
+            }
+        }
+    }
+
+    /**
+     * What is different about the ticks that hurt.
+     *
+     * <p>A mean hides the thing players actually feel. Comparing the worst 5% of ticks against the rest says
+     * whether a spike is <em>more work</em> — searches clumping onto one tick, which staggering fixes — or
+     * <em>harder work</em>, searches that each visit far more nodes, which staggering cannot fix.
+     */
+    private static void spikeReport(List<String> lines) {
+        int spikes = Math.max(1, filled / 20);
+        Integer[] order = new Integer[filled];
+        for (int i = 0; i < filled; i++) {
+            order[i] = i;
+        }
+        Arrays.sort(order, (a, b) -> Long.compare(history[b][Phase.TICK.ordinal()], history[a][Phase.TICK.ordinal()]));
+
+        lines.add("");
+        lines.add(String.format(Locale.ROOT, "worst %d ticks vs the other %d", spikes, filled - spikes));
+        lines.add(String.format(Locale.ROOT, "  %-18s %10s %10s %8s", "", "worst", "rest", "ratio"));
+        spikeLine(lines, order, spikes, "tick ms", i -> history[i][Phase.TICK.ordinal()] / 1.0E6);
+        spikeLine(lines, order, spikes, "path search ms", i -> history[i][Phase.PATH.ordinal()] / 1.0E6);
+        for (Counter counter : COUNTERS) {
+            int ordinal = counter.ordinal();
+            spikeLine(lines, order, spikes, counter.label(), i -> (double) countHistory[i][ordinal]);
+        }
+    }
+
+    private static void spikeLine(List<String> lines, Integer[] order, int spikes, String label,
+                                  java.util.function.IntToDoubleFunction value) {
+        double worst = 0.0;
+        for (int i = 0; i < spikes; i++) {
+            worst += value.applyAsDouble(order[i]);
+        }
+        worst /= spikes;
+        double rest = 0.0;
+        int restCount = filled - spikes;
+        for (int i = spikes; i < filled; i++) {
+            rest += value.applyAsDouble(order[i]);
+        }
+        rest = restCount > 0 ? rest / restCount : 0.0;
+        lines.add(String.format(Locale.ROOT, "  %-18s %10.1f %10.1f %7.1fx",
+                label, worst, rest, rest > 0.0 ? worst / rest : 0.0));
+    }
+
+    public static double meanCount(Counter counter) {
+        if (filled == 0) {
+            return 0.0;
+        }
+        long total = 0L;
+        for (int i = 0; i < filled; i++) {
+            total += countHistory[i][counter.ordinal()];
+        }
+        return (double) total / filled;
     }
 
     private static void append(List<String> lines, Phase phase, int depth, double total) {

@@ -8,6 +8,8 @@
     "MixinEntity",
     "MixinMob",
     "MixinPathNavigation",
+    "MixinPathNavigationRegion",
+    "MixinWalkNodeEvaluator",
     "MixinProjectileUtil",
     "gt.MixinNotifiableEnergyContainer"
   ],

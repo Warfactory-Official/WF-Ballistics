@@ -1,5 +1,6 @@
 package com.wf.wfballistics.entity.glyphid.ai;
 
+import com.wf.wfballistics.debug.SwarmBench;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
@@ -89,7 +90,10 @@ public abstract class GlyphidPathingGoal extends Goal {
 
     @Override
     public void start() {
-        sinceRepath = REPATH_MIN;
+        // Staggered by entity id, because a warband materialises in one tick and would otherwise repath in
+        // lockstep for the rest of its life. Measured: the worst 5% of ticks ran 7.9x as many searches as the
+        // rest while each search stayed the same size, so the spikes were pile-ups, not hard searches.
+        sinceRepath = REPATH_MIN - glyphid.getId() % REPATH_MIN;
         retryAfter = REPATH_MIN;
         stuckFor = 0;
         lastX = glyphid.getX();
@@ -117,6 +121,15 @@ public abstract class GlyphidPathingGoal extends Goal {
             return;
         }
         if (!glyphid.getNavigation().isDone() && sinceRepath < REPATH_MAX) {
+            return;
+        }
+        // One search slot per glyphid per REPATH_MIN ticks, so the swarm's searches can never all land on the
+        // same tick. Staggering only where the goal starts is not enough: anything that makes a cohort decide
+        // to repath at once -- arriving together, or all re-aiming at one target that moved -- re-synchronises
+        // them. Measured: the worst 5% of ticks ran ~8x the searches of the rest while each search stayed the
+        // same size, so the spikes were pile-ups rather than hard searches. This bounds searches per tick at
+        // population / REPATH_MIN, at the price of up to REPATH_MIN ticks of extra latency on an urgent one.
+        if (SwarmBench.staggerSearches && (glyphid.tickCount + glyphid.getId()) % REPATH_MIN != 0) {
             return;
         }
         int elapsed = sinceRepath;
