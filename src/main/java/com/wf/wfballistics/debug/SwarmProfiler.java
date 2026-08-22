@@ -68,7 +68,8 @@ public final class SwarmProfiler {
             Phase.AI.ordinal(),     // NAV
             Phase.TICK.ordinal(),   // PUSH
             Phase.TICK.ordinal(),   // MOVE
-            Phase.TICK.ordinal(),   // DIG
+            Phase.AI.ordinal(),     // DIG -- reached from customServerAiStep and from a goal, both inside
+                                    // serverAiStep, so it is a sibling of the navigation phases, not of them.
     };
 
     /**
@@ -130,6 +131,28 @@ public final class SwarmProfiler {
     public static void end(Phase phase, long start) {
         if (enabled && start != 0L) {
             current[phase.ordinal()] += System.nanoTime() - start;
+        }
+    }
+
+    /**
+     * @return nanos charged to a phase so far this tick, for callers that have to net out a nested phase.
+     */
+    public static long accrued(Phase phase) {
+        return current[phase.ordinal()];
+    }
+
+    /**
+     * Charge the time since {@code start} to a phase, minus whatever {@code nested} accrued in the meantime.
+     *
+     * <p>For phases that contain a sibling. Path searching happens both inside path following, when the
+     * navigator recomputes, and outside it, when a goal asks for a route directly — so the two cannot simply
+     * be parent and child. Netting the overlap out here keeps every reported line exclusive, which is the
+     * difference between "following a path costs this much" and a number that silently includes the search.
+     */
+    public static void endExcluding(Phase phase, long start, Phase nested, long nestedBefore) {
+        if (enabled && start != 0L) {
+            long overlap = current[nested.ordinal()] - nestedBefore;
+            current[phase.ordinal()] += System.nanoTime() - start - overlap;
         }
     }
 

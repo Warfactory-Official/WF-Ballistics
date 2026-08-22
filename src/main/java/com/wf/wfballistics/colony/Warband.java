@@ -30,6 +30,11 @@ public final class Warband {
      * Ticks since dispatch, so a warband that can never reach its target can be retired.
      */
     public int age;
+    /**
+     * Set once the target is reached. An arrived warband stops travelling but does not disband: the base it
+     * came for is simply offline, so it waits there for somebody to show up and see it.
+     */
+    public boolean arrived;
 
     public Warband(UUID id, UUID origin, double x, double z, int targetX, int targetZ, int count, int tier) {
         this.id = id;
@@ -55,12 +60,16 @@ public final class Warband {
      */
     public boolean advance(double speed) {
         age++;
+        if (arrived) {
+            return true;
+        }
         double dx = targetX - x;
         double dz = targetZ - z;
         double distance = Math.sqrt(dx * dx + dz * dz);
         if (distance <= speed) {
             x = targetX;
             z = targetZ;
+            arrived = true;
             return true;
         }
         x += dx / distance * speed;
@@ -83,6 +92,7 @@ public final class Warband {
         tag.putInt("count", count);
         tag.putInt("tier", tier);
         tag.putInt("age", age);
+        tag.putBoolean("arrived", arrived);
         return tag;
     }
 
@@ -92,12 +102,14 @@ public final class Warband {
                 tag.getInt("tx"), tag.getInt("tz"),
                 tag.getInt("count"), tag.getInt("tier"));
         warband.age = tag.getInt("age");
+        warband.arrived = tag.getBoolean("arrived");
         return warband;
     }
 
     @Override
     public String toString() {
-        return String.format("warband of %d (T%d) at (%d, %d), %d blocks from (%d, %d)",
-                count, tier, (int) x, (int) z, (int) distanceToTarget(), targetX, targetZ);
+        return String.format("warband of %d (T%d) at (%d, %d), %d blocks from (%d, %d)%s",
+                count, tier, (int) x, (int) z, (int) distanceToTarget(), targetX, targetZ,
+                arrived ? " [waiting]" : "");
     }
 }

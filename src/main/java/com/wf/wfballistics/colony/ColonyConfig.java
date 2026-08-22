@@ -26,6 +26,9 @@ public final class ColonyConfig {
     private static int crowdingRadius = 1_800;
     private static int crowdingLimit = 4;
 
+    private static int materialiseRange = 128;
+    private static int materialisePerTick = 4;
+
     private ColonyConfig() {
     }
 
@@ -153,6 +156,26 @@ public final class ColonyConfig {
      */
     public static int crowdingLimit() {
         return crowdingLimit;
+    }
+
+    /**
+     * How close a player has to be before a warband stops being a record and becomes glyphids.
+     */
+    public static int materialiseRange() {
+        return materialiseRange;
+    }
+
+    /**
+     * Bodies placed per level tick, across every warband. Caps the cost of a large warband arriving: it
+     * streams in over several ticks instead of spawning hundreds of entities inside one.
+     */
+    public static int materialisePerTick() {
+        return materialisePerTick;
+    }
+
+    public static void applyMaterialisation(int range, int perTick) {
+        materialiseRange = Math.max(16, range);
+        materialisePerTick = Math.max(0, perTick);
     }
 
     public static void apply(int safe, int fullStrength, int tiers, double growth, int popCap,

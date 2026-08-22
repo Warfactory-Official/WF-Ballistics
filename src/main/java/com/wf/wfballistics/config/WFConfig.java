@@ -79,6 +79,8 @@ public final class WFConfig {
     public static final ModConfigSpec.IntValue COLONY_PROVOCATION_RADIUS;
     public static final ModConfigSpec.IntValue COLONY_CROWDING_RADIUS;
     public static final ModConfigSpec.IntValue COLONY_CROWDING_LIMIT;
+    public static final ModConfigSpec.IntValue COLONY_MATERIALISE_RANGE;
+    public static final ModConfigSpec.IntValue COLONY_MATERIALISE_PER_TICK;
     // --- Glyphids ---
     public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
@@ -298,6 +300,14 @@ public final class WFConfig {
                 .comment("Colonies already within the crowding radius of a proposed site that will block it.",
                         "This is what makes expansion fill in territory instead of fleeing outward forever.")
                 .defineInRange("crowdingLimit", 4, 1, 1_000);
+        COLONY_MATERIALISE_RANGE = b
+                .comment("How close a player has to be before a warband stops being one record and becomes",
+                        "glyphids. Nothing is ever placed in an unloaded chunk regardless of this.")
+                .defineInRange("materialiseRange", 128, 16, 100_000);
+        COLONY_MATERIALISE_PER_TICK = b
+                .comment("Glyphids placed per dimension per tick. A large warband streams in over several",
+                        "ticks rather than spawning hundreds of entities inside one. 0 disables spawning.")
+                .defineInRange("materialisePerTick", 4, 0, 1_000);
         b.pop();
 
         b.comment("Glyphid swarm behaviour.").push("glyphids");
@@ -370,5 +380,6 @@ public final class WFConfig {
                 COLONY_TICK_INTERVAL.get(), COLONY_WARBAND_SPEED.get(),
                 COLONY_MAX_COLONIES.get(), COLONY_FRONTIER_DISTANCE.get(), COLONY_PROVOCATION_RADIUS.get(),
                 COLONY_CROWDING_RADIUS.get(), COLONY_CROWDING_LIMIT.get());
+        ColonyConfig.applyMaterialisation(COLONY_MATERIALISE_RANGE.get(), COLONY_MATERIALISE_PER_TICK.get());
     }
 }
