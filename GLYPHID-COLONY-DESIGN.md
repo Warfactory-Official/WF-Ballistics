@@ -1470,3 +1470,181 @@ repath on the same tick is, and there is no such tick when they are all reading 
   it into thrashing.
 - **Phase 4 is now the bigger lever.** Movement is 33.8% and the only way to cut it is to have fewer things
   moving.
+
+---
+
+## 23. Implemented: Phase 4, the sim tier
+
+§2's T1: a glyphid that is a record rather than an `Entity`, in a loaded chunk, walking. It is the phase §22.5
+pointed at — movement was 33.8% of a marching swarm and the only way to cut that is to have fewer things
+moving — and it is the largest single win in the subsystem so far.
+
+### 23.1 What an entity costs that a glyphid does not need
+
+From §22.1's profile of 300 marching, as a share of the samples in glyphid code:
+
+| | share | does a walking glyphid need it? |
+|---|---|---|
+| `Entity.move` + collision sweep | 33.8% | only where something can see it walk into a wall |
+| `baseTick`, blocks-inside, fluid | 18.9% | fire, air, portals, freezing — no |
+| synched-data writes | 5.7% | there is no client tracking it |
+| attribute lookups | 5.2% | its stats are a record on the caste |
+| goal selector | 25.5% | the arbitration is `GlyphidBrain.errand` already |
+
+Nearly two thirds of it is the cost of *being an entity*, not the cost of being a glyphid. So the tier is not
+an optimisation of any of those; it deletes them, and keeps the one thing that was actually behaviour — the
+brain, which §16 took off the entity for exactly this reason. A `SimGlyphid` implements `GlyphidCarrier`,
+fills in the same `GlyphidSnapshot`, is planned by the same `GlyphidBrain` against the same `GlyphidMind`,
+and carries the plan out by moving a double.
+
+### 23.2 Measured
+
+300 glyphids, 160 blocks down a flat cleared corridor, one server run per arm. The 160 is not arbitrary: the
+window has to be all march, because *arriving* is what turns a record back into a body.
+
+| arm | entities | records | ms/tick | p95 | max | per glyphid |
+|---|---|---|---|---|---|---|
+| sim off | 300 | 0 | 2.718 | 3.546 | 5.144 | 9.1 µs |
+| sim on, nobody watching | 5 | 295 | **0.117** | **0.215** | **0.340** | **0.4 µs** |
+| sim on, watcher at the base | 58 | 242 | **0.803** | **1.126** | **1.473** | **2.7 µs** |
+
+**23× cheaper with nobody near it, 3.4× cheaper with somebody standing at the target.** The middle row is the
+tier at full effect and the bottom row is the case that actually happens: a defender at the base, the front
+rank real and fighting, the column behind it records. The sim pass itself is 0.050 ms for 295 records —
+**0.17 µs each against 8.8 µs for a body**, a factor of fifty.
+
+The p95 and the max fall further than the mean does, which is the shape every phase of this work has had: a
+swarm's mean was never what a player feels.
+
+### 23.3 The two tiers have to walk at the same speed
+
+The one number that had to be got right, and it was wrong first.
+
+Vanilla ground movement accelerates toward a target velocity against block friction; for a grunt the terminal
+speed is about 0.375 blocks a tick. A walking glyphid never reaches it, because path following slows at every
+node and every corner: measured over a 160-block march it covers **0.130**. A record walks in a straight line
+at whatever constant it is given, so deriving that constant from the physics made the sim tier **56% faster
+than the entity tier** — a swarm arriving in two waves, which from the outside reads as a design decision
+rather than a bug.
+
+Calibrated against the measurement instead, the two tiers walk at **0.131 and 0.128 blocks a tick**.
+`swarmbench tiers` reports both off the same run, which is what set the constant and what would catch it
+drifting.
+
+### 23.4 The rules, which are the honest statement of what the tier is
+
+A glyphid is an entity when anything could interact with it, and a record the rest of the time. Every clause
+is a capability the record does not have:
+
+- **fighting** — a record has no target and cannot acquire one
+- **swimming, flying, falling** — physics
+- **chewing** — a world write
+- **wounded** — it is in a fight; see §23.5
+- **scout and nuclear castes** — one founds nests, the other detonates when it dies, and a record's death is
+  a list removal. Simming a nuclear would be a way of quietly disarming the most dangerous thing a colony can
+  send
+- **within 64 blocks of a player** — with 24 blocks of hysteresis, or a glyphid on the boundary changes form
+  twice a second
+
+Both directions are budgeted at 24 a tick. A player walking toward a swarm crosses the boundary for hundreds
+of glyphids within a few ticks, and `addFreshEntity` in one go is exactly the single-tick spike §11.8 says
+matters more than the mean.
+
+**Promotion is conservative in the direction that matters.** A record is only dropped once it is either dead
+or standing in the world: a failed spawn leaves it a record to be retried, the same rule
+`WarbandMaterialiser` follows for a warband that could not be placed. The mind crosses with it — a glyphid
+that spent forty ticks failing to get anywhere would otherwise arrive with a fresh sixty ticks of patience,
+and one that keeps changing tier at a wall would never accumulate enough to chew through it.
+
+**Two navigation models, and the lie is bounded.** Inside a flow field a record walks the field, which only
+ever crosses columns something could stand in — so it does not pass through walls, and does not need
+collision to avoid them. Verified: 200 records marched at a sealed obsidian box and **none ended up inside
+it**; 162 of them gave up, promoted, and started chewing. Outside a field it walks straight over the surface
+height, which is what `SimDrone` does by holding altitude and what `Warband` does crossing the map. It will
+climb a sheer wall the surface goes over — so will a real glyphid — and it can clip a block or two into one
+while doing it, which is why the tier is gated on nobody being within sixty-four blocks.
+
+**One thing a record needs that a body gets for free.** `Move.NONE` means "carry on with the walk you are
+on", which for an entity is a navigator following a path it was handed twenty ticks ago. A record has no
+navigator, so it remembers the hop. Without that it takes one step per repath interval and stands still in
+between — a swarm walking at a twentieth of its speed, which reads as a movement-speed bug rather than as a
+missing field.
+
+### 23.5 Area damage, or the tier is an exploit
+
+A swarm that no weapon can reach is not a performance feature. `SimGlyphidBlast` runs inside
+`EntityProcessorCross`, so a blast that spares entities spares records too and the falloff, the range mutator
+and the blast shape are the ones that blast would have used — the shape gate was refactored to answer about a
+position rather than an entity, or a shaped charge would have been conical for one tier and spherical for the
+other.
+
+It is also where the tier pays off hardest. A blast over three hundred bodies is three hundred `hurt` calls
+through damage sources, resistance handlers, hurt animations, sounds and death loot. Against records it is a
+distance test, one raycast and a float subtraction.
+
+Measured: a size-4 blast at the edge of a 300-strong swarm killed 24 and left the rest, and the wounded
+survivors promoted to bodies over the next two seconds. Cover is checked with one ray per record rather than
+the seven-node sample the entity path uses — a record has no bounding box for the nodes to be offset around —
+and it works: behind an obsidian wall **6 records lived where 164 in the open were cut to 7**.
+
+What a record's death does not do is drop loot or play an animation. That is deliberate rather than missing:
+it dies where nobody is.
+
+### 23.6 Both tiers, one separation grid
+
+§21's grid now holds records alongside bodies, and has to. The two halves of a swarm walk the same field to
+the same column, so a tier that separated only its entities would deliver a spread-out front rank followed by
+two hundred records standing in one block. It costs nothing — the grid is O(n) in whatever is put into it —
+and it is why `GlyphidCarrier` carries a position and a push at all. Measured across the arms: 1.22 b to the
+nearest neighbour all-entity, 1.14 b all-record, 1.13 b mixed.
+
+### 23.7 Drawn, because invisible is not the same as absent
+
+A swarm whose back half vanished at sixty-four blocks would be a rendering bug that happened to be a
+performance feature. Records are drawn out to the distance vanilla would have tracked the entities they
+replaced, by `SimGlyphidVisual` — same mesh, same skins, same pose tables, same twenty-seven instance slots.
+The half of `GlyphidVisual` both tiers share was pulled out into `GlyphidRig` rather than copied: two copies
+of a transform chain containing the constant `1.5078125` are two copies that will eventually disagree.
+
+Three things are deliberately different from the entity path:
+
+- **One flywheel effect for the whole tier, not one per glyphid.** Per-record visuals would reintroduce
+  exactly the per-object bookkeeping the tier deletes.
+- **A pool of rigs per caste.** Records appear and disappear as a swarm crosses the promotion boundary;
+  creating and deleting instances at that rate would churn the instancer's buffers every few seconds. A frame
+  fills as many as it needs and collapses the rest.
+- **One packet every four ticks holding the whole visible set**, at ~10 bytes a glyphid, against vanilla's
+  one move packet per mob per tick. Whole set and not a delta: a delta needs a removal list, an
+  acknowledgement or a heartbeat to notice a record that stopped being sent, which is three ways to leave a
+  glyphid drawn where there is none. Sending everything visible makes disappearance the default.
+
+What a record does not have, it does not draw: no bite, no corpse roll, no flight lean, no infestation
+overlay. The walk cycle and the armour plates survive, because both are visible at the distance a record
+lives at.
+
+### 23.8 The benchmark lied first, again
+
+The first two runs of this measured a jam and said nothing about it. The corridor was cleared from y=81 to
+y=95 and the world's rock started at 96, so the march's heightmap sample returned ~121, every waypoint landed
+forty blocks inside stone, the A* came back with five-node stubs and the swarm crawled at 0.05 b/tick. Every
+`fill` succeeded. All 300 glyphids existed. The tick figures looked plausible — and the arm-1 baseline moved
+from 2.876 to 2.304 ms between two runs of an identical script, which is the only reason it got caught.
+
+Same lesson as §26's silent 32768-block `fill` and the same as the unticked-chunk artefact of §16.2: **a
+headless benchmark's failure mode is a number, not an error.** The arena builder now clears to y=152 and
+probes for a roof afterwards.
+
+### 23.9 What is left
+
+- **Squads only see the entity tier.** `GlyphidSquads` reassigns bodies every 100 ticks; a record keeps the
+  orders it had when it was demoted. Defensible rather than merely unfinished — squads exist to divide a
+  swarm *at the base*, and a glyphid at the base is within sixty-four blocks of the defender it is dividing
+  over, so it has a body. It would stop being defensible the moment squads had to redirect an approach march.
+- **A record cannot be shot.** Only area damage reaches it, which is correct while the promotion range is
+  larger than any weapon's — and would silently stop being correct if something outranged it.
+- **The sim pass is still on the world thread**, and is now the best candidate for moving off it: it reads
+  no chunk except a heightmap, which is §1's whole argument for why the off-world tier is the easy one to
+  parallelise. At 0.05 ms/tick there is nothing to reclaim yet.
+- **T2 is still a separate mechanism.** A warband record and a sim record are now two things that walk
+  without an entity, and only one of them can navigate terrain. Merging them is what would let a warband
+  cross a map by the same rules it fights by.

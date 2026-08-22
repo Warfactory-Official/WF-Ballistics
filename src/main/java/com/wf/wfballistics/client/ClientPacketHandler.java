@@ -6,7 +6,9 @@ import com.wf.wfballistics.client.fx.WFEffects;
 import com.wf.wfballistics.network.AuxParticlePacket;
 import com.wf.wfballistics.network.ExplosionBlockFXPacket;
 import com.wf.wfballistics.network.ExplosionKnockbackPacket;
+import com.wf.wfballistics.client.render.SimGlyphids;
 import com.wf.wfballistics.network.MissileFlightAudioPacket;
+import com.wf.wfballistics.network.SimGlyphidSyncPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
@@ -26,6 +28,10 @@ public final class ClientPacketHandler {
             player.setDeltaMovement(player.getDeltaMovement().add(pkt.x(), pkt.y(), pkt.z()));
             player.hurtMarked = true; // makes the client push the new velocity back to the server
         }
+    }
+
+    public static void handleSimGlyphids(SimGlyphidSyncPacket pkt) {
+        SimGlyphids.accept(pkt);
     }
 
     public static void handleBlockFX(ExplosionBlockFXPacket pkt) {

@@ -2,6 +2,7 @@ package com.wf.wfballistics.client.render;
 
 import com.wf.wfballistics.client.model.GlyphidModel;
 import com.wf.wfballistics.client.model.GlyphidPoses;
+import com.wf.wfballistics.client.model.GlyphidRig;
 import com.wf.wfballistics.drone.flight.FlightAttitude;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
@@ -154,34 +155,13 @@ public class GlyphidVisual extends AbstractEntityVisual<EntityGlyphid> implement
         if (caste == GlyphidCaste.NUCLEAR && deathStartTick >= 0) {
             swell(matrix, entity.tickCount - deathStartTick + partialTick);
         }
-        matrix.translate(0.0f, -1.5078125f, 0.0f)
-                .rotateX((float) Math.PI)
-                .translate(0.0f, -1.5f, 0.0f)
-                .scale(scale);
+        GlyphidRig.mount(matrix, scale);
 
-        Matrix4f[] bite = GlyphidPoses.bite(entity.getAttackAnim(partialTick));
-        Matrix4f[] walk = GlyphidPoses.walk(entity.walkAnimation.position(partialTick));
         int light = packedLight;
-
-        for (int i = 0; i < GlyphidPoses.JAW_FIRST; i++) {
-            place(parts[i], matrix, light);
-        }
-        for (int i = 0; i < GlyphidPoses.JAW_COUNT; i++) {
-            place(parts[GlyphidPoses.JAW_FIRST + i], matrix, bite[i], light);
-        }
-        for (int i = 0; i < GlyphidPoses.WALK_COUNT; i++) {
-            place(parts[GlyphidPoses.WALK_FIRST + i], matrix, walk[i], light);
-        }
-
-        // A plate that has been knocked off is simply not drawn, which is the whole of the armour readout:
-        // how battered a glyphid looks is how much damage it is still turning away.
-        for (int bit = 0; bit < GlyphidPoses.ARMOR_PART.length; bit++) {
-            if ((armor & (1 << bit)) == 0) {
-                parts[GlyphidPoses.ARMOR_PART[bit]].setZeroTransform();
-                parts[GlyphidPoses.ARMOR_PART[bit]].setChanged();
-            }
-        }
-
+        GlyphidRig.place(parts, matrix,
+                GlyphidPoses.bite(entity.getAttackAnim(partialTick)),
+                GlyphidPoses.walk(entity.walkAnimation.position(partialTick)),
+                armor, light);
         overlay(light);
     }
 
@@ -231,20 +211,6 @@ public class GlyphidVisual extends AbstractEntityVisual<EntityGlyphid> implement
             infested[i].light(light);
             infested[i].setChanged();
         }
-    }
-
-    private static void place(TransformedInstance instance, Matrix4f root, int light) {
-        instance.pose.set(root);
-        instance.light(light);
-        instance.setChanged();
-    }
-
-    private static void place(TransformedInstance instance, Matrix4f root, Matrix4f local, int light) {
-        // Straight into the instance's own matrix: building one here and handing it to setTransform would
-        // allocate a Matrix4f per part per glyphid per frame only to copy it into this same field.
-        instance.pose.set(root).mul(local);
-        instance.light(light);
-        instance.setChanged();
     }
 
     @Override

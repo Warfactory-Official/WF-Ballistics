@@ -5,6 +5,9 @@ import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidSeparation;
 import com.wf.wfballistics.entity.glyphid.GlyphidTracker;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphid;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidManager;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidRegistry;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.chat.Component;
@@ -166,7 +169,13 @@ public final class SwarmBench {
         for (EntityGlyphid glyphid : doomed) {
             glyphid.discard();
         }
-        return doomed.size();
+        // The records too, or the next run's population starts with the survivors of the last one -- the
+        // same contamination §16.2 found when a marching column walked out of the forceloaded box.
+        SimGlyphidRegistry registry = SimGlyphidRegistry.get(level);
+        int records = registry.count();
+        registry.view().clear();
+        registry.setDirty();
+        return doomed.size() + records;
     }
 
     /**
@@ -298,6 +307,131 @@ public final class SwarmBench {
      */
     public static boolean flowField = true;
 
+    /**
+     * When clear, every glyphid is a real entity and nothing is ever a {@code SimGlyphid}.
+     *
+     * <p>Read live, and switching it off gives every outstanding record a body back on the next tick, so the
+     * two arms are the same swarm rather than two populations that happen to be the same size.
+     */
+    public static boolean simTier = true;
+
+    public static int simTier(CommandSourceStack source, boolean on) {
+        simTier = on;
+        if (!on) {
+            for (ServerLevel level : source.getServer().getAllLevels()) {
+                SimGlyphidManager.promoteAll(level);
+            }
+        }
+        source.sendSuccess(() -> Component.literal("Glyphid sim tier " + (on ? "on" : "off") + "."), false);
+        return 1;
+    }
+
+    /**
+     * Set the distance inside which a glyphid must be a real entity.
+     *
+     * <p>Exists because the interesting arms are the extremes as well as the default: at zero nothing is ever
+     * a body once it starts marching, which measures what the tier costs, and at a few hundred nothing is
+     * ever a record, which measures what it saves.
+     */
+    public static int simRange(CommandSourceStack source, double blocks) {
+        SimGlyphidManager.range = Math.max(0.0, blocks);
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "Glyphids are entities within %.0f blocks of a player.", SimGlyphidManager.range)), false);
+        return 1;
+    }
+
+    /**
+     * Stand a pretend player somewhere, or clear the one that is there.
+     *
+     * <p>See {@link SimGlyphidManager#watcher}. The headless harness has nobody logged in, so without this
+     * every arm measures a swarm that is entirely records.
+     */
+    public static int watcher(CommandSourceStack source, @Nullable Vec3 at) {
+        SimGlyphidManager.watcher = at == null ? null : new double[]{at.x, at.z};
+        source.sendSuccess(() -> Component.literal(at == null
+                ? "Bench watcher cleared."
+                : String.format(Locale.ROOT, "Bench watcher standing at (%.0f, %.0f).", at.x, at.z)), false);
+        return 1;
+    }
+
+    /**
+     * Count the records in a box.
+     *
+     * <p>Records are invisible to {@code @e}, which is most of the point of them and a real problem for a
+     * benchmark: every question the harness asks about where a swarm is, it asks with an entity selector.
+     * This is the same question for the other tier, so "did any of them end up inside the sealed box" is
+     * answerable at all.
+     */
+    public static int simCount(CommandSourceStack source, Vec3 from, Vec3 to) {
+        double minX = Math.min(from.x, to.x);
+        double maxX = Math.max(from.x, to.x);
+        double minY = Math.min(from.y, to.y);
+        double maxY = Math.max(from.y, to.y);
+        double minZ = Math.min(from.z, to.z);
+        double maxZ = Math.max(from.z, to.z);
+        int inside = 0;
+        for (SimGlyphid sim : SimGlyphidRegistry.get(source.getLevel()).view()) {
+            if (sim.x >= minX && sim.x <= maxX && sim.y >= minY && sim.y <= maxY
+                    && sim.z >= minZ && sim.z <= maxZ) {
+                inside++;
+            }
+        }
+        int found = inside;
+        source.sendSuccess(() -> Component.literal(found + " sim glyphids in the box."), false);
+        return found;
+    }
+
+    /**
+     * Set off a standard AEF blast where the command was run.
+     *
+     * <p>Here rather than in a test because the thing worth checking is that a blast kills <em>both</em>
+     * tiers, and the only honest way to ask is to detonate one over a real swarm and count what is left. A
+     * sim tier that quietly made a swarm immune to the mod's own explosions would be a exploit that looked
+     * exactly like a performance win.
+     */
+    public static int blast(CommandSourceStack source, float size) {
+        Vec3 at = source.getPosition();
+        int before = GlyphidTracker.count(source.getLevel()) + SimGlyphidManager.count(source.getLevel());
+        new com.wf.wfballistics.aef.ExplosionAEF(source.getLevel(), at.x, at.y, at.z, size)
+                .makeStandard().explode();
+        int after = GlyphidTracker.count(source.getLevel()) + SimGlyphidManager.count(source.getLevel());
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "Blast of %.0f at (%.0f, %.0f, %.0f): %d glyphids before, %d after.",
+                size, at.x, at.y, at.z, before, after)), false);
+        return 1;
+    }
+
+    /**
+     * How the swarm is split between the tiers, and how fast each half is walking.
+     *
+     * <p>The speeds are the point. Two tiers that move at different rates deliver a swarm in two waves, and
+     * that failure looks exactly like a design decision from the outside — so the calibration constant that
+     * ties them together is checked by reading both numbers off the same run rather than by argument.
+     */
+    public static int tiers(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        int bodies = GlyphidTracker.count(level);
+        int records = SimGlyphidManager.count(level);
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "%d glyphids: %d entities, %d sim (%.0f%% simulated), entities %.3f b/tick, sim %.3f b/tick",
+                bodies + records, bodies, records,
+                bodies + records == 0 ? 0.0 : 100.0 * records / (bodies + records),
+                entitySpeed(level), SimGlyphidManager.meanSpeed(level))), false);
+        return 1;
+    }
+
+    private static double entitySpeed(ServerLevel level) {
+        double total = 0.0;
+        int counted = 0;
+        for (EntityGlyphid bug : GlyphidTracker.glyphids(level)) {
+            double dx = bug.getX() - bug.xOld;
+            double dz = bug.getZ() - bug.zOld;
+            total += Math.sqrt(dx * dx + dz * dz);
+            counted++;
+        }
+        return counted == 0 ? 0.0 : total / counted;
+    }
+
     public static int flowField(CommandSourceStack source, boolean on) {
         flowField = on;
         if (!on) {
@@ -325,7 +459,9 @@ public final class SwarmBench {
      */
     public static int density(CommandSourceStack source) {
         double[] density = GlyphidSeparation.density(source.getLevel());
-        int count = GlyphidTracker.count(source.getLevel());
+        // Both tiers, because the grid the numbers come out of holds both. Counting only the entities was
+        // the same mistake as counting only them in the profiler's population.
+        int count = GlyphidTracker.count(source.getLevel()) + SimGlyphidManager.count(source.getLevel());
         source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
                 "%d glyphids: %.2fb to the nearest neighbour on average, closest pair %.2fb, %.0f overlapping",
                 count, density[0], density[1], density[2])), false);
@@ -482,7 +618,10 @@ public final class SwarmBench {
         }
         int population = 0;
         for (ServerLevel level : server.getAllLevels()) {
-            population += GlyphidTracker.count(level);
+            // Both tiers. Counting only the entities would make a swarm that moved half of itself into
+            // records look like a swarm that halved -- and the per-glyphid figure derived from it would be
+            // twice what it is.
+            population += GlyphidTracker.count(level) + SimGlyphidManager.count(level);
         }
         SwarmProfiler.sample(population);
         SwarmProfiler.endTick();

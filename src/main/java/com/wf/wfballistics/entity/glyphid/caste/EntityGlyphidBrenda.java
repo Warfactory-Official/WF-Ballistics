@@ -51,10 +51,6 @@ public class EntityGlyphidBrenda extends EntityGlyphid {
         return GlyphidStats.getStats().getBrenda();
     }
 
-    @Override
-    public double getGlyphidScale() {
-        return 2.0D;
-    }
 
     @Override
     public boolean fireImmune() {

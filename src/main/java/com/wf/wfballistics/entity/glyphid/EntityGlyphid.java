@@ -274,7 +274,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     }
 
     public double getGlyphidScale() {
-        return 1.0D;
+        return GlyphidCaste.byType(getType()).scale();
     }
 
     public GlyphidStats.StatBundle getStats() {
@@ -698,6 +698,14 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         return Integer.bitCount(armor() & FULL_ARMOR);
     }
 
+    /**
+     * Put a plate pattern back, for a body rebuilt from a {@code SimGlyphid}. Not a gameplay setter: armour
+     * is only ever lost, by {@link #breakOffArmor}.
+     */
+    public void setArmor(byte plates) {
+        entityData.set(DW_ARMOR, plates);
+    }
+
     public byte armor() {
         return entityData.get(DW_ARMOR);
     }
@@ -969,6 +977,36 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     @Override
     public GlyphidMind mind() {
         return mind;
+    }
+
+    @Override
+    public double carrierX() {
+        return getX();
+    }
+
+    @Override
+    public double carrierY() {
+        return getY();
+    }
+
+    @Override
+    public double carrierZ() {
+        return getZ();
+    }
+
+    @Override
+    public double carrierWidth() {
+        return getBbWidth();
+    }
+
+    @Override
+    public boolean carrierPushable() {
+        return isAlive() && !isPassenger() && !isAirborne();
+    }
+
+    @Override
+    public void carrierPush(double dx, double dz) {
+        push(dx, 0.0, dz);
     }
 
     /**

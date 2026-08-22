@@ -77,10 +77,6 @@ public class EntityGlyphidNuclear extends EntityGlyphid {
         return GlyphidStats.getStats().getNuclear();
     }
 
-    @Override
-    public double getGlyphidScale() {
-        return 2.0D;
-    }
 
     @Override
     public boolean fireImmune() {

@@ -84,8 +84,7 @@ public class EntityProcessorCross implements IEntityProcessor {
     public Map<Player, Vec3> process(ExplosionAEF explosion, Level level, double x, double y, double z, float size) {
         Map<Player, Vec3> affectedPlayers = new HashMap<>();
 
-        size *= 2.0F;
-        if (range != null) size = range.mutateRange(explosion, size);
+        size = blastRadius(explosion, size);
 
         AABB area = new AABB(x - size - 1, y - size - 1, z - size - 1, x + size + 1, y + size + 1, z + size + 1);
         List<Entity> list = level.getEntities(allowSelfDamage ? null : explosion.exploder, area);
@@ -138,6 +137,11 @@ public class EntityProcessorCross implements IEntityProcessor {
             }
         }
 
+        // The glyphids that have no entity to be in that list. Done here rather than in ExplosionAEF so a
+        // blast that spares entities spares them too, and so the shape gate and the falloff are this
+        // processor's rather than a second, quietly different copy of them.
+        SimGlyphidBlast.damage(this, explosion, level, x, y, z, size);
+
         // Second pass: actually deal the damage + any custom payload.
         for (Map.Entry<Entity, Float> entry : damageMap.entrySet()) {
             Entity entity = entry.getKey();
@@ -148,6 +152,25 @@ public class EntityProcessorCross implements IEntityProcessor {
         }
 
         return affectedPlayers;
+    }
+
+    /**
+     * The radius this blast actually reaches, after the doubling and any range mutator.
+     *
+     * <p>Named because it is asked for twice — once by {@link #process} and once by
+     * {@link SimGlyphidBlast} — and two blasts of different sizes damaging the two tiers would be a falloff
+     * bug nobody could see except as glyphids surviving where they should not.
+     */
+    float blastRadius(ExplosionAEF explosion, float size) {
+        float radius = size * 2.0F;
+        return range != null ? range.mutateRange(explosion, radius) : radius;
+    }
+
+    /**
+     * {@link #isWithinBlastShape}, reachable from the sim-tier pass without making the gate public.
+     */
+    boolean withinShape(ExplosionAEF explosion, double px, double py, double pz, double x, double y, double z) {
+        return isWithinBlastShape(explosion, px, py, pz, x, y, z);
     }
 
     private Vec3[] buildNodes(double x, double y, double z) {
@@ -192,6 +215,17 @@ public class EntityProcessorCross implements IEntityProcessor {
      * cone (see {@link EntityProcessorCone}). The default whole-sphere blast lets everything in range through.
      */
     protected boolean isWithinBlastShape(ExplosionAEF explosion, Entity entity, double x, double y, double z) {
+        AABB box = entity.getBoundingBox();
+        return isWithinBlastShape(explosion, entity.getX(), (box.minY + box.maxY) * 0.5, entity.getZ(), x, y, z);
+    }
+
+    /**
+     * The same gate, asked about a position rather than an entity, so something without a bounding box can
+     * be tested too. Overriding this covers both callers; overriding the entity form covers only one, which
+     * is how a shaped charge would end up spherical for the sim tier and conical for everything else.
+     */
+    protected boolean isWithinBlastShape(ExplosionAEF explosion, double px, double py, double pz,
+                                         double x, double y, double z) {
         return true;
     }
 

@@ -2,9 +2,13 @@ package com.wf.wfballistics.entity.glyphid;
 
 import com.wf.wfballistics.debug.SwarmBench;
 import com.wf.wfballistics.debug.SwarmProfiler;
+import com.wf.wfballistics.entity.glyphid.brain.GlyphidCarrier;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphid;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidRegistry;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.server.level.ServerLevel;
 
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -29,6 +33,12 @@ import java.util.Set;
  * <p>Nothing here is collision. There is no sweep, no bounding-box intersection and no cramming — an impulse
  * is added to velocity that the {@code move()} already running will spend, and a pair that ends the tick
  * still overlapping simply pushes again. The visible effect is a crowd rather than a column.
+ *
+ * <p><b>Both tiers, one grid.</b> A {@code SimGlyphid} is in here alongside the bodies, and has to be: the
+ * two halves of a swarm walk the same flow field to the same column, so a tier that separated only its
+ * entities would deliver a spread-out front rank followed by two hundred records standing in one block. It
+ * costs nothing extra — the grid is O(n) in whatever is put into it — and it is the reason the carrier
+ * interface carries a position and a push at all.
  */
 public final class GlyphidSeparation {
 
@@ -75,12 +85,13 @@ public final class GlyphidSeparation {
         if (!SwarmBench.separation) {
             return;
         }
-        Set<EntityGlyphid> swarm = GlyphidTracker.glyphids(level);
-        if (swarm.size() < 2) {
+        Set<EntityGlyphid> bodies = GlyphidTracker.glyphids(level);
+        List<SimGlyphid> records = SimGlyphidRegistry.get(level).view();
+        if (bodies.size() + records.size() < 2) {
             return;
         }
         long t = SwarmProfiler.begin();
-        Grid grid = Grid.of(swarm);
+        Grid grid = Grid.of(bodies, records);
         for (int i = 0; i < grid.count; i++) {
             grid.separate(i);
         }
@@ -93,11 +104,12 @@ public final class GlyphidSeparation {
      * of another}}. Diagnostic only: "the swarm bunches up" is not a number until something says so.
      */
     public static double[] density(ServerLevel level) {
-        Set<EntityGlyphid> swarm = GlyphidTracker.glyphids(level);
-        if (swarm.size() < 2) {
+        Set<EntityGlyphid> bodies = GlyphidTracker.glyphids(level);
+        List<SimGlyphid> records = SimGlyphidRegistry.get(level).view();
+        if (bodies.size() + records.size() < 2) {
             return new double[]{0.0, 0.0, 0.0};
         }
-        Grid grid = Grid.of(swarm);
+        Grid grid = Grid.of(bodies, records);
 
         double total = 0.0;
         double closest = Double.MAX_VALUE;
@@ -133,7 +145,7 @@ public final class GlyphidSeparation {
         private static final int KEY_SHIFT = 32;
         private static final int EMPTY = -1;
 
-        private final EntityGlyphid[] bugs;
+        private final GlyphidCarrier[] bugs;
         private final double[] x;
         private final double[] z;
         private final double[] width;
@@ -149,7 +161,7 @@ public final class GlyphidSeparation {
         private int count;
 
         private Grid(int capacity) {
-            bugs = new EntityGlyphid[capacity];
+            bugs = new GlyphidCarrier[capacity];
             x = new double[capacity];
             z = new double[capacity];
             width = new double[capacity];
@@ -160,27 +172,37 @@ public final class GlyphidSeparation {
             heads.defaultReturnValue(EMPTY);
         }
 
-        static Grid of(Set<EntityGlyphid> swarm) {
-            Grid grid = new Grid(swarm.size());
+        static Grid of(Set<EntityGlyphid> bodies, List<SimGlyphid> records) {
+            Grid grid = new Grid(bodies.size() + records.size());
             int i = 0;
-            for (EntityGlyphid bug : swarm) {
+            for (EntityGlyphid bug : bodies) {
                 // The tracker is a concurrent set and the level tick is not the only thing that touches it,
                 // so the count it reported is a hint rather than a promise.
                 if (i >= grid.bugs.length) {
                     break;
                 }
-                if (!bug.isAlive() || bug.isPassenger() || bug.isAirborne()) {
-                    continue;
-                }
-                grid.bugs[i] = bug;
-                grid.x[i] = bug.getX();
-                grid.z[i] = bug.getZ();
-                grid.width[i] = bug.getBbWidth();
-                grid.next[i] = grid.heads.put(key(grid.x[i], grid.z[i]), i);
-                i++;
+                i = grid.place(i, bug);
+            }
+            for (int r = 0; r < records.size() && i < grid.bugs.length; r++) {
+                i = grid.place(i, records.get(r));
             }
             grid.count = i;
             return grid;
+        }
+
+        /**
+         * @return the next free slot, unchanged if this body is not one that can be shoved.
+         */
+        private int place(int i, GlyphidCarrier bug) {
+            if (!bug.carrierPushable()) {
+                return i;
+            }
+            bugs[i] = bug;
+            x[i] = bug.carrierX();
+            z[i] = bug.carrierZ();
+            width[i] = bug.carrierWidth();
+            next[i] = heads.put(key(x[i], z[i]), i);
+            return i + 1;
         }
 
         private static long key(double x, double z) {
@@ -229,9 +251,9 @@ public final class GlyphidSeparation {
             double dist = Math.sqrt(distSq);
             if (dist < 1.0E-4) {
                 // Exactly stacked, which is how a materialised warband starts. Any direction will do as long
-                // as the two of them disagree about it, so it comes off the entity id rather than off a
+                // as the two of them disagree about it, so it comes off the body's id rather than off a
                 // random source that would pick a different one every tick and leave them shivering.
-                double angle = bugs[i].getId() * 2.399963;
+                double angle = bugs[i].carrierId() * 2.399963;
                 dx = Math.cos(angle);
                 dz = Math.sin(angle);
             } else {
@@ -265,7 +287,7 @@ public final class GlyphidSeparation {
                 double scale = magnitudeSq > MAX_PUSH * MAX_PUSH
                         ? MAX_PUSH / Math.sqrt(magnitudeSq)
                         : 1.0;
-                bugs[i].push(dvx[i] * scale, 0.0, dvz[i] * scale);
+                bugs[i].carrierPush(dvx[i] * scale, dvz[i] * scale);
             }
         }
 

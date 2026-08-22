@@ -66,10 +66,6 @@ public class EntityGlyphidBehemoth extends EntityGlyphid {
         return GlyphidStats.getStats().getBehemoth();
     }
 
-    @Override
-    public double getGlyphidScale() {
-        return 1.5D;
-    }
 
     /**
      * Pins the facing across the whole tick, because the look control runs inside {@code super.tick()} and
