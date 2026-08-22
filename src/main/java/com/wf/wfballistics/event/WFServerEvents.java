@@ -78,6 +78,7 @@ import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -251,6 +252,11 @@ public final class WFServerEvents {
                                                 IntegerArgumentType.getInteger(ctx, "rounds")))))
                         .then(Commands.literal("bugs")
                                 .executes(ctx -> ColonyDebug.bugs(ctx.getSource())))
+                        .then(Commands.literal("evolution")
+                                .executes(ctx -> ColonyDebug.evolution(ctx.getSource()))
+                                .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0, 1.0))
+                                        .executes(ctx -> ColonyDebug.evolution(ctx.getSource(),
+                                                DoubleArgumentType.getDouble(ctx, "value")))))
                         .then(Commands.literal("dispatch")
                                 .executes(ctx -> ColonyDebug.dispatch(ctx.getSource(), 8, false))
                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 10_000))
@@ -290,7 +296,27 @@ public final class WFServerEvents {
                                         .then(Commands.argument("radius", DoubleArgumentType.doubleArg(2.0, 256.0))
                                                 .executes(ctx -> SwarmBench.spawn(ctx.getSource(),
                                                         IntegerArgumentType.getInteger(ctx, "count"),
-                                                        DoubleArgumentType.getDouble(ctx, "radius"))))))
+                                                        DoubleArgumentType.getDouble(ctx, "radius")))
+                                                .then(Commands.argument("caste", StringArgumentType.word())
+                                                        .suggests((c, b) -> {
+                                                            for (GlyphidCaste g : GlyphidCaste.VALUES) {
+                                                                b.suggest(g.lowerName());
+                                                            }
+                                                            return b.buildFuture();
+                                                        })
+                                                        .executes(ctx -> {
+                                                            GlyphidCaste caste = GlyphidCaste.byName(
+                                                                    StringArgumentType.getString(ctx, "caste"));
+                                                            if (caste == null) {
+                                                                ctx.getSource().sendFailure(
+                                                                        Component.literal("Unknown caste."));
+                                                                return 0;
+                                                            }
+                                                            return SwarmBench.spawn(ctx.getSource(),
+                                                                    IntegerArgumentType.getInteger(ctx, "count"),
+                                                                    DoubleArgumentType.getDouble(ctx, "radius"),
+                                                                    caste);
+                                                        })))))
                         .then(Commands.literal("clear")
                                 .executes(ctx -> SwarmBench.clear(ctx.getSource())))
                         .then(Commands.literal("report")

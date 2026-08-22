@@ -9,6 +9,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -100,8 +101,24 @@ public final class DamageResistanceHandler {
      * @return {@code [totalDT, totalDR]} for {@code entity} against {@code category}; DR clamped to ≤ 1.
      */
     public static float[] getDTDR(LivingEntity entity, String category) {
+        return getDTDR(entity, category, null);
+    }
+
+    /**
+     * As {@link #getDTDR(LivingEntity, String)}, but also consults {@link DynamicResistance} when the source
+     * of the hit is known. Prefer this: the category alone throws away detail an entity may care about.
+     *
+     * @param source the hit being resolved, or null if only the category is known
+     */
+    public static float[] getDTDR(LivingEntity entity, String category, @Nullable DamageSource source) {
         float dt = 0F;
         float dr = 0F;
+
+        if (source != null && entity instanceof DynamicResistance dynamic) {
+            float[] live = dynamic.currentDTDR(source);
+            dt += live[0];
+            dr += live[1];
+        }
 
         ResistanceProfile innate = INNATE.get(entity.getType());
         if (innate != null) {
@@ -126,7 +143,12 @@ public final class DamageResistanceHandler {
      * Applies the DT/DR formula. {@code pierceDT}/{@code pierceDR} default to 0 for un-pierced hits.
      */
     public static float calculateDamage(LivingEntity entity, String category, float amount, float pierceDT, float pierceDR) {
-        float[] vals = getDTDR(entity, category);
+        return calculateDamage(entity, category, amount, pierceDT, pierceDR, null);
+    }
+
+    public static float calculateDamage(LivingEntity entity, String category, float amount, float pierceDT,
+                                        float pierceDR, @Nullable DamageSource source) {
+        float[] vals = getDTDR(entity, category, source);
         float dt = vals[0];
         float dr = vals[1];
 

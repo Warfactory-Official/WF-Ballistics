@@ -38,7 +38,9 @@ public final class DamageEventHandler {
                 DamageResistanceHandler.categoryFor(source),
                 amount,
                 DamageResistanceHandler.currentPierceDT(),
-                DamageResistanceHandler.currentPierceDR());
+                DamageResistanceHandler.currentPierceDR(),
+                // Passed so DynamicResistance implementors see the actual hit rather than only its category.
+                source);
 
         if (reduced <= 0F) {
             event.setCanceled(true);

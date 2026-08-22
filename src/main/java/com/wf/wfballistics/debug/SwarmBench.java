@@ -2,6 +2,7 @@ package com.wf.wfballistics.debug;
 
 import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
+import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidTracker;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.SectionPos;
@@ -60,6 +61,14 @@ public final class SwarmBench {
      * benchmarks never overlap.
      */
     public static int spawn(CommandSourceStack source, int count, double radius) {
+        return spawn(source, count, radius, GlyphidCaste.GRUNT);
+    }
+
+    /**
+     * As above, of one named caste. Explicitly one caste rather than a rolled mix: a benchmark arm that
+     * fields a random assortment is not comparable with the next one.
+     */
+    public static int spawn(CommandSourceStack source, int count, double radius, GlyphidCaste caste) {
         ServerLevel level = source.getLevel();
         Vec3 center = source.getPosition();
 
@@ -76,7 +85,7 @@ public final class SwarmBench {
             double z = center.z + Math.sin(angle) * r;
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) x, (int) z);
 
-            EntityGlyphid glyphid = ModEntities.GLYPHID.get().create(level);
+            EntityGlyphid glyphid = caste.type().create(level);
             if (glyphid == null) {
                 continue;
             }
@@ -95,7 +104,7 @@ public final class SwarmBench {
         int placed = spawned;
         int live = GlyphidTracker.count(level);
         source.sendSuccess(() -> Component.literal(
-                "Spawned " + placed + " glyphids in a " + (int) radius + "-block ring"
+                "Spawned " + placed + " " + caste.lowerName() + " glyphids in a " + (int) radius + "-block ring"
                         + (removed > 0 ? " (cleared " + removed + " first)" : "")
                         + ", " + FORCED.size() + " chunks forceloaded, " + live + " live."
                         + " Profiling on, warming up for " + WARMUP_TICKS + " ticks."), false);

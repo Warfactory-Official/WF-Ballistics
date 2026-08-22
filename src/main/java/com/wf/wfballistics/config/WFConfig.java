@@ -83,6 +83,9 @@ public final class WFConfig {
     public static final ModConfigSpec.IntValue COLONY_MATERIALISE_PER_TICK;
     public static final ModConfigSpec.DoubleValue COLONY_FLYING_CHANCE_PER_TIER;
     public static final ModConfigSpec.DoubleValue COLONY_FLYING_SPEED_FACTOR;
+    public static final ModConfigSpec.DoubleValue COLONY_EVOLUTION_TIME_FACTOR;
+    public static final ModConfigSpec.DoubleValue COLONY_EVOLUTION_PRESSURE_FACTOR;
+    public static final ModConfigSpec.DoubleValue COLONY_EVOLUTION_STRENGTH_BONUS;
     // --- Glyphids ---
     public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
@@ -325,6 +328,21 @@ public final class WFConfig {
         COLONY_FLYING_SPEED_FACTOR = b
                 .comment("How much faster a flying warband crosses the map than a walking one.")
                 .defineInRange("flyingSpeedFactor", 3.0, 1.0, 64.0);
+        COLONY_EVOLUTION_TIME_FACTOR = b
+                .comment("Share of the remaining gap to full evolution closed every 200 ticks by time alone.",
+                        "Evolution gates which castes a colony may field and adds a little to how fast it",
+                        "grows. At the default an untouched world is roughly half evolved after fifty hours.",
+                        "0 pins evolution to industry alone.")
+                .defineInRange("evolutionTimeFactor", 4.0E-5, 0.0, 1.0);
+        COLONY_EVOLUTION_PRESSURE_FACTOR = b
+                .comment("The same, per point of standing industry across the world. This is the term that",
+                        "makes evolution a consequence of what was built rather than of how long the game",
+                        "was left running. 0 makes evolution purely a matter of time.")
+                .defineInRange("evolutionPressureFactor", 2.0E-8, 0.0, 1.0);
+        COLONY_EVOLUTION_STRENGTH_BONUS = b
+                .comment("How much a fully evolved world adds to colony growth and warband size. At the",
+                        "default a late colony musters half again what an early one of the same tier does.")
+                .defineInRange("evolutionStrengthBonus", 0.5, 0.0, 16.0);
         b.pop();
 
         b.comment("Glyphid swarm behaviour.").push("glyphids");
@@ -424,5 +442,7 @@ public final class WFConfig {
                 COLONY_CROWDING_RADIUS.get(), COLONY_CROWDING_LIMIT.get());
         ColonyConfig.applyMaterialisation(COLONY_MATERIALISE_RANGE.get(), COLONY_MATERIALISE_PER_TICK.get());
         ColonyConfig.applyFlight(COLONY_FLYING_CHANCE_PER_TIER.get(), COLONY_FLYING_SPEED_FACTOR.get());
+        ColonyConfig.applyEvolution(COLONY_EVOLUTION_TIME_FACTOR.get(), COLONY_EVOLUTION_PRESSURE_FACTOR.get(),
+                COLONY_EVOLUTION_STRENGTH_BONUS.get());
     }
 }

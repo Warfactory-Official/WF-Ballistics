@@ -24,6 +24,13 @@ public final class ColonyRegistry extends SavedData {
     private final List<Colony> colonies = new ArrayList<>();
     private final List<Warband> warbands = new ArrayList<>();
 
+    /**
+     * The level's evolution scalar. Lives here rather than in its own {@link SavedData} because it is
+     * colony state that happens to be scalar, and a second file for one float is a second thing to keep in
+     * step. See {@link Evolution}.
+     */
+    private float evolution;
+
     public static ColonyRegistry get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(
                 new SavedData.Factory<>(ColonyRegistry::new, (tag, lookup) -> load(tag)), NAME);
@@ -35,6 +42,18 @@ public final class ColonyRegistry extends SavedData {
 
     public List<Warband> warbands() {
         return warbands;
+    }
+
+    public float evolution() {
+        return evolution;
+    }
+
+    public void setEvolution(float value) {
+        float clamped = Math.max(0.0F, Math.min(1.0F, value));
+        if (clamped != evolution) {
+            evolution = clamped;
+            setDirty();
+        }
     }
 
     public void add(Colony colony) {
@@ -141,6 +160,9 @@ public final class ColonyRegistry extends SavedData {
         for (int i = 0; i < warbandList.size(); i++) {
             registry.warbands.add(Warband.load(warbandList.getCompound(i)));
         }
+        // Absent in worlds saved before evolution existed, which reads back as 0 -- a world that has not
+        // evolved yet, which is the right answer for one that never could.
+        registry.evolution = tag.getFloat("evolution");
         return registry;
     }
 
@@ -157,6 +179,7 @@ public final class ColonyRegistry extends SavedData {
             warbandList.add(warband.save());
         }
         tag.put("warbands", warbandList);
+        tag.putFloat("evolution", evolution);
         return tag;
     }
 }

@@ -32,6 +32,10 @@ public final class ColonyConfig {
     private static double flyingChancePerTier = 0.2;
     private static double flyingSpeedFactor = 3.0;
 
+    private static double evolutionTimeFactor = 4.0E-5;
+    private static double evolutionPressureFactor = 2.0E-8;
+    private static double evolutionStrengthBonus = 0.5;
+
     private ColonyConfig() {
     }
 
@@ -189,6 +193,36 @@ public final class ColonyConfig {
      */
     public static double flyingSpeedFactor() {
         return flyingSpeedFactor;
+    }
+
+    /**
+     * Share of the remaining gap to full evolution closed per {@link Evolution#INTERVAL}, by time alone.
+     * The default is roughly half-evolved after fifty hours of an untouched world.
+     */
+    public static double evolutionTimeFactor() {
+        return evolutionTimeFactor;
+    }
+
+    /**
+     * The same, per point of standing industry. This is the term that makes evolution a consequence of what
+     * the player built rather than of how long they left the game running.
+     */
+    public static double evolutionPressureFactor() {
+        return evolutionPressureFactor;
+    }
+
+    /**
+     * How much a fully evolved world adds to colony growth and warband size, as a fraction. At the default a
+     * late colony musters half again what an early one of the same tier does.
+     */
+    public static double evolutionStrengthBonus() {
+        return evolutionStrengthBonus;
+    }
+
+    public static void applyEvolution(double timeFactor, double pressureFactor, double strengthBonus) {
+        evolutionTimeFactor = Math.max(0.0, timeFactor);
+        evolutionPressureFactor = Math.max(0.0, pressureFactor);
+        evolutionStrengthBonus = Math.max(0.0, strengthBonus);
     }
 
     public static void applyMaterialisation(int range, int perTick) {

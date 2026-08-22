@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.config.WFConfig;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
+import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidTasks;
 import com.wf.wfballistics.entity.glyphid.flight.GlyphidFlight;
 import net.minecraft.core.BlockPos;
@@ -150,7 +151,12 @@ public final class WarbandMaterialiser {
         RandomSource random = level.random;
         int centerX = (int) Math.floor(warband.x);
         int centerZ = (int) Math.floor(warband.z);
-        EntityType<EntityGlyphid> type = ModEntities.GLYPHID.get();
+
+        // Rolled per bug rather than per warband, so a mixed column is the normal case: a wall of grunts with
+        // a bombardier or two behind it reads as an army, where a warband of nothing but behemoths reads as a
+        // boss fight. See GlyphidCaste for what evolution has unlocked by now.
+        GlyphidCaste caste = GlyphidCaste.roll(random, Evolution.of(level));
+        EntityType<? extends EntityGlyphid> type = caste.type();
         EntityDimensions size = type.getDimensions();
 
         for (int attempt = 0; attempt < PLACEMENT_ATTEMPTS; attempt++) {

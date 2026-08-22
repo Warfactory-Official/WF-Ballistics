@@ -140,8 +140,8 @@ both tiers.
 
 - **Region cell size.** 32×32 chunks (512 blocks) is the starting guess; wants checking against typical
   GT base footprints.
-- **Evolution scope** — one scalar per level (Factorio) or per region? Per region rewards spreading out
-  and makes a quiet corner stay quiet; global is simpler and easier to communicate.
+- ~~**Evolution scope** — one scalar per level (Factorio) or per region?~~ Answered per-level in §14, for
+  the reason given here. The cost stands: a quiet corner does not stay quiet.
 - **Do colonies expand into loaded chunks?** Placing nest blocks in a chunk a player is standing in is a
   different proposition from doing it out of sight.
 - **Observability.** A simulation you cannot see is one you cannot tune. Wants a map/overlay command
@@ -753,19 +753,156 @@ dependency precisely so that question gets answered before a patch ships rather 
 
 ### 11.12 Still open
 
-- **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
-  indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
-  ones already walking can still drown their advance.
-- **The hop is terrain-blind.** It aims at a heightmap sample, which over water or a cliff is a spot the
-  pathfinder will not accept, and roughly 40% of a marching swarm is failing to make progress at any moment.
-  This is what the flow field is for. Flight sidesteps it entirely, which is another argument for wings.
+- **The hop is terrain-blind.** It aims at a heightmap sample, which over a cliff is a spot the pathfinder will
+  not accept, and roughly 40% of a marching swarm is failing to make progress at any moment. This is what the
+  flow field is for. Flight sidesteps it entirely, which is another argument for wings.
 - **Glyphids have no renderer.** They are bound to a no-op one so the client will start at all; models are the
   flywheel port. Note that server-only testing hid this completely — a missing renderer is a client crash.
-- `NestBuilder` is a hook: colonies materialise as data until the spawner block lands with the hive port.
-- Evolution (§7) is still not implemented — tier is distance-derived only, with no global progression.
+- `NestBuilder` is a hook: colonies materialise as data until the spawner block lands with the hive port. A
+  scout now founds the colony *record* on its own (§13.3), so only block placement is still waiting.
 - **Ambient wildlife derails a march.** Melee outranks the march goal, so a column crossing a plains biome
   stops to eat it. Fine as behaviour, ruinous as a benchmark — march runs need `doMobSpawning false` and a
   swept arena, or they measure a brawl. Whether it wants a leash in gameplay is a design question, not a bug.
 - **March speed measured 1.45 blocks/s** over a 170-block approach, against 2.07 measured earlier over a
   shorter one. The pathing logic is unchanged by the goal refactor (verified by inspection, not by A/B), so
   this is most likely terrain and column spread rather than a regression — but it is not proven.
+
+---
+
+## 12. Implemented: swimming
+
+Water was listed above as stopping a swarm, blamed on `FloatGoal` outranking the march goal. **That diagnosis
+was wrong.** `FloatGoal` carries only `Goal.Flag.JUMP`, so it never blocked a movement goal at all — and it is
+in fact load-bearing for the fix, because its constructor is what calls `navigation.setCanFloat(true)`, and
+without that flag `WalkNodeEvaluator` refuses every water cell outright whatever its cost.
+
+The real cause was two independent numbers, both vanilla defaults:
+
+**`PathType.WATER` carries a malus of 8**, against 0 for open ground. Costs are per cell, so an eight-block
+pond costs more to swim than a sixty-block shoreline detour costs to walk. The search spends itself along the
+bank and returns a partial path, which — per §11 — reads as success. `Drowned` sets this to 0 for exactly this
+reason; glyphids now do too, along with `WATER_BORDER`, which is the air cell on the bank that a glyphid has
+to step through to get in.
+
+**`LivingEntity.travel` thrusts through water at a flat `0.02`**, against a walking speed of `0.25`, unless
+`Attributes.WATER_MOVEMENT_EFFICIENCY` is set — which defaults to 0 on everything. It is now 1.0.
+
+### 12.1 Measured
+
+One glyphid under march orders, 40 blocks of open water between it and its destination, same lake both arms:
+
+| water efficiency | crossing time | speed |
+|---|---|---|
+| 1.0 (shipping) | 20 s | 2.0 blocks/s — its marching pace |
+| 0 (vanilla) | 85 s | 0.47 blocks/s |
+
+Four-fold, not the twelve-fold the two constants imply: terminal speed is thrust over drag and the attribute
+raises both. Worth stating because the naive reading of the vanilla code overstates the fix by 3×.
+
+Ten glyphids crossed the same lake without a single loss, and **air never dropped below full** — they swim on
+the surface, so `MAX_AIR` (600 ticks, double vanilla) only ever matters to one that cannot surface. That is
+deliberate: flooding a pit on top of a glyphid should still drown it.
+
+No pathfinding regression: 300 in melee measured 2.506 ms/tick against a 2.813 ms baseline. The arms are not
+strictly comparable — this run issued far fewer searches — so this is "no regression", not an improvement.
+
+---
+
+## 13. Implemented: the castes
+
+Eight subclasses on top of the grunt, adapted from ntm-next. `GlyphidCaste` is the table all of it hangs off:
+one enum carrying the entity type, the stat bundle, a spawn weight and an evolution gate, so the materialiser,
+the bench and the renderer registration all name a caste instead of holding their own list of types. That last
+one matters more than it looks — an unregistered renderer is a client crash that server-side testing cannot
+see, so the client binds renderers by iterating the table rather than by nine hand-written lines.
+
+### 13.1 What the port had to substitute
+
+Upstream leans on NTM entities that were never ported. Substitutions, all of them behaviour-preserving:
+
+| upstream | here |
+|---|---|
+| `EntityAcidBomb` | the existing `EntityGlyphidBomb` (acid pool or blast, already built for the flying castes) |
+| `EntityChemical` spray | `MistEntity` puffs walked out along the line to the target |
+| `EntityRubble` | vanilla `FallingBlockEntity`, which also lands as a block — the digger leaves the ground rearranged |
+| `ExplosionVNT` | `ExplosionAEF` |
+| pheromone mist (Brenda) | a rally: a `TASK_FOLLOW` waypoint on the corpse plus `communicate`. There is no pheromone system, but there is an orders system, and the pheromone's *function* was "everything comes here" |
+
+### 13.2 Three deliberate divergences
+
+- **The blaster fires four bombs, not ten.** Ten is survivable when each is an acid puddle and is not when each
+  is a live `ExplosionAEF` charge, and a warband fields several blasters at once.
+- **Lead is divided through.** Every upstream caste samples target displacement over a 20-tick window and then
+  multiplies it by a 20- or 60-tick lead, over-leading by a factor of twenty, and relies on a sanity check to
+  throw the result away again. `GlyphidBallistics.lead` divides by the sample interval, so the lead is the
+  velocity it claims to be.
+- **The nuclear caste's parting buff is applied to its neighbours.** Upstream loops over nearby glyphids and
+  then calls `addEffect` on the corpse, which does nothing.
+
+### 13.3 The scout is the expansion mechanic
+
+Everything else is an attacker; the scout is how a colony becomes two. It walks to a site far enough from home
+to be worth having and calls `ColonyManager.settle`, which is the only path in the mod that creates a colony
+from *inside* the world rather than from the simulation. It is spent doing so — which is what keeps expansion
+costed, since a colony that wants to spread has to raise and lose a bug per nest.
+
+---
+
+## 14. Implemented: evolution
+
+§7 asked whether evolution should be one scalar per level or per region. This is the per-level answer, for the
+reason the question gave: it is the one a player can be told about. The cost is real and worth naming — a quiet
+corner of the world does not stay quiet. Region scoping would fix that and is a strictly larger change, because
+every colony would then need to know which region it is in.
+
+Two inputs. **Time** is a floor, so an untouched world still hardens; it is deliberately slow (roughly half
+evolved after fifty hours). **Industry** is `IndustryApi.totalPressure`, the same signal that provokes
+individual colonies, summed across the world — this is the term that makes evolution a consequence of what the
+player built.
+
+Asymptotic rather than linear: each step closes a fixed share of the *remaining* gap, so the last stretch costs
+far more industry than the first, and the top of the caste table is something a world grows into.
+
+What it buys is narrow on purpose — which castes may be fielded, and a modest multiplier on growth and warband
+size. It does **not** touch tier. Distance decides where the hard nests are; evolution decides what a hard nest
+has learned to build. Measured shape, via `/wfballistics colony evolution`:
+
+```
+0.00   grunt 98%, scout 2%
+0.30   grunt 75%, scout 4%, bombardier 12%, brawler 9%
+0.60   grunt 55%, scout 4%, bombardier 15%, brawler 13%, digger 9%, blaster 4%
+1.00   grunt 37%, scout 4%, bombardier 15%, brawler 15%, digger 11%, blaster 7%,
+       behemoth 7%, nuclear 2%, brenda 2%
+```
+
+A caste enters at a quarter of its full weight rather than at zero. Ramping from zero looks tidier and is a
+bug: the scout is gated at 0.0, so it would never appear in a fresh world, and a colony that cannot field
+scouts cannot expand — the simulation stalls before it starts.
+
+The two factors are an untuned starting point. They are config, and the command sets the scalar outright,
+because evolution takes tens of hours to move on its own and that is not a test.
+
+---
+
+## 15. Implemented: glyphid armour as DT/DR
+
+`EntityGlyphid.getCurrentDTDR` had existed since the first port and nothing called it. It is now wired through
+`DamageResistanceHandler` — but not as a registered profile, because a profile is keyed by entity type and
+damage category and the glyphid breaks both assumptions: its threshold comes from how many chitin plates it
+still has, so two glyphids of one type resist differently and the same glyphid resists differently a second
+later; and it treats a laser and an electrical arc differently despite both being `energy`.
+
+So `DynamicResistance` asks the entity instead, and what it returns is summed with any static profile the
+entity also carries. A landed hit may knock a plate off, on the raw amount rather than the mitigated one — a
+hit big enough to crack chitin cracks it whether or not the chitin then absorbed the rest.
+
+Verified against the formula rather than by eye. A grunt has `thresholdMultForArmor` 1.0 and `resistanceMult`
+0.1, so a raw 6 should land as `(6 − plates/5) × 0.9`:
+
+| plates | predicted | measured |
+|---|---|---|
+| 5 | 4.50 | 4.50 |
+| 4 | 4.68 | 4.68 |
+
+That degradation is the whole point of the model: a fresh glyphid shrugs off small-arms fire and the same
+glyphid, worn down, does not.

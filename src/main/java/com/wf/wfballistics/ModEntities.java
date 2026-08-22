@@ -7,6 +7,14 @@ import com.wf.wfballistics.entity.*;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphidBomb;
 import com.wf.wfballistics.entity.glyphid.GlyphidWaypoint;
+import com.wf.wfballistics.entity.glyphid.caste.EntityGlyphidBehemoth;
+import com.wf.wfballistics.entity.glyphid.caste.EntityGlyphidBlaster;
+import com.wf.wfballistics.entity.glyphid.caste.EntityGlyphidBombardier;
+import com.wf.wfballistics.entity.glyphid.caste.EntityGlyphidBrawler;
+import com.wf.wfballistics.entity.glyphid.caste.EntityGlyphidBrenda;
+import com.wf.wfballistics.entity.glyphid.caste.EntityGlyphidDigger;
+import com.wf.wfballistics.entity.glyphid.caste.EntityGlyphidNuclear;
+import com.wf.wfballistics.entity.glyphid.caste.EntityGlyphidScout;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
@@ -113,6 +121,59 @@ public class ModEntities {
                     .build("glyphid")
             );
 
+    // The castes. Same tracking settings as the grunt throughout -- they differ in what they do, not in how
+    // often a client needs to hear about them -- and sized from GlyphidCaste's body scales.
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidScout>> GLYPHID_SCOUT =
+            ENTITY_TYPES.register("glyphid_scout", () -> caste(EntityGlyphidScout::new, 1.25F, 0.75F)
+                    .build("glyphid_scout")
+            );
+
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidBombardier>> GLYPHID_BOMBARDIER =
+            ENTITY_TYPES.register("glyphid_bombardier", () -> caste(EntityGlyphidBombardier::new, 1.75F, 1.0F)
+                    .build("glyphid_bombardier")
+            );
+
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidBlaster>> GLYPHID_BLASTER =
+            ENTITY_TYPES.register("glyphid_blaster", () -> caste(EntityGlyphidBlaster::new, 2.0F, 1.125F)
+                    .build("glyphid_blaster")
+            );
+
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidBrawler>> GLYPHID_BRAWLER =
+            ENTITY_TYPES.register("glyphid_brawler", () -> caste(EntityGlyphidBrawler::new, 2.0F, 1.125F)
+                    .build("glyphid_brawler")
+            );
+
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidDigger>> GLYPHID_DIGGER =
+            ENTITY_TYPES.register("glyphid_digger", () -> caste(EntityGlyphidDigger::new, 1.75F, 1.0F)
+                    .build("glyphid_digger")
+            );
+
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidBehemoth>> GLYPHID_BEHEMOTH =
+            ENTITY_TYPES.register("glyphid_behemoth", () -> caste(EntityGlyphidBehemoth::new, 2.5F, 1.5F)
+                    .build("glyphid_behemoth")
+            );
+
+    // Fire-immune: it is a walking bomb, and burning one to death should still leave the fuse running.
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidNuclear>> GLYPHID_NUCLEAR =
+            ENTITY_TYPES.register("glyphid_nuclear", () -> caste(EntityGlyphidNuclear::new, 2.5F, 1.75F)
+                    .fireImmune()
+                    .build("glyphid_nuclear")
+            );
+
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidBrenda>> GLYPHID_BRENDA =
+            ENTITY_TYPES.register("glyphid_brenda", () -> caste(EntityGlyphidBrenda::new, 2.5F, 1.75F)
+                    .fireImmune()
+                    .build("glyphid_brenda")
+            );
+
+    private static <T extends EntityGlyphid> EntityType.Builder<T> caste(EntityType.EntityFactory<T> factory,
+                                                                        float width, float height) {
+        return EntityType.Builder.of(factory, MobCategory.MONSTER)
+                .sized(width, height)
+                .clientTrackingRange(8)
+                .updateInterval(1);
+    }
+
     // Ordnance dropped by a glyphid on the wing: acid, or a blast for the heavier castes.
     public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidBomb>> GLYPHID_BOMB =
             ENTITY_TYPES.register("glyphid_bomb", () -> EntityType.Builder.<EntityGlyphidBomb>of(EntityGlyphidBomb::new, MobCategory.MISC)
@@ -154,6 +215,14 @@ public class ModEntities {
      */
     private static void registerAttributes(EntityAttributeCreationEvent event) {
         event.put(GLYPHID.get(), EntityGlyphid.createAttributes().build());
+        event.put(GLYPHID_SCOUT.get(), EntityGlyphidScout.createAttributes().build());
+        event.put(GLYPHID_BOMBARDIER.get(), EntityGlyphidBombardier.createAttributes().build());
+        event.put(GLYPHID_BLASTER.get(), EntityGlyphidBlaster.createAttributes().build());
+        event.put(GLYPHID_BRAWLER.get(), EntityGlyphidBrawler.createAttributes().build());
+        event.put(GLYPHID_DIGGER.get(), EntityGlyphidDigger.createAttributes().build());
+        event.put(GLYPHID_BEHEMOTH.get(), EntityGlyphidBehemoth.createAttributes().build());
+        event.put(GLYPHID_NUCLEAR.get(), EntityGlyphidNuclear.createAttributes().build());
+        event.put(GLYPHID_BRENDA.get(), EntityGlyphidBrenda.createAttributes().build());
         event.put(DEBUG_DUMMY.get(), EntityDebugDummy.createAttributes().build());
     }
 }

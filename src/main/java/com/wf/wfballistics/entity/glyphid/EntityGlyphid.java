@@ -6,6 +6,7 @@ import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.aef.standard.BlockAllocatorGlyphidDig;
 import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
 import com.wf.wfballistics.config.WFConfig;
+import com.wf.wfballistics.damage.DynamicResistance;
 import com.wf.wfballistics.damage.WFDamageTypes;
 import com.wf.wfballistics.debug.ProfiledGoal;
 import com.wf.wfballistics.debug.SwarmBench;
@@ -56,6 +57,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.pathfinder.PathType;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -84,7 +86,7 @@ import java.util.function.Predicate;
  * deliberate. It is the baseline the swarm work is measured against, which is why the tick is instrumented
  * for {@link SwarmProfiler} at every level the cost could hide in.
  */
-public class EntityGlyphid extends Monster {
+public class EntityGlyphid extends Monster implements DynamicResistance {
 
     public static final ResourceLocation TEXTURE =
             ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "textures/entity/glyphid.png");
@@ -142,6 +144,26 @@ public class EntityGlyphid extends Monster {
      */
     private static final double PREY_RANGE = 24.0;
 
+    /**
+     * What a water cell costs the pathfinder, against a vanilla default of 8.
+     *
+     * <p>Zero, not merely low. A swarm that walks around a lake is not a swarm, and the default is what made a
+     * marching column refuse to cross one: at 8 per cell an eight-block pond costs more than a sixty-block
+     * detour, so the search spends itself on the shoreline and comes back with a partial path. {@code Drowned}
+     * uses exactly this value for the same reason.
+     */
+    private static final float WATER_MALUS = 0.0F;
+
+    /**
+     * Ticks a submerged glyphid lasts, against a vanilla default of 300.
+     *
+     * <p>Long enough that crossing open water is never lethal, short enough that a pit flooded on top of one
+     * still is. Measured: a glyphid crossing a lake swims on the surface and its air never drops below full,
+     * so in practice this only ever matters to one that cannot get up — which is exactly the case worth
+     * keeping lethal.
+     */
+    private static final int MAX_AIR = 600;
+
     public boolean hasHome = false;
     public int homeX;
     public int homeY;
@@ -180,6 +202,10 @@ public class EntityGlyphid extends Monster {
 
     public EntityGlyphid(EntityType<? extends EntityGlyphid> type, Level level) {
         super(type, level);
+        setPathfindingMalus(PathType.WATER, WATER_MALUS);
+        // The air cell above water, which is what a glyphid on the shore has to step through to get in.
+        // Leaving this at its default of 8 makes entering the water expensive even once being in it is free.
+        setPathfindingMalus(PathType.WATER_BORDER, WATER_MALUS);
         applyEntityAttributes();
     }
 
@@ -187,7 +213,14 @@ public class EntityGlyphid extends Monster {
         return Monster.createMonsterAttributes()
                 .add(Attributes.MAX_HEALTH, GlyphidStats.getStats().getGrunt().health())
                 .add(Attributes.MOVEMENT_SPEED, GlyphidStats.getStats().getGrunt().movementSpeed())
-                .add(Attributes.ATTACK_DAMAGE, GlyphidStats.getStats().getGrunt().damage());
+                .add(Attributes.ATTACK_DAMAGE, GlyphidStats.getStats().getGrunt().damage())
+                // Swimming. Vanilla thrusts a living entity through water at a flat 0.02 against a walking
+                // speed of 0.25; this attribute replaces that constant with the mob's own speed, and raises
+                // the drag term with it. Measured on a 40-block crossing: 20 s at 1.0 against 85 s at the
+                // vanilla 0, so a glyphid swims at its marching pace rather than a quarter of it. (The ratio
+                // is four-fold, not the twelve-fold the two constants suggest -- terminal speed is thrust
+                // over drag, and this moves both.)
+                .add(Attributes.WATER_MOVEMENT_EFFICIENCY, 1.0D);
     }
 
     /**
@@ -237,6 +270,10 @@ public class EntityGlyphid extends Monster {
 
     @Override
     protected void registerGoals() {
+        // Keeps a swimming glyphid's head above water, and -- the part that actually matters -- is what turns
+        // on the navigation's float flag, without which the pathfinder refuses every water cell outright
+        // whatever its malus. It carries only the JUMP flag, so it runs alongside the movement goals rather
+        // than instead of them.
         goalSelector.addGoal(0, new FloatGoal(this));
         // Wrapped so the profiler can tell which of the two movement goals a path search belongs to; the two
         // answer to completely different fixes and the report used to lump them together.
@@ -538,9 +575,11 @@ public class EntityGlyphid extends Monster {
 
     /**
      * The damage threshold and resistance this bug currently presents, as {@code [threshold, resistance]}.
-     * Varies with live armour state, so it cannot be expressed as a static resistance profile.
+     * Varies with live armour state, so it cannot be expressed as a static resistance profile — which is
+     * what {@link DynamicResistance} exists for.
      */
-    public float[] getCurrentDTDR(DamageSource damage) {
+    @Override
+    public float[] currentDTDR(DamageSource damage) {
         if (damage.is(DamageTypeTags.BYPASSES_ARMOR)) return new float[]{0F, 0F};
 
         GlyphidStats.StatBundle stats = getStats();
@@ -554,6 +593,11 @@ public class EntityGlyphid extends Monster {
         return new float[]{threshold, stats.resistanceMult()};
     }
 
+    /**
+     * A landed hit may knock a plate off, which lowers the threshold {@link #currentDTDR} reports from here
+     * on. That degradation is the whole armour model: a fresh glyphid shrugs off small-arms fire and the same
+     * glyphid, worn down, does not.
+     */
     public void onDamageDealt(DamageSource damage, float amount) {
         if (isArmorBroken(amount)) breakOffArmor();
     }
@@ -571,7 +615,14 @@ public class EntityGlyphid extends Monster {
         // Glyphids never hurt each other, so a swarm packed shoulder to shoulder doesn't cut itself down
         // with its own splash.
         if (source.getEntity() instanceof EntityGlyphid) return false;
-        return GlyphidStats.getStats().handleAttack(this, source, amount);
+
+        boolean landed = GlyphidStats.getStats().handleAttack(this, source, amount);
+        // On the raw amount, not what got through: a hit big enough to crack chitin cracks it whether or not
+        // the chitin then absorbed the rest. Server-side only -- the client mirrors the plate bitmask.
+        if (landed && !level().isClientSide) {
+            onDamageDealt(source, amount);
+        }
+        return landed;
     }
 
     /**
@@ -991,6 +1042,11 @@ public class EntityGlyphid extends Monster {
      */
     @Override
     public void makeStuckInBlock(BlockState state, Vec3 motionMultiplier) {
+    }
+
+    @Override
+    public int getMaxAirSupply() {
+        return MAX_AIR;
     }
 
     /**
