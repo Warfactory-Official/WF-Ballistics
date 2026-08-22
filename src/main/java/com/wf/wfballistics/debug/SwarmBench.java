@@ -282,6 +282,19 @@ public final class SwarmBench {
      */
     public static boolean vanillaMeleeGoal;
 
+    /**
+     * When set, a glyphid may only start a path search on its own slot: one per entity per repath interval.
+     *
+     * <p>Read live rather than at spawn, so the two arms are the same swarm on the same tick.
+     */
+    public static boolean staggerSearches = true;
+
+    public static int stagger(CommandSourceStack source, boolean on) {
+        staggerSearches = on;
+        source.sendSuccess(() -> Component.literal("Path-search stagger " + (on ? "on" : "off") + "."), false);
+        return 1;
+    }
+
     public static int meleeGoal(CommandSourceStack source, boolean vanilla) {
         vanillaMeleeGoal = vanilla;
         source.sendSuccess(() -> Component.literal("Glyphids will spawn with the "
@@ -312,10 +325,38 @@ public final class SwarmBench {
      * Close the profiler's tick. Driven from the server tick rather than the level tick so that one game
      * tick is one sample even with several dimensions loaded.
      */
+    /**
+     * Bytes the server thread has allocated, or -1 where the JVM will not say.
+     *
+     * <p>Worth having because "is it allocation or is it work?" is otherwise unanswerable from timings alone:
+     * garbage does not show up where it is created, it shows up later as a GC pause on some unrelated tick,
+     * which is exactly the shape of an unexplained p95.
+     */
+    private static long lastAllocated = -1L;
+
+    private static long threadAllocatedBytes() {
+        try {
+            java.lang.management.ThreadMXBean bean = java.lang.management.ManagementFactory.getThreadMXBean();
+            if (bean instanceof com.sun.management.ThreadMXBean sun) {
+                return sun.getCurrentThreadAllocatedBytes();
+            }
+        } catch (Throwable ignored) {
+            // Not a HotSpot JVM, or the extension is unavailable: allocation simply goes unreported.
+        }
+        return -1L;
+    }
+
     public static void tick(MinecraftServer server) {
         if (!SwarmProfiler.enabled()) {
+            lastAllocated = -1L;
             return;
         }
+        long allocated = threadAllocatedBytes();
+        if (allocated >= 0L && lastAllocated >= 0L) {
+            SwarmProfiler.count(SwarmProfiler.Counter.BYTES, allocated - lastAllocated);
+        }
+        lastAllocated = allocated;
+
         if (warmup > 0) {
             warmup--;
             SwarmProfiler.reset();

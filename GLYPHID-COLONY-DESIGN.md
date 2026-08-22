@@ -531,7 +531,76 @@ against moving targets costs 8.25 ms — 13.8 µs/entity, so scaling is near eno
 The residual split landed too: `base tick` (fire, air, effects, freezing) is 0.36–0.84 ms and was most of what
 the report used to leave unattributed, which fell from 0.69 ms to 0.18 ms.
 
-### 11.7 Still open
+### 11.7 What a path search actually spends itself on
+
+"Path search is 28% of the tick" is still not an answer, so the search was split by what it does rather than
+by who asked, and the things it does were counted as well as timed. 300 glyphids, 60 drifting targets:
+
+| inside a path search | share |
+|---|---|
+| setup + chunk snapshot (`PathNavigationRegion`) | 1.4% |
+| the A\* itself | 98.6% |
+| — **node expansion** (`WalkNodeEvaluator.getNeighbors`) | **88.6%** |
+| — heap + node bookkeeping | 9.9% |
+
+209 µs per search · 92 nodes per search · **2 656 block reads per search** · 28.9 reads per node ·
+**69.7 ns per block read**
+
+**It is data retrieval, and specifically memory latency.** Node expansion is the part that reads the world:
+for each candidate step it pulls block states out of the chunk snapshot and classifies them. 70 ns per read is
+main-memory territory — an L1 hit is single-digit nanoseconds — so this is cache misses, walking a
+`PalettedContainer` bit-unpack over a working set far larger than cache, in a scattered 3D pattern.
+
+It is **not** allocation: the per-search setup that does the allocating is 1.4%, and on spike ticks allocation
+rises only 1.5× while tick time rises 2.3×, so garbage is a passenger rather than the driver. It is **not**
+the algorithm either: heap operations are under 10%.
+
+That rules out two of the three plausible fixes. Making the A\* smarter or allocating less would buy almost
+nothing. The lever is **fewer block reads** — which is what a flow field is: pay the terrain reads once for a
+region and let every glyphid sample the result, instead of 13 500 reads a tick re-deriving the same terrain
+300 times over.
+
+### 11.8 What is in a spike
+
+`p95` is the 95th-percentile tick over the window: one tick in twenty is at least this bad, so at 20 tps it is
+about once a second. It matters more than the mean, because a server that averages 4 ms and stutters to 30 is
+one players notice; the tick budget is 50 ms and only the tail ever approaches it.
+
+Comparing the worst 5% of ticks against the rest says *which kind* of spike it is:
+
+| worst 9 ticks vs the other 171 | worst | rest | ratio |
+|---|---|---|---|
+| tick ms | 8.1 | 3.5 | 2.3× |
+| path searches | 27.8 | 3.9 | **7.1×** |
+| nodes expanded | 2 349 | 371 | 6.3× |
+| block reads | 51 877 | 11 542 | 4.5× |
+| bytes allocated | 2.72 MB | 1.82 MB | 1.5× |
+
+Searches per tick swing 7×, while nodes *per search* barely move (84 vs 95). So the spikes are **pile-ups —
+more searches landing on one tick — not harder searches**. That is a scheduling problem, and scheduling
+problems have cheap fixes.
+
+Staggering the start of the goal was not enough: anything that makes a cohort decide to repath at once — a
+warband arriving together, or every glyphid re-aiming at one target that moved — re-synchronises them. So a
+glyphid may now only search in its own slot, one per entity per `REPATH_MIN` ticks, which bounds searches per
+tick at population/20. A/B'd three times each on one world:
+
+| | stagger off | stagger on |
+|---|---|---|
+| mean tick | 3.66 ms | 3.76 ms |
+| p95 | 5.48 ms | 5.48 ms |
+| **max** | **21.4 ms** | **10.3 ms** |
+| searches on the worst tick | 38.3 | 15.1 |
+
+Mean and p95 unchanged; the max halved, and the worst tick now sits exactly on the 300/20 = 15 bound. This is
+a tail fix and nothing else — worth being precise about, because it would be easy to present it as a speedup
+and it is not one.
+
+The worst tick still exceeds the bound whenever glyphids are digging: breaking a block calls
+`sendBlockUpdated`, which walks `navigatingMobs` and recomputes every nearby path **synchronously**, outside
+any slot. That is the remaining unslotted burst.
+
+### 11.9 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the

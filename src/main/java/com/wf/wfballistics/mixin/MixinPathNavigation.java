@@ -40,6 +40,8 @@ public abstract class MixinPathNavigation {
     private long wfballistics$navPathBase;
     @Unique
     private long wfballistics$pathStart;
+    @Unique
+    private long wfballistics$astarStart;
 
     @Inject(method = "tick", at = @At("HEAD"))
     private void wfballistics$navBegin(CallbackInfo ci) {
@@ -63,13 +65,43 @@ public abstract class MixinPathNavigation {
             at = @At("HEAD"))
     private void wfballistics$pathBegin(CallbackInfoReturnable<Path> cir) {
         wfballistics$pathStart = wfballistics$profiled() ? SwarmProfiler.begin() : 0L;
+        // Opens the window the pathfinder's own internals check before charging anything, so a search run for
+        // some other mob on the same tick cannot land in the glyphid numbers.
+        SwarmProfiler.setSearching(wfballistics$pathStart != 0L);
     }
 
     @Inject(method = "createPath(Ljava/util/Set;IZIF)Lnet/minecraft/world/level/pathfinder/Path;",
             at = @At("RETURN"))
     private void wfballistics$pathEnd(CallbackInfoReturnable<Path> cir) {
+        if (wfballistics$pathStart != 0L) {
+            SwarmProfiler.count(SwarmProfiler.Counter.SEARCHES, 1L);
+        }
         SwarmProfiler.endPath(wfballistics$pathStart);
+        SwarmProfiler.setSearching(false);
         wfballistics$pathStart = 0L;
+    }
+
+    /**
+     * The A* proper, bracketed apart from the chunk snapshot that {@code createPath} builds for it first.
+     * The snapshot is per-search overhead paid whether the search visits one node or five hundred.
+     */
+    @Inject(method = "createPath(Ljava/util/Set;IZIF)Lnet/minecraft/world/level/pathfinder/Path;",
+            at = @At(value = "INVOKE", shift = At.Shift.BEFORE,
+                    target = "Lnet/minecraft/world/level/pathfinder/PathFinder;findPath"
+                            + "(Lnet/minecraft/world/level/PathNavigationRegion;Lnet/minecraft/world/entity/Mob;"
+                            + "Ljava/util/Set;FIF)Lnet/minecraft/world/level/pathfinder/Path;"))
+    private void wfballistics$astarBegin(CallbackInfoReturnable<Path> cir) {
+        wfballistics$astarStart = wfballistics$pathStart != 0L ? SwarmProfiler.begin() : 0L;
+    }
+
+    @Inject(method = "createPath(Ljava/util/Set;IZIF)Lnet/minecraft/world/level/pathfinder/Path;",
+            at = @At(value = "INVOKE", shift = At.Shift.AFTER,
+                    target = "Lnet/minecraft/world/level/pathfinder/PathFinder;findPath"
+                            + "(Lnet/minecraft/world/level/PathNavigationRegion;Lnet/minecraft/world/entity/Mob;"
+                            + "Ljava/util/Set;FIF)Lnet/minecraft/world/level/pathfinder/Path;"))
+    private void wfballistics$astarEnd(CallbackInfoReturnable<Path> cir) {
+        SwarmProfiler.end(SwarmProfiler.Phase.PATH_ASTAR, wfballistics$astarStart);
+        wfballistics$astarStart = 0L;
     }
 
     @Unique
