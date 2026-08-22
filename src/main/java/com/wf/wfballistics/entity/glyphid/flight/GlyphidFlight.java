@@ -47,7 +47,18 @@ public final class GlyphidFlight {
      * the side of every hill: at cruise it covers this distance in about twenty ticks, which is the time the
      * climb rate needs to clear a hill of the same height.
      */
-    public static final int LOOKAHEAD = 14;
+    public static final int LOOKAHEAD = 16;
+
+    /**
+     * How many points along the path are sampled, beyond the one underfoot.
+     *
+     * <p>More than one because a single sample at the far end has a blind spot in the middle, and the blind
+     * spot is exactly where a hill crest sits: with only "here" and "sixteen blocks ahead", a ridge eight
+     * blocks away reads as clear ground on both sides of itself and the glyphid flies into it. Embedding
+     * itself in a hillside is the one failure the flight model cannot recover from on its own, because a bug
+     * inside rock has nowhere to move.
+     */
+    public static final int LOOKAHEAD_SAMPLES = 4;
 
     /**
      * Gain on the altitude error. Deliberately gentle -- the vertical axis only has the margin between hover

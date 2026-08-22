@@ -10,6 +10,7 @@ import com.wf.wfballistics.damage.WFDamageTypes;
 import com.wf.wfballistics.debug.SwarmProfiler;
 import com.wf.wfballistics.drone.flight.FlightAttitude;
 import com.wf.wfballistics.drone.flight.Multirotor;
+import com.wf.wfballistics.entity.glyphid.ai.GlyphidBombGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidFlightGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidTargetGoal;
 import com.wf.wfballistics.entity.glyphid.flight.GlyphidFlight;
@@ -155,6 +156,11 @@ public class EntityGlyphid extends Monster {
      * Current lean and thrust. Server-side truth; the quantised copy on the wire is what the client draws.
      */
     protected FlightAttitude attitude = FlightAttitude.LEVEL;
+    /**
+     * Ordnance left to drop. Finite so a bombing run is a raid the base can survive and rebuild from, rather
+     * than a glyphid parked overhead dissolving everything under it forever.
+     */
+    protected int bombs;
 
     public EntityGlyphid(EntityType<? extends EntityGlyphid> type, Level level) {
         super(type, level);
@@ -217,6 +223,8 @@ public class EntityGlyphid extends Monster {
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
         goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.0D, true));
+        // Takes no movement flag, so it runs alongside flight rather than instead of it.
+        goalSelector.addGoal(2, new GlyphidBombGoal(this));
         // Flight outranks walking to the same place, and falls back to it for anything without wings.
         goalSelector.addGoal(4, new GlyphidFlightGoal(this));
         // Same priority as wandering, and mutually exclusive with it: one runs under orders, the other only
@@ -300,6 +308,29 @@ public class EntityGlyphid extends Monster {
         }
     }
 
+    public int bombs() {
+        return bombs;
+    }
+
+    public void spendBomb() {
+        bombs = Math.max(0, bombs - 1);
+    }
+
+    /**
+     * Load this glyphid up. Called when a flight materialises; a glyphid that walked to the fight carries none.
+     */
+    public void setBombs(int count) {
+        bombs = Math.max(0, count);
+    }
+
+    /**
+     * Whether this caste drops blasts rather than acid. Acid is what the common flyer carries; the heavier
+     * payload belongs to castes that have not been ported yet.
+     */
+    public boolean dropsExplosives() {
+        return false;
+    }
+
     public void setFlightTarget(@Nullable Vec3 target, boolean landing) {
         this.flightTarget = target;
         this.landing = landing;
@@ -326,10 +357,11 @@ public class EntityGlyphid extends Monster {
         move(MoverType.SELF, getDeltaMovement());
 
         // Flown into something. The terrain lookahead handles hills, but not an overhang or a wall that rises
-        // faster than the sample ahead of it, so anything that actually hits climbs its way out rather than
+        // faster than the samples along it, so anything that actually hits climbs its way out rather than
         // grinding against it -- which is what a bug would do anyway.
         if (horizontalCollision && !landing) {
             setDeltaMovement(getDeltaMovement().add(0.0, GlyphidFlight.WINGS.maxClimbRate() * 0.5, 0.0));
+            unstick();
         }
         // Nothing in the air is falling, and a glyphid that flew down a cliff should not land hurt.
         resetFallDistance();
@@ -340,6 +372,23 @@ public class EntityGlyphid extends Monster {
             setYRot((float) (Mth.atan2(getDeltaMovement().z, getDeltaMovement().x) * (180.0 / Math.PI)) - 90.0F);
             yBodyRot = getYRot();
         }
+    }
+
+    /**
+     * Lift a glyphid that has ended up inside terrain back to open air.
+     *
+     * <p>The one state flight cannot recover from by itself: a bug embedded in rock has nowhere to move, so
+     * every axis is blocked and it hangs there forever looking like a frozen entity. Only reached from the
+     * collision branch, so the box test is not on the flight hot path.
+     */
+    private void unstick() {
+        if (level().noCollision(this)) {
+            return;
+        }
+        int surface = surfaceAt(getBlockX(), getBlockZ());
+        setPos(getX(), surface + GlyphidFlight.CLEARANCE, getZ());
+        setDeltaMovement(0.0, 0.0, 0.0);
+        attitude = FlightAttitude.LEVEL;
     }
 
     /**
@@ -354,17 +403,22 @@ public class EntityGlyphid extends Monster {
      * ahead of it, so it climbs before a hill rather than into it.
      */
     protected int floorHeight(Vec3 target) {
-        int here = surfaceAt(getBlockX(), getBlockZ());
+        int highest = surfaceAt(getBlockX(), getBlockZ());
         double dx = target.x - getX();
         double dz = target.z - getZ();
         double distance = Math.sqrt(dx * dx + dz * dz);
         if (distance < 1.0) {
-            return here;
+            return highest;
         }
+
         double reach = Math.min(distance, GlyphidFlight.LOOKAHEAD);
-        int aheadX = Mth.floor(getX() + dx / distance * reach);
-        int aheadZ = Mth.floor(getZ() + dz / distance * reach);
-        return Math.max(here, surfaceAt(aheadX, aheadZ));
+        for (int i = 1; i <= GlyphidFlight.LOOKAHEAD_SAMPLES; i++) {
+            double step = reach * i / GlyphidFlight.LOOKAHEAD_SAMPLES;
+            int x = Mth.floor(getX() + dx / distance * step);
+            int z = Mth.floor(getZ() + dz / distance * step);
+            highest = Math.max(highest, surfaceAt(x, z));
+        }
+        return highest;
     }
 
     /**
@@ -848,6 +902,7 @@ public class EntityGlyphid extends Monster {
         compound.putByte("subtype", subtype());
         // Only the wings are saved, not whether they were in use: a glyphid reloads on the ground.
         compound.putBoolean("canFly", canFly());
+        compound.putInt("bombs", bombs);
 
         compound.putBoolean("hasHome", hasHome);
         compound.putInt("homeX", homeX);
@@ -869,6 +924,7 @@ public class EntityGlyphid extends Monster {
         entityData.set(DW_SUBTYPE, compound.getByte("subtype"));
         setCanFly(compound.getBoolean("canFly"));
         setAirborne(false);
+        bombs = compound.getInt("bombs");
 
         hasHome = compound.getBoolean("hasHome");
         homeX = compound.getInt("homeX");

@@ -18,6 +18,7 @@ public final class WFDamageTypes {
     public static final ResourceKey<DamageType> EXPLOSIVE = key("explosive");
     public static final ResourceKey<DamageType> ELECTRIC = key("electric");
     public static final ResourceKey<DamageType> LASER = key("laser");
+    public static final ResourceKey<DamageType> ACID = key("acid");
 
     private WFDamageTypes() {
     }
