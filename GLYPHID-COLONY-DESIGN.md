@@ -1204,3 +1204,69 @@ not the bodies.
 Verified: 24 grunts sealed in obsidian with a base outside split into machines / breach / rally at power 8/8/8,
 with the breach landing on the wall block. `PLAYER` is the one objective not confirmed at runtime — an
 RCON-driven headless server has no players to divide over.
+
+---
+
+## 20. Measured: the walled base
+
+The scenario the digging and the squads were built for, and the one the tick was expected to fail on: three
+hundred glyphids in front of a fortified compound whose interior is not reachable at all until a wall comes
+down. A destination that cannot be pathed to is the pathological case for path search — every failed search
+costs a full node budget and returns nothing — so the question was whether a stalled assault is affordable.
+
+The arena is flat by construction: a 77x65 plate, a 25x25 compound of one material four blocks tall with no
+roof, 81 furnaces inside as the thing worth attacking, and the swarm spawned 28 blocks off the west face.
+Flattened deliberately — natural terrain puts a climbable slope against one face and the arm then measures
+the hill rather than the wall. Driven by `wall.sh` over RCON.
+
+| arm | first breach | inside at the end | ms/tick | p95 | path search |
+|---|---|---|---|---|---|
+| stone, 300 grunts | t+16s | 293 of 300 | 2.419 | 3.339 | 16.0%, 1.5/tick |
+| obsidian, 300 grunts | never, 60s | 0 | 2.338 | 3.536 | 17.4%, 0.7/tick |
+| obsidian, 280 grunts + 20 diggers | t+26s | 296 of 300 | 2.317 | 3.240 | 13.0%, 1.4/tick |
+
+Against the open-field baselines of §16.1 — 3.89 ms marching and 3.81 ms in melee, both at 300 — **an assault
+on a walled base is the cheapest thing a swarm of this size does.** A bug that is chewing is not searching,
+and a bug packed against a wall behind two hundred others has nowhere to search to. The stalled arm is the
+one to read: sixty seconds of three hundred glyphids wanting something they cannot reach costs 0.7 searches a
+tick, because the brain's backoff doubles the retry interval out to `REPATH_MAX` and leaves it there. The
+failure this scenario was written to find is not there.
+
+The mixed arm is the caste ceiling doing what it was for. Twenty diggers — 7% of the swarm — opened a wall
+that the other 280 could not scratch, and 296 of 300 were inside within twenty seconds of the first hole. A
+base wall is not a yes-or-no defence against a swarm; it is a filter on which castes matter, and the answer
+to obsidian is to make the diggers not arrive.
+
+### 20.1 Three defects, none of them in the tick
+
+Running the thing surfaced three bugs that the unit-sized tests could not, and all three were silent.
+
+- **A cluster centre is not a place.** The industry field is 512 blocks to a cell, which is the right
+  resolution for deciding which region a colony resents and far too coarse to walk to. A cluster centre is the
+  value-weighted average of its cells, so the compound — straddling the cell boundary at the origin — reported
+  a base centre 38 blocks outside its own wall, on a hillside. The squad went there. The earlier §19 check had
+  looked correct only because that base sat at (256, 256), which is exactly a cell centre. Fixed by splitting
+  the question in two: the cluster answers *is there a base here worth splitting over*, and a new
+  `IndustryApi.nearestMachine` — block entities over loaded chunks, bounded by the objective range — answers
+  *where*. Coarse while they are still walking in, exact by the time they arrive.
+- **The rally objective ate itself.** `RALLY` is meant to be where the warband was going in the first place,
+  and it was read back off the bug's task — which a squad assignment had already overwritten. One
+  reassignment later the fallback was a copy of the last objective, and the "original" destination walked
+  across the map at one objective per five seconds. The pre-squad destination is now remembered on the entity
+  the first time it is overwritten, and saved, because it is the warband's orders rather than squad state.
+- **Bases vanish on restart.** The pressure field is saved data and comes back with the world; the cluster
+  list is derived and does not. Nothing recomputed it: the scan is event-driven off placements and first-time
+  chunk sweeps, and an established base triggers neither on a restart, since every chunk of it has been swept
+  before. So a restarted server reported no bases at all until somebody placed a machine, and everything
+  targeting one quietly did nothing. One `LevelEvent.Load` handler.
+
+The last of those is the one worth remembering. Every arm of §19 was run inside a single session, and a
+restart is not something a benchmark does.
+
+### 20.2 What the run does not cover
+
+- **Players.** Still no runtime confirmation of the `PLAYER` objective; a headless RCON server has no players.
+- **A defended base.** Nothing shoots back. The perf figures are for a swarm against architecture, not
+  against architecture and turrets, and the melee arm of §16.1 is the closer proxy for that.
+- **Depth.** One-block walls. A three-thick obsidian shell multiplies the digger's 8 s per block by the
+  doorway's four blocks and again by depth, which is a wait, not a new behaviour — but it has not been run.

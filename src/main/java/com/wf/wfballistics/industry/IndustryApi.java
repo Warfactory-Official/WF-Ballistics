@@ -1,5 +1,6 @@
 package com.wf.wfballistics.industry;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import org.jetbrains.annotations.Nullable;
@@ -49,6 +50,14 @@ public final class IndustryApi {
      */
     public static @Nullable IndustryCluster nearestCluster(ServerLevel level, double x, double z) {
         return IndustryClusters.nearest(level, x, z);
+    }
+
+    /**
+     * @return the nearest machine to a position in the loaded world, or null. Block-precise, unlike
+     * {@link #nearestCluster}, which answers in region cells.
+     */
+    public static @Nullable BlockPos nearestMachine(ServerLevel level, double x, double z, double radius) {
+        return IndustryTracker.nearestMachine(level, x, z, radius);
     }
 
     /**
