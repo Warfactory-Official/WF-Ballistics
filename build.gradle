@@ -132,6 +132,19 @@ neoForge {
             gameDirectory = project.file(project.hasProperty('withWarforge') ? 'run-warforge' : 'run')
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.DEBUG
+
+            // -Pjfr makes the run profilable with Java Flight Recorder, without starting a recording:
+            // attach one on demand with `jcmd <pid> JFR.start`, so a recording covers the benchmark window
+            // rather than ten minutes of startup.
+            //
+            // DebugNonSafepoints is the flag that makes the profile worth reading. Without it the JIT only
+            // emits stack-trace metadata at safepoints, so every sample is attributed to the nearest safepoint
+            // rather than to where the time actually went -- hot leaf methods vanish and their callers inherit
+            // the cost. Left off by default because it slightly constrains optimisation.
+            if (project.hasProperty('jfr')) {
+                jvmArguments.addAll '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints',
+                        '-XX:StartFlightRecording:name=idle,settings=none'
+            }
         }
     }
 

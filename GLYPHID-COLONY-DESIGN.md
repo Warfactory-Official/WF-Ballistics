@@ -600,7 +600,50 @@ The worst tick still exceeds the bound whenever glyphids are digging: breaking a
 `sendBlockUpdated`, which walks `navigatingMobs` and recomputes every nearby path **synchronously**, outside
 any slot. That is the remaining unslotted burst.
 
-### 11.9 Still open
+### 11.9 Recording a JFR profile
+
+`./gradlew runServer -Pjfr` adds `-XX:+DebugNonSafepoints`, which is the flag that makes the profile worth
+reading: without it the JIT only emits stack-trace metadata at safepoints, so samples are attributed to the
+nearest safepoint and hot leaf methods vanish into their callers. It does not start a recording — attach one
+around the benchmark window instead, because a recording spanning startup is mostly classloading:
+
+```
+jcmd <pid> JFR.start name=run settings=profile jdk.ExecutionSample#period=1ms
+# ... run the benchmark ...
+jcmd <pid> JFR.dump name=run filename=run/jfr/run.jfr
+jcmd <pid> JFR.stop name=run
+```
+
+`jcmd` must come from the JVM being attached to — the Gradle daemon runs Java 17 here while the game runs 21,
+and a mismatched `jcmd` fails to attach. `readlink /proc/<pid>/exe` finds the right one.
+
+**Sample the window, not the run.** The server thread is idle ~92% of wall time at these swarm sizes, so a
+12-second window yields a few hundred usable samples and the sampler spends the rest on whatever background
+thread happens to be runnable. A 45–60 second soak gives 3 500+ server-thread samples; anything shorter is not
+worth interpreting.
+
+The execution profile agrees with the counters. Leaf methods on the server thread, 300 in melee:
+
+| | share of server-thread samples |
+|---|---|
+| `PalettedContainer.get` | 5.4% |
+| `LevelChunk.getBlockState` | 3.9% |
+| `SimpleBitStorage.get` | 2.5% |
+| `PalettedContainer$Strategy.getIndex` | 1.5% |
+| `BlockBehaviour$BlockStateBase.getBlock` | 1.6% |
+
+~15% at the leaf in block-state reading alone, which is what §11.7 predicted from timings.
+
+Allocation is diffuse: no steady-state site above 6%, spread across `Direction$Plane.iterator`,
+`WalkNodeEvaluator.findAcceptedNode`, `Shapes.create`, `Vec3` arithmetic and fluid handling. It is not the
+driver, which is the same conclusion the per-tick byte counter reached.
+
+**A trap worth recording.** The first allocation profile read as 80% `EnchantmentHelper.isImmuneToDamage`.
+That was the benchmark's own `kill @e` at the start of the window — *two* samples, with enough extrapolated
+weight to swamp everything else. `jdk.ObjectAllocationSample` weights are extrapolations, so a single burst
+can dominate a profile; exclude setup and re-read before believing an allocation hotspot.
+
+### 11.10 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
