@@ -6,8 +6,10 @@ import com.wf.wfballistics.client.gui.MissileDispenserScreen;
 import com.wf.wfballistics.client.render.BombletRenderer;
 import com.wf.wfballistics.client.render.CrateRenderer;
 import com.wf.wfballistics.client.render.DroneVisual;
+import com.wf.wfballistics.client.render.GlyphidVisual;
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.client.render.EntityTorexRender;
+import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.item.MissilePreset;
 import com.wf.wfballistics.item.MissilePresetRegistry;
@@ -20,6 +22,7 @@ import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EntityType;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
 import net.neoforged.neoforge.client.event.ModelEvent;
@@ -58,8 +61,8 @@ public class WFBallisticsClient {
         event.registerEntityRenderer(ModEntities.FIRE_LINGERING.get(),
                 NoopRenderer::new);
 
-        // Glyphids have no models yet -- that is the model/flywheel port. A renderer still has to be bound
-        // for every registered entity type or the client refuses to start, so they draw nothing until then.
+        // Glyphids draw through flywheel (see GlyphidVisual), which is what lets a swarm be a swarm.
+        // A renderer still has to be bound for every registered entity type or the client refuses to start.
         // Driven off the caste table rather than listed by hand, so adding a caste cannot leave a type
         // unbound -- which is a client crash on join, and one that server-side testing never sees.
         for (GlyphidCaste caste : GlyphidCaste.VALUES) {
@@ -146,6 +149,29 @@ public class WFBallisticsClient {
                     return true;
                 }
             });
+
+            // Same caste table the renderers were bound off, for the same reason: a caste that ships without
+            // a visual is an invisible bug, and nothing server-side ever notices.
+            for (GlyphidCaste caste : GlyphidCaste.VALUES) {
+                bindGlyphid(caste.type(), caste);
+            }
+        });
+    }
+
+    /**
+     * Generic so the wildcard on {@link GlyphidCaste#type()} has somewhere to be captured.
+     */
+    private static <T extends EntityGlyphid> void bindGlyphid(EntityType<T> type, GlyphidCaste caste) {
+        VisualizerRegistry.setVisualizer(type, new EntityVisualizer<T>() {
+            @Override
+            public EntityVisual<? super T> createVisual(VisualizationContext ctx, T entity, float partialTick) {
+                return new GlyphidVisual(ctx, entity, caste);
+            }
+
+            @Override
+            public boolean skipVanillaRender(T entity) {
+                return true;
+            }
         });
     }
 }

@@ -1,11 +1,15 @@
 package com.wf.wfballistics.entity.glyphid;
 
 import com.wf.wfballistics.ModEntities;
+import com.wf.wfballistics.WFBallistics;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.EntityType;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.IdentityHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.Supplier;
 
 /**
@@ -52,15 +56,32 @@ public enum GlyphidCaste {
     private final float minEvolution;
     private final float baseWeight;
     private final Supplier<EntityType<? extends EntityGlyphid>> type;
+    private final ResourceLocation skin;
 
     GlyphidCaste(float minEvolution, float baseWeight, Supplier<EntityType<? extends EntityGlyphid>> type) {
         this.minEvolution = minEvolution;
         this.baseWeight = baseWeight;
         this.type = type;
+        // The grunt wears the unsuffixed skin the others are named against, being the glyphid every other
+        // caste is a variation on. Compared by name because a constructor may not reference a constant of
+        // its own enum.
+        String name = "GRUNT".equals(name()) ? "glyphid" : "glyphid_" + lowerName();
+        this.skin = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "textures/entity/" + name + ".png");
     }
 
     public EntityType<? extends EntityGlyphid> type() {
         return type.get();
+    }
+
+    /**
+     * This caste's texture.
+     *
+     * <p>Server-safe despite being a render concern: a {@link ResourceLocation} is not a client class, and
+     * keeping it here is what stops the skin naming from living as string munging inside the renderer, where
+     * a caste whose texture is not named after it would silently draw the wrong one.
+     */
+    public ResourceLocation skin() {
+        return skin;
     }
 
     public float minEvolution() {
@@ -108,6 +129,29 @@ public enum GlyphidCaste {
         }
         return GRUNT;
     }
+
+    /**
+     * Which caste an entity type is, falling back to {@link #GRUNT}.
+     *
+     * <p>Built on first use rather than in a static initialiser: the entity types are deferred registry
+     * objects, and resolving them while this enum is still initialising would force them before the registry
+     * has them. The race between two callers building it is benign — both build the same map — and the
+     * volatile write is what publishes it safely.
+     */
+    public static GlyphidCaste byType(EntityType<?> type) {
+        Map<EntityType<?>, GlyphidCaste> map = BY_TYPE;
+        if (map == null) {
+            map = new IdentityHashMap<>();
+            for (GlyphidCaste caste : VALUES) {
+                map.put(caste.type(), caste);
+            }
+            BY_TYPE = map;
+        }
+        GlyphidCaste caste = map.get(type);
+        return caste != null ? caste : GRUNT;
+    }
+
+    private static volatile @Nullable Map<EntityType<?>, GlyphidCaste> BY_TYPE;
 
     public static @Nullable GlyphidCaste byName(String name) {
         for (GlyphidCaste caste : VALUES) {
