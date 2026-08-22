@@ -1299,3 +1299,65 @@ centre is irrelevant the moment the blocks themselves are loaded. 2.642 ms/tick 
   against architecture and turrets, and the melee arm of §16.1 is the closer proxy for that.
 - **Depth.** One-block walls. A three-thick obsidian shell multiplies the digger's 8 s per block by the
   doorway's four blocks and again by depth, which is a wait, not a new behaviour — but it has not been run.
+
+---
+
+## 21. Implemented: separation without a broadphase
+
+§11.4 turned entity push off because it was the only cost that grew faster than the swarm did — 1.8% of the
+tick at a hundred glyphids, 15.5% at three hundred packed. What that bought in milliseconds it charged back in
+looks: with nothing keeping them apart, three hundred bodies converge to a point and stand inside each other.
+Measured, 300 marching on one spot: **0.47 blocks to the nearest neighbour on average, 231 of 300 inside half
+a body width of another, and the closest pair at exactly 0.00.**
+
+**The cost was never the push.** It was the broadphase — every glyphid asking the level for an inflated-box
+entity query, every tick, which walks entity sections and runs a generic predicate over everything in them.
+The arithmetic that follows a query is a handful of subtractions. So the push stays and the query goes: one
+uniform grid built per level tick out of `GlyphidTracker`, which already holds every live glyphid, and each
+bug compares itself only against the bugs in the nine cells around it. Each pair is visited once and pushed
+both ways, which halves the work and means two glyphids cannot disagree about which way they are separating.
+
+Nothing in it is collision. There is no sweep, no bounding-box intersection and no cramming: an impulse is
+added to velocity that the `move()` already running will spend, and a pair that ends the tick still
+overlapping simply pushes again. The swept-collision cost §11.2 went after is not reachable from here.
+
+### 21.1 Two numbers that had to be got right
+
+**The push has to be worth a walk.** The first cut capped each pair at 0.05 blocks a tick — a fifth of a
+walk, deliberately gentle so separation would lose to the direction the glyphid actually wanted to go. It
+lost: a swarm converging on a point is three hundred bodies driving inward at walking pace, and with entity
+collision off there is nothing else in the way, so a push weaker than the drive does not hold a spacing, it
+only slows the compression down. It closed to 0.59 blocks a bug. The cap is now 0.15 — comparable to a walk —
+and applied **per glyphid over all its neighbours** rather than per pair, which is what makes a number that
+size safe. Six pairs pushing the same way is a shove across the map; six pairs pushing outward from a ring is
+nothing at all, and only the sum knows the difference.
+
+**Displacement stopped being an honest signal.** §16's backoff doubles the repath interval when a glyphid is
+not moving, on the reasoning that the pathfinder returns a partial route rather than nothing, so movement is
+the only truth. Separation breaks that: a bug wedged in a crowd is shoved a block a second, every shove reads
+as a path that is working, and the whole swarm holds itself at the minimum repath interval forever. Progress
+is now the movement **projected onto the bearing to the destination** — a sideways shove scores nothing, a
+backwards one scores less. That change alone took the converging arm from 3.72 to 3.14 ms/tick before
+separation was tuned at all.
+
+### 21.2 Measured
+
+Two arms, one server run each, 300 glyphids.
+
+| | nearest neighbour | overlapping | closest pair | ms/tick |
+|---|---|---|---|---|
+| converge on a point, off | 0.47 b | 231 | 0.00 | 2.956 |
+| converge on a point, on | 1.02 b | 78 | 0.19 | 3.540 |
+| assault a walled base, off | 0.55 b | 210 | 0.00 | 2.313 |
+| assault a walled base, on | 1.04 b | 16 | 0.48 | 2.475 |
+
+The grid pass itself is **0.093 ms at 300**, 2.6% of the tick. The rest of the difference is not separation
+work, it is glyphids moving instead of standing in a heap — more path following, more movement, more of the
+`move()` that a stationary bug gets for free.
+
+The assault is the case worth reading, and it is nearly free: **+7% for 210 overlapping bugs down to 16.** It
+also breaches the wall *sooner* — t+10s against t+15s — because a swarm spread along a wall chews it in
+several places at once, where a stacked one queues behind whichever bug got there first.
+
+The converging arm is the worst case at +20%, and it is the one a flow field changes: what those glyphids are
+spending their time on is repathing into a pile they cannot enter.

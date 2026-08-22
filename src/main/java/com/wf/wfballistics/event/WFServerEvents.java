@@ -80,6 +80,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
+import com.wf.wfballistics.entity.glyphid.GlyphidSeparation;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -140,6 +141,9 @@ public final class WFServerEvents {
             ColonyManager.tick(level);
             // After the colony tier, because it reassigns bugs the materialiser may have only just placed.
             GlyphidSquads.tick(level);
+            // One grid for the whole swarm instead of an entity query per glyphid. Level-wide rather than
+            // per-entity precisely so the neighbourhood is built once.
+            GlyphidSeparation.tick(level);
             tickScenarios(level);
         }
     }
@@ -375,6 +379,13 @@ public final class WFServerEvents {
                                         .executes(ctx -> SwarmBench.push(ctx.getSource(), true)))
                                 .then(Commands.literal("skip")
                                         .executes(ctx -> SwarmBench.push(ctx.getSource(), false))))
+                        .then(Commands.literal("separation")
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> SwarmBench.separation(ctx.getSource(), true)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> SwarmBench.separation(ctx.getSource(), false))))
+                        .then(Commands.literal("density")
+                                .executes(ctx -> SwarmBench.density(ctx.getSource())))
                         .then(Commands.literal("stagger")
                                 .then(Commands.literal("on")
                                         .executes(ctx -> SwarmBench.stagger(ctx.getSource(), true)))

@@ -3,6 +3,7 @@ package com.wf.wfballistics.debug;
 import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
+import com.wf.wfballistics.entity.glyphid.GlyphidSeparation;
 import com.wf.wfballistics.entity.glyphid.GlyphidTracker;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.SectionPos;
@@ -17,6 +18,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 /**
@@ -282,8 +284,33 @@ public final class SwarmBench {
     }
 
     /**
-     * When set, glyphids spawn with vanilla's {@code MeleeAttackGoal} instead of {@link
-     * com.wf.wfballistics.entity.glyphid.ai.GlyphidMeleeGoal}.
+     * When clear, the swarm does not push itself apart at all.
+     *
+     * <p>Read live, so both arms are the same swarm on the same tick — which matters here more than usual,
+     * because what separation is worth depends entirely on how packed the swarm already is.
+     */
+    public static boolean separation = true;
+
+    public static int separation(CommandSourceStack source, boolean on) {
+        separation = on;
+        source.sendSuccess(() -> Component.literal("Glyphid separation " + (on ? "on" : "off") + "."), false);
+        return 1;
+    }
+
+    /**
+     * How tightly the swarm is packed, which is the thing separation exists to change.
+     */
+    public static int density(CommandSourceStack source) {
+        double[] density = GlyphidSeparation.density(source.getLevel());
+        int count = GlyphidTracker.count(source.getLevel());
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "%d glyphids: %.2fb to the nearest neighbour on average, closest pair %.2fb, %.0f overlapping",
+                count, density[0], density[1], density[2])), false);
+        return 1;
+    }
+
+    /**
+     * When set, glyphids spawn with vanilla's {@code MeleeAttackGoal} instead of the brain goal.
      *
      * <p>Read at spawn, so a benchmark switches arms by re-materialising the swarm — which every run does
      * anyway. Kept past the measurement it was written for because a melee goal is exactly the kind of thing

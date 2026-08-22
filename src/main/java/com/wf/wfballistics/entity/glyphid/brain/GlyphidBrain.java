@@ -21,10 +21,11 @@ import org.jetbrains.annotations.Nullable;
  * two blocks and stops. A waypoint {@link #HOP} blocks along the bearing, asked for with an explicit range,
  * always yields a usable route.
  *
- * <p><b>Back off on not moving, not on not pathing.</b> The pathfinder almost never returns nothing: when the
+ * <p><b>Back off on not arriving, not on not pathing.</b> The pathfinder almost never returns nothing: when the
  * destination is unreachable it hands back a partial route to the best node it found, so the expensive case is
- * also the one that reads as success. Displacement is the only honest signal, and a glyphid that has not moved
- * in a second will not move in the next one either.
+ * also the one that reads as success. Movement is the only honest signal — but only movement <em>towards the
+ * destination</em>, because a glyphid being jostled by three hundred neighbours is moving constantly and
+ * arriving never.
  */
 public final class GlyphidBrain {
 
@@ -215,15 +216,22 @@ public final class GlyphidBrain {
         mind.sinceRepath = 0;
 
         Vec3 pos = self.position();
-        double moved = Math.abs(pos.x - mind.lastX) + Math.abs(pos.z - mind.lastZ);
-        mind.lastX = pos.x;
-        mind.lastZ = pos.z;
         mind.aimedX = destination.x;
         mind.aimedZ = destination.z;
 
         double dx = destination.x - pos.x;
         double dz = destination.z - pos.z;
         double distance = Math.sqrt(dx * dx + dz * dz);
+        // Ground covered *towards the destination*, not ground covered. See the note on the backoff above:
+        // once the swarm pushes itself apart, plain displacement stops being an honest signal, because a
+        // glyphid wedged in a crowd is shoved a block a second and every shove reads as a path that is
+        // working. Projecting onto the bearing scores a sideways shove at nothing and a backwards one below
+        // nothing, which is what they are worth.
+        double moved = distance < 1.0E-4
+                ? 0.0
+                : ((pos.x - mind.lastX) * dx + (pos.z - mind.lastZ) * dz) / distance;
+        mind.lastX = pos.x;
+        mind.lastZ = pos.z;
         if (distance < 1.0) {
             // Standing on it. Counts as having got there rather than as a failed search, so the backoff does
             // not punish a glyphid for arriving.
