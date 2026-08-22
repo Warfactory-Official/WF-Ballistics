@@ -371,7 +371,57 @@ Two things came out of measuring rather than reasoning:
   strike on a target did nothing at all. Splashing at the contact point instead put it exactly on the target,
   which took it from 20 HP to dead in twelve seconds.
 
-### 10.6 Still open
+---
+
+## 11. Measured: 300 attacking a base
+
+Everything before this measured a swarm *travelling*. This measures one arriving: 300 glyphids sent at a
+walled compound, pathing failing, climbing, digging and packing against it. Ryzen 9 7900X, dev server, one
+mod, no players — so these are optimistic against real server hardware by roughly 1.5–2×.
+
+| 300 glyphids | walking, closing | walking, in contact | flying, in contact |
+|---|---|---|---|
+| mean tick | 5.4–8.1 ms | 4.4 ms | 4.0 ms |
+| per entity | 18–27 µs | 14.6 µs | 13.4 µs |
+| p95 | 6.7–8.1 ms | 6.6 ms | 5.4 ms |
+| max | *(see below)* | 14 ms | 7.3 ms |
+| path search | 35–58% | 20% | 4.5% |
+| movement | 26% | 50% | 59% |
+| collision push | 3% | 9.3% | 15.5% |
+
+**The dominant term changes with what the swarm is doing.** While it is closing, path search dominates. Once
+it is in contact and packed, physics does — movement plus collision push is 59% walking and 74% flying. Those
+are not the same problem and do not have the same fix.
+
+### 11.1 Per-entity cost is flat; collision push is not
+
+25.4 µs/entity at 100 and 26.9 µs at 300 — flat, so the swarm scales linearly overall. The exception is
+`pushEntities`: 1.8% at 100, 9.3% at 300 walking, 15.5% at 300 flying (flyers converge tighter, so they pack
+denser). That is the one superlinear term measured, and it is pure waste — a swarm has no reason to shove
+itself apart.
+
+### 11.2 The spikes were the benchmark, not the swarm
+
+Early windows showed maxima of 99 ms, 108 ms and 343 ms against means of 2–8 ms. That is the debug
+`materialise` command placing 300 entities inside a single tick, which the real path never does —
+`materialisePerTick` streams them in four at a time for exactly this reason. Steady state maxima are 7–20 ms.
+Worth recording because a mean of 8 ms with a max of 343 ms is the shape of a measurement artefact, and reading
+it as swarm cost would have sent the next day's work in the wrong direction.
+
+### 11.3 What this says about threading
+
+The part that can move off-thread is the part that reads no world: path *planning* against a `TerrainField`
+snapshot, steering, flight attitude (`Multirotor.step` is already pure), and the whole colony tier. That is
+20–58% of a swarm on the move.
+
+The part that cannot is `move()` and `pushEntities` — they read chunk block states and the entity list and
+mutate position, which is what `WorldThread.assertOn` exists to enforce. That is 59–74% of a swarm in contact.
+
+So off-threading is the answer for the approach and not for the fight. For the fight the lever is not *where*
+the physics runs but *how many entities run it at all*, which is the T1/T2 sim tier: bodies only where
+something is touching them, records everywhere else.
+
+### 11.4 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
