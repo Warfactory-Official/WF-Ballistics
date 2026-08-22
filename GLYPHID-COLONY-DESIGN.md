@@ -756,13 +756,15 @@ dependency precisely so that question gets answered before a patch ships rather 
 - **The hop is terrain-blind.** It aims at a heightmap sample, which over a cliff is a spot the pathfinder will
   not accept, and roughly 40% of a marching swarm is failing to make progress at any moment. This is what the
   flow field is for. Flight sidesteps it entirely, which is another argument for wings.
-- **Glyphids have no renderer.** They are bound to a no-op one so the client will start at all; models are the
-  flywheel port. Note that server-only testing hid this completely — a missing renderer is a client crash.
+- ~~**Glyphids have no renderer.**~~ Done, §17. Worth keeping the lesson: server-only testing hid this
+  completely, because a missing renderer is a client crash and nothing headless ever loads one.
 - `NestBuilder` is a hook: colonies materialise as data until the spawner block lands with the hive port. A
   scout now founds the colony *record* on its own (§13.3), so only block placement is still waiting.
 - **Ambient wildlife derails a march.** Melee outranks the march goal, so a column crossing a plains biome
   stops to eat it. Fine as behaviour, ruinous as a benchmark — march runs need `doMobSpawning false` and a
   swept arena, or they measure a brawl. Whether it wants a leash in gameplay is a design question, not a bug.
+  §16.2: `march2.sh` now sweeps for this, and six animals left over from worldgen were costing 45% of a march
+  run's path search.
 - **March speed measured 1.45 blocks/s** over a 170-block approach, against 2.07 measured earlier over a
   shorter one. The pathing logic is unchanged by the goal refactor (verified by inspection, not by A/B), so
   this is most likely terrain and column spread rather than a regression — but it is not proven.
@@ -906,3 +908,299 @@ Verified against the formula rather than by eye. A grunt has `thresholdMultForAr
 
 That degradation is the whole point of the model: a fresh glyphid shrugs off small-arms fire and the same
 glyphid, worn down, does not.
+
+---
+
+## 16. Implemented: the brain, and why it did not go off-thread
+
+All glyphid behaviour lived inside vanilla `Goal`s bolted to an `Entity`. That is fine for T0 and fatal for
+everything above it: a warband record has no goal selector, so §2's tier model could not be built at all until
+the decisions came out of the goals. That extraction is what this phase is.
+
+The split is one rule: **a decision goes in `GlyphidBrain`, a world read or write goes in `GlyphidBody`.**
+
+| | reads the world | where it lives |
+|---|---|---|
+| which errand — bite or march | no | `GlyphidBrain.errand` |
+| when to repath, and the backoff | no | `GlyphidBrain.repathDue`, `settle` |
+| where the next hop goes | no | `GlyphidBrain.advance` |
+| charge instead of path | no | `GlyphidBrain.melee` |
+| when a bite is off cooldown | no | `GlyphidBrain.melee` |
+| the A*, the heightmap sample, the raycast, the bite | **yes** | `GlyphidBody` |
+
+`GlyphidBrain` imports no `Level`, no `Entity` and no `Path`, which is what makes that table checkable rather
+than aspirational. Per-bug memory that used to be fields on the goals — repath timer, backoff, stuck counter,
+bite cooldown — is now a `GlyphidMind` the *carrier* owns, so a record can own one too.
+
+Arbitration moved with it. Biting used to outrank marching because the melee goal sat at priority 3 and the
+march goal at 4; it is now `GlyphidBrain.errand`, which is the same rule written somewhere that does not need
+a goal selector to read it. `GlyphidBrainGoal` is what is left: it holds `MOVE` so idle wandering cannot run
+during a march, and releases it when there is nowhere to be.
+
+### 16.1 Measured
+
+Both arms on the same world, three runs each, 300 glyphids.
+
+| 300 glyphids | goals | brain |
+|---|---|---|
+| melee, vs 60 drifting dummies | 4.45 ms (4.34–4.62) | **3.81 ms (3.72–3.98)** |
+| — path searches per tick | 5.0 | **3.7** |
+| — hits landed in the window | 964 | **1007** |
+| march, 300 under orders | 4.10 ms (3.54–4.66) | 3.89 ms (3.53–4.30) |
+| — path searches per tick | 2.9 | **2.2** |
+
+Melee is **14% faster** and the arms do not overlap. The march is inside run-to-run noise and is reported as
+no change, not as the 5% the means suggest — but its search rate falls by the same quarter melee's does, and
+that is the stable signal in both.
+
+The likely mechanism, stated as a hypothesis rather than a measurement: the old melee goal reset its backoff
+every time `canUse` flickered, so a glyphid that kept failing to reach a target never accumulated one and kept
+paying full price for searches. One errand held across a whole engagement lets the backoff actually
+accumulate. More hits landing on fewer searches is the same shape the charge change produced in §11.11 — a
+glyphid that stops re-planning spends its time biting.
+
+Behaviour was checked separately from cost, because a cheaper swarm that has stopped doing anything is also
+cheap: 4 glyphids sealed in a one-block stone shell ate 4 blocks out of the wall between them and their orders
+in 30 seconds; a column ordered onto the spot it is standing on drops to `TASK_IDLE` and resumes wandering.
+
+### 16.2 The march benchmark was measuring nothing
+
+`march.sh` sends a warband 2,200 blocks and reads back `0.000 ms/tick`. That is not a fast swarm, it is the
+unticked-chunk artefact: the column walks out of the forceloaded box within seconds and stops being simulated.
+Worse, its glyphids survive the next run's `kill`, so successive runs report 285, then 578, then 870 entities
+against an unchanged 0.000 ms.
+
+`march2.sh` replaces it: 300 glyphids ordered across a 136-block diagonal that stays inside the loaded box,
+and it sweeps ambient wildlife first. Without the sweep, six animals left over from worldgen pulled 45% of the
+"march" benchmark's path search into melee.
+
+### 16.3 Upstream's async layer is a net loss at this scale, and was not ported
+
+ntm-next ships `com.hbm.entity.mob.ai.async` — `GlyphidBrain`, `GlyphidSnapshot`, `GlyphidDecision`,
+`GlyphidForkJoinPool`. It looks like exactly this phase already done. Reading it, three things rule it out:
+
+- **`GlyphidBlockView.captureCorridor` copies up to 4,096 block states into a hash map, on the world thread,
+  per glyphid, per submission.** A 16-block hop is ~17 steps of a 3×3×3 box, so ~459 reads plus an insert
+  each. At §11.10's ~36 ns marginal read that is ≳20 µs per glyphid against a whole-entity budget of 9.4 µs
+  per tick. It would roughly triple the cost of the swarm.
+- **One `CompletableFuture` per glyphid per tick** (`DEFAULT_RECOMPUTE_INTERVAL_TICKS = 1`), so 300 submissions
+  a tick where the drone side dispatches one job per squad.
+- **The A* does not move off-thread at all.** The decision is `PathTo(x, y, z, maxDist)` and the world thread
+  still runs `createPath`. What crosses the boundary is a raycast and some arithmetic — cheaper than the
+  capture that feeds it.
+
+So the shape was taken and the mechanism was not.
+
+### 16.4 Why the brain still runs on the world thread
+
+§11.3 put 20–58% of a swarm off-threadable, but that was measured before charge and shared paths cut path
+search from 52% of the march to 16%. On the numbers above the off-threadable share is the search, and moving
+it needs a terrain snapshot the workers can read — which §11.11 established has to carry floor height and
+collision, not just `PathType`, because over 90% of the reads never touch the type cache. That is Phase 3's
+data structure, and it is shelved.
+
+There is also no batch driver yet — no `GlyphidAiScheduler` answering to `DroneAiScheduler`. With one
+implementation of `GlyphidCarrier` and nothing to run in parallel it would be indirection with a single
+caller. What builds it is the second carrier: the sim tier of §2, which has no goal selector to be driven by
+and wants one level-wide pass. Two things would then be worth putting in it that a per-entity goal cannot do —
+sharing one target-acquisition query across a cluster instead of 15 box queries a tick, and dispatching
+searches against a shared terrain field.
+
+The boundary is what matters now, and it is drawn. Crossing it is a scheduling change rather than a rewrite.
+
+---
+
+## 17. Implemented: rendering
+
+Nine castes over **one mesh and nine skins**. `glyphid.obj` is 217 vertices and 287 triangles in 19 named
+parts; the rig poses those parts into 27 instance slots.
+
+Flywheel instancing, on the `DroneVisual` pattern — `AbstractEntityVisual` driving `TransformedInstance`s.
+Not a per-entity `EntityRenderer` walking geometry into a `VertexConsumer`, which is what upstream's
+`HFRWavefrontObject` is built for and is the thing that does not survive three hundred bugs. Only the obj
+*reader* was ported, geometry only, emitting one flywheel `Mesh` per named part.
+
+The existing `neoforge:obj` + `PartialModel` pipeline the missiles and drones use was deliberately not
+reused, for two reasons: it bakes a file down to one flat `BakedModel` with no way to address a part, and
+the walk cycle needs all 19 posed against each other; and it resolves textures onto the block atlas, so
+nine caste skins would have meant 9 × 19 model jsons and entity skins stitched into the block atlas.
+
+Every joint is a function of one scalar — walk phase, or bite phase — so the poses are tabled ahead of time
+and drawing a glyphid is 27 matrix multiplies and no trigonometry. The six legs are two meshes drawn three
+times each and share a `Model`, so they share an instancer and one draw call; all nine castes share one
+upload of the geometry, because flywheel pools by `Mesh` identity.
+
+Per-caste skin and scale, armour plates that disappear as they are shot off, jaws and head tilt off
+`getAttackAnim`, the airborne lean off the same `getRoll`/`getPitch` the drone flight model publishes, and
+an infestation decal for infected bugs built lazily so uninfected ones pay nothing.
+
+**Measured** (RX 7900 XT, small window, vsync off, three alternating rounds per arm; baseline is the same
+300 entities with the flywheel backend off, so entity ticking and tracking are identical in both arms):
+
+| scene | baseline | with visuals | delta |
+|---|---|---|---|
+| 300 on screen at ~40 m | 1.302 ms | 1.696 ms | +0.394 ms (1.31 µs each) |
+| 300, camera inside the swarm | 1.243 ms | 1.625 ms | +0.382 ms (805 → 615 fps) |
+| 900 | 1.332 ms | 1.922 ms | +0.590 ms — sub-linear |
+
+Sub-linear at 900 is the shape instancing is supposed to have. The window was small, so fill rate is
+under-weighted and these numbers are the CPU-side per-instance cost — which is the part that scales with
+population, and the part that mattered.
+
+Two consequences worth knowing. `skipVanillaRender` is true, so with the flywheel backend off glyphids draw
+nothing at all — the same trade the drones already make, and it also means no shadow (correct: the original
+set `shadowOpaque = 0`) and no F3+B hitbox. And `EntityGlyphidNuclear.fuse` is private and unsynced, so the
+death swell starts from the first tick the visual sees the bug dying rather than from the real fuse; syncing
+it would cost a data watcher for a cosmetic detail, so it has not been.
+
+Which skin a caste wears now lives on `GlyphidCaste` alongside its gate and its weight, rather than being
+rebuilt from the caste's name inside the renderer. A `ResourceLocation` is not a client class, so the table
+stays server-safe — the same trade `MissileModels` makes — and a caste whose texture is not named after it
+can no longer silently draw the wrong one.
+
+---
+
+## 18. Implemented: digging priced on hardness
+
+### 18.1 The bug: nothing ever consulted the material
+
+Glyphids ate bedrock. Not because there was no gate — there was one, on explosion resistance — but because the
+number it compared against was never the block's.
+
+`BlockAllocatorStandard.blockResistance` asked the exploder entity:
+
+```java
+explosion.exploder.getBlockExplosionResistance(compat, level, pos, state, fluid, power)
+```
+
+`Entity.getBlockExplosionResistance` returns its last argument unchanged. It is an *adjustment* hook — vanilla
+computes `max(block, fluid)` resistance and passes **that** in, so an entity can raise or lower it. Passing the
+remaining blast power instead means it hands the power straight back, and the comparison becomes
+`ceiling < power`, which for a glyphid's blast size of 1–5 against a ceiling of 100 is always false. Every
+block in reach went, whatever it was made of.
+
+Confined to glyphids by luck rather than design: every warhead uses the `ExplosionAEF` constructor that leaves
+`exploder` null, which takes the correct branch. Only the glyphid dig, the nuclear caste's death blast and
+glyphid bombs pass an exploder.
+
+### 18.2 Hardness, not explosion resistance
+
+The gate now reads `getDestroySpeed`. The two numbers disagree exactly where it matters: obsidian is 50
+hardness against 1,200 resistance, and a reinforced door is a nuisance to mine and barely resists a blast at
+all. A glyphid is biting, not detonating — and hardness is also the number a player already has an intuition
+for, because it is the one their pickaxe answers to.
+
+Two distinct ways to be un-chewable, and the difference is the whole point of the mechanic:
+
+- **Above the caste's ceiling** — this caste cannot open it, a bigger one could. This is what makes the
+  material a wall is built from a real decision.
+- **Negative hardness** — bedrock, barriers, portal frames. Unbreakable to everything, at any evolution.
+
+Digging is a *rate*, not a bite: `ticks = hardness / digStrength × 20`, banked against one block at a time.
+
+| caste | hardness/s | ceiling | stone (1.5) | iron (5) | obsidian (50) |
+|---|---|---|---|---|---|
+| scout | 0 | — | never | never | never |
+| grunt, bombardier | 1.25 | 10 | 1.2 s | 4 s | never |
+| brawler, blaster, nuclear | 2 | 25 | 0.8 s | 2.5 s | never |
+| behemoth | 4 | 50 | 0.4 s | 1.3 s | 12.5 s |
+| brenda | 5 | 60 | 0.3 s | 1 s | 10 s |
+| digger | 6.25 | 60 | 0.2 s | 0.8 s | 8 s |
+
+**Measured**, one glyphid sealed in a one-block shell, timing until it got out:
+
+| | grunt | digger |
+|---|---|---|
+| stone | **20 s** | — |
+| iron block | **36 s** | — |
+| obsidian | **sealed** (45 s) | **59 s** |
+| bedrock | **sealed** (30 s) | — |
+
+Stone against iron is 20 s against 36 s where the hardness ratio is 3.3× — the fixed cost in both is the same
+few seconds of failing to path before a glyphid gives up and starts eating.
+
+### 18.3 A breach is a doorway, not a hole
+
+The first working version chewed one block and then stood there. Two things had to be true that were not:
+
+- **One block is not a doorway.** A glyphid is 1.5 blocks wide and a chewed block leaves a hole 1 wide, so it
+  ate through and still could not fit. The old blast-shaped bite removed a whole sphere, which is why nobody
+  had noticed. A breach now opens the block walked into, the one above it, and their neighbours to either
+  side along the wall — widening across the face, because the axis a wall is thin on is the one being
+  travelled down.
+- **Do not re-earn the stuck timer per block.** Sixty ticks of failing to make progress is the right price for
+  deciding to start eating and the wrong price for continuing, and paying it between every block turned a
+  two-block wall into a minute of standing still. Chewing now runs straight on to the next block of the
+  breach. It is self-limiting: the reach only looks a few blocks ahead, so an open way finds nothing.
+
+Widening is anchored on the block first walked into rather than on whichever was chewed last. Stepping outward
+from the last one lets a glyphid tunnel sideways along a wall forever, always one block from finishing.
+
+### 18.4 The cracks
+
+The block a glyphid is working shows vanilla's breaking overlay, advancing 0–9 with the chew, and breaks with
+the ordinary particles and sound (`Level.destroyBlock` with drops off). Purely cosmetic, but it is what makes
+a swarm at a wall legible: you can see which block is going and roughly when.
+
+The packet is sent only when the stage actually changes — at three hundred glyphids, one per tick per bug to
+every player in range is not a thing to do for decoration. It is cleared on any tick that is not a chew and on
+the glyphid dying, because a client holds an abandoned overlay for 400 ticks and half-eaten blocks that
+nothing is eating look like a bug. `glyphid.diggingOverlay` turns it off.
+
+## 19. Implemented: squads
+
+A swarm that sends every bug at the nearest player is one problem, solved once. Split three ways — one squad
+on each defender, one eating the reactor — it is three problems at once, and the defenders have to divide too.
+
+**Equal by power, not by count.** Forty bugs split into two twenties puts every behemoth in one half and hands
+the other half a rout. Each caste carries a `power` on its stat bundle (a grunt 1, a behemoth 10, a brenda 20),
+explicit rather than derived from health and damage because the castes that matter most to a split are the ones
+whose worth is not their statline. The partition is greedy longest-processing-time: strongest first, each onto
+whichever squad is currently weakest. One sort, and within a few percent of even at these sizes.
+
+**Objectives**, best first, capped at four squads and at least four bugs each:
+
+| kind | from |
+|---|---|
+| `PLAYER` | each survival player in range, nearest first — two squads never take the same one |
+| `MACHINES` | `IndustryApi.nearestCluster`, the same pressure field the colony tier aims warbands with |
+| `BREACH` | the wall between the swarm and its primary objective |
+| `RALLY` | where the warband was going. Always last, so the list is never empty |
+
+A squad sent after a player prefers that player in `findTargetCandidate`. Without that, the split decides where
+four squads walk and then all four converge on whoever is nearest the moment they arrive — the exact behaviour
+it exists to prevent.
+
+**Stateless.** There is no squad object living between reassignments; the whole split is recomputed every 100
+ticks from what is standing there. Objectives die, players move, bugs are killed — a roster maintained through
+all of that is a lifecycle to get wrong, and recomputing costs one pass. Membership stays stable anyway because
+the input is sorted deterministically.
+
+**Measured**, `/wfballistics colony squads`, 30 grunts and 4 behemoths against a detected base:
+
+```
+squad 0: 9 bugs,  power 27 -> machines (256, 81, 256)
+squad 1: 13 bugs, power 26 -> breach   (230, 73, 230)
+squad 2: 15 bugs, power 26 -> rally    (0, 89, 0)
+```
+
+Nine bugs against fifteen, and the power is 27 against 26. That is the split working: the heavies are spread,
+not the bodies.
+
+### 19.1 Three things that had to be got wrong first
+
+- **Group by home, quantised.** Bugs are grouped by where they came from rather than by where they are, so one
+  colony's attack force divides itself and two colonies that happened to meet do not. But each bug records its
+  own landing spot, so keying on the exact block gave forty hosts of one. Quantised to a 64-block cell.
+- **Median, not mean.** Objectives are looked for around the swarm's position — and once a swarm has been split
+  it is walking two ways at once, so the mean is a point in the empty ground between them. Every objective was
+  then discovered relative to somewhere no glyphid was. The median sits inside whichever group is larger.
+- **Do not filter a breach by distance.** The first version ignored obstructions nearer than four blocks, on
+  the theory that anything closer was the swarm's own ground. It threw the objective away in precisely the case
+  it exists for: a swarm already pressed against the wall it needs to open, which is where all of them end up.
+  The test is now whether the ray struck a *side* face with a solid block above it — vertical and at least two
+  tall, which is a wall and not a step.
+
+Verified: 24 grunts sealed in obsidian with a base outside split into machines / breach / rally at power 8/8/8,
+with the breach landing on the wall block. `PLAYER` is the one objective not confirmed at runtime — an
+RCON-driven headless server has no players to divide over.

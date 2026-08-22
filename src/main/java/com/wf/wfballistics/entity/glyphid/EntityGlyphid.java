@@ -6,6 +6,7 @@ import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.aef.standard.BlockAllocatorGlyphidDig;
 import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
 import com.wf.wfballistics.config.WFConfig;
+import com.wf.wfballistics.colony.GlyphidObjective;
 import com.wf.wfballistics.damage.DynamicResistance;
 import com.wf.wfballistics.damage.WFDamageTypes;
 import com.wf.wfballistics.debug.ProfiledGoal;
@@ -14,11 +15,15 @@ import com.wf.wfballistics.debug.SwarmProfiler;
 import com.wf.wfballistics.drone.flight.FlightAttitude;
 import com.wf.wfballistics.drone.flight.Multirotor;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidBombGoal;
-import com.wf.wfballistics.entity.glyphid.ai.GlyphidMeleeGoal;
+import com.wf.wfballistics.entity.glyphid.ai.GlyphidBrainGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidFlightGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidTargetGoal;
+import com.wf.wfballistics.entity.glyphid.brain.GlyphidBody;
+import com.wf.wfballistics.entity.glyphid.brain.GlyphidCarrier;
+import com.wf.wfballistics.entity.glyphid.brain.GlyphidMind;
+import com.wf.wfballistics.entity.glyphid.brain.GlyphidPlan;
+import com.wf.wfballistics.entity.glyphid.brain.GlyphidSnapshot;
 import com.wf.wfballistics.entity.glyphid.flight.GlyphidFlight;
-import com.wf.wfballistics.entity.glyphid.ai.GlyphidTaskMoveGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidWanderGoal;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
@@ -86,7 +91,7 @@ import java.util.function.Predicate;
  * deliberate. It is the baseline the swarm work is measured against, which is why the tick is instrumented
  * for {@link SwarmProfiler} at every level the cost could hide in.
  */
-public class EntityGlyphid extends Monster implements DynamicResistance {
+public class EntityGlyphid extends Monster implements DynamicResistance, GlyphidCarrier {
 
     public static final byte TYPE_NORMAL = 0;
     public static final byte TYPE_INFECTED = 1;
@@ -177,7 +182,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance {
     protected @Nullable GlyphidWaypoint taskWaypoint = null;
 
     public int blastSize = blastSize(getGlyphidScale());
-    public int blastResToDig = blastResToDig(getGlyphidScale());
 
     /**
      * Where the flight goal wants this glyphid to be. Null while walking.
@@ -196,6 +200,22 @@ public class EntityGlyphid extends Monster implements DynamicResistance {
      * than a glyphid parked overhead dissolving everything under it forever.
      */
     protected int bombs;
+
+    /**
+     * This glyphid's AI memory. Lives on the entity rather than on a goal so that the same behaviour can be
+     * run by something that is not an entity at all: see {@link GlyphidCarrier}.
+     */
+    private final GlyphidMind mind = new GlyphidMind();
+
+    /**
+     * Which squad of its warband this glyphid is in, and what that squad was sent to do.
+     *
+     * <p>Not saved and not synced. {@code GlyphidSquads} recomputes the whole split every few seconds from
+     * what is actually standing there, so a value carried across a reload would only be a stale one; a bug
+     * that reloads still has its task destination, which is where its squad had sent it.
+     */
+    public int squad;
+    public @Nullable GlyphidObjective objective;
 
     public EntityGlyphid(EntityType<? extends EntityGlyphid> type, Level level) {
         super(type, level);
@@ -226,10 +246,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance {
      */
     public static int blastSize(double scale) {
         return Math.min((int) (3 * scale) / 2, 5);
-    }
-
-    public static int blastResToDig(double scale) {
-        return Math.min((int) (50 * (scale * 2)), 150);
     }
 
     public ResourceLocation getSkin() {
@@ -272,20 +288,21 @@ public class EntityGlyphid extends Monster implements DynamicResistance {
         // whatever its malus. It carries only the JUMP flag, so it runs alongside the movement goals rather
         // than instead of them.
         goalSelector.addGoal(0, new FloatGoal(this));
-        // Wrapped so the profiler can tell which of the two movement goals a path search belongs to; the two
-        // answer to completely different fixes and the report used to lump them together.
-        goalSelector.addGoal(3, new ProfiledGoal(SwarmBench.vanillaMeleeGoal
-                ? new MeleeAttackGoal(this, 1.0D, true)
-                : new GlyphidMeleeGoal(this, 1.0D),
-                SwarmProfiler.Phase.PATH_MELEE));
+        // One goal for biting and marching both: which of the two a glyphid is doing is decided inside the
+        // brain rather than by goal priority, because a warband record has no goal selector to decide it with.
+        // The vanilla melee goal is still reachable for A/B. It outranks the brain goal so that it wins the
+        // MOVE flag; the brain stands down from biting while it is in play and just marches.
+        if (SwarmBench.vanillaMeleeGoal) {
+            goalSelector.addGoal(2, new ProfiledGoal(new MeleeAttackGoal(this, 1.0D, true),
+                    SwarmProfiler.Phase.PATH_MELEE));
+        }
+        goalSelector.addGoal(3, new GlyphidBrainGoal(this));
         // Takes no movement flag, so it runs alongside flight rather than instead of it.
         goalSelector.addGoal(2, new GlyphidBombGoal(this));
         // Flight outranks walking to the same place, and falls back to it for anything without wings.
         goalSelector.addGoal(4, new GlyphidFlightGoal(this));
-        // Same priority as wandering, and mutually exclusive with it: one runs under orders, the other only
-        // when idle.
-        goalSelector.addGoal(4, new ProfiledGoal(new GlyphidTaskMoveGoal(this, 1.0D),
-                SwarmProfiler.Phase.PATH_MARCH));
+        // Mutually exclusive with the brain goal by way of the MOVE flag: one runs under orders, the other
+        // only when idle.
         goalSelector.addGoal(4, new GlyphidWanderGoal(this, 1.0D));
         targetSelector.addGoal(1, new HurtByTargetGoal(this));
         targetSelector.addGoal(2, new GlyphidTargetGoal(this));
@@ -731,7 +748,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance {
         long t = SwarmProfiler.begin();
         long pathBefore = SwarmProfiler.accrued(SwarmProfiler.Phase.PATH);
         ExplosionAEF blast = new ExplosionAEF(level(), x, y, z, blastSize, this);
-        blast.setBlockAllocator(new BlockAllocatorGlyphidDig(blastResToDig, EntityGlyphid::isSpawnerBlock));
+        blast.setBlockAllocator(new BlockAllocatorGlyphidDig(getStats().digCeiling(), EntityGlyphid::isSpawnerBlock));
         blast.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
         blast.setEntityProcessor(null);
         blast.setPlayerProcessor(null);
@@ -753,11 +770,33 @@ public class EntityGlyphid extends Monster implements DynamicResistance {
         if (hasEffect(MobEffects.BLINDNESS)) return null;
 
         double radius = useExtendedTargeting() ? 128D : 16D;
+
+        // A squad sent after somebody goes after them, not after whoever happens to be closest. Without this
+        // the split decides where four squads walk and then all four converge on the same defender the moment
+        // they arrive, which is the behaviour it exists to prevent.
+        LivingEntity assigned = assignedTarget(radius);
+        if (assigned != null) {
+            return assigned;
+        }
+
         Player player = level().getNearestPlayer(getX(), getY(), getZ(), radius, false);
         if (player != null) {
             return player;
         }
         return nearestPrey(Math.min(radius, PREY_RANGE));
+    }
+
+    /**
+     * @return the player this glyphid's squad was pointed at, if they are alive and in range.
+     */
+    private @Nullable LivingEntity assignedTarget(double radius) {
+        if (objective == null || objective.player() == null || !(level() instanceof ServerLevel server)) {
+            return null;
+        }
+        if (!(server.getEntity(objective.player()) instanceof LivingEntity assigned)) {
+            return null;
+        }
+        return assigned.isAlive() && distanceToSqr(assigned) <= radius * radius ? assigned : null;
     }
 
     /**
@@ -884,6 +923,53 @@ public class EntityGlyphid extends Monster implements DynamicResistance {
         }
 
         return super.doHurtTarget(target);
+    }
+
+    // --- brain ---
+
+    /**
+     * Speed modifier every walk of this glyphid's is issued at. A field on the body rather than a constructor
+     * argument on a goal, because a plan says where to go and the body says how fast it can.
+     */
+    public double aiSpeed() {
+        return 1.0D;
+    }
+
+    @Override
+    public int carrierId() {
+        return getId();
+    }
+
+    @Override
+    public boolean carrierAlive() {
+        return isAlive();
+    }
+
+    @Override
+    public GlyphidMind mind() {
+        return mind;
+    }
+
+    /**
+     * A glyphid killed mid-bite leaves its cracks on the block. The client only expires an abandoned overlay
+     * after twenty seconds, which on a defended wall means half-eaten blocks that nothing is eating.
+     */
+    @Override
+    public void remove(RemovalReason reason) {
+        if (!level().isClientSide) {
+            GlyphidBody.clearCracks(this, mind);
+        }
+        super.remove(reason);
+    }
+
+    @Override
+    public GlyphidSnapshot snapshot(ServerLevel level) {
+        return GlyphidBody.snapshot(this);
+    }
+
+    @Override
+    public void apply(ServerLevel level, GlyphidPlan plan) {
+        GlyphidBody.apply(this, plan);
     }
 
     // --- colony tasks ---

@@ -89,6 +89,7 @@ public final class WFConfig {
     // --- Glyphids ---
     public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
+    public static final ModConfigSpec.BooleanValue GLYPHID_DIG_OVERLAY;
     public static final ModConfigSpec.BooleanValue GLYPHID_WAYPOINT_DEBUG;
     public static final ModConfigSpec.BooleanValue GLYPHID_BOMBING;
     public static final ModConfigSpec.IntValue GLYPHID_BOMB_LOAD;
@@ -355,6 +356,11 @@ public final class WFConfig {
                 .comment("Glyphids chew through terrain and buildings to reach a waypoint. With this off they",
                         "path around obstacles instead, which is cheaper but lets walls stop them entirely.")
                 .define("digging", true);
+        GLYPHID_DIG_OVERLAY = b
+                .comment("Show the block-breaking cracks on whatever a glyphid is chewing. Purely visual, but",
+                        "it is a packet per crack stage to every player in range, so a swarm eating a wall in",
+                        "front of a crowded base is where it would cost anything.")
+                .define("diggingOverlay", true);
         GLYPHID_WAYPOINT_DEBUG = b
                 .comment("Render colony waypoints as coloured dust particles (client-side).")
                 .define("waypointDebug", false);

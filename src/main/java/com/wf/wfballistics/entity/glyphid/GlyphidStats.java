@@ -83,12 +83,29 @@ public abstract class GlyphidStats {
      * @param thresholdMultForArmor  damage threshold contributed by each surviving armour plate, so a bug
      *                               that has been shelled turns away less
      * @param resistanceMult         fraction of a hit shrugged off after the threshold applies
+     * @param power                  what this caste is worth when a swarm divides itself into squads of equal
+     *                               strength. Explicit rather than derived from health and damage, because the
+     *                               castes that matter most to a split are the ones whose worth is not their
+     *                               statline: a nuclear is worth far more than its health says
+     * @param digStrength            block hardness chewed through per second, or 0 for a caste that cannot dig
+     * @param digCeiling             hardness this caste cannot chew at any speed. Obsidian is 50 and stone is
+     *                               1.5, so this is what decides whether a wall is an obstacle or a stop
      */
     public record StatBundle(double health, double speed, double damage, float thresholdMultForArmor,
-                             float resistanceMult) {
+                             float resistanceMult, double power, double digStrength, double digCeiling) {
 
         public double movementSpeed() {
             return speed * MOVEMENT_SPEED_SCALE;
+        }
+
+        /**
+         * @return ticks to chew through a block of the given hardness, or -1 if this caste never can
+         */
+        public int ticksToChew(float hardness) {
+            if (digStrength <= 0.0 || hardness < 0.0F || hardness > digCeiling) {
+                return -1;
+            }
+            return Math.max(1, (int) Math.ceil(hardness / digStrength * 20.0));
         }
     }
 
@@ -98,15 +115,17 @@ public abstract class GlyphidStats {
     public static final class GlyphidStatsNT extends GlyphidStats {
 
         public GlyphidStatsNT() {
-            this.statsGrunt = new StatBundle(20D, 1D, 2D, 1F, 0.1F);
-            this.statsBombardier = new StatBundle(15D, 1D, 2D, 1F, 0.1F);
-            this.statsBrawler = new StatBundle(35D, 1D, 10D, 2F, 0.15F);
-            this.statsDigger = new StatBundle(50D, 1D, 10D, 3F, 0.20F);
-            this.statsBlaster = new StatBundle(35D, 1D, 10D, 2F, 0.15F);
-            this.statsBehemoth = new StatBundle(125D, 0.8D, 25D, 5F, 0.35F);
-            this.statsBrenda = new StatBundle(250D, 1.2D, 50D, 10F, 0.5F);
-            this.statsNuclear = new StatBundle(100D, 0.8D, 50D, 10F, 0.5F);
-            this.statsScout = new StatBundle(20D, 1.5D, 5D, 0.5F, 0.5F);
+            //                                hp    spd   dmg   plate  res    power  dig/s  ceiling
+            this.statsGrunt = new StatBundle(20D, 1D, 2D, 1F, 0.1F, 1D, 1.25D, 10D);
+            this.statsBombardier = new StatBundle(15D, 1D, 2D, 1F, 0.1F, 2D, 1.25D, 10D);
+            this.statsBrawler = new StatBundle(35D, 1D, 10D, 2F, 0.15F, 3D, 2D, 25D);
+            this.statsDigger = new StatBundle(50D, 1D, 10D, 3F, 0.20F, 4D, 6.25D, 60D);
+            this.statsBlaster = new StatBundle(35D, 1D, 10D, 2F, 0.15F, 4D, 2D, 25D);
+            this.statsBehemoth = new StatBundle(125D, 0.8D, 25D, 5F, 0.35F, 10D, 4D, 50D);
+            this.statsBrenda = new StatBundle(250D, 1.2D, 50D, 10F, 0.5F, 20D, 5D, 60D);
+            this.statsNuclear = new StatBundle(100D, 0.8D, 50D, 10F, 0.5F, 12D, 2D, 25D);
+            // A scout carries no jaws worth the name: it founds nests, it does not open walls.
+            this.statsScout = new StatBundle(20D, 1.5D, 5D, 0.5F, 0.5F, 1D, 0D, 0D);
         }
 
         @Override

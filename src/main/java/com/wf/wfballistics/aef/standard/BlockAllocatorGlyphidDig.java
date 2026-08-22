@@ -1,6 +1,7 @@
 package com.wf.wfballistics.aef.standard;
 
 import com.wf.wfballistics.aef.ExplosionAEF;
+import com.wf.wfballistics.entity.glyphid.GlyphidDigging;
 import net.minecraft.core.BlockPos;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
@@ -18,8 +19,8 @@ import java.util.function.Predicate;
  * <ul>
  *   <li><b>Rays stop at anything too tough, they do not weaken.</b> A standard blast spends power per block
  *       and eventually peters out, so a strong charge always gets a little way into a hard wall. A glyphid
- *       either can chew a material or cannot, so a ray hitting anything above {@code maximum} resistance
- *       ends there and everything behind it survives. Reinforced walls hold completely instead of eroding.</li>
+ *       either can chew a material or cannot, so a ray hitting anything above {@code maximum} hardness ends
+ *       there and everything behind it survives. Reinforced walls hold completely instead of eroding.</li>
  *   <li><b>Range is fixed.</b> The march runs to the explosion radius rather than until power runs out, so
  *       one bite is the same size every time.</li>
  * </ul>
@@ -31,6 +32,7 @@ public class BlockAllocatorGlyphidDig extends BlockAllocatorStandard {
 
     private static final float STEP = 0.3F;
 
+    /** Hardness ceiling: anything above it stops the ray dead. */
     protected final double maximum;
     protected final Predicate<BlockState> stopAt;
 
@@ -76,7 +78,7 @@ public class BlockAllocatorGlyphidDig extends BlockAllocatorStandard {
                         BlockState state = level.getBlockState(cursor);
 
                         if (!state.isAir()) {
-                            if (maximum < blockResistance(explosion, level, cursor, state, size) || stopAt.test(state)) {
+                            if (GlyphidDigging.stopsABite(state, level, cursor, maximum) || stopAt.test(state)) {
                                 break;
                             }
                             // Air is never collected: it costs a BlockPos allocation per step and the block
