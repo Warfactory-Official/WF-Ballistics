@@ -1245,10 +1245,10 @@ Running the thing surfaced three bugs that the unit-sized tests could not, and a
   resolution for deciding which region a colony resents and far too coarse to walk to. A cluster centre is the
   value-weighted average of its cells, so the compound — straddling the cell boundary at the origin — reported
   a base centre 38 blocks outside its own wall, on a hillside. The squad went there. The earlier §19 check had
-  looked correct only because that base sat at (256, 256), which is exactly a cell centre. Fixed by splitting
-  the question in two: the cluster answers *is there a base here worth splitting over*, and a new
-  `IndustryApi.nearestMachine` — block entities over loaded chunks, bounded by the objective range — answers
-  *where*. Coarse while they are still walking in, exact by the time they arrive.
+  looked correct only because that base sat at (256, 256), which is exactly a cell centre. Fixed by asking the
+  world instead once the world has an answer: `IndustryApi.pressingMachine` scans block entities over loaded
+  chunks, and the cluster centre is what is left when nothing is loaded — good enough to point a walk in the
+  right direction, and replaced by a real block by the time they arrive. See §20.2 for what it ranks by.
 - **The rally objective ate itself.** `RALLY` is meant to be where the warband was going in the first place,
   and it was read back off the bug's task — which a squad assignment had already overwritten. One
   reassignment later the fallback was a copy of the last objective, and the "original" destination walked
@@ -1263,7 +1263,36 @@ Running the thing surfaced three bugs that the unit-sized tests could not, and a
 The last of those is the one worth remembering. Every arm of §19 was run inside a single session, and a
 restart is not something a benchmark does.
 
-### 20.2 What the run does not cover
+### 20.2 A target is picked by worth, not by distance
+
+Aiming at a *machine* rather than a cell centre is only half the answer. Standing inside a base, the nearest
+machine is whichever one a glyphid happened to walk past, and a swarm that eats the first furnace it trips
+over is not attacking a factory — it is grazing.
+
+The whitelist is already a ranking of how much a block provokes, and it spans nearly three orders of
+magnitude: a fusion reactor is 400, a large combustion engine 120, a furnace 1. That ordering is the answer to
+"what is worth killing", so a candidate scores `value * (1 - distance/radius)` — the same linear falloff
+§8.5 weighs a region's pressure by, at block resolution instead of cell resolution. A reactor anywhere in range outranks every furnace in the building; two
+similar machines are decided by which is nearer.
+
+Up to two objectives, at least 24 blocks apart. Two squads eating adjacent blocks of the same machine hall is
+not two objectives, it is one with the bodies split; 24 blocks is a room's width, so a mid-sized factory still
+offers two and a shed does not.
+
+**Measured.** The compound was rebuilt two-valued: 45 furnaces on the near side, on the line the swarm walks
+in along, and 25 blast furnaces (value 2) on the far side, 32 blocks past them.
+
+```
+squad 0: 101 bugs, power 101 -> machines (14, 81, 2)     <- the blast furnaces, on the far side
+squad 1: 100 bugs, power 100 -> machines (-14, 81, -2)   <- the furnace floor, second objective
+squad 2:  99 bugs, power  99 -> rally (0, 81, 0)
+```
+
+The lead squad walked past forty-five nearer machines to reach twenty-five better ones, and held that
+objective with the swarm standing inside the compound — which is the case that matters, because a cluster
+centre is irrelevant the moment the blocks themselves are loaded. 2.642 ms/tick at 300, breached at t+15s.
+
+### 20.3 What the run does not cover
 
 - **Players.** Still no runtime confirmation of the `PLAYER` objective; a headless RCON server has no players.
 - **A defended base.** Nothing shoots back. The perf figures are for a swarm against architecture, not

@@ -64,6 +64,11 @@ public final class GlyphidSquads {
      */
     private static final double BREACH_REACH = 48.0;
     /**
+     * How far apart two machine objectives have to be to count as different parts of a base. A room's width:
+     * near enough that a mid-sized factory still offers two, far enough that they are not the same wall.
+     */
+    private static final double MACHINE_SEPARATION = 24.0;
+    /**
      * Size of the cell that decides two glyphids came from the same place, as a power of two. 64 blocks: wide
      * enough to hold one nest and everything that spilled out of it, narrow enough that two colonies attacking
      * the same base still divide themselves separately.
@@ -185,10 +190,7 @@ public final class GlyphidSquads {
             }
         }
 
-        GlyphidObjective machines = machines(level, centreX, centreZ);
-        if (machines != null) {
-            out.add(machines);
-        }
+        addMachines(level, out, centreX, centreZ);
 
         EntityGlyphid first = members.get(0);
         GlyphidObjective rally = rallyOf(first);
@@ -222,26 +224,42 @@ public final class GlyphidSquads {
     }
 
     /**
-     * The base worth attacking, aimed at a machine rather than at a cluster centre where one is loaded.
+     * What there is to wreck, best first.
      *
-     * <p>Two resolutions, and the difference matters more than it looks. The cluster field is the colony
-     * simulation's, in 512-block cells: a cluster centre is a value-weighted average of those, so a base
-     * that straddles a cell boundary reports a centre with no machine near it — measured 38 blocks out on a
-     * 25-block compound, which put the squad on a hillside outside the wall. So the cluster answers "is
-     * there a base here worth splitting over" and the block-precise lookup answers "where". Coarse while
-     * they are still walking in, exact by the time they arrive, and no cost when there is nothing near.
+     * <p>Two ways of answering the same question at two ranges, and which one applies is decided by whether
+     * the base is loaded rather than by any distance rule. Close enough to see the machines, a squad is sent
+     * at the machine most worth killing — the whitelist is a ranking of provocation, so that is the
+     * generator hall rather than whichever furnace is nearest. Too far for the world to have an answer, the
+     * cluster centre is all there is, and it is enough: it only has to point the walk in the right
+     * direction, and by the time they arrive the blocks themselves are loaded and the objective sharpens.
+     *
+     * <p>The cluster is deliberately <em>not</em> a precondition for the block-precise lookup. A centre in
+     * 512-block cells can sit hundreds of blocks from its own machines, so gating on it would have thrown
+     * away a base a swarm was standing inside — measured at 38 blocks out on a 25-block compound, which is
+     * the whole reason this is two lookups and not one.
+     *
+     * <p>Up to two, far enough apart to be different parts of the same base. Two squads eating adjacent
+     * blocks of one machine hall is not two objectives; it is one, with the bodies split.
      */
-    private static @Nullable GlyphidObjective machines(ServerLevel level, double centreX, double centreZ) {
+    private static void addMachines(ServerLevel level, List<GlyphidObjective> out,
+                                    double centreX, double centreZ) {
+        BlockPos first = IndustryApi.pressingMachine(level, centreX, centreZ, OBJECTIVE_RANGE);
+        if (first != null) {
+            out.add(GlyphidObjective.machines(first.getX(), first.getY(), first.getZ()));
+            BlockPos second = IndustryApi.pressingMachine(level, centreX, centreZ, OBJECTIVE_RANGE,
+                    first, MACHINE_SEPARATION);
+            if (second != null) {
+                out.add(GlyphidObjective.machines(second.getX(), second.getY(), second.getZ()));
+            }
+            return;
+        }
+
         IndustryCluster base = IndustryApi.nearestCluster(level, centreX, centreZ);
         if (base == null || base.distanceSqTo(centreX, centreZ) > OBJECTIVE_RANGE * OBJECTIVE_RANGE) {
-            return null;
-        }
-        BlockPos machine = IndustryApi.nearestMachine(level, centreX, centreZ, OBJECTIVE_RANGE);
-        if (machine != null) {
-            return GlyphidObjective.machines(machine.getX(), machine.getY(), machine.getZ());
+            return;
         }
         int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, base.centerX(), base.centerZ());
-        return GlyphidObjective.machines(base.centerX(), y, base.centerZ());
+        out.add(GlyphidObjective.machines(base.centerX(), y, base.centerZ()));
     }
 
     /**

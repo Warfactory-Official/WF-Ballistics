@@ -53,11 +53,19 @@ public final class IndustryApi {
     }
 
     /**
-     * @return the nearest machine to a position in the loaded world, or null. Block-precise, unlike
-     * {@link #nearestCluster}, which answers in region cells.
+     * @return the machine most worth attacking near a position in the loaded world, or null. Block-precise
+     * and ranked by provocation, unlike {@link #nearestCluster}, which answers in 512-block region cells.
      */
-    public static @Nullable BlockPos nearestMachine(ServerLevel level, double x, double z, double radius) {
-        return IndustryTracker.nearestMachine(level, x, z, radius);
+    public static @Nullable BlockPos pressingMachine(ServerLevel level, double x, double z, double radius) {
+        return IndustryTracker.pressingMachine(level, x, z, radius, null, 0.0);
+    }
+
+    /**
+     * As above, ignoring anything within {@code separation} of a machine already spoken for.
+     */
+    public static @Nullable BlockPos pressingMachine(ServerLevel level, double x, double z, double radius,
+                                                     @Nullable BlockPos awayFrom, double separation) {
+        return IndustryTracker.pressingMachine(level, x, z, radius, awayFrom, separation);
     }
 
     /**

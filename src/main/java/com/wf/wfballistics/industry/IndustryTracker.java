@@ -119,28 +119,36 @@ public final class IndustryTracker {
     }
 
     /**
-     * The nearest tracked machine to a position, over loaded chunks only.
+     * The machine most worth attacking near a position, over loaded chunks only.
      *
-     * <p>Exists because the cell field is 512 blocks to a side. That is the right resolution for deciding
-     * which region a colony resents and far too coarse to walk to: a cluster centre is a value-weighted
-     * average of cells, so a base that straddles a cell boundary reports a centre with no machine anywhere
-     * near it. Anything that has to point at a machine in the loaded world has to look at the world.
+     * <p><b>Worth, not distance.</b> Standing inside a base, the nearest machine is whichever one a glyphid
+     * happens to have walked past, and a swarm that eats the first furnace it trips over is not attacking a
+     * factory — it is grazing. The whitelist is already a ranking of how much a block provokes: a fusion
+     * reactor is 400 against a furnace's 1, and the generators are the part of a base that hurts to lose.
+     * So a candidate scores {@code value * (1 - distance/radius)}, the same linear falloff
+     * {@link IndustryRegistry#pressureWithin} weighs a region by. A reactor anywhere in range outranks every
+     * furnace in the building; two similar machines are decided by which is closer.
      *
      * <p>Block entities rather than block states, for the same reason the chunk sweep does it: everything
      * this tracks has one, and 98k states a chunk to find them is not affordable on something that runs
      * while a swarm is standing on the doorstep. Unloaded chunks are skipped rather than loaded — a machine
      * nobody has loaded is not one a glyphid can chew.
      *
-     * @return the nearest machine within {@code radius} horizontally, or null if there is none.
+     * @param awayFrom  a machine already spoken for, or null. Candidates within {@code separation} of it are
+     *                  skipped, which is how a second squad is given a different part of the same base
+     *                  instead of a neighbour of the block the first one is already eating.
+     * @return the best machine within {@code radius} horizontally, or null if there is none.
      */
-    public static @Nullable BlockPos nearestMachine(ServerLevel level, double x, double z, double radius) {
+    public static @Nullable BlockPos pressingMachine(ServerLevel level, double x, double z, double radius,
+                                                     @Nullable BlockPos awayFrom, double separation) {
         int minChunkX = SectionPos.blockToSectionCoord(x - radius);
         int maxChunkX = SectionPos.blockToSectionCoord(x + radius);
         int minChunkZ = SectionPos.blockToSectionCoord(z - radius);
         int maxChunkZ = SectionPos.blockToSectionCoord(z + radius);
+        double separationSq = separation * separation;
 
         BlockPos best = null;
-        double bestSq = radius * radius;
+        double bestScore = 0.0;
         for (int cx = minChunkX; cx <= maxChunkX; cx++) {
             for (int cz = minChunkZ; cz <= maxChunkZ; cz++) {
                 LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
@@ -148,14 +156,22 @@ public final class IndustryTracker {
                     continue;
                 }
                 for (BlockPos pos : chunk.getBlockEntitiesPos()) {
-                    if (IndustryValues.valueOf(chunk.getBlockState(pos)) <= 0) {
+                    int value = IndustryValues.valueOf(chunk.getBlockState(pos));
+                    if (value <= 0) {
                         continue;
                     }
                     double dx = pos.getX() + 0.5 - x;
                     double dz = pos.getZ() + 0.5 - z;
                     double distSq = dx * dx + dz * dz;
-                    if (distSq < bestSq) {
-                        bestSq = distSq;
+                    if (distSq > radius * radius) {
+                        continue;
+                    }
+                    if (awayFrom != null && awayFrom.distSqr(pos) < separationSq) {
+                        continue;
+                    }
+                    double score = value * (1.0 - Math.sqrt(distSq) / radius);
+                    if (score > bestScore) {
+                        bestScore = score;
                         best = pos.immutable();
                     }
                 }
