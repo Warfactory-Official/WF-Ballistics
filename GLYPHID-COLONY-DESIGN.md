@@ -643,7 +643,56 @@ That was the benchmark's own `kill @e` at the start of the window — *two* samp
 weight to swamp everything else. `jdk.ObjectAllocationSample` weights are extrapolations, so a single burst
 can dominate a profile; exclude setup and re-read before believing an allocation hotspot.
 
-### 11.10 Still open
+### 11.10 Correcting §11.7: it is two costs, not one
+
+§11.7 divided node-expansion time by block reads, got 69.7 ns per read, and called it memory latency. That
+number was an artefact. Varying the working set — same 300 glyphids, same goals, only the area they spread
+over — shows it moving the *wrong way*:
+
+| | spawn r=8, targets over 8 blocks | spawn r=100, targets over 180 blocks |
+|---|---|---|
+| block reads per node | 2.1 | 189.3 |
+| ns per node expanded | 1 114 | 7 874 |
+| "ns per read" | 522.6 | 41.6 |
+| µs per search | 124 | 390 |
+| tick | 3.00 ms | 4.76 ms |
+
+Reads per node vary **90×** with locality, because vanilla's `PathTypeCache` absorbs them when the swarm keeps
+searching the same ground. Dividing a large fixed cost by a tiny read count is what produced the inflated
+figure. Solving the two regimes as `ns/node = fixed + reads × cost`:
+
+- **~36 ns marginal cost per block read** — consistent across both, and genuinely memory-bound (~180 cycles).
+- **~1 038 ns fixed cost per node expanded**, independent of reads: `PathTypeCache` hashing, node lookup and
+  allocation, direction iteration, malus arithmetic.
+
+Which one dominates depends entirely on how spread out the swarm is:
+
+| | reads | fixed |
+|---|---|---|
+| tight (a swarm converging on one base) | 7% | **93%** |
+| wide (a column crossing fresh terrain) | **87%** | 13% |
+
+So the earlier conclusion — "the lever is fewer block reads" — was right for the march and wrong for the
+assault, which is the case that matters most. In a converging swarm almost all of node expansion is the A*'s
+own bookkeeping, and the terrain reads are already being cached away.
+
+That does not change the destination, because a flow field removes both terms at once: no per-entity A* means
+no per-node fixed cost, and terrain sampled once per region means no per-entity reads. It does change what to
+expect from a partial fix — making block reads cheaper would buy ~7% of node expansion in the case we care
+about, not 90%.
+
+**On `VarHandle` and `Unsafe`.** Neither addresses either term. A block read costs ~180 cycles because it is
+several dependent cache misses (chunk → section → packed `long[]` → palette → `BlockState`); `Unsafe` removes
+a bounds check worth about one cycle and cannot make a miss faster. The fixed per-node cost is hash lookups
+and allocation, which is a data-structure problem, not an access-primitive one. Both terms are fixed by
+layout — a dense, cache-resident passability field — and layout is exactly what `TerrainField` is for.
+
+Where `VarHandle` genuinely earns its place here is publication, not speed: when the flow field is computed on
+a worker and read by the server thread, `setRelease`/`getAcquire` is the correct and cheap way to hand it
+over. Worth noting too that `sun.misc.Unsafe`'s memory access is deprecated for removal (JEP 471), so betting
+a long-lived mod on it is a bad trade even where it would help.
+
+### 11.11 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
