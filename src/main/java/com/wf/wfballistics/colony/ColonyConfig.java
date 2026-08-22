@@ -29,6 +29,9 @@ public final class ColonyConfig {
     private static int materialiseRange = 128;
     private static int materialisePerTick = 4;
 
+    private static double flyingChancePerTier = 0.2;
+    private static double flyingSpeedFactor = 3.0;
+
     private ColonyConfig() {
     }
 
@@ -173,9 +176,29 @@ public final class ColonyConfig {
         return materialisePerTick;
     }
 
+    /**
+     * Chance per colony tier that a warband is on the wing, so wings are something the frontier has and the
+     * starting area does not. At the default a tier-0 nest never fields them and a tier-4 one usually does.
+     */
+    public static double flyingChance(int tier) {
+        return Math.min(1.0, flyingChancePerTier * tier);
+    }
+
+    /**
+     * How much faster a flying warband crosses the map than a walking one.
+     */
+    public static double flyingSpeedFactor() {
+        return flyingSpeedFactor;
+    }
+
     public static void applyMaterialisation(int range, int perTick) {
         materialiseRange = Math.max(16, range);
         materialisePerTick = Math.max(0, perTick);
+    }
+
+    public static void applyFlight(double chancePerTier, double speedFactor) {
+        flyingChancePerTier = Math.max(0.0, chancePerTier);
+        flyingSpeedFactor = Math.max(1.0, speedFactor);
     }
 
     public static void apply(int safe, int fullStrength, int tiers, double growth, int popCap,

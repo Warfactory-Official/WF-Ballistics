@@ -126,9 +126,15 @@ public final class ColonyDebug {
         }
 
         int idle = 0;
+        int airborne = 0;
         int shown = 0;
         for (EntityGlyphid bug : swarm) {
-            boolean pathing = !bug.getNavigation().isDone();
+            boolean flying = bug.isAirborne();
+            // A flying glyphid does no pathfinding at all, so it is not "stalled" for lacking a path.
+            boolean pathing = flying || !bug.getNavigation().isDone();
+            if (flying) {
+                airborne++;
+            }
             if (!pathing) {
                 idle++;
             }
@@ -136,17 +142,20 @@ public final class ColonyDebug {
                 double dx = bug.taskX - bug.getX();
                 double dz = bug.taskZ - bug.getZ();
                 int distance = (int) Math.sqrt(dx * dx + dz * dz);
+                String state = flying
+                        ? String.format(Locale.ROOT, "flying, %.0f deg bank", Math.toDegrees(bug.getRoll()))
+                        : (pathing ? "pathing" : "no path");
                 source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
                         "  (%d, %d, %d) task %d, %d blocks out, %s, %.0f hp",
                         (int) bug.getX(), (int) bug.getY(), (int) bug.getZ(),
-                        bug.getCurrentTask(), distance,
-                        pathing ? "pathing" : "no path", bug.getHealth())), false);
+                        bug.getCurrentTask(), distance, state, bug.getHealth())), false);
             }
         }
         int total = swarm.size();
         int stalled = idle;
+        int flyers = airborne;
         source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
-                "%d glyphids, %d without a path%s", total, stalled,
+                "%d glyphids, %d airborne, %d without a path%s", total, flyers, stalled,
                 total > BUG_REPORT_LIMIT ? " (first " + BUG_REPORT_LIMIT + " listed)" : "")), false);
         return total;
     }
@@ -155,7 +164,7 @@ public final class ColonyDebug {
      * Send a warband from the nearest colony at the caller, so an attack can be watched without waiting for
      * one to be provoked and then to walk several thousand blocks.
      */
-    public static int dispatch(CommandSourceStack source, int count) {
+    public static int dispatch(CommandSourceStack source, int count, boolean flying) {
         ServerLevel level = source.getLevel();
         ColonyRegistry registry = ColonyRegistry.get(level);
         Vec3 pos = source.getPosition();
@@ -169,6 +178,7 @@ public final class ColonyDebug {
 
         Warband warband = new Warband(java.util.UUID.randomUUID(), origin.id, origin.x, origin.z,
                 (int) pos.x, (int) pos.z, count, origin.tier);
+        warband.flying = flying;
         registry.add(warband);
         source.sendSuccess(() -> Component.literal("Dispatched " + warband), false);
         return count;

@@ -163,6 +163,7 @@ public final class ColonyManager {
 
         Warband warband = new Warband(UUID.randomUUID(), colony.id, colony.x, colony.z,
                 target.centerX(), target.centerZ(), size, colony.tier);
+        warband.flying = level.random.nextDouble() < ColonyConfig.flyingChance(colony.tier);
         registry.add(warband);
         LOGGER.debug("[wfballistics] {} dispatched {}", colony, warband);
     }
@@ -240,7 +241,8 @@ public final class ColonyManager {
 
         for (Warband warband : registry.warbands()) {
             boolean wasArrived = warband.arrived;
-            if (warband.advance(speed) && !wasArrived) {
+            double own = warband.flying ? speed * ColonyConfig.flyingSpeedFactor() : speed;
+            if (warband.advance(own) && !wasArrived) {
                 LOGGER.debug("[wfballistics] {} reached its target", warband);
             }
             // An arrived warband is not removed: it waits on the target for somebody to turn up, and

@@ -8,7 +8,11 @@ import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
 import com.wf.wfballistics.config.WFConfig;
 import com.wf.wfballistics.damage.WFDamageTypes;
 import com.wf.wfballistics.debug.SwarmProfiler;
+import com.wf.wfballistics.drone.flight.FlightAttitude;
+import com.wf.wfballistics.drone.flight.Multirotor;
+import com.wf.wfballistics.entity.glyphid.ai.GlyphidFlightGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidTargetGoal;
+import com.wf.wfballistics.entity.glyphid.flight.GlyphidFlight;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidTaskMoveGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidWanderGoal;
 import net.minecraft.core.BlockPos;
@@ -30,6 +34,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
@@ -45,6 +50,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
@@ -92,6 +99,32 @@ public class EntityGlyphid extends Monster {
     private static final EntityDataAccessor<Byte> DW_SUBTYPE =
             SynchedEntityData.defineId(EntityGlyphid.class, EntityDataSerializers.BYTE);
 
+    /**
+     * Wings, packed: bit 0 is "has them", bit 1 is "using them right now".
+     *
+     * <p>Flight is a modifier rather than a caste on purpose. A winged glyphid is a normal glyphid that can
+     * also fly — it still walks, digs, climbs, takes orders and loses armour plates the same way — so making
+     * it a subclass would fork every one of those behaviours to gain nothing.
+     */
+    private static final EntityDataAccessor<Byte> DW_FLIGHT =
+            SynchedEntityData.defineId(EntityGlyphid.class, EntityDataSerializers.BYTE);
+    /**
+     * Lean about the nose axis, quantised for the wire exactly as {@code DroneEntity} does it. Only ever
+     * written while airborne, so a walking glyphid never sends either of these.
+     */
+    private static final EntityDataAccessor<Byte> DW_ROLL =
+            SynchedEntityData.defineId(EntityGlyphid.class, EntityDataSerializers.BYTE);
+    private static final EntityDataAccessor<Byte> DW_PITCH =
+            SynchedEntityData.defineId(EntityGlyphid.class, EntityDataSerializers.BYTE);
+
+    public static final byte FLIGHT_CAPABLE = 0b01;
+    public static final byte FLIGHT_AIRBORNE = 0b10;
+
+    /**
+     * Radians per unit of the quantised lean, matching {@code DroneEntity.TILT_QUANTUM}.
+     */
+    public static final float TILT_QUANTUM = 90.0F;
+
     public boolean hasHome = false;
     public int homeX;
     public int homeY;
@@ -109,6 +142,19 @@ public class EntityGlyphid extends Monster {
 
     public int blastSize = blastSize(getGlyphidScale());
     public int blastResToDig = blastResToDig(getGlyphidScale());
+
+    /**
+     * Where the flight goal wants this glyphid to be. Null while walking.
+     */
+    protected @Nullable Vec3 flightTarget;
+    /**
+     * True while descending onto {@link #flightTarget} rather than cruising toward it.
+     */
+    protected boolean landing;
+    /**
+     * Current lean and thrust. Server-side truth; the quantised copy on the wire is what the client draws.
+     */
+    protected FlightAttitude attitude = FlightAttitude.LEVEL;
 
     public EntityGlyphid(EntityType<? extends EntityGlyphid> type, Level level) {
         super(type, level);
@@ -152,6 +198,9 @@ public class EntityGlyphid extends Monster {
         builder.define(DW_WALL, false);
         builder.define(DW_ARMOR, FULL_ARMOR);
         builder.define(DW_SUBTYPE, TYPE_NORMAL);
+        builder.define(DW_FLIGHT, (byte) 0);
+        builder.define(DW_ROLL, (byte) 0);
+        builder.define(DW_PITCH, (byte) 0);
     }
 
     protected void applyEntityAttributes() {
@@ -168,6 +217,8 @@ public class EntityGlyphid extends Monster {
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
         goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.0D, true));
+        // Flight outranks walking to the same place, and falls back to it for anything without wings.
+        goalSelector.addGoal(4, new GlyphidFlightGoal(this));
         // Same priority as wandering, and mutually exclusive with it: one runs under orders, the other only
         // when idle.
         goalSelector.addGoal(4, new GlyphidTaskMoveGoal(this, 1.0D));
@@ -204,8 +255,151 @@ public class EntityGlyphid extends Monster {
     @Override
     public void travel(Vec3 travelVector) {
         long t = SwarmProfiler.begin();
-        super.travel(travelVector);
+        if (isAirborne()) {
+            fly();
+        } else {
+            super.travel(travelVector);
+        }
         SwarmProfiler.end(SwarmProfiler.Phase.MOVE, t);
+    }
+
+    // --- flight ---
+
+    public boolean canFly() {
+        return (entityData.get(DW_FLIGHT) & FLIGHT_CAPABLE) != 0;
+    }
+
+    public void setCanFly(boolean value) {
+        byte flags = entityData.get(DW_FLIGHT);
+        entityData.set(DW_FLIGHT, (byte) (value ? flags | FLIGHT_CAPABLE : flags & ~FLIGHT_CAPABLE));
+    }
+
+    public boolean isAirborne() {
+        return (entityData.get(DW_FLIGHT) & FLIGHT_AIRBORNE) != 0;
+    }
+
+    /**
+     * Take off or land.
+     *
+     * <p>Gravity is handed to the flight model while airborne, because {@link com.wf.wfballistics.drone.flight.Multirotor}
+     * already subtracts it: leaving vanilla's on as well would apply it twice and the glyphid would never get
+     * off the ground.
+     */
+    public void setAirborne(boolean value) {
+        if (value && !canFly()) {
+            return;
+        }
+        byte flags = entityData.get(DW_FLIGHT);
+        entityData.set(DW_FLIGHT, (byte) (value ? flags | FLIGHT_AIRBORNE : flags & ~FLIGHT_AIRBORNE));
+        setNoGravity(value);
+        if (value) {
+            getNavigation().stop();
+        } else {
+            attitude = FlightAttitude.LEVEL;
+            publishAttitude();
+        }
+    }
+
+    public void setFlightTarget(@Nullable Vec3 target, boolean landing) {
+        this.flightTarget = target;
+        this.landing = landing;
+    }
+
+    /**
+     * One tick of flight, replacing the walking physics entirely.
+     */
+    protected void fly() {
+        Vec3 target = flightTarget;
+        if (target == null) {
+            target = position();
+        }
+
+        Vec3 desired = landing
+                ? GlyphidFlight.descentVelocity(position(), target)
+                : GlyphidFlight.desiredVelocity(position(), target, floorHeight(target), cruiseSpeed());
+
+        Multirotor.Step step = Multirotor.step(getDeltaMovement(), attitude, desired, GlyphidFlight.WINGS, 1.0);
+        attitude = step.attitude();
+        publishAttitude();
+
+        setDeltaMovement(step.velocity());
+        move(MoverType.SELF, getDeltaMovement());
+
+        // Flown into something. The terrain lookahead handles hills, but not an overhang or a wall that rises
+        // faster than the sample ahead of it, so anything that actually hits climbs its way out rather than
+        // grinding against it -- which is what a bug would do anyway.
+        if (horizontalCollision && !landing) {
+            setDeltaMovement(getDeltaMovement().add(0.0, GlyphidFlight.WINGS.maxClimbRate() * 0.5, 0.0));
+        }
+        // Nothing in the air is falling, and a glyphid that flew down a cliff should not land hurt.
+        resetFallDistance();
+
+        // Face the way it is going, so the lean reads as banking into a turn rather than sliding.
+        double speedSq = getDeltaMovement().horizontalDistanceSqr();
+        if (speedSq > 1.0E-4) {
+            setYRot((float) (Mth.atan2(getDeltaMovement().z, getDeltaMovement().x) * (180.0 / Math.PI)) - 90.0F);
+            yBodyRot = getYRot();
+        }
+    }
+
+    /**
+     * How fast this caste cruises. Scaled by body size so a bigger bug is not simply a slower one.
+     */
+    public double cruiseSpeed() {
+        return GlyphidFlight.CRUISE_SPEED / Math.max(0.5, getGlyphidScale());
+    }
+
+    /**
+     * The ground a flying glyphid holds its clearance above: the highest of what is under it and what is
+     * ahead of it, so it climbs before a hill rather than into it.
+     */
+    protected int floorHeight(Vec3 target) {
+        int here = surfaceAt(getBlockX(), getBlockZ());
+        double dx = target.x - getX();
+        double dz = target.z - getZ();
+        double distance = Math.sqrt(dx * dx + dz * dz);
+        if (distance < 1.0) {
+            return here;
+        }
+        double reach = Math.min(distance, GlyphidFlight.LOOKAHEAD);
+        int aheadX = Mth.floor(getX() + dx / distance * reach);
+        int aheadZ = Mth.floor(getZ() + dz / distance * reach);
+        return Math.max(here, surfaceAt(aheadX, aheadZ));
+    }
+
+    /**
+     * @return the surface height of a column, or this glyphid's own altitude where the chunk is not loaded --
+     * which keeps it holding station rather than diving at terrain nobody has generated.
+     */
+    protected int surfaceAt(int x, int z) {
+        if (!level().hasChunk(x >> 4, z >> 4)) {
+            return getBlockY();
+        }
+        return level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+    }
+
+    private void publishAttitude() {
+        float yaw = (float) ((getYRot() + 90.0F) * (Math.PI / 180.0));
+        entityData.set(DW_ROLL, quantise(attitude.roll(yaw)));
+        entityData.set(DW_PITCH, quantise(attitude.pitch(yaw)));
+    }
+
+    private static byte quantise(double radians) {
+        return (byte) Math.max(-127, Math.min(127, Math.round(radians * TILT_QUANTUM)));
+    }
+
+    /**
+     * @return lean about the nose axis, radians, as the client sees it.
+     */
+    public float getRoll() {
+        return entityData.get(DW_ROLL) / TILT_QUANTUM;
+    }
+
+    /**
+     * @return lean about the wing axis, radians: positive is nose down.
+     */
+    public float getPitch() {
+        return entityData.get(DW_PITCH) / TILT_QUANTUM;
     }
 
     // --- damage ---
@@ -314,6 +508,12 @@ public class EntityGlyphid extends Monster {
 
         if (hasEffect(MobEffects.BLINDNESS)) {
             onBlinded();
+        }
+
+        // Wings are for getting somewhere. Anything else -- orders cancelled, target acquired, dropped into
+        // water -- comes down, so a stale airborne flag can never leave one hovering with its gravity off.
+        if (isAirborne() && (getCurrentTask() != GlyphidTasks.TASK_FOLLOW || isInWater())) {
+            setAirborne(false);
         }
 
         if (getCurrentTask() == GlyphidTasks.TASK_FOLLOW) {
@@ -551,6 +751,21 @@ public class EntityGlyphid extends Monster {
         }
     }
 
+    /**
+     * Pull the destination height onto real terrain once its column is loaded.
+     *
+     * <p>Shared by both movement goals, and load-bearing for either. A glyphid is given a placeholder height
+     * when it materialises, because the base it is heading for is usually still unloaded from where it lands.
+     * Left stale, the arrival test can never pass: walkers mill around on top of their own target and flyers
+     * hover over it forever.
+     */
+    public void resolveTaskHeight() {
+        if (!level().hasChunk(taskX >> 4, taskZ >> 4)) {
+            return;
+        }
+        taskY = level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, taskX, taskZ);
+    }
+
     public boolean isAtDestination() {
         long thresholdSq = hasWaypoint && taskWaypoint != null
                 ? (long) taskWaypoint.radius * taskWaypoint.radius
@@ -607,9 +822,13 @@ public class EntityGlyphid extends Monster {
     public void makeStuckInBlock(BlockState state, Vec3 motionMultiplier) {
     }
 
+    /**
+     * Climbing is suppressed in the air: vanilla clamps a climbing entity's motion to a crawl in every axis,
+     * so a glyphid that brushed a wall mid-flight would drop out of the sky.
+     */
     @Override
     public boolean onClimbable() {
-        return isBesideClimbableBlock();
+        return !isAirborne() && isBesideClimbableBlock();
     }
 
     public boolean isBesideClimbableBlock() {
@@ -627,6 +846,8 @@ public class EntityGlyphid extends Monster {
         super.addAdditionalSaveData(compound);
         compound.putByte("armor", armor());
         compound.putByte("subtype", subtype());
+        // Only the wings are saved, not whether they were in use: a glyphid reloads on the ground.
+        compound.putBoolean("canFly", canFly());
 
         compound.putBoolean("hasHome", hasHome);
         compound.putInt("homeX", homeX);
@@ -646,6 +867,8 @@ public class EntityGlyphid extends Monster {
         super.readAdditionalSaveData(compound);
         entityData.set(DW_ARMOR, compound.contains("armor") ? compound.getByte("armor") : FULL_ARMOR);
         entityData.set(DW_SUBTYPE, compound.getByte("subtype"));
+        setCanFly(compound.getBoolean("canFly"));
+        setAirborne(false);
 
         hasHome = compound.getBoolean("hasHome");
         homeX = compound.getInt("homeX");

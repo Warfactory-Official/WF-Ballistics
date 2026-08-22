@@ -81,6 +81,8 @@ public final class WFConfig {
     public static final ModConfigSpec.IntValue COLONY_CROWDING_LIMIT;
     public static final ModConfigSpec.IntValue COLONY_MATERIALISE_RANGE;
     public static final ModConfigSpec.IntValue COLONY_MATERIALISE_PER_TICK;
+    public static final ModConfigSpec.DoubleValue COLONY_FLYING_CHANCE_PER_TIER;
+    public static final ModConfigSpec.DoubleValue COLONY_FLYING_SPEED_FACTOR;
     // --- Glyphids ---
     public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
@@ -308,6 +310,14 @@ public final class WFConfig {
                 .comment("Glyphids placed per dimension per tick. A large warband streams in over several",
                         "ticks rather than spawning hundreds of entities inside one. 0 disables spawning.")
                 .defineInRange("materialisePerTick", 4, 0, 1_000);
+        COLONY_FLYING_CHANCE_PER_TIER = b
+                .comment("Chance per colony tier that a warband flies instead of walking. At the default a",
+                        "tier-0 nest never fields wings and a tier-4 one usually does, so flight is something",
+                        "the frontier has. Flying glyphids do no pathfinding, so they are also cheaper.")
+                .defineInRange("flyingChancePerTier", 0.2, 0.0, 1.0);
+        COLONY_FLYING_SPEED_FACTOR = b
+                .comment("How much faster a flying warband crosses the map than a walking one.")
+                .defineInRange("flyingSpeedFactor", 3.0, 1.0, 64.0);
         b.pop();
 
         b.comment("Glyphid swarm behaviour.").push("glyphids");
@@ -381,5 +391,6 @@ public final class WFConfig {
                 COLONY_MAX_COLONIES.get(), COLONY_FRONTIER_DISTANCE.get(), COLONY_PROVOCATION_RADIUS.get(),
                 COLONY_CROWDING_RADIUS.get(), COLONY_CROWDING_LIMIT.get());
         ColonyConfig.applyMaterialisation(COLONY_MATERIALISE_RANGE.get(), COLONY_MATERIALISE_PER_TICK.get());
+        ColonyConfig.applyFlight(COLONY_FLYING_CHANCE_PER_TIER.get(), COLONY_FLYING_SPEED_FACTOR.get());
     }
 }
