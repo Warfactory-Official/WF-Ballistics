@@ -4,6 +4,7 @@ import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidTasks;
+import com.wf.wfballistics.entity.glyphid.flight.GlyphidFlight;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -158,15 +159,24 @@ public final class WarbandMaterialiser {
                 continue;
             }
 
-            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-            if (y <= level.getMinBuildHeight() || y >= level.getMaxBuildHeight()) {
+            int surface = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+            if (surface <= level.getMinBuildHeight() || surface >= level.getMaxBuildHeight()) {
                 continue;
             }
 
-            BlockPos ground = new BlockPos(x, y - 1, z);
-            // Nothing spawns standing on water or in lava; the surface height alone does not rule either out.
-            if (!level.getFluidState(ground).isEmpty() || !level.getFluidState(ground.above()).isEmpty()) {
-                continue;
+            // A flight arrives in the air, so it needs clearance rather than footing. That is why a flying
+            // warband crosses a coastline intact where a walking one leaves most of itself owed to the record:
+            // there is no such thing as unsuitable ground when you are not standing on it.
+            int y = warband.flying
+                    ? Math.min(level.getMaxBuildHeight() - 2, surface + GlyphidFlight.CLEARANCE)
+                    : surface;
+
+            if (!warband.flying) {
+                BlockPos ground = new BlockPos(x, y - 1, z);
+                // Nothing stands on water or in lava; the surface height alone rules out neither.
+                if (!level.getFluidState(ground).isEmpty() || !level.getFluidState(ground.above()).isEmpty()) {
+                    continue;
+                }
             }
 
             double px = x + 0.5;
@@ -194,6 +204,7 @@ public final class WarbandMaterialiser {
      * wild spawn: somewhere to fall back to, and somewhere to go.
      */
     private static void orient(EntityGlyphid glyphid, Warband warband, @Nullable Colony origin, int y) {
+        glyphid.setCanFly(warband.flying);
         glyphid.hasHome = true;
         glyphid.homeX = origin != null ? origin.x : (int) warband.x;
         glyphid.homeY = origin != null && origin.hasResolvedY() ? origin.y : y;
@@ -205,5 +216,12 @@ public final class WarbandMaterialiser {
         glyphid.taskY = y;
         glyphid.taskZ = warband.targetZ;
         glyphid.setCurrentTask(GlyphidTasks.TASK_FOLLOW, null);
+
+        // Placed in the air, so it has to be flying before its first tick or it simply falls out of the sky.
+        if (warband.flying) {
+            glyphid.setAirborne(true);
+            glyphid.setFlightTarget(
+                    new net.minecraft.world.phys.Vec3(warband.targetX + 0.5, y, warband.targetZ + 0.5), false);
+        }
     }
 }

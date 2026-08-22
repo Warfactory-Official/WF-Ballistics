@@ -82,7 +82,9 @@ public class GlyphidTaskMoveGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        return glyphid.getCurrentTask() == GlyphidTasks.TASK_FOLLOW && !glyphid.isAtDestination();
+        return !glyphid.isAirborne()
+                && glyphid.getCurrentTask() == GlyphidTasks.TASK_FOLLOW
+                && !glyphid.isAtDestination();
     }
 
     @Override
@@ -130,7 +132,7 @@ public class GlyphidTaskMoveGoal extends Goal {
         lastX = glyphid.getX();
         lastZ = glyphid.getZ();
 
-        resolveDestinationY();
+        glyphid.resolveTaskHeight();
         boolean progressing = pathToward() && moved > PROGRESS;
 
         // Backing off is keyed on getting somewhere, not on whether a path came back. The pathfinder almost
@@ -149,22 +151,6 @@ public class GlyphidTaskMoveGoal extends Goal {
             stuckFor = 0;
             chew();
         }
-    }
-
-    /**
-     * Pull the destination height onto real terrain once its column is loaded.
-     *
-     * <p>A warband is given a placeholder height when it materialises, because the base it is marching on is
-     * usually still unloaded from where it lands. Left stale, the arrival test never passes and the swarm
-     * mills around on top of its own target.
-     */
-    private void resolveDestinationY() {
-        int x = glyphid.taskX;
-        int z = glyphid.taskZ;
-        if (!glyphid.level().hasChunk(x >> 4, z >> 4)) {
-            return;
-        }
-        glyphid.taskY = glyphid.level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
     }
 
     /**

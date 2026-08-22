@@ -252,10 +252,13 @@ public final class WFServerEvents {
                         .then(Commands.literal("bugs")
                                 .executes(ctx -> ColonyDebug.bugs(ctx.getSource())))
                         .then(Commands.literal("dispatch")
-                                .executes(ctx -> ColonyDebug.dispatch(ctx.getSource(), 8))
+                                .executes(ctx -> ColonyDebug.dispatch(ctx.getSource(), 8, false))
                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 10_000))
                                         .executes(ctx -> ColonyDebug.dispatch(ctx.getSource(),
-                                                IntegerArgumentType.getInteger(ctx, "count")))))
+                                                IntegerArgumentType.getInteger(ctx, "count"), false))
+                                        .then(Commands.literal("flying")
+                                                .executes(ctx -> ColonyDebug.dispatch(ctx.getSource(),
+                                                        IntegerArgumentType.getInteger(ctx, "count"), true)))))
                         .then(Commands.literal("materialise")
                                 .executes(ctx -> ColonyDebug.materialise(ctx.getSource(), 64))
                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 10_000))

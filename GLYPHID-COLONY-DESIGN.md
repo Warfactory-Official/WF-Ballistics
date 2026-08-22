@@ -287,7 +287,67 @@ showed up as negative residuals: path search happens *inside* path following whe
 and inside digging via the block-update recompute above. Netting both out moved 76% of what looked like
 digging cost into path search, where it belongs.
 
-### 9.6 Still open
+---
+
+## 10. Implemented: flight
+
+Wings are a **modifier, not a caste**. A winged glyphid is a normal glyphid that can also fly: it still walks,
+digs, climbs, takes orders and loses armour plates the same way, so a subclass would fork every one of those
+behaviours to gain nothing. It is a capability bit alongside the existing subtype, and the glyphid lands to
+fight.
+
+### 10.1 Reusing the drone flight model is not a shortcut
+
+Flight runs on `Multirotor`, the drone's flight model, because the fact that model is built around applies to
+both: **the airframe can only push along its own up axis, so it has to tip over to go anywhere.** A flying
+insect banks into a turn for the same reason a quadcopter does. The difference between the two is entirely in
+the `Airframe` record — the bug leans harder (50° vs 40°), snaps into the lean nearly twice as fast, drags
+more so it darts rather than glides, and descends faster than it climbs, which is the opposite of the
+quadcopter. A multirotor diving into its own downwash stops flying; a bug folding its wings does not.
+
+`Multirotor.step` is pure arithmetic over values with no world access, which is what made it reusable at all.
+
+### 10.2 Wings are a performance feature
+
+A flying glyphid does **no pathfinding whatsoever**. Measured on the same world, same staging, same count:
+
+| 80 glyphids | walking | flying |
+|---|---|---|
+| mean tick | 1.728 ms | 0.686 ms |
+| per entity | 21.6 µs | 8.6 µs |
+| p95 / max | 5.140 / 16.406 ms | 0.813 / 1.084 ms |
+| path search | 44% | 0% |
+
+Two and a half times cheaper, and the spikes disappear: with no A* in the loop the cost is flat and
+predictable, where a walking swarm's worst tick is twenty times its mean. A flying assault is the *cheap* one.
+
+It also sidesteps the placement problem in §9.2 — a flight needs clearance rather than footing, so it crosses
+a coastline intact where a walking warband leaves most of itself owed to the record.
+
+### 10.3 Flight is what the T2 record already assumed
+
+A warband has always moved in a straight line ignoring terrain, because there is no terrain loaded to move
+around. Walkers only get away with that because nobody can see them do it; flyers actually do it. So the
+abstract tier and the visible one finally agree.
+
+Flying warbands travel three times as fast off-world, and the chance a colony fields them scales with tier —
+at the default a tier-0 nest never does and a tier-4 one usually does, so wings are something the frontier has.
+
+### 10.4 Three things that had to be suppressed in the air
+
+Each of these is vanilla behaviour that is right on the ground and wrong off it:
+
+- **Gravity.** `Multirotor` already subtracts it; leaving vanilla's on applies it twice and the glyphid never
+  gets off the ground.
+- **Climbing.** Vanilla clamps a climbing entity's motion to a crawl in every axis, so a glyphid that brushed
+  a wall mid-flight would drop out of the sky.
+- **A stale airborne flag.** Wings are for getting somewhere; anything else — orders cancelled, target
+  acquired, dropped in water — lands, so nothing can be left hovering with its gravity switched off.
+
+The destination height also had to become shared between the walking and flying goals. Only the walking goal
+resolved it, so a flight's arrival test could never pass and the swarm hovered over its own target forever.
+
+### 10.5 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
