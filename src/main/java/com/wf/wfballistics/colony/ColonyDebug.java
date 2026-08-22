@@ -11,6 +11,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Inspection and control for the colony simulation.
@@ -118,6 +120,51 @@ public final class ColonyDebug {
             source.sendSuccess(() -> Component.literal("  " + warband), false);
         }
         return registry.warbands().size();
+    }
+
+    /**
+     * Report how the loaded swarm has divided itself up.
+     *
+     * <p>The split is the whole mechanic and it is invisible from outside: four squads walking to four
+     * different places look exactly like one swarm milling about until you know what each of them was told.
+     */
+    public static int squads(CommandSourceStack source) {
+        var swarm = GlyphidTracker.glyphids(source.getLevel());
+        if (swarm.isEmpty()) {
+            source.sendSuccess(() -> Component.literal("No glyphids in this dimension."), false);
+            return 0;
+        }
+
+        Map<Integer, int[]> counts = new TreeMap<>();
+        Map<Integer, Double> power = new TreeMap<>();
+        Map<Integer, String> orders = new TreeMap<>();
+        int unassigned = 0;
+        for (EntityGlyphid bug : swarm) {
+            if (bug.objective == null) {
+                unassigned++;
+                continue;
+            }
+            counts.computeIfAbsent(bug.squad, k -> new int[1])[0]++;
+            power.merge(bug.squad, bug.getStats().power(), Double::sum);
+            orders.putIfAbsent(bug.squad, bug.objective.toString());
+        }
+
+        if (counts.isEmpty()) {
+            source.sendSuccess(() -> Component.literal(
+                    swarm.size() + " glyphids, none in a squad yet (reassigned every "
+                            + GlyphidSquads.REFORM_INTERVAL + " ticks)"), false);
+            return 0;
+        }
+        for (Map.Entry<Integer, int[]> entry : counts.entrySet()) {
+            int id = entry.getKey();
+            source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                    "  squad %d: %d bugs, power %.0f -> %s",
+                    id, entry.getValue()[0], power.get(id), orders.get(id))), false);
+        }
+        int loose = unassigned;
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "%d squads over %d glyphids, %d unassigned", counts.size(), swarm.size(), loose)), false);
+        return counts.size();
     }
 
     /**

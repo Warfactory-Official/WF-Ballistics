@@ -13,6 +13,7 @@ import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.debug.SwarmBench;
 import com.wf.wfballistics.colony.ColonyDebug;
 import com.wf.wfballistics.colony.ColonyManager;
+import com.wf.wfballistics.colony.GlyphidSquads;
 import com.wf.wfballistics.industry.IndustryClusters;
 import com.wf.wfballistics.industry.IndustryDebug;
 import java.util.Set;
@@ -137,6 +138,8 @@ public final class WFServerEvents {
             // changed and the world has since gone quiet.
             IndustryClusters.tick(level);
             ColonyManager.tick(level);
+            // After the colony tier, because it reassigns bugs the materialiser may have only just placed.
+            GlyphidSquads.tick(level);
             tickScenarios(level);
         }
     }
@@ -252,6 +255,8 @@ public final class WFServerEvents {
                                                 IntegerArgumentType.getInteger(ctx, "rounds")))))
                         .then(Commands.literal("bugs")
                                 .executes(ctx -> ColonyDebug.bugs(ctx.getSource())))
+                        .then(Commands.literal("squads")
+                                .executes(ctx -> ColonyDebug.squads(ctx.getSource())))
                         .then(Commands.literal("evolution")
                                 .executes(ctx -> ColonyDebug.evolution(ctx.getSource()))
                                 .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0, 1.0))

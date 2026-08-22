@@ -88,11 +88,23 @@ public class BlockAllocatorStandard implements IBlockAllocator {
     /**
      * Resistance the exploder sees for this block (lets a custom exploder override per-block resistance).
      */
+    /**
+     * How much this block resists being blown up.
+     *
+     * <p>The exploder hook is an <em>adjustment</em>, not a source: {@code Entity.getBlockExplosionResistance}
+     * returns its last argument unchanged by default, and vanilla feeds it the block's own resistance so an
+     * entity can raise or lower it. Feeding it the remaining blast power instead made it hand that power
+     * straight back, so any explosion with an exploder set never consulted the material at all and chewed
+     * bedrock exactly as fast as dirt. Every glyphid dig is such an explosion; the warheads are not, which is
+     * why it only ever showed up as bugs eating through the world.
+     */
     protected float blockResistance(ExplosionAEF explosion, Level level, BlockPos pos, BlockState state, float power) {
         FluidState fluid = state.getFluidState();
+        float resistance = Math.max(state.getExplosionResistance(level, pos, explosion.compat),
+                fluid.getExplosionResistance(level, pos, explosion.compat));
         return explosion.exploder != null
-                ? explosion.exploder.getBlockExplosionResistance(explosion.compat, level, pos, state, fluid, power)
-                : state.getExplosionResistance(level, pos, explosion.compat);
+                ? explosion.exploder.getBlockExplosionResistance(explosion.compat, level, pos, state, fluid, resistance)
+                : resistance;
     }
 
     protected boolean canDestroy(ExplosionAEF explosion, Level level, BlockPos pos, BlockState state, float power) {
