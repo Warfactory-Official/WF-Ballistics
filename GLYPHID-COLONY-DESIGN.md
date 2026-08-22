@@ -421,7 +421,34 @@ So off-threading is the answer for the approach and not for the fight. For the f
 the physics runs but *how many entities run it at all*, which is the T1/T2 sim tier: bodies only where
 something is touching them, records everywhere else.
 
-### 11.4 Still open
+### 11.4 Melee, and the end of the superlinear term
+
+Glyphids now attack anything alive worth biting, not only players: livestock, villagers and golems all count,
+since a colony that walked past a farm to reach the player would not read as an infestation. Other monsters
+are skipped so a swarm does not stop to brawl with the local zombies. That also makes melee measurable without
+a client — verified by putting 20 cows in a 300-strong swarm and having 16 of them eaten in twelve seconds.
+
+Searching for prey is a box query rather than a walk of the player list, so acquisition had to drop from every
+tick to once a second, staggered by entity id. At three hundred glyphids, searching every tick would have cost
+more than the rest of the swarm put together.
+
+Entity push is now skipped between glyphids entirely, and the search for anything else to push runs every
+fourth tick. A swarm has no reason to shove itself apart, and the shoving is what made a dense pack jitter.
+
+| 300 glyphids, in contact | before | after |
+|---|---|---|
+| collision push, walking | 0.410 ms (9.3%) | **0.124 ms (2.8%)** |
+| collision push, flying | 0.621 ms (15.5%) | **0.311 ms (6.9%)** |
+
+That removes the only cost measured that grew faster than the swarm did. Side effect worth stating: it also
+skips vanilla entity cramming, so a packed swarm no longer suffocates itself — which for a mod about packed
+swarms is the behaviour we wanted anyway.
+
+**Full combat cost, 300 glyphids fighting a herd:** 4.9 ms/tick walking (16.2 µs/entity), 4.5 ms flying
+(15.1 µs). Melee is barely dearer than marching, and the split holds: movement 41–47%, path search 17–32%,
+push under 7%.
+
+### 11.5 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
