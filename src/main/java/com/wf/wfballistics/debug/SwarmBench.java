@@ -289,6 +289,65 @@ public final class SwarmBench {
      */
     public static boolean staggerSearches = true;
 
+    /**
+     * Charge straight at a target that is close and visible, instead of pathfinding to it.
+     */
+    public static boolean chargeMelee = true;
+
+    /**
+     * Share one A* between glyphids searching the same route, via {@link
+     * com.wf.wfballistics.entity.glyphid.ai.GlyphidPathCache}.
+     */
+    public static boolean sharedPaths = true;
+
+    /**
+     * Restore vanilla entity-vs-entity pushing for glyphids.
+     *
+     * <p>Only exists so that third-party collision optimisations can be measured against something. With the
+     * shipping behaviour there is nothing left for them to optimise -- glyphids do not push each other at all
+     * -- which would read as "the mod does nothing" when the honest statement is "we already deleted the work
+     * it speeds up".
+     */
+    public static boolean vanillaPush;
+
+    public static int charge(CommandSourceStack source, boolean on) {
+        chargeMelee = on;
+        source.sendSuccess(() -> Component.literal("Melee charge " + (on ? "on" : "off") + "."), false);
+        return 1;
+    }
+
+    public static int sharedPaths(CommandSourceStack source, boolean on) {
+        sharedPaths = on;
+        com.wf.wfballistics.entity.glyphid.ai.GlyphidPathCache.clear();
+        source.sendSuccess(() -> Component.literal("Shared paths " + (on ? "on" : "off") + "."), false);
+        return 1;
+    }
+
+    public static int push(CommandSourceStack source, boolean vanilla) {
+        vanillaPush = vanilla;
+        source.sendSuccess(() -> Component.literal("Glyphid push: " + (vanilla ? "vanilla" : "skipped") + "."), false);
+        return 1;
+    }
+
+    /**
+     * Resize vanilla's shared path-type cache on every loaded level, live.
+     */
+    public static int pathCache(CommandSourceStack source, double megabytes) {
+        int entries = PathTypeCacheSize.setMegabytes(megabytes);
+        int levels = 0;
+        for (ServerLevel level : source.getServer().getAllLevels()) {
+            if (level.getPathTypeCache() instanceof ResizablePathTypeCache resizable) {
+                resizable.wfballistics$resize(entries);
+                levels++;
+            }
+        }
+        int touched = levels;
+        source.sendSuccess(() -> Component.literal(String.format(java.util.Locale.ROOT,
+                "Path-type cache: %d entries (%.2f MB) across %d level(s).",
+                entries, PathTypeCacheSize.megabytesFor(entries), touched)), false);
+        return 1;
+    }
+
     public static int stagger(CommandSourceStack source, boolean on) {
         staggerSearches = on;
         source.sendSuccess(() -> Component.literal("Path-search stagger " + (on ? "on" : "off") + "."), false);

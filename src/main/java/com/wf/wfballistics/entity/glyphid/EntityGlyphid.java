@@ -290,6 +290,11 @@ public class EntityGlyphid extends Monster {
     @Override
     protected void pushEntities() {
         long t = SwarmProfiler.begin();
+        if (SwarmBench.vanillaPush) {
+            super.pushEntities();
+            SwarmProfiler.end(SwarmProfiler.Phase.PUSH, t);
+            return;
+        }
         // Staggered by entity id so the whole swarm does not search on the same tick.
         if (!level().isClientSide && (tickCount + getId()) % PUSH_INTERVAL == 0) {
             Predicate<Entity> pushable = EntitySelector.pushableBy(this);

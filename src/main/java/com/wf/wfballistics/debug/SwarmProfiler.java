@@ -82,7 +82,11 @@ public final class SwarmProfiler {
         SEARCHES("path searches"),
         NODES("nodes expanded"),
         BYTES("bytes allocated"),
-        BLOCK_READS("block reads");
+        BLOCK_READS("block reads"),
+        PATH_HIT("shared paths reused"),
+        PATH_MISS("paths searched"),
+        TYPE_QUERY("path-type queries"),
+        TYPE_MISS("path-type misses");
 
         private final String label;
 
@@ -436,6 +440,14 @@ public final class SwarmProfiler {
                 lines.add(String.format(Locale.ROOT,
                         "  %.0f block reads per search, %.1f per node, %.1f ns per read",
                         reads / searches, nodes > 0.0 ? reads / nodes : 0.0, neighbors * 1.0E6 / reads));
+            }
+            double queries = meanCount(Counter.TYPE_QUERY);
+            if (queries > 0.0) {
+                double misses = meanCount(Counter.TYPE_MISS);
+                lines.add(String.format(Locale.ROOT,
+                        "  %.1f path-type queries per node, %.0f%% hit; they explain %.0f%% of block reads",
+                        nodes > 0.0 ? queries / nodes : 0.0, 100.0 * (queries - misses) / queries,
+                        reads > 0.0 ? 100.0 * misses / reads : 0.0));
             }
         }
     }

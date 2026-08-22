@@ -1,0 +1,108 @@
+package com.wf.wfballistics.entity.glyphid.ai;
+
+import com.wf.wfballistics.debug.SwarmProfiler;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.pathfinder.Node;
+import net.minecraft.world.level.pathfinder.Path;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * One A* per group of glyphids going the same way, instead of one per glyphid.
+ *
+ * <p>Three hundred bugs marching on the same base currently run three hundred independent searches for what
+ * is, to within a few blocks, the same route. Quantising both ends of the search to a {@link #CELL}-block grid
+ * makes those searches collide on one key, so the first one pays and the rest copy the answer.
+ *
+ * <p>The copy matters: {@link Path} carries a mutable cursor into its own node list, so two mobs sharing one
+ * instance would advance each other's position along it. The nodes themselves are immutable once the search
+ * has finished and are shared freely; only the cursor is duplicated.
+ *
+ * <p>Entries expire after {@link #TTL} ticks. A path is a statement about terrain that glyphids are actively
+ * chewing through, and a stale one routes the swarm into a wall it already ate.
+ */
+public final class GlyphidPathCache {
+
+    /**
+     * Quantisation of both search endpoints, in blocks.
+     *
+     * <p>Trades hit rate against fidelity: bigger cells share more searches but start the shared route further
+     * from the glyphid that follows it, which reads as the swarm forming up into lanes. Four is small enough
+     * that the detour is under a body length and large enough to collapse a packed warband onto a handful of
+     * searches.
+     */
+    private static final int CELL = 4;
+    private static final int TTL = 20;
+    /**
+     * Cleared wholesale past this size rather than evicted one at a time: the cache is rebuilt every second
+     * anyway, so the cheapest correct policy is the crude one.
+     */
+    private static final int MAX_ENTRIES = 512;
+
+    private record Key(ResourceKey<Level> dimension, int startX, int startY, int startZ,
+                       int destX, int destY, int destZ) {
+    }
+
+    private record Entry(@Nullable Path path, int tick) {
+    }
+
+    private static final Map<Key, Entry> CACHE = new HashMap<>();
+
+    private GlyphidPathCache() {
+    }
+
+    private static int cell(int value) {
+        return Math.floorDiv(value, CELL);
+    }
+
+    private static Key key(Level level, BlockPos start, BlockPos destination) {
+        return new Key(level.dimension(), cell(start.getX()), cell(start.getY()), cell(start.getZ()),
+                cell(destination.getX()), cell(destination.getY()), cell(destination.getZ()));
+    }
+
+    /**
+     * @return a private copy of a recent path for this route, or null if nobody has searched it lately
+     */
+    public static @Nullable Path lookup(Level level, BlockPos start, BlockPos destination, int tick) {
+        Entry entry = CACHE.get(key(level, start, destination));
+        if (entry == null || tick - entry.tick() > TTL || tick < entry.tick()) {
+            SwarmProfiler.count(SwarmProfiler.Counter.PATH_MISS, 1L);
+            return null;
+        }
+        SwarmProfiler.count(SwarmProfiler.Counter.PATH_HIT, 1L);
+        return entry.path() == null ? null : copy(entry.path());
+    }
+
+    /**
+     * Record a search result, including a failed one — proving a route does not exist costs more than finding
+     * one, and is exactly as worth sharing.
+     */
+    public static void store(Level level, BlockPos start, BlockPos destination, @Nullable Path path, int tick) {
+        if (CACHE.size() >= MAX_ENTRIES) {
+            CACHE.clear();
+        }
+        CACHE.put(key(level, start, destination), new Entry(path, tick));
+    }
+
+    public static void clear() {
+        CACHE.clear();
+    }
+
+    public static int size() {
+        return CACHE.size();
+    }
+
+    private static Path copy(Path path) {
+        List<Node> nodes = new ArrayList<>(path.getNodeCount());
+        for (int i = 0; i < path.getNodeCount(); i++) {
+            nodes.add(path.getNode(i));
+        }
+        return new Path(nodes, path.getTarget(), path.canReach());
+    }
+}
