@@ -10,6 +10,7 @@ import com.wf.wfballistics.api.WFBallisticsAPI;
 import com.wf.wfballistics.chunk.DetonationChunkGuard; // used in ModBusEvents
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.debug.MissileDebug;
+import com.wf.wfballistics.debug.SwarmBench;
 import java.util.Set;
 import java.util.ArrayList;
 import net.minecraft.resources.ResourceLocation;
@@ -95,6 +96,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.neoforged.neoforge.event.tick.LevelTickEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.Comparator;
 import java.util.List;
@@ -128,6 +130,15 @@ public final class WFServerEvents {
             com.wf.wfballistics.build.BuildManager.tick(level);
             tickScenarios(level);
         }
+    }
+
+    /**
+     * Closes the swarm profiler's tick. On the server tick rather than the level tick so one game tick is
+     * one sample however many dimensions are loaded.
+     */
+    @SubscribeEvent
+    public static void onServerTick(ServerTickEvent.Post event) {
+        SwarmBench.tick(event.getServer());
     }
 
     /**
@@ -215,6 +226,31 @@ public final class WFServerEvents {
                 .then(buildCommand())
                 .then(salvageCommand())
                 .then(jobCommand())
+                .then(Commands.literal("swarmbench")
+                        .executes(ctx -> {
+                            ctx.getSource().sendSuccess(
+                                    () -> Component.literal(SwarmBench.status(ctx.getSource().getLevel())), false);
+                            return 1;
+                        })
+                        .then(Commands.literal("spawn")
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 2048))
+                                        .executes(ctx -> SwarmBench.spawn(ctx.getSource(),
+                                                IntegerArgumentType.getInteger(ctx, "count"), 24.0))
+                                        .then(Commands.argument("radius", DoubleArgumentType.doubleArg(2.0, 256.0))
+                                                .executes(ctx -> SwarmBench.spawn(ctx.getSource(),
+                                                        IntegerArgumentType.getInteger(ctx, "count"),
+                                                        DoubleArgumentType.getDouble(ctx, "radius"))))))
+                        .then(Commands.literal("clear")
+                                .executes(ctx -> SwarmBench.clear(ctx.getSource())))
+                        .then(Commands.literal("report")
+                                .executes(ctx -> SwarmBench.report(ctx.getSource())))
+                        .then(Commands.literal("reset")
+                                .executes(ctx -> SwarmBench.reset(ctx.getSource())))
+                        .then(Commands.literal("profile")
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> SwarmBench.profile(ctx.getSource(), true)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> SwarmBench.profile(ctx.getSource(), false)))))
                 .then(Commands.literal("exchange")
                         .then(Commands.literal("list")
                                 .executes(ctx -> exchangeList(ctx.getSource())))

@@ -48,6 +48,10 @@ public final class WFConfig {
     public static final ModConfigSpec.DoubleValue SIM_TERMINAL_RANGE;
     public static final ModConfigSpec.DoubleValue SIM_SPAWN_MARGIN;
     public static final ModConfigSpec.IntValue SIM_CRUISE_DELAY_TICKS;
+    // --- Glyphids ---
+    public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
+    public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
+    public static final ModConfigSpec.BooleanValue GLYPHID_WAYPOINT_DEBUG;
     // --- Debug ---
     public static final ModConfigSpec.BooleanValue DEBUG_LOGGING;
 
@@ -162,6 +166,21 @@ public final class WFConfig {
         SIM_CRUISE_DELAY_TICKS = b
                 .comment("Ticks a missile must cruise before it may offload to the sim at all (20 ticks = 1s).")
                 .defineInRange("cruiseDelayTicks", 100, 0, 1_000_000);
+        b.pop();
+
+        b.comment("Glyphid swarm behaviour.").push("glyphids");
+        GLYPHID_EXTENDED_TARGETING = b
+                .comment("Glyphids hunt players across 128 blocks instead of only the 16 around them.",
+                        "This is what turns a nest into a base attack, and it is the single biggest lever on",
+                        "how much work a swarm does per tick.")
+                .define("extendedTargeting", false);
+        GLYPHID_DIG = b
+                .comment("Glyphids chew through terrain and buildings to reach a waypoint. With this off they",
+                        "path around obstacles instead, which is cheaper but lets walls stop them entirely.")
+                .define("digging", true);
+        GLYPHID_WAYPOINT_DEBUG = b
+                .comment("Render colony waypoints as coloured dust particles (client-side).")
+                .define("waypointDebug", false);
         b.pop();
 
         b.comment("Debugging.").push("debug");
