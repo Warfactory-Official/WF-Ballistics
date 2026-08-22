@@ -146,3 +146,76 @@ both tiers.
   different proposition from doing it out of sight.
 - **Observability.** A simulation you cannot see is one you cannot tune. Wants a map/overlay command
   from the start — the precedents are `/wfballistics drone telemetry` and upstream's `GlyphidPathDebug`.
+
+---
+
+## 8. Implemented: colonies, expansion, attacks
+
+### 8.1 Why nothing writes to unloaded chunks
+
+The obvious way to expand out of sight is to write blocks straight into chunk data. Rejected: bypassing
+the chunk cache races anything already resident in memory, and under C2ME the chunk pipeline is running
+in parallel, so the failure mode is a corrupted region rather than a slow tick.
+
+It is also unnecessary, because §4 already decided the colony record is the truth and blocks are only its
+view. **A nest in an unloaded chunk needs no blocks — nothing can see it.** So expansion writes a record,
+costs nothing, and the nest is built when the chunk loads on its own. `PendingChunkEdits` covers explicit
+block deltas the same way. Zero chunks loaded, no corruption surface, same visible result.
+
+A related consequence: a colony founded off-world cannot know the ground height there, so it does not
+guess. `Colony.y` stays `Y_UNRESOLVED` and the surface is sampled at materialisation, when there is real
+terrain to sample.
+
+### 8.2 Distance scaling
+
+Strength is a function of distance from world spawn: nothing inside `safeRadius`, ramping linearly to
+`maxTier` at `fullStrengthDistance`. Tier multiplies population cap, growth rate, warband size and nest
+radius, so the frontier is where the dangerous colonies are and pushing out is a decision with a price.
+
+### 8.3 Build, then strike
+
+Two independent numbers, which is what produces a rhythm rather than a trickle:
+
+- **population** grows on its own to a cap — what an attack is *paid for* out of
+- **aggression** accumulates from nearby industry — what decides *whether* to attack
+
+A colony with numbers and no provocation sits still; one with provocation and no numbers keeps building
+until it can afford to act. On strike it spends population, resets aggression, and emits one `Warband`
+record — one object for however many glyphids, moving in a straight line, which is the tier that makes
+this scale.
+
+### 8.4 Expansion needs a stop, not a cooldown
+
+Found by fast-forwarding rather than by reasoning: with only a cooldown, colonies reached **150,000
+blocks from spawn**. Expansion is exponential — every colony founded can found more — and each generation
+moved outward, so the frontier ran away. Three limits now: `maxColonies` per dimension, `frontierDistance`
+beyond which nothing may be founded, and a `crowdingLimit` within `crowdingRadius` that turns expansion
+into filling territory in rather than leapfrogging outward.
+
+### 8.5 Provocation radius is deliberately not the cell size
+
+First cut sampled "the neighbouring cells", which silently tied how far industry can be smelled to the
+industry cell size — so tuning cells for performance would have quietly changed gameplay, and a colony 850
+blocks from a factory was oblivious for no visible reason. It is now an explicit `provocationRadius` with
+linear falloff.
+
+Known granularity limit: falloff is measured to **cell centres**, not to machines, so the effective radius
+carries up to about half a cell diagonal of error (~360 blocks at the 32-chunk default).
+
+### 8.6 Verified
+
+Growth, aggression accrual, strike, expansion and warband travel all match hand-computed predictions
+(aggression 1.0/s at the test pressure; strike at exactly 100 s; warband of 8 for tier 0; population and
+aggression correctly spent). Three dispatches and two arrivals observed over a fast-forwarded run, with a
+stable 100-round cycle.
+
+`fastforward` is load-bearing for this and had its own bug worth recording: it advanced warbands once per
+colony round rather than once per tick, under-reporting travel by the tick interval and making every
+strike look 20x slower than it is.
+
+### 8.7 Still open
+
+- Materialisation (warband record → entities) is the piece that has to conserve counts and place bodies on
+  real ground. Tracked separately; a warband currently completes its journey and disperses.
+- `NestBuilder` is a hook: colonies materialise as data until the spawner block lands with the hive port.
+- Evolution (§7) is still not implemented — tier is distance-derived only, with no global progression.

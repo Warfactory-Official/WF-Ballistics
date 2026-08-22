@@ -11,6 +11,8 @@ import com.wf.wfballistics.chunk.DetonationChunkGuard; // used in ModBusEvents
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.debug.SwarmBench;
+import com.wf.wfballistics.colony.ColonyDebug;
+import com.wf.wfballistics.colony.ColonyManager;
 import com.wf.wfballistics.industry.IndustryClusters;
 import com.wf.wfballistics.industry.IndustryDebug;
 import java.util.Set;
@@ -133,6 +135,7 @@ public final class WFServerEvents {
             // Event-driven and debounced: this only dispatches a scan when industry actually
             // changed and the world has since gone quiet.
             IndustryClusters.tick(level);
+            ColonyManager.tick(level);
             tickScenarios(level);
         }
     }
@@ -232,6 +235,20 @@ public final class WFServerEvents {
                 .then(buildCommand())
                 .then(salvageCommand())
                 .then(jobCommand())
+                .then(Commands.literal("colony")
+                        .executes(ctx -> ColonyDebug.status(ctx.getSource()))
+                        .then(Commands.literal("list")
+                                .executes(ctx -> ColonyDebug.list(ctx.getSource())))
+                        .then(Commands.literal("warbands")
+                                .executes(ctx -> ColonyDebug.warbands(ctx.getSource())))
+                        .then(Commands.literal("found")
+                                .executes(ctx -> ColonyDebug.found(ctx.getSource())))
+                        .then(Commands.literal("clear")
+                                .executes(ctx -> ColonyDebug.clear(ctx.getSource())))
+                        .then(Commands.literal("fastforward")
+                                .then(Commands.argument("rounds", IntegerArgumentType.integer(1, 100_000))
+                                        .executes(ctx -> ColonyDebug.fastForward(ctx.getSource(),
+                                                IntegerArgumentType.getInteger(ctx, "rounds"))))))
                 .then(Commands.literal("industry")
                         .executes(ctx -> IndustryDebug.status(ctx.getSource()))
                         .then(Commands.literal("bases")

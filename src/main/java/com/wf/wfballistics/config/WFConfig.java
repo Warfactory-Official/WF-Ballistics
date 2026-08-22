@@ -2,6 +2,7 @@ package com.wf.wfballistics.config;
 
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.compat.WarforgeCompat;
+import com.wf.wfballistics.colony.ColonyConfig;
 import com.wf.wfballistics.industry.IndustryConfig;
 import com.wf.wfballistics.industry.IndustryValues;
 import com.wf.wfballistics.sim.MissileSimConfig;
@@ -59,6 +60,25 @@ public final class WFConfig {
     public static final ModConfigSpec.IntValue INDUSTRY_CLUSTER_MIN_VALUE;
     public static final ModConfigSpec.IntValue INDUSTRY_RECOMPUTE_DELAY;
     public static final ModConfigSpec.BooleanValue INDUSTRY_BACKFILL;
+    // --- Colonies ---
+    public static final ModConfigSpec.IntValue COLONY_SAFE_RADIUS;
+    public static final ModConfigSpec.IntValue COLONY_FULL_STRENGTH_DISTANCE;
+    public static final ModConfigSpec.IntValue COLONY_MAX_TIER;
+    public static final ModConfigSpec.DoubleValue COLONY_GROWTH_PER_SECOND;
+    public static final ModConfigSpec.IntValue COLONY_POPULATION_CAP;
+    public static final ModConfigSpec.DoubleValue COLONY_AGGRESSION_PER_PRESSURE;
+    public static final ModConfigSpec.DoubleValue COLONY_STRIKE_THRESHOLD;
+    public static final ModConfigSpec.IntValue COLONY_WARBAND_SIZE;
+    public static final ModConfigSpec.IntValue COLONY_EXPANSION_POPULATION;
+    public static final ModConfigSpec.IntValue COLONY_EXPANSION_COOLDOWN;
+    public static final ModConfigSpec.IntValue COLONY_EXPANSION_RANGE;
+    public static final ModConfigSpec.IntValue COLONY_TICK_INTERVAL;
+    public static final ModConfigSpec.DoubleValue COLONY_WARBAND_SPEED;
+    public static final ModConfigSpec.IntValue COLONY_MAX_COLONIES;
+    public static final ModConfigSpec.IntValue COLONY_FRONTIER_DISTANCE;
+    public static final ModConfigSpec.IntValue COLONY_PROVOCATION_RADIUS;
+    public static final ModConfigSpec.IntValue COLONY_CROWDING_RADIUS;
+    public static final ModConfigSpec.IntValue COLONY_CROWDING_LIMIT;
     // --- Glyphids ---
     public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
@@ -215,6 +235,71 @@ public final class WFConfig {
                 .define("chunkBackfill", true);
         b.pop();
 
+        b.comment("Colony simulation: nests grow, take offence and march whether or not chunks are loaded.",
+                        "Strength scales with distance from world spawn, so the frontier is the dangerous part.")
+                .push("colonies");
+        COLONY_SAFE_RADIUS = b
+                .comment("No colony may exist within this many blocks of world spawn.")
+                .defineInRange("safeRadius", 512, 0, 1_000_000);
+        COLONY_FULL_STRENGTH_DISTANCE = b
+                .comment("Distance from spawn at which colonies reach the maximum tier. Strength ramps",
+                        "linearly between the safe radius and here.")
+                .defineInRange("fullStrengthDistance", 12_000, 1, 30_000_000);
+        COLONY_MAX_TIER = b
+                .comment("Highest colony tier. Each tier multiplies population cap, growth and warband size.")
+                .defineInRange("maxTier", 4, 0, 32);
+        COLONY_GROWTH_PER_SECOND = b
+                .comment("Population a tier-0 colony gains per second.")
+                .defineInRange("growthPerSecond", 0.35, 0.0, 1000.0);
+        COLONY_POPULATION_CAP = b
+                .comment("Population cap at tier 0; each tier adds another multiple of this.")
+                .defineInRange("populationCap", 20, 1, 100_000);
+        COLONY_AGGRESSION_PER_PRESSURE = b
+                .comment("Aggression gained per point of nearby industry provocation, per second.",
+                        "This is the link between what the player runs and when they get attacked.")
+                .defineInRange("aggressionPerPressure", 0.02, 0.0, 1000.0);
+        COLONY_STRIKE_THRESHOLD = b
+                .comment("Aggression at which a colony with the numbers to spare sends a warband.")
+                .defineInRange("strikeThreshold", 100.0, 1.0, 1_000_000.0);
+        COLONY_WARBAND_SIZE = b
+                .comment("Warband size at tier 0; each tier adds another multiple.")
+                .defineInRange("warbandSize", 8, 1, 10_000);
+        COLONY_EXPANSION_POPULATION = b
+                .comment("Population a colony must hold before it can afford to found another.")
+                .defineInRange("expansionPopulation", 25, 1, 100_000);
+        COLONY_EXPANSION_COOLDOWN = b
+                .comment("Ticks before a colony may expand again (12000 = 10 minutes).")
+                .defineInRange("expansionCooldownTicks", 12_000, 1, 10_000_000);
+        COLONY_EXPANSION_RANGE = b
+                .comment("How far from its parent a new colony is founded, outward from spawn.")
+                .defineInRange("expansionRange", 900, 16, 100_000);
+        COLONY_TICK_INTERVAL = b
+                .comment("Ticks between colony updates. Colonies are staggered across this window, so the",
+                        "per-tick cost is the colony count divided by this.")
+                .defineInRange("tickIntervalTicks", 20, 1, 1200);
+        COLONY_WARBAND_SPEED = b
+                .comment("Blocks per tick a travelling warband covers while off-world.")
+                .defineInRange("warbandSpeed", 0.35, 0.01, 64.0);
+        COLONY_MAX_COLONIES = b
+                .comment("Hard ceiling on colonies per dimension. Expansion is exponential -- every colony",
+                        "founded can found more -- so it needs a stop, not just a cooldown.")
+                .defineInRange("maxColonies", 250, 0, 100_000);
+        COLONY_FRONTIER_DISTANCE = b
+                .comment("No colony may be founded beyond this distance from spawn.")
+                .defineInRange("frontierDistance", 24_000, 1, 30_000_000);
+        COLONY_PROVOCATION_RADIUS = b
+                .comment("How far a colony can smell industry. Independent of the industry cell size on",
+                        "purpose, so tuning cells for performance does not silently change gameplay.")
+                .defineInRange("provocationRadius", 1_500, 16, 100_000);
+        COLONY_CROWDING_RADIUS = b
+                .comment("Radius the crowding limit below is measured over.")
+                .defineInRange("crowdingRadius", 1_800, 16, 100_000);
+        COLONY_CROWDING_LIMIT = b
+                .comment("Colonies already within the crowding radius of a proposed site that will block it.",
+                        "This is what makes expansion fill in territory instead of fleeing outward forever.")
+                .defineInRange("crowdingLimit", 4, 1, 1_000);
+        b.pop();
+
         b.comment("Glyphid swarm behaviour.").push("glyphids");
         GLYPHID_EXTENDED_TARGETING = b
                 .comment("Glyphids hunt players across 128 blocks instead of only the 16 around them.",
@@ -278,5 +363,12 @@ public final class WFConfig {
         IndustryValues.bake(INDUSTRY_MACHINES.get());
         IndustryConfig.apply(INDUSTRY_CELL_CHUNKS.get(), INDUSTRY_CLUSTER_GAP.get(),
                 INDUSTRY_CLUSTER_MIN_VALUE.get(), INDUSTRY_RECOMPUTE_DELAY.get(), INDUSTRY_BACKFILL.get());
+        ColonyConfig.apply(COLONY_SAFE_RADIUS.get(), COLONY_FULL_STRENGTH_DISTANCE.get(), COLONY_MAX_TIER.get(),
+                COLONY_GROWTH_PER_SECOND.get(), COLONY_POPULATION_CAP.get(),
+                COLONY_AGGRESSION_PER_PRESSURE.get(), COLONY_STRIKE_THRESHOLD.get(), COLONY_WARBAND_SIZE.get(),
+                COLONY_EXPANSION_POPULATION.get(), COLONY_EXPANSION_COOLDOWN.get(), COLONY_EXPANSION_RANGE.get(),
+                COLONY_TICK_INTERVAL.get(), COLONY_WARBAND_SPEED.get(),
+                COLONY_MAX_COLONIES.get(), COLONY_FRONTIER_DISTANCE.get(), COLONY_PROVOCATION_RADIUS.get(),
+                COLONY_CROWDING_RADIUS.get(), COLONY_CROWDING_LIMIT.get());
     }
 }

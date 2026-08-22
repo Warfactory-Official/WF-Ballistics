@@ -152,6 +152,40 @@ public final class IndustryRegistry extends SavedData {
     }
 
     /**
+     * @return provocation reaching this position from within {@code radiusBlocks}, falling off linearly
+     * with distance.
+     *
+     * <p>The radius is explicit rather than "the neighbouring cells" on purpose. Sampling a fixed ring of
+     * cells silently ties how far industry can be smelled to the cell size, so changing the cell size for
+     * performance reasons would quietly change the gameplay — and a colony 850 blocks from a factory would
+     * be oblivious for no reason a reader could see.
+     */
+    public int pressureWithin(int blockX, int blockZ, int radiusBlocks) {
+        int span = cellChunks * 16;
+        int reach = Math.max(1, (int) Math.ceil(radiusBlocks / (double) span));
+        long own = cellOf(blockX, blockZ, cellChunks);
+        int originX = cellX(own);
+        int originZ = cellZ(own);
+
+        double total = 0.0;
+        for (int dx = -reach; dx <= reach; dx++) {
+            for (int dz = -reach; dz <= reach; dz++) {
+                int value = cells.get(packCell(originX + dx, originZ + dz));
+                if (value == 0) {
+                    continue;
+                }
+                double centreX = (originX + dx) * span + span / 2.0;
+                double centreZ = (originZ + dz) * span + span / 2.0;
+                double distance = Math.sqrt(Math.pow(centreX - blockX, 2) + Math.pow(centreZ - blockZ, 2));
+                if (distance <= radiusBlocks) {
+                    total += value * (1.0 - distance / radiusBlocks);
+                }
+            }
+        }
+        return (int) Math.round(total);
+    }
+
+    /**
      * @return every occupied cell and its value. This is what the colony simulation reads; it is orders of
      * magnitude smaller than {@link #machineCount()}, which is what makes clustering over it cheap.
      */
