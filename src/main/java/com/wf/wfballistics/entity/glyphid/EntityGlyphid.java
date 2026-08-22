@@ -34,6 +34,7 @@ import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.HumanoidArm;
+import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
@@ -63,6 +64,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * The base glyphid: an armoured, wall-climbing, terrain-chewing swarm mob.
@@ -125,6 +127,17 @@ public class EntityGlyphid extends Monster {
      * Radians per unit of the quantised lean, matching {@code DroneEntity.TILT_QUANTUM}.
      */
     public static final float TILT_QUANTUM = 90.0F;
+
+    /**
+     * Ticks between looking for something to push. See {@link #pushEntities}.
+     */
+    private static final int PUSH_INTERVAL = 4;
+
+    /**
+     * How far a glyphid notices something that is not a player. Shorter than the extended player-hunting
+     * range: a colony crosses the map for the thing that provoked it, and eats whatever it walks into.
+     */
+    private static final double PREY_RANGE = 24.0;
 
     public boolean hasHome = false;
     public int homeX;
@@ -253,10 +266,30 @@ public class EntityGlyphid extends Monster {
 
     // The AI bucket cannot be an override: Mob#serverAiStep is final. It is taken in MixinMob instead.
 
+    /**
+     * Glyphids do not shove each other, and only look for anything else to shove every
+     * {@link #PUSH_INTERVAL} ticks.
+     *
+     * <p>Entity-vs-entity push is the only cost measured that grows faster than the swarm does: 1.8% of the
+     * tick at a hundred glyphids, 15.5% at three hundred packed. It is also pure waste — a swarm has no reason
+     * to push itself apart, and the shoving is what makes a dense pack jitter. With the swarm excluded there
+     * is usually nothing left to push, so the search for something to push is what gets throttled.
+     *
+     * <p>Side effect worth stating: this skips vanilla's entity cramming, so a packed swarm no longer suffocates
+     * itself. For a mod whose whole premise is packed swarms that is the behaviour we want anyway.
+     */
     @Override
     protected void pushEntities() {
         long t = SwarmProfiler.begin();
-        super.pushEntities();
+        // Staggered by entity id so the whole swarm does not search on the same tick.
+        if (!level().isClientSide && (tickCount + getId()) % PUSH_INTERVAL == 0) {
+            Predicate<Entity> pushable = EntitySelector.pushableBy(this);
+            List<Entity> nearby = level().getEntities(this, getBoundingBox(),
+                    other -> !(other instanceof EntityGlyphid) && pushable.test(other));
+            for (Entity other : nearby) {
+                doPush(other);
+            }
+        }
         SwarmProfiler.end(SwarmProfiler.Phase.PUSH, t);
     }
 
@@ -615,10 +648,49 @@ public class EntityGlyphid extends Monster {
         SwarmProfiler.endExcluding(SwarmProfiler.Phase.DIG, t, SwarmProfiler.Phase.PATH, pathBefore);
     }
 
-    public @Nullable Player findTargetCandidate() {
+    /**
+     * What this glyphid would attack if it looked right now.
+     *
+     * <p>Players first and at the longest range, then anything else alive and worth biting. Livestock,
+     * villagers and golems all count: a colony that walked past a farm to get to the player would not read as
+     * an infestation. Other monsters are skipped so a swarm does not stop to brawl with the local zombies, and
+     * glyphids never target each other.
+     */
+    public @Nullable LivingEntity findTargetCandidate() {
         if (hasEffect(MobEffects.BLINDNESS)) return null;
+
         double radius = useExtendedTargeting() ? 128D : 16D;
-        return level().getNearestPlayer(getX(), getY(), getZ(), radius, false);
+        Player player = level().getNearestPlayer(getX(), getY(), getZ(), radius, false);
+        if (player != null) {
+            return player;
+        }
+        return nearestPrey(Math.min(radius, PREY_RANGE));
+    }
+
+    /**
+     * @return the nearest non-player thing worth attacking, or null.
+     */
+    protected @Nullable LivingEntity nearestPrey(double radius) {
+        AABB box = getBoundingBox().inflate(radius);
+        List<LivingEntity> candidates = level().getEntitiesOfClass(LivingEntity.class, box, EntityGlyphid::isPrey);
+
+        LivingEntity best = null;
+        double bestSq = Double.MAX_VALUE;
+        for (LivingEntity candidate : candidates) {
+            double distSq = candidate.distanceToSqr(this);
+            if (distSq < bestSq) {
+                bestSq = distSq;
+                best = candidate;
+            }
+        }
+        return best;
+    }
+
+    public static boolean isPrey(LivingEntity entity) {
+        return entity.isAlive()
+                && entity.attackable()
+                && !(entity instanceof EntityGlyphid)
+                && !(entity instanceof Monster);
     }
 
     /**
