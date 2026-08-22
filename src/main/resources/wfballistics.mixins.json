@@ -5,6 +5,8 @@
   "compatibilityLevel": "JAVA_21",
   "plugin": "com.wf.wfballistics.mixin.WFMixinPlugin",
   "mixins": [
+    "MixinMob",
+    "MixinPathNavigation",
     "MixinProjectileUtil",
     "gt.MixinNotifiableEnergyContainer"
   ],

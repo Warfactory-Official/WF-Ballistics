@@ -3,10 +3,13 @@ package com.wf.wfballistics;
 import com.wf.wfballistics.drone.CrateEntity;
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.entity.*;
+import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
+import com.wf.wfballistics.entity.glyphid.GlyphidWaypoint;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.MobCategory;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -98,8 +101,37 @@ public class ModEntities {
                     .build("torex")
             );
 
+    // Swarm mob. Climbs walls and chews terrain, so it is tracked at normal mob range but updated every
+    // tick: a glyphid that stutters on a wall reads as broken.
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphid>> GLYPHID =
+            ENTITY_TYPES.register("glyphid", () -> EntityType.Builder.<EntityGlyphid>of(EntityGlyphid::new, MobCategory.MONSTER)
+                    .sized(1.4F, 1.0F)
+                    .clientTrackingRange(8)
+                    .updateInterval(1)
+                    .build("glyphid")
+            );
+
+    // Colony order marker. Never moves, never renders, and only ticks every 40th tick, so it costs almost
+    // nothing to leave lying around.
+    public static final DeferredHolder<EntityType<?>, EntityType<GlyphidWaypoint>> GLYPHID_WAYPOINT =
+            ENTITY_TYPES.register("glyphid_waypoint", () -> EntityType.Builder.<GlyphidWaypoint>of(GlyphidWaypoint::new, MobCategory.MISC)
+                    .fireImmune()
+                    .sized(0.1F, 0.1F)
+                    .clientTrackingRange(48)
+                    .updateInterval(Integer.MAX_VALUE)
+                    .build("glyphid_waypoint")
+            );
+
     // 3. Register the DeferredRegister with the Mod Event Bus
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);
+        eventBus.addListener(ModEntities::registerAttributes);
+    }
+
+    /**
+     * Living entities need an attribute supplier registered before anything can spawn one.
+     */
+    private static void registerAttributes(EntityAttributeCreationEvent event) {
+        event.put(GLYPHID.get(), EntityGlyphid.createAttributes().build());
     }
 }
