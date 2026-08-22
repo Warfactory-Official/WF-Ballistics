@@ -304,6 +304,18 @@ public class EntityGlyphid extends Monster {
         SwarmProfiler.end(SwarmProfiler.Phase.MOVE, t);
     }
 
+    /**
+     * Vanilla walks every block the hitbox overlaps and asks each one what it does to an entity standing in
+     * it. Measured here rather than in a mixin because the method is already overridable; the rest of
+     * {@code move} is split apart in {@link com.wf.wfballistics.mixin.MixinEntity}.
+     */
+    @Override
+    protected void checkInsideBlocks() {
+        long t = SwarmProfiler.begin();
+        super.checkInsideBlocks();
+        SwarmProfiler.end(SwarmProfiler.Phase.INSIDE, t);
+    }
+
     // --- flight ---
 
     public boolean canFly() {

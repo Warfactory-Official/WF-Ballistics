@@ -448,7 +448,47 @@ swarms is the behaviour we wanted anyway.
 (15.1 µs). Melee is barely dearer than marching, and the split holds: movement 41–47%, path search 17–32%,
 push under 7%.
 
-### 11.5 Still open
+### 11.5 Inside `move()`
+
+With push fixed, movement became the largest line in the report and the one that cannot leave the server
+thread — so "movement is 45%" is where the question starts. Vanilla's `move` is three unrelated things sharing
+a name, and they were split apart (`MixinEntity`, plus a `checkInsideBlocks` override) to find out which one
+the swarm actually pays for. 300 walking, in contact:
+
+| inside movement (2.16 ms total) | ms | of tick |
+|---|---|---|
+| collision sweep | 1.36 | 25.9% |
+| — block shapes | 0.74 | 14.1% |
+| — entity overlap query | 0.62 | 11.9% |
+| friction, fall, attributes, animation | 0.60 | 11.4% |
+| fire scan (`getBlockStatesIfLoaded` + `noneMatch`) | 0.15 | 2.8% |
+| blocks inside (hitbox volume walk) | 0.06 | 1.1% |
+
+**The collision sweep is the answer**: 63% of movement, roughly half block shapes and half the entity query.
+Everything else in `move` put together is smaller than the sweep alone. The two small lines that *sound*
+expensive — walking every block the hitbox touches, and streaming those blocks again to ask about fire — cost
+under 4% between them.
+
+The entity half is pure waste for a glyphid. `getEntityCollisions` walks the entity sections over the swept
+box, allocating a list per entity per tick, and filters on `canCollideWith` — which in 1.21.1 only `Boat` and
+`Shulker` ever answer yes to. The list comes back empty every time. A/B'd on the same world in one server run
+via `swarmbench entitycollisions off`:
+
+| 300 walking, in contact | query on | query skipped |
+|---|---|---|
+| collision sweep | 1.36 / 1.50 ms | **0.73 / 0.74 ms** |
+| movement | 2.16 / 2.29 ms | **1.55 / 1.54 ms** |
+| tick | 5.24 / 5.10 ms | **3.78 / 3.94 ms** |
+| worst tick in window | 10.7 / 28.4 ms | **6.2 / 15.0 ms** |
+
+Behaviour is identical unless a glyphid walks into a boat or a shulker, because in both arms the returned list
+is empty. The spike reduction is the giveaway that it was also garbage: 300 throwaway lists a tick.
+
+The block half is not free money. It runs `collectColliders` a second time and `collideWithShapes` once per
+candidate step height whenever a mob on the ground hits something horizontally — which for a swarm pressed
+against a wall is every tick. Cutting it means giving up step-up, and glyphids need to climb terrain.
+
+### 11.6 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
