@@ -1,6 +1,7 @@
 package com.wf.wfballistics;
 
 import com.wf.wfballistics.drone.CrateEntity;
+import com.wf.wfballistics.debug.EntityDebugDummy;
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.entity.*;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
@@ -132,6 +133,16 @@ public class ModEntities {
                     .build("glyphid_waypoint")
             );
 
+    // Benchmark target. Never moves and never dies, so a melee window measures the swarm rather than what
+    // the swarm is chewing on.
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityDebugDummy>> DEBUG_DUMMY =
+            ENTITY_TYPES.register("debug_dummy", () -> EntityType.Builder.<EntityDebugDummy>of(EntityDebugDummy::new, MobCategory.MISC)
+                    .sized(0.6F, 1.8F)
+                    .clientTrackingRange(8)
+                    .updateInterval(Integer.MAX_VALUE)
+                    .build("debug_dummy")
+            );
+
     // 3. Register the DeferredRegister with the Mod Event Bus
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);
@@ -143,5 +154,6 @@ public class ModEntities {
      */
     private static void registerAttributes(EntityAttributeCreationEvent event) {
         event.put(GLYPHID.get(), EntityGlyphid.createAttributes().build());
+        event.put(DEBUG_DUMMY.get(), EntityDebugDummy.createAttributes().build());
     }
 }

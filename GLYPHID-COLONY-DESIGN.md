@@ -488,7 +488,50 @@ The block half is not free money. It runs `collectColliders` a second time and `
 candidate step height whenever a mob on the ground hits something horizontally — which for a swarm pressed
 against a wall is every tick. Cutting it means giving up step-up, and glyphids need to climb terrain.
 
-### 11.6 Still open
+### 11.6 The melee goal was most of the tick
+
+Benchmarking moved off cows and onto `EntityDebugDummy` — no AI, unkillable, and stationary unless told
+otherwise. That last dial turned out to decide the answer.
+
+Against **still** targets, path search is 6% of the tick and vanilla's `MeleeAttackGoal` looks fine. Against
+targets that **move**, the same goal is 59%. The difference is structural, not tuning:
+
+- `canUse()` runs a **full A\*** — every twenty ticks, per mob, purely to decide whether attacking is possible.
+  Three hundred glyphids with a target pay fifteen searches a tick before any of them has moved.
+- `tick()` repaths every four to ten ticks, re-triggered whenever the target shifts **one block**.
+- Both call `createPath(entity, 0)`, which takes its range from follow range — 16 for a monster. Anything
+  further fails, and a failed search is the expensive one: it expands the whole reachable set before giving up.
+
+So a benchmark against stationary targets would have reported the swarm as fine and been wrong. Movement is a
+parameter of the target, not a property of the test.
+
+`GlyphidMeleeGoal` does no pathfinding in `canUse` at all, and shares `GlyphidPathingGoal` with the march —
+hops with an explicit range, backoff keyed on displacement, chewing through what is in the way. It re-aims
+only when the target has left the hop it was walking to, rather than on a block of drift.
+
+**300 glyphids vs 60 targets drifting on an 8-block circle:**
+
+| | vanilla melee + entity query | glyphid melee, query skipped |
+|---|---|---|
+| tick | 8.70 ms (29.0 µs/entity) | **4.50 ms (15.0 µs/entity)** |
+| p95 | 11.98 ms | 8.64 ms |
+| path search | 5.12 ms (58.8%) | 1.50 ms (33.3%) |
+| hits landed | 525 | **574** |
+
+Roughly half the tick, and it fights *better* — fewer glyphids stranded without a route, because a hop always
+yields one and a glyphid that still cannot route digs instead. Against stationary targets the same pair is
+4.16 ms → 2.88 ms (13.9 → 9.6 µs/entity).
+
+Both arms are switchable at runtime (`swarmbench meleegoal vanilla|glyphid`, `swarmbench entitycollisions
+on|off`) and read at spawn, so the comparison is one server run on one world rather than four.
+
+**Where 300 now sits:** 9.6 µs/entity against still targets, 15.0 µs moving, 10.3 µs flying. 600 walking
+against moving targets costs 8.25 ms — 13.8 µs/entity, so scaling is near enough linear.
+
+The residual split landed too: `base tick` (fire, air, effects, freezing) is 0.36–0.84 ms and was most of what
+the report used to leave unattributed, which fell from 0.69 ms to 0.18 ms.
+
+### 11.7 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
@@ -500,5 +543,9 @@ against a wall is every tick. Cutting it means giving up step-up, and glyphids n
   flywheel port. Note that server-only testing hid this completely — a missing renderer is a client crash.
 - `NestBuilder` is a hook: colonies materialise as data until the spawner block lands with the hive port.
 - Evolution (§7) is still not implemented — tier is distance-derived only, with no global progression.
-- Extended targeting acquires players at 128 blocks, but `MeleeAttackGoal` paths within follow range, so a
-  glyphid can see a target it cannot route to.
+- **Ambient wildlife derails a march.** Melee outranks the march goal, so a column crossing a plains biome
+  stops to eat it. Fine as behaviour, ruinous as a benchmark — march runs need `doMobSpawning false` and a
+  swept arena, or they measure a brawl. Whether it wants a leash in gameplay is a design question, not a bug.
+- **March speed measured 1.45 blocks/s** over a 170-block approach, against 2.07 measured earlier over a
+  shorter one. The pathing logic is unchanged by the goal refactor (verified by inspection, not by A/B), so
+  this is most likely terrain and column spread rather than a regression — but it is not proven.

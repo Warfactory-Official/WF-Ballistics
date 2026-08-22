@@ -302,11 +302,34 @@ public final class WFServerEvents {
                                         .executes(ctx -> SwarmBench.profile(ctx.getSource(), true)))
                                 .then(Commands.literal("off")
                                         .executes(ctx -> SwarmBench.profile(ctx.getSource(), false))))
+                        .then(Commands.literal("dummies")
+                                .executes(ctx -> SwarmBench.dummyReport(ctx.getSource()))
+                                .then(Commands.literal("clear")
+                                        .executes(ctx -> SwarmBench.dummyClear(ctx.getSource())))
+                                .then(Commands.literal("reset")
+                                        .executes(ctx -> SwarmBench.dummyReset(ctx.getSource())))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1, 512))
+                                        .executes(ctx -> SwarmBench.dummies(ctx.getSource(),
+                                                IntegerArgumentType.getInteger(ctx, "count"), 30.0, 0.0))
+                                        .then(Commands.argument("spread", DoubleArgumentType.doubleArg(1.0, 256.0))
+                                                .executes(ctx -> SwarmBench.dummies(ctx.getSource(),
+                                                        IntegerArgumentType.getInteger(ctx, "count"),
+                                                        DoubleArgumentType.getDouble(ctx, "spread"), 0.0))
+                                                .then(Commands.argument("drift", DoubleArgumentType.doubleArg(0.0, 64.0))
+                                                        .executes(ctx -> SwarmBench.dummies(ctx.getSource(),
+                                                                IntegerArgumentType.getInteger(ctx, "count"),
+                                                                DoubleArgumentType.getDouble(ctx, "spread"),
+                                                                DoubleArgumentType.getDouble(ctx, "drift")))))))
                         .then(Commands.literal("entitycollisions")
                                 .then(Commands.literal("on")
                                         .executes(ctx -> SwarmBench.entityCollisions(ctx.getSource(), true)))
                                 .then(Commands.literal("off")
-                                        .executes(ctx -> SwarmBench.entityCollisions(ctx.getSource(), false)))))
+                                        .executes(ctx -> SwarmBench.entityCollisions(ctx.getSource(), false))))
+                        .then(Commands.literal("meleegoal")
+                                .then(Commands.literal("vanilla")
+                                        .executes(ctx -> SwarmBench.meleeGoal(ctx.getSource(), true)))
+                                .then(Commands.literal("glyphid")
+                                        .executes(ctx -> SwarmBench.meleeGoal(ctx.getSource(), false)))))
                 .then(Commands.literal("exchange")
                         .then(Commands.literal("list")
                                 .executes(ctx -> exchangeList(ctx.getSource())))

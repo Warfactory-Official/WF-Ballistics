@@ -158,6 +158,96 @@ public final class SwarmBench {
         return doomed.size();
     }
 
+    /**
+     * Scatter {@code count} dummies across a square of {@code spread} blocks, clearing any previous set.
+     *
+     * <p>Square rather than ring: the swarm materialises into a square, and the interesting failure is a
+     * target sitting just outside the attacker's follow range, which a ring of one radius cannot produce.
+     */
+    public static int dummies(CommandSourceStack source, int count, double spread, double drift) {
+        ServerLevel level = source.getLevel();
+        Vec3 center = source.getPosition();
+        int removed = clearDummies(level);
+
+        int spawned = 0;
+        for (int i = 0; i < count; i++) {
+            // Deterministic scatter: two coprime strides so a rerun places them identically.
+            double x = center.x + ((i * 7) % 31) / 30.0 * spread - spread / 2.0;
+            double z = center.z + ((i * 13) % 31) / 30.0 * spread - spread / 2.0;
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) x, (int) z);
+
+            EntityDebugDummy dummy = ModEntities.DEBUG_DUMMY.get().create(level);
+            if (dummy == null) {
+                continue;
+            }
+            dummy.moveTo(x, y, z, 0F, 0F);
+            dummy.setDrift((float) drift);
+            if (level.addFreshEntity(dummy)) {
+                spawned++;
+            }
+        }
+
+        int placed = spawned;
+        source.sendSuccess(() -> Component.literal("Placed " + placed + " dummies across " + (int) spread
+                + " blocks, drift " + (int) drift
+                + (removed > 0 ? " (cleared " + removed + " first)" : "") + "."), false);
+        return placed;
+    }
+
+    /**
+     * @return how much of the swarm is actually landing hits, which a tick-time number cannot tell you.
+     */
+    public static int dummyReport(CommandSourceStack source) {
+        List<EntityDebugDummy> dummies = liveDummies(source.getLevel());
+        int hits = 0;
+        float damage = 0.0F;
+        int engaged = 0;
+        for (EntityDebugDummy dummy : dummies) {
+            hits += dummy.hits();
+            damage += dummy.damageTaken();
+            if (dummy.hits() > 0) {
+                engaged++;
+            }
+        }
+        int total = hits;
+        float dealt = damage;
+        int touched = engaged;
+        int size = dummies.size();
+        source.sendSuccess(() -> Component.literal(String.format(java.util.Locale.ROOT,
+                "%d dummies, %d engaged, %d hits, %.1f damage", size, touched, total, dealt)), false);
+        return 1;
+    }
+
+    public static int dummyReset(CommandSourceStack source) {
+        List<EntityDebugDummy> dummies = liveDummies(source.getLevel());
+        for (EntityDebugDummy dummy : dummies) {
+            dummy.resetCounters();
+        }
+        int size = dummies.size();
+        source.sendSuccess(() -> Component.literal("Reset " + size + " dummies."), false);
+        return 1;
+    }
+
+    public static int dummyClear(CommandSourceStack source) {
+        int removed = clearDummies(source.getLevel());
+        source.sendSuccess(() -> Component.literal("Removed " + removed + " dummies."), false);
+        return 1;
+    }
+
+    private static List<EntityDebugDummy> liveDummies(ServerLevel level) {
+        List<EntityDebugDummy> found = new ArrayList<>();
+        level.getEntities(ModEntities.DEBUG_DUMMY.get(), dummy -> true, found);
+        return found;
+    }
+
+    private static int clearDummies(ServerLevel level) {
+        List<EntityDebugDummy> doomed = liveDummies(level);
+        for (EntityDebugDummy dummy : doomed) {
+            dummy.discard();
+        }
+        return doomed.size();
+    }
+
     public static int profile(CommandSourceStack source, boolean on) {
         SwarmProfiler.setEnabled(on);
         warmup = on ? WARMUP_TICKS : 0;
@@ -174,11 +264,28 @@ public final class SwarmBench {
      * are different claims, and a toggle lets both be measured against the same world in one server run.
      * Defaults off, so nothing changes until a benchmark asks for it.
      */
-    public static boolean skipEntityCollisions;
+    public static boolean skipEntityCollisions = true;
 
     public static int entityCollisions(CommandSourceStack source, boolean on) {
         skipEntityCollisions = !on;
         source.sendSuccess(() -> Component.literal("Glyphid entity-collision query " + (on ? "on" : "skipped") + "."), false);
+        return 1;
+    }
+
+    /**
+     * When set, glyphids spawn with vanilla's {@code MeleeAttackGoal} instead of {@link
+     * com.wf.wfballistics.entity.glyphid.ai.GlyphidMeleeGoal}.
+     *
+     * <p>Read at spawn, so a benchmark switches arms by re-materialising the swarm — which every run does
+     * anyway. Kept past the measurement it was written for because a melee goal is exactly the kind of thing
+     * that quietly regresses, and this makes checking it a two-command job rather than a git bisect.
+     */
+    public static boolean vanillaMeleeGoal;
+
+    public static int meleeGoal(CommandSourceStack source, boolean vanilla) {
+        vanillaMeleeGoal = vanilla;
+        source.sendSuccess(() -> Component.literal("Glyphids will spawn with the "
+                + (vanilla ? "vanilla" : "glyphid") + " melee goal."), false);
         return 1;
     }
 

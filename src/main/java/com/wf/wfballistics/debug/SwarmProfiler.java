@@ -49,7 +49,11 @@ public final class SwarmProfiler {
         COLLIDE("collision sweep"),
         ENTCOL("entity collisions"),
         INSIDE("blocks inside"),
-        SCAN("fire scan");
+        SCAN("fire scan"),
+        PATH_MELEE("- for melee"),
+        PATH_MARCH("- for the march"),
+        BASE("base tick"),
+        FLUID("fluid push");
 
         private final String label;
 
@@ -82,6 +86,10 @@ public final class SwarmProfiler {
             Phase.COLLIDE.ordinal(),// ENTCOL
             Phase.MOVE.ordinal(),   // INSIDE
             Phase.MOVE.ordinal(),   // SCAN
+            Phase.PATH.ordinal(),   // PATH_MELEE
+            Phase.PATH.ordinal(),   // PATH_MARCH
+            Phase.TICK.ordinal(),   // BASE
+            Phase.BASE.ordinal(),   // FLUID
     };
 
     /**
@@ -151,6 +159,45 @@ public final class SwarmProfiler {
      */
     public static long accrued(Phase phase) {
         return current[phase.ordinal()];
+    }
+
+    /**
+     * Which goal, if any, is currently on the stack and should be blamed for any path search underneath it.
+     *
+     * <p>A static because the search happens several frames down, inside the navigator, on an object that has
+     * no idea which goal asked. Same thread-safety story as the rest of this class: server thread only, and
+     * only ever set while profiling is on.
+     */
+    private static Phase caller;
+
+    /**
+     * Claim responsibility for whatever searching happens until {@link #exitCaller}. Returns the previous
+     * claimant, which the caller must hand back — goals nest.
+     */
+    public static Phase enterCaller(Phase phase) {
+        Phase previous = caller;
+        caller = phase;
+        return previous;
+    }
+
+    public static void exitCaller(Phase previous) {
+        caller = previous;
+    }
+
+    /**
+     * Charge a path search, to {@link Phase#PATH} and to whichever goal claimed it.
+     *
+     * <p>Separate from {@link #end} because "pathfinding is a third of the tick" stopped being useful the
+     * moment it was true: what decides whether that is a bug or a cost is <em>who keeps asking</em>.
+     */
+    public static void endPath(long start) {
+        if (enabled && start != 0L) {
+            long elapsed = System.nanoTime() - start;
+            current[Phase.PATH.ordinal()] += elapsed;
+            if (caller != null) {
+                current[caller.ordinal()] += elapsed;
+            }
+        }
     }
 
     /**

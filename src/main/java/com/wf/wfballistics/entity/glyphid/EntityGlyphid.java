@@ -7,10 +7,13 @@ import com.wf.wfballistics.aef.standard.BlockAllocatorGlyphidDig;
 import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
 import com.wf.wfballistics.config.WFConfig;
 import com.wf.wfballistics.damage.WFDamageTypes;
+import com.wf.wfballistics.debug.ProfiledGoal;
+import com.wf.wfballistics.debug.SwarmBench;
 import com.wf.wfballistics.debug.SwarmProfiler;
 import com.wf.wfballistics.drone.flight.FlightAttitude;
 import com.wf.wfballistics.drone.flight.Multirotor;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidBombGoal;
+import com.wf.wfballistics.entity.glyphid.ai.GlyphidMeleeGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidFlightGoal;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidTargetGoal;
 import com.wf.wfballistics.entity.glyphid.flight.GlyphidFlight;
@@ -235,14 +238,20 @@ public class EntityGlyphid extends Monster {
     @Override
     protected void registerGoals() {
         goalSelector.addGoal(0, new FloatGoal(this));
-        goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.0D, true));
+        // Wrapped so the profiler can tell which of the two movement goals a path search belongs to; the two
+        // answer to completely different fixes and the report used to lump them together.
+        goalSelector.addGoal(3, new ProfiledGoal(SwarmBench.vanillaMeleeGoal
+                ? new MeleeAttackGoal(this, 1.0D, true)
+                : new GlyphidMeleeGoal(this, 1.0D),
+                SwarmProfiler.Phase.PATH_MELEE));
         // Takes no movement flag, so it runs alongside flight rather than instead of it.
         goalSelector.addGoal(2, new GlyphidBombGoal(this));
         // Flight outranks walking to the same place, and falls back to it for anything without wings.
         goalSelector.addGoal(4, new GlyphidFlightGoal(this));
         // Same priority as wandering, and mutually exclusive with it: one runs under orders, the other only
         // when idle.
-        goalSelector.addGoal(4, new GlyphidTaskMoveGoal(this, 1.0D));
+        goalSelector.addGoal(4, new ProfiledGoal(new GlyphidTaskMoveGoal(this, 1.0D),
+                SwarmProfiler.Phase.PATH_MARCH));
         goalSelector.addGoal(4, new GlyphidWanderGoal(this, 1.0D));
         targetSelector.addGoal(1, new HurtByTargetGoal(this));
         targetSelector.addGoal(2, new GlyphidTargetGoal(this));
@@ -314,6 +323,25 @@ public class EntityGlyphid extends Monster {
         long t = SwarmProfiler.begin();
         super.checkInsideBlocks();
         SwarmProfiler.end(SwarmProfiler.Phase.INSIDE, t);
+    }
+
+    /**
+     * Everything a living thing does that is not deciding or moving: fire, air, effects, portals, freezing.
+     * Was the largest unattributed block in the report.
+     */
+    @Override
+    public void baseTick() {
+        long t = SwarmProfiler.begin();
+        super.baseTick();
+        SwarmProfiler.end(SwarmProfiler.Phase.BASE, t);
+    }
+
+    @Override
+    protected boolean updateInWaterStateAndDoFluidPushing() {
+        long t = SwarmProfiler.begin();
+        boolean inFluid = super.updateInWaterStateAndDoFluidPushing();
+        SwarmProfiler.end(SwarmProfiler.Phase.FLUID, t);
+        return inFluid;
     }
 
     // --- flight ---
