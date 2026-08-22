@@ -54,8 +54,9 @@ public final class SwarmProfiler {
         PATH_MARCH("- for the march"),
         BASE("base tick"),
         FLUID("fluid push"),
-        // A level pass rather than a per-entity one, so it is not inside TICK and cannot hang off it.
+        // Level passes rather than per-entity ones, so they are not inside TICK and cannot hang off it.
         SEPARATE("separation"),
+        FLOW("flow field build"),
         // The two below are a second cut of PATH -- by what it is doing rather than by who asked. They sit
         // outside the tree, because a phase can only be subtracted from its parent once and the by-caller
         // split already accounts for all of PATH.
@@ -126,6 +127,7 @@ public final class SwarmProfiler {
             Phase.TICK.ordinal(),   // BASE
             Phase.BASE.ordinal(),   // FLUID
             -1,                     // SEPARATE -- a level pass, reported beside the tree rather than in it
+            -1,                     // FLOW -- likewise
             -1,                     // PATH_ASTAR -- reported in its own section, see searchReport()
             -1,                     // PATH_NEIGHBORS
     };
@@ -403,11 +405,13 @@ public final class SwarmProfiler {
                 filled, mean, total, p95Millis(Phase.TICK), maxMillis(Phase.TICK),
                 mean > 0.0 ? String.format(Locale.ROOT, " (%.1f us/entity)", total * 1000.0 / mean) : ""));
         append(lines, Phase.TICK, 0, total);
-        double separation = meanMillis(Phase.SEPARATE);
-        if (separation > 0.0) {
-            // Beside the tree, not in it: this is one pass over the level, so it is not part of any entity's
-            // tick and adding it as a child of one would make the shares add up to more than the whole.
-            lines.add(line("separation (level pass)", 0, separation, p95Millis(Phase.SEPARATE), total));
+        // Beside the tree, not in it: these are passes over the level, so they are not part of any entity's
+        // tick and adding them as children of one would make the shares add up to more than the whole.
+        for (Phase pass : new Phase[]{Phase.SEPARATE, Phase.FLOW}) {
+            double millis = meanMillis(pass);
+            if (millis > 0.0) {
+                lines.add(line(pass.label() + " (level pass)", 0, millis, p95Millis(pass), total));
+            }
         }
         searchReport(lines);
         spikeReport(lines);

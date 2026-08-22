@@ -7,7 +7,10 @@ import com.wf.wfballistics.config.WFConfig;
 import com.wf.wfballistics.entity.glyphid.GlyphidDigging;
 import com.wf.wfballistics.entity.glyphid.GlyphidTasks;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidPathCache;
+import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowField;
+import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.LivingEntity;
@@ -104,7 +107,30 @@ public final class GlyphidBody {
                 targetVisible,
                 targetInReach,
                 SwarmBench.chargeMelee,
-                stagger);
+                stagger,
+                flowStep(glyphid, target));
+    }
+
+    /**
+     * Ask the shared field which way, for a glyphid that is marching.
+     *
+     * <p>Marching only. A field is built to one fixed destination, and a target that walks would invalidate
+     * it every few seconds — the melee case is already answered by the charge, which costs a raycast and
+     * beats any field inside twelve blocks. Sampled every tick because a field is walked by steering rather
+     * than by following a route: the cost is an array index and eight comparisons, against the 212 µs search
+     * it replaces.
+     */
+    private static @Nullable Vec3 flowStep(EntityGlyphid glyphid, @Nullable LivingEntity target) {
+        if (target != null || glyphid.getCurrentTask() != GlyphidTasks.TASK_FOLLOW || glyphid.isAirborne()
+                || glyphid.mind().chewing || !(glyphid.level() instanceof ServerLevel level)) {
+            return null;
+        }
+        GlyphidFlowField field = GlyphidFlowFields.fieldFor(level, glyphid.taskX, glyphid.taskY, glyphid.taskZ);
+        if (field == null) {
+            return null;
+        }
+        double[] step = field.step(glyphid.getX(), glyphid.getY(), glyphid.getZ());
+        return step == null ? null : new Vec3(step[0], step[1], step[2]);
     }
 
     public static void apply(EntityGlyphid glyphid, GlyphidPlan plan) {
@@ -136,13 +162,17 @@ public final class GlyphidBody {
                 }
             }
             case CHEW -> chew(glyphid, mind, plan);
-            case PATH -> {
-                boolean accepted = walk(glyphid, plan);
-                Vec3 chew = GlyphidBrain.resolve(plan, mind, accepted);
-                if (chew != null) {
-                    pickBlockToChew(glyphid, chew);
+            case FLOW -> {
+                // No search and no path to follow: the field said which column, the move control does the
+                // rest -- stepping up, jumping and turning are all its job already.
+                if (!glyphid.getNavigation().isDone()) {
+                    glyphid.getNavigation().stop();
                 }
+                glyphid.getMoveControl().setWantedPosition(plan.hopX() + 0.5, plan.hopY(), plan.hopZ() + 0.5,
+                        glyphid.aiSpeed());
+                settle(glyphid, mind, plan, true);
             }
+            case PATH -> settle(glyphid, mind, plan, walk(glyphid, plan));
         }
 
         if (plan.bite()) {
@@ -155,6 +185,23 @@ public final class GlyphidBody {
 
         if (plan.nextTask() != GlyphidPlan.KEEP_TASK) {
             glyphid.setCurrentTask(plan.nextTask(), glyphid.getWaypoint());
+        }
+    }
+
+    /**
+     * Age the patience and start chewing if it has run out.
+     *
+     * <p>Only on the ticks the brain actually decided something — {@code elapsed} of zero is a glyphid that
+     * was left alone this tick, and running the backoff against no elapsed time would age it to its limit
+     * within a second of walking.
+     */
+    private static void settle(EntityGlyphid glyphid, GlyphidMind mind, GlyphidPlan plan, boolean accepted) {
+        if (plan.elapsed() <= 0) {
+            return;
+        }
+        Vec3 chew = GlyphidBrain.resolve(plan, mind, accepted);
+        if (chew != null) {
+            pickBlockToChew(glyphid, chew);
         }
     }
 
@@ -308,6 +355,11 @@ public final class GlyphidBody {
             // Drops nothing, but does emit the break particles and the sound, which is the whole point of
             // going through this rather than setting the block to air.
             level.destroyBlock(pos, false, glyphid);
+            if (level instanceof ServerLevel server) {
+                // A hole in a wall is a new route. Without this the field keeps steering the swarm at
+                // whichever gap it knew about when it was flooded, and the one they just made is invisible.
+                GlyphidFlowFields.invalidate(server, pos);
+            }
             // Straight on to the next block of the breach rather than stopping here. Making it re-earn sixty
             // ticks of being stuck between every block turns a two-block wall into a minute of standing still.
             // Deeper wall first, then widening the doorway; when neither finds anything the way is open.

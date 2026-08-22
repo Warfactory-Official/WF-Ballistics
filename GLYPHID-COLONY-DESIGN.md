@@ -1361,3 +1361,112 @@ several places at once, where a stacked one queues behind whichever bug got ther
 
 The converging arm is the worst case at +20%, and it is the one a flow field changes: what those glyphids are
 spending their time on is repathing into a pile they cannot enter.
+
+---
+
+## 22. Implemented: Phase 3, the flow field
+
+### 22.1 First, what the tick is actually made of
+
+§11.7 concluded "the lever is fewer block reads", and §11.11 walked that back for the assault. Both were
+written before charge, shared paths and the stagger. A JFR recording of 300 marching, 1 ms sampling, sliced by
+what the stack is inside — as a share of the samples that are in glyphid code at all, which is 81% of the
+server thread:
+
+| | share |
+|---|---|
+| `Entity.move` and collision | 33.8% |
+| goal selector | 25.5% |
+| — of which path search | 13.8% |
+| `baseTick`, blocks-inside, fluid | 18.9% |
+| synched-data writes | 5.7% |
+| attribute lookups | 5.2% |
+| separation | 3.6% |
+
+**Path search is no longer the dominant term.** It is a third of what movement costs. That is worth saying
+plainly, because Phase 3 was scheduled when path search was 52% of a march, and a plan that outlives its
+measurement is how projects optimise the wrong thing for a month. The remaining case for the flow field is
+that it is 13.8% of the mean and **31% of a p95 tick**, that it scales with swarm size where movement scales
+with entity count, and that it is the only one of the three a warband record can use — a record has no
+pathfinder, so §2's sim tier cannot navigate at all without it.
+
+The profile also handed over two things that were free. `setAggressive` and its shared-flag write were 4.9%
+of everything the swarm did, and the climbable flag another 3.6%, all of it setting values to what they
+already were. Both are now written through a server-side mirror, so the unchanged case is a boolean compare.
+
+### 22.2 The field
+
+One flood per destination, not one search per glyphid. Breadth-first from the destination over walkable
+columns; a glyphid's whole navigation decision becomes one array index and eight comparisons, against a 212 µs
+search that read 4843 blocks.
+
+Four things are load-bearing:
+
+- **Flooded outward from the goal, and read before it is finished.** The columns nearest the destination are
+  solved first, which are the ones a converging swarm is standing in, and a glyphid in an unfilled column
+  falls back to pathfinding for another second. Nothing ever waits on it, which is what makes an incremental
+  build honest rather than a way of hiding a stall.
+- **Floors sampled by the flood, not up front.** Only columns the flood reaches are ever read, so a field
+  around a sealed base costs the inside of the wall and stops.
+- **Budgeted at 768 columns a tick.** A complete field is ~9400 columns; flooding it in one tick would be a
+  2 ms spike on the tick it landed, which is exactly the stutter §11.8 says matters more than the mean.
+- **Double-buffered.** A rebuild floods alongside the field in use and swaps when finished. The first cut
+  replaced the field in place, which put three hundred glyphids back on the pathfinder for the dozen ticks a
+  reflood takes — and the comment above it claimed otherwise, which is how it survived a reading.
+
+### 22.3 Glyphids climb, and a field that forgets it is worse than no field
+
+The result that made this work. An obsidian compound — unchewable by a grunt, so digging is off the table —
+with a single three-block gap on the far side, destination in the middle, 300 glyphids outside:
+
+| | inside after 60 s | ms/tick |
+|---|---|---|
+| pathfinding | 231 of 300 | 2.610 |
+| flow field, walking model | 91 of 300 | 2.809 |
+| flow field, climbing model | **300 of 300** | **2.178** |
+
+Pathfinding "solved" the maze by not solving it: a glyphid walks into the wall, `horizontalCollision` sets the
+climb flag, and it goes over the top. The first field modelled a walker — one block of step-up — so it did the
+clever thing and sent everyone the long way round to the gap, where three hundred bugs queued at a
+three-wide door. **The naive behaviour was better than the smart one, because the naive one was the only one
+that knew what a glyphid can do.**
+
+Connecting columns up to eight blocks apart vertically fixes it, and the field goes from worse than
+pathfinding to strictly better: everyone gets in, sooner, for less. The climb is charged as one step like any
+other move, which is a small lie — climbing is slower than walking — but the honest weight is still far below
+the cost of walking around a building, and a weighted flood is a bucket queue for a correction that changes no
+decisions.
+
+### 22.4 Measured
+
+300 glyphids, one server run each arm.
+
+| arm | | ms/tick | p95 | max | path search | searches/tick |
+|---|---|---|---|---|---|---|
+| march 48 blocks, open ground | off | 2.369 | 3.042 | 3.718 | 9.4% | 1.1 |
+| | **on** | **2.090** | **2.426** | **2.702** | **0.6%** | **0.1** |
+| obsidian compound, one gap | off | 2.610 | 3.618 | 5.462 | 15.9% | — |
+| | **on** | **2.178** | **2.699** | **3.694** | **4.6%** | — |
+| assault a stone base | on | 2.260 | 2.733 | 4.431 | 4.7% | — |
+
+**−12% on the mean and −27% on the worst tick in the window**, with path search all but gone: 1.1 searches a
+tick becomes 0.1, and what is left is the glyphids outside the field's square still hopping their way in. The
+field build itself is 0.006 ms/tick amortised — it is finished and idle for most of a run, which is the whole
+point of paying for terrain once.
+
+The tail is the number worth keeping. A swarm's mean was never the problem; the 5.4 ms tick when forty of them
+repath on the same tick is, and there is no such tick when they are all reading the same array.
+
+### 22.5 What is left
+
+- **The build is still on the world thread.** It is now the structure §11.10 asked for — dense arrays, no
+  block reads at lookup — so moving the flood to a worker is a scheduling change. It has not been done because
+  at 0.006 ms/tick there is nothing to reclaim yet.
+- **Melee still pathfinds**, deliberately: a field is built to a fixed destination and a target that walks
+  would invalidate it every few seconds, where the charge of §11.11 answers the same question with a raycast.
+- **Terrain the swarm did not change is noticed on a timer.** Chewing invalidates precisely, and a 400-tick
+  age is the backstop for a player bricking up a doorway. A stuck-glyphid signal was tried and removed: three
+  hundred bugs jammed in a gap are stuck for reasons that have nothing to do with the field, and they reflood
+  it into thrashing.
+- **Phase 4 is now the bigger lever.** Movement is 33.8% and the only way to cut it is to have fewer things
+  moving.

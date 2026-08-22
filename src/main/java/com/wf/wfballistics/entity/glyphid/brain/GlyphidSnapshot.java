@@ -20,6 +20,10 @@ import org.jetbrains.annotations.Nullable;
  *                      heightmap read is a world read
  * @param charge        bench switch, snapshotted rather than read inside the brain so the brain has no static
  *                      dependencies at all
+ * @param flowStep      the next column the shared flow field says to walk into, or null where there is no
+ *                      field, the field has not flooded this far, or nothing is marching. Sampled here for
+ *                      the same reason as the rest: the field is a world-thread structure, and the brain is
+ *                      not allowed to hold one
  */
 public record GlyphidSnapshot(
         int id,
@@ -40,7 +44,8 @@ public record GlyphidSnapshot(
         boolean targetVisible,
         boolean targetInReach,
         boolean charge,
-        boolean stagger) {
+        boolean stagger,
+        @Nullable Vec3 flowStep) {
 
     public boolean hasTarget() {
         return targetPosition != null;
