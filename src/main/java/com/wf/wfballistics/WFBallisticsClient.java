@@ -63,6 +63,9 @@ public class WFBallisticsClient {
         event.registerEntityRenderer(ModEntities.GLYPHID_WAYPOINT.get(), NoopRenderer::new);
         event.registerEntityRenderer(ModEntities.GLYPHID_BOMB.get(), NoopRenderer::new);
 
+        // Benchmark targets are server-side furniture; nothing to draw.
+        event.registerEntityRenderer(ModEntities.DEBUG_DUMMY.get(), NoopRenderer::new);
+
         // The nuke explosion is server-side block destruction; nothing to draw.
         event.registerEntityRenderer(ModEntities.NUKE_EXPLOSION.get(),
                 NoopRenderer::new);

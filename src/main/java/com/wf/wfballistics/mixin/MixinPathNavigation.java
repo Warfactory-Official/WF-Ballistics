@@ -68,7 +68,7 @@ public abstract class MixinPathNavigation {
     @Inject(method = "createPath(Ljava/util/Set;IZIF)Lnet/minecraft/world/level/pathfinder/Path;",
             at = @At("RETURN"))
     private void wfballistics$pathEnd(CallbackInfoReturnable<Path> cir) {
-        SwarmProfiler.end(SwarmProfiler.Phase.PATH, wfballistics$pathStart);
+        SwarmProfiler.endPath(wfballistics$pathStart);
         wfballistics$pathStart = 0L;
     }
 
