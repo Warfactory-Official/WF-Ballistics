@@ -139,6 +139,15 @@ public final class GlyphidSquads {
      * Point one glyphid at its squad's objective.
      */
     private static void order(ServerLevel level, EntityGlyphid bug, int squad, GlyphidObjective objective) {
+        // Captured before the first overwrite, or the warband's own destination is lost the moment a split
+        // happens and the rally objective becomes a copy of whatever the last one was.
+        if (!bug.hasRally) {
+            GlyphidObjective rally = rallyOf(bug);
+            bug.hasRally = true;
+            bug.rallyX = rally.x();
+            bug.rallyY = rally.y();
+            bug.rallyZ = rally.z();
+        }
         bug.squad = squad;
         bug.objective = objective;
         bug.taskX = objective.x();
@@ -176,14 +185,13 @@ public final class GlyphidSquads {
             }
         }
 
-        IndustryCluster base = IndustryApi.nearestCluster(level, centreX, centreZ);
-        if (base != null && base.distanceSqTo(centreX, centreZ) <= OBJECTIVE_RANGE * OBJECTIVE_RANGE) {
-            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, base.centerX(), base.centerZ());
-            out.add(GlyphidObjective.machines(base.centerX(), y, base.centerZ()));
+        GlyphidObjective machines = machines(level, centreX, centreZ);
+        if (machines != null) {
+            out.add(machines);
         }
 
         EntityGlyphid first = members.get(0);
-        GlyphidObjective rally = GlyphidObjective.rally(first.taskX, first.taskY, first.taskZ);
+        GlyphidObjective rally = rallyOf(first);
 
         GlyphidObjective primary = out.isEmpty() ? rally : out.get(0);
         BlockPos wall = obstruction(level, centreX, centreY, centreZ, primary);
@@ -193,6 +201,47 @@ public final class GlyphidSquads {
 
         out.add(rally);
         return out;
+    }
+
+    /**
+     * Where a squad with nothing better to do goes, and the value {@link #order} remembers.
+     *
+     * <p>The three cases are one rule read at different times: what this glyphid was doing before any squad
+     * touched it. Once remembered it is authoritative; before that it is the march destination, if the bug
+     * has one. A swarm that has never been given orders falls back to where it came down, which is the only
+     * position on it that a split cannot have overwritten -- and without that fallback a swarm assigned
+     * before its orders arrive remembers the coordinates of nowhere and walks to them forever.
+     */
+    private static GlyphidObjective rallyOf(EntityGlyphid bug) {
+        if (bug.hasRally) {
+            return GlyphidObjective.rally(bug.rallyX, bug.rallyY, bug.rallyZ);
+        }
+        return bug.getCurrentTask() == GlyphidTasks.TASK_FOLLOW
+                ? GlyphidObjective.rally(bug.taskX, bug.taskY, bug.taskZ)
+                : GlyphidObjective.rally(bug.homeX, bug.homeY, bug.homeZ);
+    }
+
+    /**
+     * The base worth attacking, aimed at a machine rather than at a cluster centre where one is loaded.
+     *
+     * <p>Two resolutions, and the difference matters more than it looks. The cluster field is the colony
+     * simulation's, in 512-block cells: a cluster centre is a value-weighted average of those, so a base
+     * that straddles a cell boundary reports a centre with no machine near it — measured 38 blocks out on a
+     * 25-block compound, which put the squad on a hillside outside the wall. So the cluster answers "is
+     * there a base here worth splitting over" and the block-precise lookup answers "where". Coarse while
+     * they are still walking in, exact by the time they arrive, and no cost when there is nothing near.
+     */
+    private static @Nullable GlyphidObjective machines(ServerLevel level, double centreX, double centreZ) {
+        IndustryCluster base = IndustryApi.nearestCluster(level, centreX, centreZ);
+        if (base == null || base.distanceSqTo(centreX, centreZ) > OBJECTIVE_RANGE * OBJECTIVE_RANGE) {
+            return null;
+        }
+        BlockPos machine = IndustryApi.nearestMachine(level, centreX, centreZ, OBJECTIVE_RANGE);
+        if (machine != null) {
+            return GlyphidObjective.machines(machine.getX(), machine.getY(), machine.getZ());
+        }
+        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, base.centerX(), base.centerZ());
+        return GlyphidObjective.machines(base.centerX(), y, base.centerZ());
     }
 
     /**

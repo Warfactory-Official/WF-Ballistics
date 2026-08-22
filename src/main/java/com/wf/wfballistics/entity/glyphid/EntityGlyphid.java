@@ -175,6 +175,20 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     public int taskY;
     public int taskZ;
 
+    /**
+     * Where this glyphid was headed before a squad sent it somewhere else, and the fallback every squad
+     * assignment falls back to.
+     *
+     * <p>Remembered rather than re-read from the task, because a squad assignment overwrites the task: read
+     * back a reassignment later it is no longer the warband's destination but wherever the last split put
+     * this bug, and the rally objective walks away from where it was supposed to be one reassignment at a
+     * time. Saved, unlike the squad itself, because it is the warband's orders and not squad state.
+     */
+    public boolean hasRally;
+    public int rallyX;
+    public int rallyY;
+    public int rallyZ;
+
     protected int currentTask = GlyphidTasks.TASK_IDLE;
     protected int previousTask;
     protected @Nullable GlyphidWaypoint previousWaypoint;
@@ -1170,6 +1184,11 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         compound.putInt("taskY", taskY);
         compound.putInt("taskZ", taskZ);
 
+        compound.putBoolean("hasRally", hasRally);
+        compound.putInt("rallyX", rallyX);
+        compound.putInt("rallyY", rallyY);
+        compound.putInt("rallyZ", rallyZ);
+
         compound.putInt("task", currentTask);
     }
 
@@ -1191,6 +1210,11 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         taskX = compound.getInt("taskX");
         taskY = compound.getInt("taskY");
         taskZ = compound.getInt("taskZ");
+
+        hasRally = compound.getBoolean("hasRally");
+        rallyX = compound.getInt("rallyX");
+        rallyY = compound.getInt("rallyY");
+        rallyZ = compound.getInt("rallyZ");
 
         currentTask = compound.getInt("task");
         applyEntityAttributes();
