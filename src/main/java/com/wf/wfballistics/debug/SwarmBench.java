@@ -291,6 +291,29 @@ public final class SwarmBench {
      */
     public static boolean separation = true;
 
+    /**
+     * When clear, glyphids march by pathfinding to a hop rather than by following the shared field.
+     *
+     * <p>Read live, so both arms are the same swarm on the same tick.
+     */
+    public static boolean flowField = true;
+
+    public static int flowField(CommandSourceStack source, boolean on) {
+        flowField = on;
+        if (!on) {
+            com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields.clear();
+        }
+        source.sendSuccess(() -> Component.literal("Glyphid flow field " + (on ? "on" : "off") + "."), false);
+        return 1;
+    }
+
+    public static int flowFields(CommandSourceStack source) {
+        for (String line : com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields.report(source.getLevel())) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        return 1;
+    }
+
     public static int separation(CommandSourceStack source, boolean on) {
         separation = on;
         source.sendSuccess(() -> Component.literal("Glyphid separation " + (on ? "on" : "off") + "."), false);

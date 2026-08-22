@@ -206,6 +206,25 @@ public final class GlyphidBrain {
             return new GlyphidPlan(GlyphidPlan.Move.CHEW, mind.chewX, mind.chewY, mind.chewZ, false,
                     destination, lookAt, bite, GlyphidPlan.KEEP_TASK, 0, 0.0);
         }
+        Vec3 flow = self.flowStep();
+        if (flow != null) {
+            // The field already knows the way, so there is nothing to search and nothing to hop to: the plan
+            // is simply the next column. The progress accounting still runs on the repath schedule, because a
+            // glyphid walking a field gets just as stuck as one walking a path and it is the same stuck timer
+            // that turns it into a digger.
+            mind.sinceRepath++;
+            boolean due = repathDue(mind, self.tickCount(), self.id(), true, self.stagger());
+            int elapsed = 0;
+            double moved = 0.0;
+            if (due) {
+                elapsed = mind.sinceRepath;
+                mind.sinceRepath = 0;
+                moved = closed(self.position(), destination, mind);
+            }
+            return new GlyphidPlan(GlyphidPlan.Move.FLOW, Mth.floor(flow.x), Mth.floor(flow.y),
+                    Mth.floor(flow.z), false, destination, lookAt, bite, GlyphidPlan.KEEP_TASK, elapsed, moved);
+        }
+
         if (!repathDue(mind, self.tickCount(), self.id(), self.navigationDone(), self.stagger())) {
             mind.sinceRepath++;
             return GlyphidPlan.hold(lookAt, bite);
@@ -222,16 +241,7 @@ public final class GlyphidBrain {
         double dx = destination.x - pos.x;
         double dz = destination.z - pos.z;
         double distance = Math.sqrt(dx * dx + dz * dz);
-        // Ground covered *towards the destination*, not ground covered. See the note on the backoff above:
-        // once the swarm pushes itself apart, plain displacement stops being an honest signal, because a
-        // glyphid wedged in a crowd is shoved a block a second and every shove reads as a path that is
-        // working. Projecting onto the bearing scores a sideways shove at nothing and a backwards one below
-        // nothing, which is what they are worth.
-        double moved = distance < 1.0E-4
-                ? 0.0
-                : ((pos.x - mind.lastX) * dx + (pos.z - mind.lastZ) * dz) / distance;
-        mind.lastX = pos.x;
-        mind.lastZ = pos.z;
+        double moved = closed(pos, destination, mind);
         if (distance < 1.0) {
             // Standing on it. Counts as having got there rather than as a failed search, so the backoff does
             // not punish a glyphid for arriving.
@@ -273,6 +283,26 @@ public final class GlyphidBrain {
         }
         mind.stuckFor = 0;
         return plan.destination();
+    }
+
+    /**
+     * Ground covered <em>towards the destination</em> since this was last asked, not ground covered.
+     *
+     * <p>See the note on the backoff at the top. Once a swarm pushes itself apart, plain displacement stops
+     * being an honest signal: a glyphid wedged in a crowd is shoved a block a second and every shove reads as
+     * a route that is working. Projecting the movement onto the bearing scores a sideways shove at nothing
+     * and a backwards one below nothing, which is what they are worth.
+     */
+    private static double closed(Vec3 pos, Vec3 destination, GlyphidMind mind) {
+        double dx = destination.x - pos.x;
+        double dz = destination.z - pos.z;
+        double distance = Math.sqrt(dx * dx + dz * dz);
+        double closed = distance < 1.0E-4
+                ? 0.0
+                : ((pos.x - mind.lastX) * dx + (pos.z - mind.lastZ) * dz) / distance;
+        mind.lastX = pos.x;
+        mind.lastZ = pos.z;
+        return closed;
     }
 
     private static void settle(GlyphidMind mind, boolean pathAccepted, double moved, int elapsed) {

@@ -81,6 +81,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidSeparation;
+import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -144,6 +145,8 @@ public final class WFServerEvents {
             // One grid for the whole swarm instead of an entity query per glyphid. Level-wide rather than
             // per-entity precisely so the neighbourhood is built once.
             GlyphidSeparation.tick(level);
+            // Last, so a field built this tick is flooded from terrain the diggers have already changed.
+            GlyphidFlowFields.tick(level);
             tickScenarios(level);
         }
     }
@@ -170,6 +173,7 @@ public final class WFServerEvents {
     public static void onServerStopping(ServerStoppingEvent event) {
         DroneAiScheduler.shutdown();
         IndustryClusters.clear();
+        GlyphidFlowFields.clear();
     }
 
     @SubscribeEvent
@@ -386,6 +390,13 @@ public final class WFServerEvents {
                                         .executes(ctx -> SwarmBench.separation(ctx.getSource(), false))))
                         .then(Commands.literal("density")
                                 .executes(ctx -> SwarmBench.density(ctx.getSource())))
+                        .then(Commands.literal("flowfield")
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> SwarmBench.flowField(ctx.getSource(), true)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> SwarmBench.flowField(ctx.getSource(), false))))
+                        .then(Commands.literal("flowfields")
+                                .executes(ctx -> SwarmBench.flowFields(ctx.getSource())))
                         .then(Commands.literal("stagger")
                                 .then(Commands.literal("on")
                                         .executes(ctx -> SwarmBench.stagger(ctx.getSource(), true)))

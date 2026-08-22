@@ -61,6 +61,13 @@ public record GlyphidPlan(
          */
         CHARGE,
         /**
+         * Step into the next column the shared flow field points at, in {@link #destination}. The same
+         * mechanism as {@link #CHARGE} — it is the move control either way — but the two are separate so the
+         * profiler can tell a glyphid that is following a field from one that is running at something it can
+         * see, and so that turning the field off is one branch rather than a rewrite.
+         */
+        FLOW,
+        /**
          * Keep eating the block the mind is chewing. Movement planning is suspended while this runs.
          */
         CHEW,
