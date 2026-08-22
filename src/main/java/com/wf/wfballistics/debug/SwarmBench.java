@@ -165,6 +165,23 @@ public final class SwarmBench {
         return 1;
     }
 
+    /**
+     * When set, glyphids skip vanilla's entity-overlap query inside the collision sweep.
+     *
+     * <p>Exists to measure what that query is worth rather than argue about it. Only {@code Boat} and
+     * {@code Shulker} answer yes to {@code canBeCollidedWith}, so for a glyphid the query walks the entity
+     * sections over its swept box and returns an empty list every time — but "should be free" and "is free"
+     * are different claims, and a toggle lets both be measured against the same world in one server run.
+     * Defaults off, so nothing changes until a benchmark asks for it.
+     */
+    public static boolean skipEntityCollisions;
+
+    public static int entityCollisions(CommandSourceStack source, boolean on) {
+        skipEntityCollisions = !on;
+        source.sendSuccess(() -> Component.literal("Glyphid entity-collision query " + (on ? "on" : "skipped") + "."), false);
+        return 1;
+    }
+
     public static int report(CommandSourceStack source) {
         if (warmup > 0) {
             int remaining = warmup;

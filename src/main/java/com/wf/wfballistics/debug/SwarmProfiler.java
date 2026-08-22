@@ -14,7 +14,11 @@ import java.util.Locale;
  * number rather than from an assumption.
  *
  * <p>Phases nest: {@link Phase#PATH} happens inside {@link Phase#AI}, which happens inside
- * {@link Phase#TICK}. The tree is declared in {@link #PARENT} and the report subtracts children from their
+ * {@link Phase#TICK}, and {@link Phase#COLLIDE} inside {@link Phase#MOVE}. The movement phases exist because
+ * once collision push was fixed, movement became the largest single line in the report, and "movement" is not
+ * an actionable answer either: vanilla's {@code move} is a collision sweep, a block-volume walk and a handful
+ * of block-state lookups, and only measuring says which of them the swarm is actually paying for.
+ * The tree is declared in {@link #PARENT} and the report subtracts children from their
  * parent, so every line is exclusive of the lines indented under it and the residual on each parent is
  * labelled rather than silently dropped. A large residual means the cost is somewhere no call site has been
  * placed yet, which is itself worth knowing.
@@ -41,7 +45,11 @@ public final class SwarmProfiler {
         NAV("path following"),
         PUSH("collision push"),
         MOVE("movement"),
-        DIG("digging");
+        DIG("digging"),
+        COLLIDE("collision sweep"),
+        ENTCOL("entity collisions"),
+        INSIDE("blocks inside"),
+        SCAN("fire scan");
 
         private final String label;
 
@@ -70,6 +78,10 @@ public final class SwarmProfiler {
             Phase.TICK.ordinal(),   // MOVE
             Phase.AI.ordinal(),     // DIG -- reached from customServerAiStep and from a goal, both inside
                                     // serverAiStep, so it is a sibling of the navigation phases, not of them.
+            Phase.MOVE.ordinal(),   // COLLIDE
+            Phase.COLLIDE.ordinal(),// ENTCOL
+            Phase.MOVE.ordinal(),   // INSIDE
+            Phase.MOVE.ordinal(),   // SCAN
     };
 
     /**
