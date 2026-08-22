@@ -32,7 +32,10 @@ public final class WFFluids {
     public static final DeferredHolder<FluidType, FluidType> MUSTARD_GAS_TYPE =
             FLUID_TYPES.register("mustard_gas", () -> new GasFluidType(0xB8A038));
     public static final DeferredHolder<FluidType, FluidType> KEROSENE_TYPE =
-            FLUID_TYPES.register("kerosene", KeroseneFluidType::new);    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> PHOSGENE =
+            FLUID_TYPES.register("kerosene", KeroseneFluidType::new);
+    // Glyphid acid
+    public static final DeferredHolder<FluidType, FluidType> GLYPHID_ACID_TYPE =
+            FLUID_TYPES.register("glyphid_acid", () -> new GasFluidType(0x8CD836));    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> PHOSGENE =
             FLUIDS.register("phosgene", () -> new BaseFlowingFluid.Source(WFFluids.PHOSGENE_PROPS));
 
     private WFFluids() {
@@ -133,6 +136,16 @@ public final class WFFluids {
             FLUIDS.register("flowing_mustard_gas", () -> new BaseFlowingFluid.Flowing(WFFluids.MUSTARD_GAS_PROPS));
     public static final BaseFlowingFluid.Properties MUSTARD_GAS_PROPS =
             new BaseFlowingFluid.Properties(MUSTARD_GAS_TYPE, MUSTARD_GAS, FLOWING_MUSTARD_GAS);
+
+
+    // Glyphid acid. Registered as a fluid because that is the key MistEffects looks an effect up by; there is
+    // deliberately no bucket, since the only thing that produces it is a bug.
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> GLYPHID_ACID =
+            FLUIDS.register("glyphid_acid", () -> new BaseFlowingFluid.Source(WFFluids.GLYPHID_ACID_PROPS));
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> FLOWING_GLYPHID_ACID =
+            FLUIDS.register("flowing_glyphid_acid", () -> new BaseFlowingFluid.Flowing(WFFluids.GLYPHID_ACID_PROPS));
+    public static final BaseFlowingFluid.Properties GLYPHID_ACID_PROPS =
+            new BaseFlowingFluid.Properties(GLYPHID_ACID_TYPE, GLYPHID_ACID, FLOWING_GLYPHID_ACID);
 
 
 

@@ -87,6 +87,13 @@ public final class WFConfig {
     public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
     public static final ModConfigSpec.BooleanValue GLYPHID_WAYPOINT_DEBUG;
+    public static final ModConfigSpec.BooleanValue GLYPHID_BOMBING;
+    public static final ModConfigSpec.IntValue GLYPHID_BOMB_LOAD;
+    public static final ModConfigSpec.IntValue GLYPHID_BOMB_INTERVAL;
+    public static final ModConfigSpec.DoubleValue GLYPHID_ACID_DAMAGE;
+    public static final ModConfigSpec.DoubleValue GLYPHID_ACID_RADIUS;
+    public static final ModConfigSpec.BooleanValue GLYPHID_ACID_CORRODES;
+    public static final ModConfigSpec.IntValue GLYPHID_BOMB_BLAST;
     // --- Debug ---
     public static final ModConfigSpec.BooleanValue DEBUG_LOGGING;
 
@@ -333,6 +340,31 @@ public final class WFConfig {
         GLYPHID_WAYPOINT_DEBUG = b
                 .comment("Render colony waypoints as coloured dust particles (client-side).")
                 .define("waypointDebug", false);
+        GLYPHID_BOMBING = b
+                .comment("Flying glyphids drop acid on what they were sent to attack. This is what makes wings",
+                        "a threat to a base rather than just a faster way of arriving at one.")
+                .define("bombing", true);
+        GLYPHID_BOMB_LOAD = b
+                .comment("Bombs each flying glyphid carries. Finite, so a raid is something a base survives and",
+                        "rebuilds from rather than a bug parked overhead dissolving it forever.")
+                .defineInRange("bombLoad", 4, 0, 512);
+        GLYPHID_BOMB_INTERVAL = b
+                .comment("Ticks between bomb releases from one glyphid.")
+                .defineInRange("bombIntervalTicks", 30, 1, 1200);
+        GLYPHID_ACID_DAMAGE = b
+                .comment("Damage per second to anything standing in a fresh acid pool. Tapers to nothing as",
+                        "the pool dries out.")
+                .defineInRange("acidDamage", 3.0, 0.0, 1000.0);
+        GLYPHID_ACID_RADIUS = b
+                .comment("Horizontal radius of the acid pool a bomb leaves.")
+                .defineInRange("acidRadius", 3.0, 0.5, 32.0);
+        GLYPHID_ACID_CORRODES = b
+                .comment("Acid pools dissolve the blocks under them. Obsidian-grade blast resistance holds;",
+                        "most machine casings and building blocks do not.")
+                .define("acidCorrodesBlocks", true);
+        GLYPHID_BOMB_BLAST = b
+                .comment("Blast radius for the explosive payload, used by castes that drop it instead of acid.")
+                .defineInRange("bombBlastRadius", 3, 1, 64);
         b.pop();
 
         b.comment("Debugging.").push("debug");

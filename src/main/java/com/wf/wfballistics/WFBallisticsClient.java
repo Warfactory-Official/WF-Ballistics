@@ -57,6 +57,12 @@ public class WFBallisticsClient {
         event.registerEntityRenderer(ModEntities.FIRE_LINGERING.get(),
                 NoopRenderer::new);
 
+        // Glyphids have no models yet -- that is the model/flywheel port. A renderer still has to be bound
+        // for every registered entity type or the client refuses to start, so they draw nothing until then.
+        event.registerEntityRenderer(ModEntities.GLYPHID.get(), NoopRenderer::new);
+        event.registerEntityRenderer(ModEntities.GLYPHID_WAYPOINT.get(), NoopRenderer::new);
+        event.registerEntityRenderer(ModEntities.GLYPHID_BOMB.get(), NoopRenderer::new);
+
         // The nuke explosion is server-side block destruction; nothing to draw.
         event.registerEntityRenderer(ModEntities.NUKE_EXPLOSION.get(),
                 NoopRenderer::new);

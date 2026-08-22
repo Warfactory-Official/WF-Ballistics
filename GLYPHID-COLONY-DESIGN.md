@@ -347,14 +347,40 @@ Each of these is vanilla behaviour that is right on the ground and wrong off it:
 The destination height also had to become shared between the walking and flying goals. Only the walking goal
 resolved it, so a flight's arrival test could never pass and the swarm hovered over its own target forever.
 
-### 10.5 Still open
+### 10.5 Bombing
+
+Wings that only carried a glyphid to a wall would be a faster commute, not a new threat. A flight drops
+ordnance on what it was sent to attack: acid now, blasts for the castes that get there. Bombing takes no
+movement flag, so a glyphid bombs on the way past rather than stopping to aim.
+
+Acid reuses the existing mist system — it is registered as a fluid because that is the key `MistEffects` looks
+an effect up by, and there is deliberately no bucket, since the only thing that produces it is a bug. Unlike
+the war gases it is aimed at a base rather than a person: it eats blocks. Glyphids are immune to it, a flight
+that dissolved itself on its own bombing run being a strange kind of threat.
+
+The payload is finite — four bombs each by default — so a raid is something a base survives and rebuilds from
+rather than a bug parked overhead dissolving it forever.
+
+Two things came out of measuring rather than reasoning:
+
+- **Corrosion was a demolition charge.** Two blocks per twenty ticks cleared *every* block within the radius
+  over a pool's life — 49 of 49 in the test. One per thirty pits the area instead: 7 blocks per bomb, so a
+  raid eats its way in and lets the swarm through instead of erasing the building.
+- **Splashing at the bomb's position put the pool in the air.** A bomb released from altitude covers several
+  blocks per tick, so where it *was* when the hit resolved was three blocks above what it hit, and a direct
+  strike on a target did nothing at all. Splashing at the contact point instead put it exactly on the target,
+  which took it from 20 HP to dead in twelve seconds.
+
+### 10.6 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
   ones already walking can still drown their advance.
 - **The hop is terrain-blind.** It aims at a heightmap sample, which over water or a cliff is a spot the
   pathfinder will not accept, and roughly 40% of a marching swarm is failing to make progress at any moment.
-  This is what the flow field is for.
+  This is what the flow field is for. Flight sidesteps it entirely, which is another argument for wings.
+- **Glyphids have no renderer.** They are bound to a no-op one so the client will start at all; models are the
+  flywheel port. Note that server-only testing hid this completely — a missing renderer is a client crash.
 - `NestBuilder` is a hook: colonies materialise as data until the spawner block lands with the hive port.
 - Evolution (§7) is still not implemented — tier is distance-derived only, with no global progression.
 - Extended targeting acquires players at 128 blocks, but `MeleeAttackGoal` paths within follow range, so a

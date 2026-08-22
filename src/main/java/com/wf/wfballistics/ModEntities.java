@@ -4,6 +4,7 @@ import com.wf.wfballistics.drone.CrateEntity;
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.entity.*;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
+import com.wf.wfballistics.entity.glyphid.EntityGlyphidBomb;
 import com.wf.wfballistics.entity.glyphid.GlyphidWaypoint;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
@@ -109,6 +110,15 @@ public class ModEntities {
                     .clientTrackingRange(8)
                     .updateInterval(1)
                     .build("glyphid")
+            );
+
+    // Ordnance dropped by a glyphid on the wing: acid, or a blast for the heavier castes.
+    public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidBomb>> GLYPHID_BOMB =
+            ENTITY_TYPES.register("glyphid_bomb", () -> EntityType.Builder.<EntityGlyphidBomb>of(EntityGlyphidBomb::new, MobCategory.MISC)
+                    .sized(0.4F, 0.4F)
+                    .clientTrackingRange(8)
+                    .updateInterval(2)
+                    .build("glyphid_bomb")
             );
 
     // Colony order marker. Never moves, never renders, and only ticks every 40th tick, so it costs almost

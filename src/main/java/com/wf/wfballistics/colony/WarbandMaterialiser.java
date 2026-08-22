@@ -2,6 +2,7 @@ package com.wf.wfballistics.colony;
 
 import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.ModEntities;
+import com.wf.wfballistics.config.WFConfig;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidTasks;
 import com.wf.wfballistics.entity.glyphid.flight.GlyphidFlight;
@@ -205,6 +206,9 @@ public final class WarbandMaterialiser {
      */
     private static void orient(EntityGlyphid glyphid, Warband warband, @Nullable Colony origin, int y) {
         glyphid.setCanFly(warband.flying);
+        if (warband.flying) {
+            glyphid.setBombs(WFConfig.GLYPHID_BOMB_LOAD.get());
+        }
         glyphid.hasHome = true;
         glyphid.homeX = origin != null ? origin.x : (int) warband.x;
         glyphid.homeY = origin != null && origin.hasResolvedY() ? origin.y : y;
