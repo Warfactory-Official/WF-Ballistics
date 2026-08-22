@@ -1,5 +1,6 @@
 package com.wf.wfballistics.colony;
 
+import com.wf.wfballistics.debug.SwarmProfiler;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidTasks;
 import com.wf.wfballistics.entity.glyphid.GlyphidTracker;
@@ -86,6 +87,15 @@ public final class GlyphidSquads {
         if (swarm.size() < MIN_PER_SQUAD * 2) {
             return;
         }
+        long t = SwarmProfiler.begin();
+        try {
+            split(level, swarm);
+        } finally {
+            SwarmProfiler.end(SwarmProfiler.Phase.SQUAD, t);
+        }
+    }
+
+    private static void split(ServerLevel level, Set<EntityGlyphid> swarm) {
 
         // Grouped by where they came from, not by where they are. A colony's attack force is the thing that
         // should divide itself; two colonies' warbands that happen to have met are not one swarm, and

@@ -36,12 +36,13 @@ public class EntityProcessorCone extends EntityProcessorCross {
     }
 
     @Override
-    protected boolean isWithinBlastShape(ExplosionAEF explosion, Entity entity, double x, double y, double z) {
-        // Bearing from the charge to the entity's centre is inside the cone iff its angle to the axis is within
+    protected boolean isWithinBlastShape(ExplosionAEF explosion, double px, double py, double pz,
+                                         double x, double y, double z) {
+        // Bearing from the charge to the target's centre is inside the cone iff its angle to the axis is within
         // the half-angle: i.e. the normalised dot with the axis is at least cos(halfAngle).
-        Vec3 toEntity = entity.position().add(0, entity.getBbHeight() * 0.5, 0).subtract(x, y, z);
-        double lenSqr = toEntity.lengthSqr();
+        Vec3 toTarget = new Vec3(px - x, py - y, pz - z);
+        double lenSqr = toTarget.lengthSqr();
         if (lenSqr < 1.0e-6) return true; // point-blank on the charge: always caught
-        return toEntity.dot(axis) / Math.sqrt(lenSqr) >= cosHalfAngle;
+        return toTarget.dot(axis) / Math.sqrt(lenSqr) >= cosHalfAngle;
     }
 }

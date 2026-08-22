@@ -77,10 +77,6 @@ public class EntityGlyphidDigger extends EntityGlyphid {
         return GlyphidStats.getStats().getDigger();
     }
 
-    @Override
-    public double getGlyphidScale() {
-        return 1.3D;
-    }
 
     /**
      * The caste whose whole job is getting through terrain. Ignores the config switch that gates chewing for

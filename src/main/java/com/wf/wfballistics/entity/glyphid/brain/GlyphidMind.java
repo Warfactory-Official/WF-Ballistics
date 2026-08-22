@@ -123,4 +123,33 @@ public final class GlyphidMind {
     public void repathNow() {
         sinceRepath = retryAfter;
     }
+
+    /**
+     * Take another body's memory wholesale.
+     *
+     * <p>For the tier boundary. A glyphid that crosses it is the same animal, and the patience it has earned
+     * is most of what tells it to stop walking and start eating — reset on every crossing, a bug that keeps
+     * changing tier at a wall never accumulates enough of it to chew through.
+     */
+    public void copyFrom(GlyphidMind other) {
+        sinceRepath = other.sinceRepath;
+        retryAfter = other.retryAfter;
+        stuckFor = other.stuckFor;
+        lastX = other.lastX;
+        lastZ = other.lastZ;
+        untilAttack = other.untilAttack;
+        aimedX = other.aimedX;
+        aimedZ = other.aimedZ;
+        errand = other.errand;
+        chewing = other.chewing;
+        chewX = other.chewX;
+        chewY = other.chewY;
+        chewZ = other.chewZ;
+        chewProgress = other.chewProgress;
+        breachX = other.breachX;
+        breachY = other.breachY;
+        breachZ = other.breachZ;
+        // Deliberately not chewStage: the cracks belong to whichever body put them on the block, and are
+        // addressed by its entity id. A record has none, so anything outstanding was already cleared.
+    }
 }

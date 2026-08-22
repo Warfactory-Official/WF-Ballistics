@@ -57,6 +57,8 @@ public final class SwarmProfiler {
         // Level passes rather than per-entity ones, so they are not inside TICK and cannot hang off it.
         SEPARATE("separation"),
         FLOW("flow field build"),
+        SIM("sim tier"),
+        SQUAD("squad split"),
         // The two below are a second cut of PATH -- by what it is doing rather than by who asked. They sit
         // outside the tree, because a phase can only be subtracted from its parent once and the by-caller
         // split already accounts for all of PATH.
@@ -128,6 +130,8 @@ public final class SwarmProfiler {
             Phase.BASE.ordinal(),   // FLUID
             -1,                     // SEPARATE -- a level pass, reported beside the tree rather than in it
             -1,                     // FLOW -- likewise
+            -1,                     // SIM -- likewise
+            -1,                     // SQUAD -- likewise
             -1,                     // PATH_ASTAR -- reported in its own section, see searchReport()
             -1,                     // PATH_NEIGHBORS
     };
@@ -377,6 +381,52 @@ public final class SwarmProfiler {
         return sorted[Math.min(filled - 1, (int) Math.ceil(filled * 0.95) - 1)] / 1.0E6;
     }
 
+    /**
+     * The phases that make up a tick of swarm, whichever tier paid for them: the entity tick plus the level
+     * passes that are not inside anybody's tick.
+     */
+    private static final Phase[] SWARM =
+            {Phase.TICK, Phase.SEPARATE, Phase.FLOW, Phase.SIM, Phase.SQUAD};
+
+    private static long swarmNanos(int sample) {
+        long total = 0L;
+        for (Phase phase : SWARM) {
+            total += history[sample][phase.ordinal()];
+        }
+        return total;
+    }
+
+    public static double swarmMillis() {
+        if (filled == 0) {
+            return 0.0;
+        }
+        long total = 0L;
+        for (int i = 0; i < filled; i++) {
+            total += swarmNanos(i);
+        }
+        return total / (double) filled / 1.0E6;
+    }
+
+    private static double swarmPercentile(double quantile) {
+        if (filled == 0) {
+            return 0.0;
+        }
+        long[] sorted = new long[filled];
+        for (int i = 0; i < filled; i++) {
+            sorted[i] = swarmNanos(i);
+        }
+        Arrays.sort(sorted);
+        return sorted[Math.min(filled - 1, (int) Math.ceil(filled * quantile) - 1)] / 1.0E6;
+    }
+
+    private static double swarmMax() {
+        long worst = 0L;
+        for (int i = 0; i < filled; i++) {
+            worst = Math.max(worst, swarmNanos(i));
+        }
+        return worst / 1.0E6;
+    }
+
     public static double maxMillis(Phase phase) {
         if (filled == 0) {
             return 0.0;
@@ -398,16 +448,20 @@ public final class SwarmProfiler {
             lines.add("No samples. Profiling " + (enabled ? "is on, but nothing has ticked yet." : "is off."));
             return lines;
         }
-        double total = meanMillis(Phase.TICK);
+        // The whole swarm, not just the entity half of it. Once glyphids can be records the entity tick
+        // stops being the cost of a swarm and becomes the cost of the part of it that still has bodies --
+        // which falls to nothing as the tier does its job, and would read as a swarm that got faster by
+        // vanishing. Everything the swarm spends, in one number, whichever tier spends it.
+        double total = swarmMillis();
         double mean = meanPopulation();
         lines.add(String.format(Locale.ROOT,
-                "%d ticks, %.1f entities: %.3f ms/tick mean, %.3f p95, %.3f max%s",
-                filled, mean, total, p95Millis(Phase.TICK), maxMillis(Phase.TICK),
-                mean > 0.0 ? String.format(Locale.ROOT, " (%.1f us/entity)", total * 1000.0 / mean) : ""));
+                "%d ticks, %.1f glyphids: %.3f ms/tick mean, %.3f p95, %.3f max%s",
+                filled, mean, total, swarmPercentile(0.95), swarmMax(),
+                mean > 0.0 ? String.format(Locale.ROOT, " (%.1f us/glyphid)", total * 1000.0 / mean) : ""));
         append(lines, Phase.TICK, 0, total);
         // Beside the tree, not in it: these are passes over the level, so they are not part of any entity's
         // tick and adding them as children of one would make the shares add up to more than the whole.
-        for (Phase pass : new Phase[]{Phase.SEPARATE, Phase.FLOW}) {
+        for (Phase pass : new Phase[]{Phase.SEPARATE, Phase.FLOW, Phase.SIM, Phase.SQUAD}) {
             double millis = meanMillis(pass);
             if (millis > 0.0) {
                 lines.add(line(pass.label() + " (level pass)", 0, millis, p95Millis(pass), total));
@@ -478,12 +532,12 @@ public final class SwarmProfiler {
         for (int i = 0; i < filled; i++) {
             order[i] = i;
         }
-        Arrays.sort(order, (a, b) -> Long.compare(history[b][Phase.TICK.ordinal()], history[a][Phase.TICK.ordinal()]));
+        Arrays.sort(order, (a, b) -> Long.compare(swarmNanos(b), swarmNanos(a)));
 
         lines.add("");
         lines.add(String.format(Locale.ROOT, "worst %d ticks vs the other %d", spikes, filled - spikes));
         lines.add(String.format(Locale.ROOT, "  %-18s %10s %10s %8s", "", "worst", "rest", "ratio"));
-        spikeLine(lines, order, spikes, "tick ms", i -> history[i][Phase.TICK.ordinal()] / 1.0E6);
+        spikeLine(lines, order, spikes, "tick ms", i -> swarmNanos(i) / 1.0E6);
         spikeLine(lines, order, spikes, "path search ms", i -> history[i][Phase.PATH.ordinal()] / 1.0E6);
         for (Counter counter : COUNTERS) {
             int ordinal = counter.ordinal();

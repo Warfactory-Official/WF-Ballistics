@@ -68,10 +68,6 @@ public class EntityGlyphidBrawler extends EntityGlyphid {
         return GlyphidStats.getStats().getBrawler();
     }
 
-    @Override
-    public double getGlyphidScale() {
-        return 1.25D;
-    }
 
     @Override
     protected void customServerAiStep() {

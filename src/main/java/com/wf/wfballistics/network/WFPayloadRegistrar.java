@@ -33,6 +33,9 @@ public final class WFPayloadRegistrar {
         r.playToClient(MissileFlightAudioPacket.TYPE, MissileFlightAudioPacket.STREAM_CODEC,
                 (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleMissileAudio(pkt)));
 
+        r.playToClient(SimGlyphidSyncPacket.TYPE, SimGlyphidSyncPacket.STREAM_CODEC,
+                (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleSimGlyphids(pkt)));
+
         r.playToServer(SpawnMissilePacket.TYPE, SpawnMissilePacket.STREAM_CODEC,
                 (pkt, ctx) -> pkt.handle(ctx));
         r.playToServer(DronePadConfigPacket.TYPE, DronePadConfigPacket.STREAM_CODEC,

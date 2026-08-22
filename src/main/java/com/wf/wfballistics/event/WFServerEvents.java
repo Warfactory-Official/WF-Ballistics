@@ -82,6 +82,8 @@ import net.minecraft.commands.Commands;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidSeparation;
 import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidManager;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidTracking;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.UuidArgument;
 import net.minecraft.world.level.levelgen.structure.BoundingBox;
@@ -142,8 +144,12 @@ public final class WFServerEvents {
             ColonyManager.tick(level);
             // After the colony tier, because it reassigns bugs the materialiser may have only just placed.
             GlyphidSquads.tick(level);
+            // Before separation, so a glyphid demoted this tick is already in the registry the grid reads
+            // and the two tiers are separated against each other rather than one tick apart.
+            SimGlyphidManager.tick(level);
+            SimGlyphidTracking.tick(level);
             // One grid for the whole swarm instead of an entity query per glyphid. Level-wide rather than
-            // per-entity precisely so the neighbourhood is built once.
+            // per-entity precisely so the neighbourhood is built once, and over both tiers.
             GlyphidSeparation.tick(level);
             // Last, so a field built this tick is flooded from terrain the diggers have already changed.
             GlyphidFlowFields.tick(level);
@@ -397,6 +403,31 @@ public final class WFServerEvents {
                                         .executes(ctx -> SwarmBench.flowField(ctx.getSource(), false))))
                         .then(Commands.literal("flowfields")
                                 .executes(ctx -> SwarmBench.flowFields(ctx.getSource())))
+                        .then(Commands.literal("sim")
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> SwarmBench.simTier(ctx.getSource(), true)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> SwarmBench.simTier(ctx.getSource(), false)))
+                                .then(Commands.argument("range", DoubleArgumentType.doubleArg(0.0, 4096.0))
+                                        .executes(ctx -> SwarmBench.simRange(ctx.getSource(),
+                                                DoubleArgumentType.getDouble(ctx, "range")))))
+                        .then(Commands.literal("tiers")
+                                .executes(ctx -> SwarmBench.tiers(ctx.getSource())))
+                        .then(Commands.literal("simcount")
+                                .then(Commands.argument("from", Vec3Argument.vec3())
+                                        .then(Commands.argument("to", Vec3Argument.vec3())
+                                                .executes(ctx -> SwarmBench.simCount(ctx.getSource(),
+                                                        Vec3Argument.getVec3(ctx, "from"),
+                                                        Vec3Argument.getVec3(ctx, "to"))))))
+                        .then(Commands.literal("blast")
+                                .then(Commands.argument("size", DoubleArgumentType.doubleArg(1.0, 64.0))
+                                        .executes(ctx -> SwarmBench.blast(ctx.getSource(),
+                                                (float) DoubleArgumentType.getDouble(ctx, "size")))))
+                        .then(Commands.literal("watcher")
+                                .executes(ctx -> SwarmBench.watcher(ctx.getSource(), null))
+                                .then(Commands.argument("at", Vec3Argument.vec3())
+                                        .executes(ctx -> SwarmBench.watcher(ctx.getSource(),
+                                                Vec3Argument.getVec3(ctx, "at")))))
                         .then(Commands.literal("stagger")
                                 .then(Commands.literal("on")
                                         .executes(ctx -> SwarmBench.stagger(ctx.getSource(), true)))

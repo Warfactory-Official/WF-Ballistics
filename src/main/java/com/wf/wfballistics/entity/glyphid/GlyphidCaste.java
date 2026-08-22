@@ -30,19 +30,19 @@ public enum GlyphidCaste {
     /**
      * The baseline bug. Always available, always the majority.
      */
-    GRUNT(0.00F, 10.0F, () -> ModEntities.GLYPHID.get()),
+    GRUNT(0.00F, 10.0F, 1.0D, () -> ModEntities.GLYPHID.get()),
     /**
      * Founds nests. Available from the start because a colony that cannot expand is not a colony, and rare
      * because one scout is worth a dozen grunts to the simulation.
      */
-    SCOUT(0.00F, 1.0F, () -> ModEntities.GLYPHID_SCOUT.get()),
-    BOMBARDIER(0.10F, 4.0F, () -> ModEntities.GLYPHID_BOMBARDIER.get()),
-    BRAWLER(0.25F, 4.0F, () -> ModEntities.GLYPHID_BRAWLER.get()),
-    DIGGER(0.35F, 3.0F, () -> ModEntities.GLYPHID_DIGGER.get()),
-    BLASTER(0.50F, 2.0F, () -> ModEntities.GLYPHID_BLASTER.get()),
-    BEHEMOTH(0.65F, 2.0F, () -> ModEntities.GLYPHID_BEHEMOTH.get()),
-    NUCLEAR(0.80F, 0.5F, () -> ModEntities.GLYPHID_NUCLEAR.get()),
-    BRENDA(0.90F, 0.5F, () -> ModEntities.GLYPHID_BRENDA.get());
+    SCOUT(0.00F, 1.0F, 0.75D, () -> ModEntities.GLYPHID_SCOUT.get()),
+    BOMBARDIER(0.10F, 4.0F, 1.0D, () -> ModEntities.GLYPHID_BOMBARDIER.get()),
+    BRAWLER(0.25F, 4.0F, 1.25D, () -> ModEntities.GLYPHID_BRAWLER.get()),
+    DIGGER(0.35F, 3.0F, 1.3D, () -> ModEntities.GLYPHID_DIGGER.get()),
+    BLASTER(0.50F, 2.0F, 1.25D, () -> ModEntities.GLYPHID_BLASTER.get()),
+    BEHEMOTH(0.65F, 2.0F, 1.5D, () -> ModEntities.GLYPHID_BEHEMOTH.get()),
+    NUCLEAR(0.80F, 0.5F, 2.0D, () -> ModEntities.GLYPHID_NUCLEAR.get()),
+    BRENDA(0.90F, 0.5F, 2.0D, () -> ModEntities.GLYPHID_BRENDA.get());
 
     /**
      * Share of its full weight a caste carries the instant it unlocks.
@@ -55,12 +55,15 @@ public enum GlyphidCaste {
 
     private final float minEvolution;
     private final float baseWeight;
+    private final double scale;
     private final Supplier<EntityType<? extends EntityGlyphid>> type;
     private final ResourceLocation skin;
 
-    GlyphidCaste(float minEvolution, float baseWeight, Supplier<EntityType<? extends EntityGlyphid>> type) {
+    GlyphidCaste(float minEvolution, float baseWeight, double scale,
+                 Supplier<EntityType<? extends EntityGlyphid>> type) {
         this.minEvolution = minEvolution;
         this.baseWeight = baseWeight;
+        this.scale = scale;
         this.type = type;
         // The grunt wears the unsuffixed skin the others are named against, being the glyphid every other
         // caste is a variation on. Compared by name because a constructor may not reference a constant of
@@ -74,6 +77,17 @@ public enum GlyphidCaste {
     }
 
     /**
+     * How much bigger than a grunt this caste is.
+     *
+     * <p>Here rather than on the entity for the same reason {@link #skin} is: it is the caste that is a
+     * different size, not the class, and the sim tier has a caste and no class. {@code EntityGlyphid}
+     * reads it back out through {@code getGlyphidScale}, so the number exists once.
+     */
+    public double scale() {
+        return scale;
+    }
+
+    /**
      * This caste's texture.
      *
      * <p>Server-safe despite being a render concern: a {@link ResourceLocation} is not a client class, and
@@ -82,6 +96,28 @@ public enum GlyphidCaste {
      */
     public ResourceLocation skin() {
         return skin;
+    }
+
+    /**
+     * This caste's numbers, without an entity to ask.
+     *
+     * <p>Needed by the sim tier, which has a caste and no body. Kept as a switch on the enum rather than
+     * derived from {@code EntityGlyphid.getStats()} because that one is an override per subclass, and the
+     * point of a record is that no subclass has been instantiated.
+     */
+    public GlyphidStats.StatBundle stats() {
+        GlyphidStats table = GlyphidStats.getStats();
+        return switch (this) {
+            case GRUNT -> table.getGrunt();
+            case SCOUT -> table.getScout();
+            case BOMBARDIER -> table.getBombardier();
+            case BRAWLER -> table.getBrawler();
+            case DIGGER -> table.getDigger();
+            case BLASTER -> table.getBlaster();
+            case BEHEMOTH -> table.getBehemoth();
+            case NUCLEAR -> table.getNuclear();
+            case BRENDA -> table.getBrenda();
+        };
     }
 
     public float minEvolution() {

@@ -37,10 +37,6 @@ public class EntityGlyphidBlaster extends EntityGlyphidBombardier {
         return GlyphidStats.getStats().getBlaster();
     }
 
-    @Override
-    public double getGlyphidScale() {
-        return 1.25D;
-    }
 
     @Override
     public boolean dropsExplosives() {

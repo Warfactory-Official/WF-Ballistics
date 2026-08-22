@@ -85,10 +85,6 @@ public class EntityGlyphidScout extends EntityGlyphid {
         return GlyphidStats.getStats().getScout();
     }
 
-    @Override
-    public double getGlyphidScale() {
-        return 0.75D;
-    }
 
     @Override
     public boolean isScoutType() {
