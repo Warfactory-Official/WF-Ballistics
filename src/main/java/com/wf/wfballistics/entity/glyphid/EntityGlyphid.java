@@ -88,9 +88,6 @@ import java.util.function.Predicate;
  */
 public class EntityGlyphid extends Monster implements DynamicResistance {
 
-    public static final ResourceLocation TEXTURE =
-            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "textures/entity/glyphid.png");
-
     public static final byte TYPE_NORMAL = 0;
     public static final byte TYPE_INFECTED = 1;
     public static final byte TYPE_RADIOACTIVE = 2;
@@ -236,7 +233,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance {
     }
 
     public ResourceLocation getSkin() {
-        return TEXTURE;
+        return GlyphidCaste.byType(getType()).skin();
     }
 
     public double getGlyphidScale() {
