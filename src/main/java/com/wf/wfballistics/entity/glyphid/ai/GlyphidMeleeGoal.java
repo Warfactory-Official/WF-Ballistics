@@ -1,5 +1,6 @@
 package com.wf.wfballistics.entity.glyphid.ai;
 
+import com.wf.wfballistics.debug.SwarmBench;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntitySelector;
@@ -44,6 +45,16 @@ public class GlyphidMeleeGoal extends GlyphidPathingGoal {
      * How far the target may drift from the point we last aimed at before the hop is worth re-aiming.
      */
     private static final double REAIM_DISTANCE_SQ = (double) HOP * HOP;
+
+    /**
+     * Inside this range, with the target in sight, a glyphid walks straight at it instead of pathfinding.
+     *
+     * <p>Measured: melee path search was 28% of the tick, and every one of those searches was a glyphid
+     * running a ninety-node A* to reach something it could already see. Steering costs a rotation and two
+     * block lookups; the move control still jumps and steps up on its own, and the walk goal is still there
+     * for anything actually blocked.
+     */
+    private static final double CHARGE_RANGE = 12.0;
 
     private int ticksUntilNextAttack;
     private double aimedX;
@@ -104,7 +115,15 @@ public class GlyphidMeleeGoal extends GlyphidPathingGoal {
             repathNow();
         }
 
-        advance();
+        if (SwarmBench.chargeMelee && withinCharge(target)) {
+            // Straight at it. The navigator is stopped so it does not keep walking a stale path underneath.
+            if (!glyphid.getNavigation().isDone()) {
+                glyphid.getNavigation().stop();
+            }
+            glyphid.getMoveControl().setWantedPosition(target.getX(), target.getY(), target.getZ(), speed);
+        } else {
+            advance();
+        }
 
         ticksUntilNextAttack = Math.max(ticksUntilNextAttack - 1, 0);
         if (ticksUntilNextAttack <= 0 && glyphid.isWithinMeleeAttackRange(target)
@@ -113,6 +132,15 @@ public class GlyphidMeleeGoal extends GlyphidPathingGoal {
             glyphid.swing(InteractionHand.MAIN_HAND);
             glyphid.doHurtTarget(target);
         }
+    }
+
+    /**
+     * Close enough and visible enough to just walk at. Line of sight is what stands in for "no wall between
+     * us"; {@link net.minecraft.world.entity.ai.sensing.Sensing} caches it per tick, so asking is cheap.
+     */
+    private boolean withinCharge(LivingEntity target) {
+        return glyphid.distanceToSqr(target) < CHARGE_RANGE * CHARGE_RANGE
+                && glyphid.getSensing().hasLineOfSight(target);
     }
 
     @Override

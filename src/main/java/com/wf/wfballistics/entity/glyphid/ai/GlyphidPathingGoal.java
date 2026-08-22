@@ -66,7 +66,7 @@ public abstract class GlyphidPathingGoal extends Goal {
     protected static final double CHEW_REACH = 3.0;
 
     protected final EntityGlyphid glyphid;
-    private final double speed;
+    protected final double speed;
 
     private int sinceRepath;
     private int retryAfter = REPATH_MIN;
@@ -190,8 +190,20 @@ public abstract class GlyphidPathingGoal extends Goal {
             hopY = Mth.floor(pos.y);
         }
 
-        // Accuracy 1, range named explicitly: see PATH_RANGE.
-        Path path = glyphid.getNavigation().createPath(new BlockPos(hopX, hopY, hopZ), 1, PATH_RANGE);
+        BlockPos hop = new BlockPos(hopX, hopY, hopZ);
+        BlockPos start = glyphid.blockPosition();
+        Path path;
+        if (SwarmBench.sharedPaths) {
+            int tick = glyphid.tickCount;
+            path = GlyphidPathCache.lookup(glyphid.level(), start, hop, tick);
+            if (path == null) {
+                // Accuracy 1, range named explicitly: see PATH_RANGE.
+                path = glyphid.getNavigation().createPath(hop, 1, PATH_RANGE);
+                GlyphidPathCache.store(glyphid.level(), start, hop, path, tick);
+            }
+        } else {
+            path = glyphid.getNavigation().createPath(hop, 1, PATH_RANGE);
+        }
         return path != null && glyphid.getNavigation().moveTo(path, speed);
     }
 

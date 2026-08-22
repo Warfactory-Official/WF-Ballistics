@@ -58,6 +58,13 @@ repositories {
         url = 'https://maven.parchmentmc.org'
     }
     maven {
+        // Modrinth's maven, for dev-time optimisation mods we benchmark against. Scoped so it can never
+        // shadow a real dependency.
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+    maven {
         // CurseMaven hosts curse.maven:* artifacts (spark). Scoped to the curse.maven group.
         name = 'CurseMaven'
         url = 'https://cursemaven.com'
@@ -141,6 +148,13 @@ neoForge {
             // emits stack-trace metadata at safepoints, so every sample is attributed to the nearest safepoint
             // rather than to where the time actually went -- hot leaf methods vanish and their callers inherit
             // the cost. Left off by default because it slightly constrains optimisation.
+
+            // -Paccel=FFM pins Accelerated Recoiling's collision backend. Explicit rather than AUTO, because
+            // AUTO prefers its OpenCL backend and a headless server has no GPU to prefer -- benchmarking the
+            // GPU path on a dev box reports a number no server can reproduce.
+            if (project.hasProperty('accel')) {
+                systemProperty 'acceleratedrecoiling.backend', project.property('accel')
+            }
             if (project.hasProperty('jfr')) {
                 jvmArguments.addAll '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints',
                         '-XX:StartFlightRecording:name=idle,settings=none'
@@ -162,6 +176,13 @@ configurations {
 }
 
 dependencies {
+    // --- Benchmarking company ----------------------------------------------------------------
+    // Lithium is dev-runtime only and never published. It is here so the swarm work is measured in
+    // the environment it will actually ship into, and -- more pointedly -- so that anywhere we patch
+    // vanilla for performance, we find out immediately whether Lithium already patched it or, worse,
+    // patched it a different way. Vanilla's PathTypeCache is exactly that kind of contested ground.
+    localRuntime "maven.modrinth:lithium:${lithium_version}"
+
     // --- Flywheel (Engine-Room, NeoForge 1.21.1) ---------------------------------------------
     // compileOnly API for types at compile time; the full jar is present in dev via localRuntime.
     // Flywheel is declared a required dependency in neoforge.mods.toml, so it is NOT jar-in-jar'd

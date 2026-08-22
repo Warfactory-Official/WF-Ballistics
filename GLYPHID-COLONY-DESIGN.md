@@ -692,7 +692,66 @@ a worker and read by the server thread, `setRelease`/`getAcquire` is the correct
 over. Worth noting too that `sun.misc.Unsafe`'s memory access is deprecated for removal (JEP 471), so betting
 a long-lived mod on it is a bad trade even where it would help.
 
-### 11.11 Still open
+### 11.11 Charge, shared paths, and the PathTypeCache dead end
+
+Two changes, both measured against Lithium 0.15.4 and Accelerated Recoiling (FFM backend) installed, because
+that is the environment this ships into.
+
+**Charge instead of pathfinding.** Inside 12 blocks with line of sight, a glyphid drives its move control
+straight at the target and never touches the navigator. The move control still steps up and jumps on its own.
+
+**Shared paths.** `GlyphidPathCache` quantises both search endpoints to a 4-block grid, so glyphids going the
+same way collide on one key and copy each other's answer instead of each running the same A*. Paths are
+copied rather than shared outright: a `Path` carries a mutable cursor, so two mobs on one instance would
+advance each other along it.
+
+| 300 glyphids | before | after |
+|---|---|---|
+| melee, vs 60 drifting targets | 3.40 ms | **3.00 ms** |
+| — hits landed in the window | 228 | **373** |
+| — path search | 24.1% | 11.4% |
+| march, 300 under orders | 5.81 ms | **3.06 ms** |
+| — path search | 3.03 ms (52%) | 0.48 ms (16%) |
+
+The melee number is the interesting one: charging landed **63% more hits**, because a glyphid that stops
+re-planning and just closes spends its time biting. Shared-path hit rate is 65% on the march and 24% in
+melee, which is the expected shape — a warband shares a destination, a brawl does not.
+
+**Current shipping cost at 300: 2.81 ms in melee and 2.81 ms marching, both 9.4 µs/entity.**
+
+#### The PathTypeCache was a dead end, twice over
+
+`PathTypeCache` is a direct-mapped table of 4096 entries, shared level-wide, so it looked like the obvious
+capacity problem behind 2.1 reads per node when packed against 189 when spread. It is not. Sweeping the table
+from 4096 entries to 262 144 (0.05 MB → 3.00 MB), spread out:
+
+| entries | reads/node | ns/node | tick |
+|---|---|---|---|
+| 4 096 | 171.8 | 7 190 | 3.85 ms |
+| 65 536 | 161.4 | 7 593 | 3.89 ms |
+| 131 072 | 161.1 | 7 433 | 3.43 ms |
+| 262 144 | 163.0 | 7 840 | 3.50 ms |
+
+A 64× bigger table buys about 8% fewer reads, inside run-to-run noise on tick time. Counting the cache
+directly says why:
+
+- Spread out, at vanilla size: **210 path-type queries per node, 93% hit — and they explain 9% of block reads.**
+- At 3 MB: 99% hit, explaining 1%.
+
+So the cache was never the problem: it was already 93% effective, and **over 90% of the reads never go
+through it at all.** They are the uncached direct `getBlockState` and collision-shape calls elsewhere in
+`WalkNodeEvaluator` — floor levels, diagonal validity, fluid checks.
+
+Two consequences. First, the resize is not worth an `@Overwrite` on a vanilla method for 8% of a term that is
+itself ~13% of the tick; it stays behind `swarmbench pathcache` as a measuring tool, not a shipped fix.
+Second, and more useful: **a `TerrainField` that cached only `PathType` would miss nine tenths of the reads.**
+If it is ever built it has to carry floor height and collision, which is a much larger structure than §11.10
+assumed — another reason the flow field is not the next thing to build.
+
+Lithium 0.15.4 does not patch `PathTypeCache`, so there is no conflict there; it is now a dev-runtime
+dependency precisely so that question gets answered before a patch ships rather than after.
+
+### 11.12 Still open
 
 - **Water stops a swarm.** `FloatGoal` outranks the march goal, so a glyphid that walks into a lake bobs there
   indefinitely. Placement refuses water, so a warband crossing a coastline materialises only on land — but the
