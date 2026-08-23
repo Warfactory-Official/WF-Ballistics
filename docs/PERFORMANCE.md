@@ -13,7 +13,7 @@ Reproduce with the harness under `$CLAUDE_JOB_DIR/tmp`: `perf.py` (scaling and t
 |---|---|---|---|
 | glyphid entities | 2000 marching | **+16.8 ms** | 8.4 µs/bug |
 | glyphid records (sim tier) | 2000, 89% simulated | **+4.4 ms** | 2.9 µs/bug |
-| separation grid | 2048 bodies | **+2.4 ms** | 13% of the swarm |
+| separation grid | 2048 bodies | **≤0.7 ms** for the pass | see below |
 | shared flow field | 2048 bodies | **no measurable difference** | — |
 | colony records | 200 colonies, none loaded | **0.0 ms** | free |
 | nest chambers hatching | one tier-1 nest | **+0.5 ms** | — |
@@ -62,6 +62,28 @@ so 39% of a glyphid's tick is in code with no profiler call site in it. Every *n
 Anyone optimising the swarm further should place call sites in those two residuals first, because
 everything currently visible is smaller than what is not.
 
+Subtracting each line from its parent gives the exclusive cost of every piece, which sums to the 15.345 ms
+measured:
+
+| # | what | ms | share | per glyphid |
+|---|---|---|---|---|
+| 1 | ai step, **unnamed** | 3.042 | 19.8% | 1.53 µs |
+| 2 | movement, **unnamed** | 2.977 | 19.4% | 1.49 µs |
+| 3 | `baseTick` | 1.975 | 12.9% | 0.99 µs |
+| 4 | block collision sweep | 1.884 | 12.3% | 0.95 µs |
+| 5 | path search (the march) | 1.877 | 12.2% | 0.94 µs |
+| 6 | entity tick, **unnamed** | 1.475 | 9.6% | 0.74 µs |
+| 7 | fire scan | 0.674 | 4.4% | 0.34 µs |
+| 8 | all four level passes | 0.658 | 4.3% | 0.33 µs |
+| 9 | path following | 0.589 | 3.8% | 0.30 µs |
+| 10 | blocks inside | 0.195 | 1.3% | 0.10 µs |
+| — | entity-vs-entity push | 0.000 | 0.0% | — |
+| — | digging | 0.000 | 0.0% | — |
+
+**The top two lines, and six of the top fifteen percent, are code with no call site in it. 7.494 ms —
+48.8% of the swarm — is unnamed.** No optimisation of anything on this list is worth starting before
+those three residuals are broken up, because each of them is larger than every named line.
+
 **Ceiling:** ~6000 bodies fills a 50 ms tick, ~3000 for half of one.
 
 ## The sim tier
@@ -79,8 +101,16 @@ At 2048 bodies, priced by what it costs *and* what it buys:
 | on | 18.30 ms | 1.07 blocks | 80 of 2048 |
 | off | 15.90 ms | **0.12 blocks** | **2009 of 2048** |
 
-2.4 ms, 13% of the swarm's cost, and it is the difference between a crowd and two thousand bodies standing
-in one block. Worth it.
+**The 2.4 ms difference is not the grid's cost, and it matters not to read it as one.** The profiler's own
+total is `TICK + SEPARATE + FLOW + SIM + SQUAD`, and at 2000 bodies that total is 15.345 ms against an
+entity tick of 14.687 — so **all four level passes together come to 0.658 ms**, which is the ceiling on
+what the separation grid itself can be spending. The other ~1.7 ms of the A/B is the swarm behaving
+differently: with separation off it collapses into a pile, and a pile occupies fewer chunks and sweeps
+shorter distances, so it is genuinely cheaper to tick. Turning separation off does not buy 2.4 ms of
+headroom; it buys under 0.7 ms and a swarm that is a single block.
+
+Which is the right trade anyway: it is the difference between a crowd and two thousand bodies standing in
+one place, for at most 4% of the swarm's cost.
 
 ## The shared flow field
 
