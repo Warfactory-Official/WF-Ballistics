@@ -8,6 +8,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.Locale;
@@ -185,6 +186,52 @@ public final class ColonyDebug {
         }
         source.sendSuccess(() -> Component.literal("Founded " + colony), false);
         return 1;
+    }
+
+    /**
+     * Build the nearest colony's nest here and now, rather than waiting for a scout to settle one or for its
+     * chunk to load.
+     *
+     * <p>Reports what landed against what is owed, because that split is the whole of {@link PendingChunkEdits}
+     * and it is invisible otherwise: a mound half in an unloaded chunk looks like a mound that failed to
+     * build.
+     */
+    public static int nest(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        ColonyRegistry registry = ColonyRegistry.get(level);
+        Vec3 pos = source.getPosition();
+
+        Colony colony = registry.nearest(pos.x, pos.z);
+        if (colony == null) {
+            source.sendSuccess(() -> Component.literal(
+                    "No colonies; found one first with 'colony found'."), false);
+            return 0;
+        }
+        if (!colony.hasResolvedY()) {
+            // Load the chunk before asking how high the ground is. Level.getHeight does not load one: for an
+            // unloaded column it quietly answers with the bottom of the world, which builds the mound in the
+            // bedrock and clips every chamber off it. Loading it also fires ChunkEvent.Load, which builds the
+            // nest properly on the way past -- hence the `built` re-read below.
+            level.getChunk(colony.x >> 4, colony.z >> 4);
+            if (!colony.hasResolvedY()) {
+                colony.y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, colony.x, colony.z);
+            }
+        }
+
+        boolean already = colony.built;
+        GlyphidNest.Result result = already ? GlyphidNest.survey(level, colony) : GlyphidNest.place(level, colony);
+        colony.built = true;
+        registry.setDirty();
+
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "%s %s: %d blocks (%d written, %d owed to unloaded chunks), %d chambers",
+                already ? "Already built" : "Built", colony, result.blocks(), result.written(),
+                result.blocks() - result.written(), result.chambers().size())), false);
+        for (BlockPos chamber : result.chambers()) {
+            source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                    "  chamber at %d %d %d", chamber.getX(), chamber.getY(), chamber.getZ())), false);
+        }
+        return result.blocks();
     }
 
     /**

@@ -40,5 +40,9 @@ public class ModBlockEntities {
             BLOCK_ENTITIES.register("turret_interceptor_supersonic", () -> BlockEntityType.Builder.of(
                     TurretInterceptorSupersonicBlockEntity::new, ModBlocks.TURRET_INTERCEPTOR_SUPERSONIC.get()).build(null));
 
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<GlyphidSpawnerBlockEntity>> GLYPHID_SPAWNER =
+            BLOCK_ENTITIES.register("glyphid_spawner", () -> BlockEntityType.Builder.of(
+                    GlyphidSpawnerBlockEntity::new, ModBlocks.GLYPHID_SPAWNER.get()).build(null));
+
 
 }

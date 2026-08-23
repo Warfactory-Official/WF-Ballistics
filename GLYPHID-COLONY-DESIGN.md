@@ -758,8 +758,9 @@ dependency precisely so that question gets answered before a patch ships rather 
   flow field is for. Flight sidesteps it entirely, which is another argument for wings.
 - ~~**Glyphids have no renderer.**~~ Done, §17. Worth keeping the lesson: server-only testing hid this
   completely, because a missing renderer is a client crash and nothing headless ever loads one.
-- `NestBuilder` is a hook: colonies materialise as data until the spawner block lands with the hive port. A
-  scout now founds the colony *record* on its own (§13.3), so only block placement is still waiting.
+- ~~`NestBuilder` is a hook: colonies materialise as data until the spawner block lands with the hive port. A
+  scout now founds the colony *record* on its own (§13.3), so only block placement is still waiting.~~ Done,
+  §25 — and it found two deadlocks in `PendingChunkEdits` that nothing had ever reached.
 - **Ambient wildlife derails a march.** Melee outranks the march goal, so a column crossing a plains biome
   stops to eat it. Fine as behaviour, ruinous as a benchmark — march runs need `doMobSpawning false` and a
   swept arena, or they measure a brawl. Whether it wants a leash in gameplay is a design question, not a bug.
@@ -1843,3 +1844,158 @@ benchmark produced no thread assertion, no pass failure and no dropped tick.
 - **One worker per level.** Splitting the record list across workers is safe and unnecessary; it would need
   the prefetch's miss list to be synchronised, and it would buy latency inside a window that is already
   mostly empty.
+
+---
+
+## 25. Implemented: the hive port
+
+§4 decided this one before there was any code: **the colony record simulates, and blocks are its view in
+loaded chunks.** Upstream's model is the other way round — `TileEntityGlyphidSpawner` decides how big a swarm
+to make out of local pollution, keeps its own cooldown, and answers to nothing — which cannot simulate a
+colony nobody is looking at. So this is not a port of that class so much as its inversion, and the hook
+`ColonyManager.NestBuilder` was left for exactly this.
+
+Two blocks. `glyphid_nest` is the flesh a mound is made of and holds no state at all. `glyphid_spawner` — an
+**egg chamber** — is the record's hands: it spends the colony's population to put a defender on the ground,
+and it is the only thing the block layer can act on the record *through*.
+
+### 25.1 The mound is generated, not stamped
+
+`GlyphidHiveFeature` carries one fixed 11×11×5 `int[][][]`. That is right for a worldgen feature and wrong
+here, because §8.2 made nest radius a function of distance from spawn (`2 + tier`, so 2 to 6) and the entire
+point of that scaling is that a frontier nest should read as a different proposition from a starting one. A
+fixed schematic can only be the same mound five times.
+
+So a dome of radius `r` on a skirt `r` deep — the skirt being what keeps it anchored where the ground falls
+away under it — with `1 + tier` chambers buried one layer under the skin, one at the apex and the rest on a
+ring at 0.55·r. Measured: **14 blocks and one chamber at tier 0, 381 and five at tier 4.**
+
+Chambers are buried rather than surfaced on purpose. Clearing a nest should be digging into it.
+
+One constraint worth stating because it looks like a bug on a bench world: nothing is placed below
+`minBuildHeight + 5`, which is cheaper than reading the block to check for bedrock and — unlike reading it —
+works for the part of a mound owed to a chunk that is not loaded. On a superflat world the surface sits *below*
+that line, so the skirt is clipped away and the mound floats a block. In an overworld with a surface near y 64
+nothing is clipped.
+
+### 25.2 One block, one subtype: none
+
+Upstream has infested and radioactive nest variants, picked by a `rand.nextInt(10)` at worldgen. Not ported.
+A colony already decides what it fields, out of tier and evolution and the caste table (§13, §14); a per-block
+subtype would be a second source of truth for the same question, contradicting the first, which is precisely
+the inversion §4 rejects. The `_alt` texture survives as a weighted blockstate variant, because that is a
+model concern and not a state one.
+
+### 25.3 What a chamber asks the colony
+
+Everything. In order, cheapest question first:
+
+1. **Is anybody near?** (48 blocks.) Off-world defence is what the record is for; a chamber that hatched into
+   an empty chunk would be paying population for bugs nobody would ever see.
+2. **Is it already crowded?** A box query, not a walk of `GlyphidTracker` — a level-wide list would make one
+   chamber's tick cost the size of the swarm attacking it.
+3. **Does the colony have a population to spend?** One bug costs one, debited *after* a body reaches the
+   world, for the same reason `WarbandMaterialiser` debits by what it placed rather than by what it wanted.
+
+That third one is the mechanic, not an accounting detail: **a nest defends itself out of the same pool it
+musters warbands from.** A colony that has just sent an army defends badly, and one that has been under siege
+cannot also attack. Two behaviours, one number.
+
+A chamber finds its colony lazily, on its first tick, and remembers it. Not written in by the builder, because
+half a mound's blocks may arrive later through `PendingChunkEdits`, which knows a block id and nothing else —
+lazy binding covers that path, the direct one, and a hand-placed block besides. A chamber that finds no colony
+within its nest radius is marked orphaned once and for good, so blocks left behind by a colony that was wiped
+out are dead flesh rather than a spawner that outlived its owner.
+
+### 25.4 The chambers are the colony's life
+
+The block layer would otherwise be decoration, and worse than decoration: a player could raze a mound and the
+record would carry on growing and mustering out of ground that was now bare. That is §4's failure from the
+other direction — the view and the truth diverging permanently, with the player looking at the view.
+
+So `Colony.spawners` is set from what the builder actually laid out, and breaking a chamber decrements it. At
+zero the colony is removed. **Clearing a nest means digging out every chamber**, and a tier-4 nest has five of
+them under a 381-block mound.
+
+The other half of that is `EntityGlyphid.isSpawnerBlock`, which was a `return false` stub waiting for these
+blocks. A colony will not chew its own mound: at 0.5 hardness a single bite would take a chamber's worth of
+nest with it, which would let a colony kill itself by defending.
+
+### 25.5 Two deadlocks, found by hanging a dev server
+
+Both in `PendingChunkEdits`, both pre-existing, and neither reachable until something actually queued edits —
+nothing ever had. Both were `jstack`, not reasoning.
+
+A nest is stamped from inside `ChunkEvent.Load`. `Level.setBlock` there reaches a **blocking `getChunk` for the
+chunk currently being loaded**, and on the server thread that is a deadlock: the thread waiting for the chunk
+is the thread that would finish loading it. Two independent routes to it:
+
+| route | reached via |
+|---|---|
+| vanilla neighbour shape update | `markAndNotifyBlock` → `updateNeighbourShapes` → `getBlockState` |
+| Lithium hopper update-suppression | `markAndNotifyBlock` → `HopperHelper.updateHopperOnUpdateSuppression` |
+
+The first is answered by `UPDATE_KNOWN_SHAPE`, and the old comment on `drain` — "UPDATE_CLIENTS without
+neighbour updates" — was simply wrong: the flag that suppresses neighbour *notification* is not the flag that
+suppresses neighbour *shape* updates, and only the first was being left out. The second ignores flags
+entirely. So `drain` writes through the `ChunkAccess` instead, which is what worldgen does and has none of that
+machinery attached. Nothing is lost by skipping it: the chunk has not been sent to a client yet, so the packet
+that would carry the blocks has not been built.
+
+A third, quieter one in the same place: **a chunk in the middle of `ChunkEvent.Load` does not yet answer true
+to `level.hasChunk`** — the FULL future that test reads has not completed. So a nest built there queues *its own
+chunk's* blocks as owed rather than writing them, and with `drain` running before the build those would sit in
+the queue until the chunk was unloaded and loaded again. A nest that exists in the record and nowhere else.
+Fixed by building first and draining second.
+
+And one in the debug command rather than the game: `Level.getHeight` does not load a chunk — for an unloaded
+column it quietly answers with the bottom of the world. `colony nest` on an out-of-sight colony was therefore
+resolving the ground to y −64, building the mound inside the bedrock and clipping every chamber off it. It
+reported "5 chambers" as "0 chambers" and 381 blocks as 21, with no error anywhere. The same shape of failure
+as `BuiltInRegistries.get` returning a default.
+
+### 25.6 Verified at runtime
+
+39 checks over one server run, on a superflat bench world, driven over rcon with the answers coming back
+through a scoreboard rather than `/say` — `execute store result score` reports to the command source and so
+reaches rcon, where a broadcast does not. Chamber positions are read back out of the command rather than
+recomputed by the harness, so a mistake in the harness's idea of the geometry cannot pass as a mistake in the
+game's.
+
+| | result |
+|---|---|
+| a glyphid chews out of a dirt corridor | 2 of 6 wall blocks eaten in 60 s |
+| the same glyphid against nest flesh | **0 of 6**, same corridor, same 60 s |
+| tier 0 mound | 14 blocks, 1 chamber, all of it in loaded chunks |
+| tier 4 mound | 381 blocks, 5 chambers, 120 written and **261 owed to 3 unloaded chunks** |
+| those chunks loaded | 0 owed, and the blocks and all five chambers are there |
+| a colony founded out of sight | unbuilt and height-less until its chunk loaded, then 5 chambers with nobody asking |
+| 25 s with nobody near the nest | +8.80 population, 0 hatched |
+| 25 s with somebody standing on it | +3.70, so **5.10 spent for 5 hatched** |
+| the far nest, nobody near it | 0 hatched |
+| chambers dug out one at a time | 4, 3, 2, 1 left and alive; at 0 the colony is gone |
+
+The growth-versus-control pair is the honest way to measure the ledger. A tier-0 colony grows at 0.35/s and one
+chamber spends 0.2/s, so population *rises* while it is being spent and the delta on its own says nothing;
+against a control window of the same length with nobody near, the difference is what the defenders cost.
+
+The corridor test also had to be repaired before it proved anything. At one block wide the glyphid — 1.4 blocks
+wide — was pushed out through the walls, walked away over open ground, was never stuck and so never chewed. The
+control "failed" and the nest arm "passed" for the same reason: neither glyphid was ever in a corridor. **A
+control that can pass without the mechanism firing is not a control**, which is why the dirt arm now has to eat
+its way out before the nest arm's result is read at all.
+
+The dev client bakes both block models with no missing model, missing texture or blockstate error (§17's
+lesson: a renderer problem is a client crash that server-side testing cannot see).
+
+### 25.7 What is left
+
+- **Nothing gives a nest away from a distance.** A mound is a mound; there is no smell, no sound, no particle.
+  A player has no way to tell a colony from terrain until they are inside its 48-block hatch radius.
+- **A garrison despawns when the player leaves**, and the population that paid for it is not refunded. That is
+  consistent — it is the same as being killed, and the colony regrows — but it does mean a player can bleed a
+  nest by walking in and out of range. Whether that is an exploit or a tactic is a design question.
+- **Nest blocks have no loot table.** Upstream drops eggs from a spawner. Nothing here has a use for them yet.
+- **`PendingChunkEdits.submit` still writes through `Level.setBlock`** for a chunk that is already loaded. That
+  path is safe — the blocking `getChunk` returns immediately for a chunk that is up — but it is the same call
+  that deadlocked, kept apart only by that condition.

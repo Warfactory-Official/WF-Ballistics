@@ -31,6 +31,8 @@ public final class WFCreativeTabs {
                         output.accept(ModBlocks.TURRET_CIWS_ITEM.get());
                         output.accept(ModBlocks.TURRET_INTERCEPTOR_ITEM.get());
                         output.accept(ModBlocks.TURRET_INTERCEPTOR_SUPERSONIC_ITEM.get());
+                        output.accept(ModBlocks.GLYPHID_NEST_ITEM.get());
+                        output.accept(ModBlocks.GLYPHID_SPAWNER_ITEM.get());
                         output.accept(com.wf.wfballistics.fluid.WFFluids.KEROSENE_BUCKET.get());
                         // Preset missiles (registration order).
                         ModItems.missileItems().forEach(item -> output.accept(item.get()));
