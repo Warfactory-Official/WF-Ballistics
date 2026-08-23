@@ -58,7 +58,12 @@ public final class SwarmProfiler {
         SEPARATE("separation"),
         FLOW("flow field build"),
         SIM("sim tier"),
+        SIM_WAIT("- waiting for the pass"),
         SQUAD("squad split"),
+        // Wall time of the sim pass itself, which is not the world thread's time once it runs on a worker.
+        // Outside the tree and outside SWARM on purpose: adding it to the total would report a cost nothing
+        // pays, and subtracting it silently would report a swarm that got faster with no line saying where.
+        SIM_ASYNC("sim tier pass"),
         // The two below are a second cut of PATH -- by what it is doing rather than by who asked. They sit
         // outside the tree, because a phase can only be subtracted from its parent once and the by-caller
         // split already accounts for all of PATH.
@@ -131,7 +136,9 @@ public final class SwarmProfiler {
             -1,                     // SEPARATE -- a level pass, reported beside the tree rather than in it
             -1,                     // FLOW -- likewise
             -1,                     // SIM -- likewise
+            Phase.SIM.ordinal(),    // SIM_WAIT -- the part of SIM that is the world thread standing still
             -1,                     // SQUAD -- likewise
+            -1,                     // SIM_ASYNC -- not the world thread's at all, see the enum
             -1,                     // PATH_ASTAR -- reported in its own section, see searchReport()
             -1,                     // PATH_NEIGHBORS
     };
@@ -214,6 +221,19 @@ public final class SwarmProfiler {
     public static void end(Phase phase, long start) {
         if (enabled && start != 0L) {
             current[phase.ordinal()] += System.nanoTime() - start;
+        }
+    }
+
+    /**
+     * Charge nanos measured somewhere else to a phase.
+     *
+     * <p>For work that did not happen between a {@link #begin} and an {@link #end} on this thread: the sim
+     * pass times itself on a worker and hands the figure back at the join, because a worker may not touch the
+     * unsynchronised arrays this class keeps. Called on the world thread like everything else here.
+     */
+    public static void charge(Phase phase, long nanos) {
+        if (enabled && nanos > 0L) {
+            current[phase.ordinal()] += nanos;
         }
     }
 
@@ -465,11 +485,40 @@ public final class SwarmProfiler {
             double millis = meanMillis(pass);
             if (millis > 0.0) {
                 lines.add(line(pass.label() + " (level pass)", 0, millis, p95Millis(pass), total));
+                if (pass == Phase.SIM && meanMillis(Phase.SIM_WAIT) > 0.0) {
+                    lines.add(line(Phase.SIM_WAIT.label(), 1, meanMillis(Phase.SIM_WAIT),
+                            p95Millis(Phase.SIM_WAIT), total));
+                }
             }
         }
+        offThreadReport(lines);
         searchReport(lines);
         spikeReport(lines);
         return lines;
+    }
+
+    /**
+     * What the swarm costs somewhere other than the world thread, and how much of that the world thread ended
+     * up paying for anyway.
+     *
+     * <p>Reported apart from the total above, and that separation is the whole point of the section. Once the
+     * sim pass runs on a worker its cost stops being tick time, so folding it into the headline would report
+     * a budget nothing spends — and dropping it silently would report a swarm that got cheaper with no line
+     * saying where the work went. The number that decides whether the move was worth making is the last one:
+     * a stall the size of the pass means the work moved threads and the waiting did not.
+     */
+    private static void offThreadReport(List<String> lines) {
+        double async = meanMillis(Phase.SIM_ASYNC);
+        if (async <= 0.0) {
+            return;
+        }
+        double waited = meanMillis(Phase.SIM_WAIT);
+        lines.add("");
+        lines.add(String.format(Locale.ROOT, "off the world thread (not in the total above)"));
+        lines.add(String.format(Locale.ROOT, "  %-24s %8.3f ms  p95 %.3f, max %.3f",
+                Phase.SIM_ASYNC.label(), async, p95Millis(Phase.SIM_ASYNC), maxMillis(Phase.SIM_ASYNC)));
+        lines.add(String.format(Locale.ROOT, "  %-24s %8.3f ms  %.0f%% of it hidden behind the vanilla tick",
+                "world thread waited", waited, 100.0 * (1.0 - Math.min(1.0, waited / async))));
     }
 
     /**

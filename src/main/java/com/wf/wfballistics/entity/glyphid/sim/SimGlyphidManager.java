@@ -7,9 +7,6 @@ import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidTasks;
 import com.wf.wfballistics.entity.glyphid.GlyphidTracker;
-import com.wf.wfballistics.entity.glyphid.brain.GlyphidBrain;
-import com.wf.wfballistics.entity.glyphid.brain.GlyphidPlan;
-import com.wf.wfballistics.entity.glyphid.brain.GlyphidSnapshot;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -67,10 +64,28 @@ public final class SimGlyphidManager {
     }
 
     /**
-     * Run one dimension: decide who belongs where, then advance every record.
+     * The front half of the tick, from {@code LevelTickEvent.Pre}: read the world, then set the pass going.
      *
-     * <p>Decisions first, so a glyphid demoted this tick is stepped as a record on the same tick rather than
-     * standing still for one — the same ordering {@code SimDroneManager} uses and for the same reason.
+     * <p>Split from {@link #tick} so the records advance <em>while</em> the world thread runs the vanilla
+     * level tick rather than after it. See {@link SimGlyphidPass} for the contract that makes that safe.
+     */
+    public static void beginTick(ServerLevel level) {
+        if (!SwarmBench.simTier) {
+            SimGlyphidPass.idle(level);
+            return;
+        }
+        long t = SwarmProfiler.begin();
+        SimGlyphidPass.begin(level, SimGlyphidRegistry.get(level));
+        SwarmProfiler.end(SwarmProfiler.Phase.SIM, t);
+    }
+
+    /**
+     * The back half, from {@code LevelTickEvent.Post}: join the pass, then decide who belongs in which tier.
+     *
+     * <p>Decisions after the walk rather than before it, which is the one thing the split changes. A glyphid
+     * demoted here has already had its tick as an entity and takes its first as a record next tick, and one
+     * promoted here had its tick as a record and takes its first as an entity next tick — so neither loses a
+     * tick, and the demoted one no longer moves twice on the tick it changes form.
      */
     public static void tick(ServerLevel level) {
         SimGlyphidRegistry registry = SimGlyphidRegistry.get(level);
@@ -81,31 +96,12 @@ public final class SimGlyphidManager {
             return;
         }
         long t = SwarmProfiler.begin();
+        SimGlyphidPass.join(level, registry);
         if (level.getGameTime() % DECIDE_INTERVAL == 0L) {
             demote(level, registry);
             promote(level, registry);
         }
-        advance(level, registry);
         SwarmProfiler.end(SwarmProfiler.Phase.SIM, t);
-    }
-
-    /**
-     * Plan and move every record. The whole tier, and the reason it is worth having: one pass, no entity
-     * list, no chunk, and the same {@link GlyphidBrain} the bodies run.
-     */
-    private static void advance(ServerLevel level, SimGlyphidRegistry registry) {
-        List<SimGlyphid> all = registry.view();
-        if (all.isEmpty()) {
-            return;
-        }
-        for (int i = 0; i < all.size(); i++) {
-            SimGlyphid sim = all.get(i);
-            sim.tickCount++;
-            GlyphidSnapshot self = sim.snapshot(level);
-            GlyphidPlan plan = GlyphidBrain.plan(self, sim.mind());
-            sim.apply(level, plan);
-        }
-        registry.setDirty();
     }
 
     // --- entity -> record ---

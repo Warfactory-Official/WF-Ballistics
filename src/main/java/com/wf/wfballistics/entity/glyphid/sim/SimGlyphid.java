@@ -11,12 +11,10 @@ import com.wf.wfballistics.entity.glyphid.brain.GlyphidMind;
 import com.wf.wfballistics.entity.glyphid.brain.GlyphidPlan;
 import com.wf.wfballistics.entity.glyphid.brain.GlyphidSnapshot;
 import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowField;
-import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
@@ -214,16 +212,35 @@ public final class SimGlyphid implements GlyphidCarrier {
     }
 
     /**
+     * The carrier form, for anything that drives a record through {@link GlyphidCarrier} without knowing
+     * which tier it has. Routes to the same code as the pass, with the world read straight through.
+     */
+    @Override
+    public GlyphidSnapshot snapshot(ServerLevel level) {
+        return snapshot(new SimWorldLive(level));
+    }
+
+    @Override
+    public void apply(ServerLevel level, GlyphidPlan plan) {
+        apply(new SimWorldLive(level), plan);
+    }
+
+    /**
      * What the brain is allowed to see. Shorter than the entity's by everything a record cannot have: there
      * is no target, because a record that has something to fight has already been promoted, and no navigator,
      * so the walk is always "done" and the brain is never waiting on one to finish.
      */
-    @Override
-    public GlyphidSnapshot snapshot(ServerLevel level) {
+    public GlyphidSnapshot snapshot(SimWorld world) {
         boolean stagger = SwarmBench.staggerSearches;
-        if (task == GlyphidTasks.TASK_FOLLOW
+        // Asked once and used twice. Both the destination's height and the field that leads to it are only
+        // wanted while marching, and both come out of the same lookup, so a record that is not marching does
+        // not put its task position into the prefetch's working set at all.
+        SimWorld.Destination destination = task == GlyphidTasks.TASK_FOLLOW
+                ? world.destination(taskX, taskY, taskZ)
+                : SimWorld.Destination.NONE;
+        if (destination.height() != SimWorld.UNKNOWN
                 && GlyphidBrain.repathDue(mind, tickCount, id, true, stagger)) {
-            resolveTaskHeight(level);
+            taskY = destination.height();
         }
         return new GlyphidSnapshot(
                 id,
@@ -245,11 +262,10 @@ public final class SimGlyphid implements GlyphidCarrier {
                 false,
                 SwarmBench.chargeMelee,
                 stagger,
-                flowStep(level));
+                flowStep(destination));
     }
 
-    @Override
-    public void apply(ServerLevel level, GlyphidPlan plan) {
+    public void apply(SimWorld world, GlyphidPlan plan) {
         prevX = x;
         prevY = y;
         prevZ = z;
@@ -259,29 +275,29 @@ public final class SimGlyphid implements GlyphidCarrier {
                 // The field hands back the floor of the column it is pointing at, so there is nothing left
                 // to look up: the step is already a position in the world. Re-asked every tick, so there is
                 // nothing to remember either.
-                    walk(level, plan.hopX() + 0.5, plan.hopY(), plan.hopZ() + 0.5, false);
+                    walk(world, plan.hopX() + 0.5, plan.hopY(), plan.hopZ() + 0.5, false);
             case PATH ->
                 // No pathfinder to search with. The hop is still the right place to head for -- it is a
                 // waypoint along the bearing, which is all a straight walk needs -- and the height comes off
                 // the surface, which is the whole of this tier's terrain model.
-                    aim(level, plan.hopX() + 0.5, plan.hopY(), plan.hopZ() + 0.5, true);
+                    aim(world, plan.hopX() + 0.5, plan.hopY(), plan.hopZ() + 0.5, true);
             case CHARGE -> {
                 Vec3 destination = plan.destination();
                 if (destination != null) {
-                    aim(level, destination.x, destination.y, destination.z, true);
+                    aim(world, destination.x, destination.y, destination.z, true);
                 }
             }
             case CHEW -> wantsChew = true;
             case NONE -> {
                 if (hasHop) {
-                    walk(level, hopX, hopY, hopZ, hopSampled);
+                    walk(world, hopX, hopY, hopZ, hopSampled);
                 } else {
-                    drift(level);
+                    drift(world);
                 }
             }
             case STOP -> {
                 hasHop = false;
-                drift(level);
+                drift(world);
             }
         }
 
@@ -299,13 +315,14 @@ public final class SimGlyphid implements GlyphidCarrier {
     /**
      * Ask the shared field which way, on the same terms the entity tier asks: marching only, and null where
      * there is no field or it has not flooded this far.
+     *
+     * <p>The field itself is a pair of dense arrays and reading one is eight comparisons and an index, which
+     * is why the pass can do it from a worker at all. It is only ever written by
+     * {@code GlyphidFlowFields.tick}, which runs on the world thread after the pass has been joined.
      */
-    private @Nullable Vec3 flowStep(ServerLevel level) {
-        if (task != GlyphidTasks.TASK_FOLLOW || mind.chewing) {
-            return null;
-        }
-        GlyphidFlowField field = GlyphidFlowFields.fieldFor(level, taskX, taskY, taskZ);
-        if (field == null) {
+    private @Nullable Vec3 flowStep(SimWorld.Destination destination) {
+        GlyphidFlowField field = destination.field();
+        if (field == null || mind.chewing) {
             return null;
         }
         double[] step = field.step(x, y, z);
@@ -316,13 +333,13 @@ public final class SimGlyphid implements GlyphidCarrier {
      * Take a new walk, and remember it. The record keeps walking to this point on every tick the brain
      * leaves it alone, which is nineteen ticks in twenty.
      */
-    private void aim(ServerLevel level, double tx, double ty, double tz, boolean sampleGround) {
+    private void aim(SimWorld world, double tx, double ty, double tz, boolean sampleGround) {
         hasHop = true;
         hopX = tx;
         hopY = ty;
         hopZ = tz;
         hopSampled = sampleGround;
-        walk(level, tx, ty, tz, sampleGround);
+        walk(world, tx, ty, tz, sampleGround);
     }
 
     /**
@@ -332,7 +349,7 @@ public final class SimGlyphid implements GlyphidCarrier {
      *                     False for a flow step, whose height came out of the field and is already the floor
      *                     of a column something can stand in.
      */
-    private void walk(ServerLevel level, double tx, double ty, double tz, boolean sampleGround) {
+    private void walk(SimWorld world, double tx, double ty, double tz, boolean sampleGround) {
         double speed = stats().movementSpeed() * SPEED_PER_ATTRIBUTE;
         double dx = tx - x;
         double dz = tz - z;
@@ -344,16 +361,16 @@ public final class SimGlyphid implements GlyphidCarrier {
             yRot = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0F;
         }
         spendPush();
-        settleOnto(level, sampleGround ? groundAt(level, x, z) : ty);
+        settleOnto(sampleGround ? groundAt(world, x, z) : ty);
     }
 
     /**
      * Standing still, but still on the ground and still shoved by the crowd. Without this a stopped glyphid
      * inside a pile is the one thing nothing can move.
      */
-    private void drift(ServerLevel level) {
+    private void drift(SimWorld world) {
         spendPush();
-        settleOnto(level, groundAt(level, x, z));
+        settleOnto(groundAt(world, x, z));
     }
 
     private void spendPush() {
@@ -367,7 +384,7 @@ public final class SimGlyphid implements GlyphidCarrier {
      * Approach a new floor height rather than snapping to it, so climbing a wall takes about as long as an
      * entity takes to climb it and a drop is a fall rather than a teleport.
      */
-    private void settleOnto(ServerLevel level, double floor) {
+    private void settleOnto(double floor) {
         double delta = floor - y;
         if (Math.abs(delta) <= CLIMB_RATE) {
             y = floor;
@@ -378,28 +395,28 @@ public final class SimGlyphid implements GlyphidCarrier {
 
     /**
      * Surface height in a column, re-read only when the column changes. At a fifth of a block a tick that is
-     * one heightmap lookup every five ticks, which is this tier's entire cost of knowing about terrain.
+     * one lookup every five ticks or so, which is this tier's entire cost of knowing about terrain.
+     *
+     * <p>The unknown case covers two things that want the same answer: a chunk that is not loaded, and a
+     * column the prefetch has not been given yet. Both keep the height already held and ask again next tick —
+     * the column cache is deliberately not advanced, so the retry happens. A record already approaches a new
+     * floor rather than snapping to it, so a tick of lag on the answer is below what the movement resolves.
      */
-    private double groundAt(ServerLevel level, double px, double pz) {
+    private double groundAt(SimWorld world, double px, double pz) {
         int columnX = Mth.floor(px);
         int columnZ = Mth.floor(pz);
         if (columnX == groundColumnX && columnZ == groundColumnZ) {
             return ground;
         }
-        if (!level.hasChunk(columnX >> 4, columnZ >> 4)) {
-            // No chunk to ask. Keeping the last height is what a warband record does for the whole crossing.
+        int height = world.height(columnX, columnZ);
+        if (height == SimWorld.UNKNOWN) {
+            // Keeping the last height is what a warband record does for a whole crossing.
             return ground == 0.0 ? y : ground;
         }
         groundColumnX = columnX;
         groundColumnZ = columnZ;
-        ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, columnX, columnZ);
+        ground = height;
         return ground;
-    }
-
-    public void resolveTaskHeight(ServerLevel level) {
-        if (level.hasChunk(taskX >> 4, taskZ >> 4)) {
-            taskY = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, taskX, taskZ);
-        }
     }
 
     public boolean atDestination() {
