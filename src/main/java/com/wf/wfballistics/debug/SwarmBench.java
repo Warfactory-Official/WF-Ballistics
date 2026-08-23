@@ -4,15 +4,18 @@ import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidSeparation;
+import com.wf.wfballistics.entity.glyphid.GlyphidTasks;
 import com.wf.wfballistics.entity.glyphid.GlyphidTracker;
 import com.wf.wfballistics.entity.glyphid.sim.SimGlyphid;
 import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidManager;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidPass;
 import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidRegistry;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
@@ -314,6 +317,88 @@ public final class SwarmBench {
      * two arms are the same swarm rather than two populations that happen to be the same size.
      */
     public static boolean simTier = true;
+
+    /**
+     * Point every glyphid in both tiers at one place, and make that place stick.
+     *
+     * <p>The benchmark needs a swarm that marches, because the sim tier is the approach march and a glyphid
+     * standing still is not in it. Left to the game the objective comes from {@link GlyphidSquads}, and that
+     * is not usable as a control: squads see only the entity tier, so as the tier promotes and demotes the
+     * roster churns, the rally point is recomputed from whichever bug happens to be first, and it moves.
+     * Measured, that gave a swarm whose simulated fraction swung between 35% and 81% within a minute and
+     * whose two tiers reported speeds a factor of three apart — a benchmark measuring its own scenario
+     * drifting rather than anything about the code.
+     *
+     * <p>The rally is written as well as the task, and that is the load-bearing half. A reform recomputes
+     * every objective from the rally, so setting them equal makes reassignment idempotent: the squads still
+     * run, still cost what they cost, and hand every glyphid back the destination it already had.
+     */
+    public static int march(CommandSourceStack source, Vec3 to) {
+        ServerLevel level = source.getLevel();
+        int x = Mth.floor(to.x);
+        int z = Mth.floor(to.z);
+        int y = level.hasChunk(x >> 4, z >> 4)
+                ? level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
+                : Mth.floor(to.y);
+
+        int ordered = 0;
+        for (EntityGlyphid bug : GlyphidTracker.glyphids(level)) {
+            bug.taskX = x;
+            bug.taskY = y;
+            bug.taskZ = z;
+            bug.hasRally = true;
+            bug.rallyX = x;
+            bug.rallyY = y;
+            bug.rallyZ = z;
+            bug.setCurrentTask(GlyphidTasks.TASK_FOLLOW, null);
+            ordered++;
+        }
+        for (SimGlyphid sim : SimGlyphidRegistry.get(level).view()) {
+            sim.taskX = x;
+            sim.taskY = y;
+            sim.taskZ = z;
+            sim.hasRally = true;
+            sim.rallyX = x;
+            sim.rallyY = y;
+            sim.rallyZ = z;
+            sim.task = GlyphidTasks.TASK_FOLLOW;
+            ordered++;
+        }
+        int marching = ordered;
+        source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
+                "%d glyphids marching on (%d, %d, %d).", marching, x, y, z)), false);
+        return marching;
+    }
+
+    /**
+     * When clear, the sim pass runs inline on the world thread instead of on a worker.
+     *
+     * <p>The control arm, and the reason {@link com.wf.wfballistics.entity.glyphid.sim.SimWorldLive} still
+     * exists. Both arms read the same prefetched world at the same point in the tick, so the only difference
+     * between them is which thread pays — which is what makes the pair a measurement of the move rather than
+     * of two different simulations.
+     */
+    public static boolean simAsync = true;
+
+    public static int simAsync(CommandSourceStack source, boolean on) {
+        for (ServerLevel level : source.getServer().getAllLevels()) {
+            SimGlyphidRegistry.get(level).await();
+        }
+        simAsync = on;
+        source.sendSuccess(() -> Component.literal("Glyphid sim pass runs "
+                + (on ? "on a worker." : "on the world thread.")), false);
+        return 1;
+    }
+
+    /**
+     * Where the sim pass ran, what it cost and how much of that the world thread waited out.
+     */
+    public static int simThread(CommandSourceStack source) {
+        for (String line : SimGlyphidPass.report(source.getLevel())) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        return 1;
+    }
 
     public static int simTier(CommandSourceStack source, boolean on) {
         simTier = on;

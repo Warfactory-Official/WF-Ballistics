@@ -83,6 +83,7 @@ import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidSeparation;
 import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields;
 import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidManager;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidPass;
 import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidTracking;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.UuidArgument;
@@ -121,6 +122,18 @@ public final class WFServerEvents {
     private WFServerEvents() {
     }
 
+    /**
+     * Sets the glyphid sim tier walking before the world thread starts its own tick, so the two run at once.
+     * The join is at the top of {@link #onLevelTick}; see {@code SimGlyphidPass} for what makes the window
+     * safe.
+     */
+    @SubscribeEvent
+    public static void onLevelTickPre(LevelTickEvent.Pre event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            SimGlyphidManager.beginTick(level);
+        }
+    }
+
     @SubscribeEvent
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
@@ -144,8 +157,12 @@ public final class WFServerEvents {
             ColonyManager.tick(level);
             // After the colony tier, because it reassigns bugs the materialiser may have only just placed.
             GlyphidSquads.tick(level);
-            // Before separation, so a glyphid demoted this tick is already in the registry the grid reads
-            // and the two tiers are separated against each other rather than one tick apart.
+            // Joins the pass dispatched by onLevelTickPre, then decides who changes tier. Here rather than at
+            // the top of this method because everything above is free to reach a record if it ever needs to —
+            // SimGlyphidRegistry.view() joins first — so leaving it late simply gives the worker more of the
+            // tick to hide in. Still before separation, so a glyphid demoted this tick is already in the
+            // registry the grid reads and the two tiers are separated against each other rather than a tick
+            // apart.
             SimGlyphidManager.tick(level);
             SimGlyphidTracking.tick(level);
             // One grid for the whole swarm instead of an entity query per glyphid. Level-wide rather than
@@ -173,10 +190,16 @@ public final class WFServerEvents {
     @SubscribeEvent
     public static void onServerStarting(ServerStartingEvent event) {
         DroneAiScheduler.startup();
+        // After the drone pool, which is what marks the world thread that both sets of assertions test
+        // against.
+        SimGlyphidPass.startup();
     }
 
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
+        // Before anything else: a pass killed halfway through would leave a swarm with half its records
+        // moved, and that is the state the world would then be saved in.
+        SimGlyphidPass.shutdown(event.getServer().getAllLevels());
         DroneAiScheduler.shutdown();
         IndustryClusters.clear();
         GlyphidFlowFields.clear();
@@ -411,6 +434,17 @@ public final class WFServerEvents {
                                 .then(Commands.argument("range", DoubleArgumentType.doubleArg(0.0, 4096.0))
                                         .executes(ctx -> SwarmBench.simRange(ctx.getSource(),
                                                 DoubleArgumentType.getDouble(ctx, "range")))))
+                        .then(Commands.literal("march")
+                                .then(Commands.argument("to", Vec3Argument.vec3())
+                                        .executes(ctx -> SwarmBench.march(ctx.getSource(),
+                                                Vec3Argument.getVec3(ctx, "to")))))
+                        .then(Commands.literal("simasync")
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> SwarmBench.simAsync(ctx.getSource(), true)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> SwarmBench.simAsync(ctx.getSource(), false))))
+                        .then(Commands.literal("simthread")
+                                .executes(ctx -> SwarmBench.simThread(ctx.getSource())))
                         .then(Commands.literal("tiers")
                                 .executes(ctx -> SwarmBench.tiers(ctx.getSource())))
                         .then(Commands.literal("simcount")

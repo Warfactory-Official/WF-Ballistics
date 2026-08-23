@@ -1642,9 +1642,204 @@ probes for a roof afterwards.
   over, so it has a body. It would stop being defensible the moment squads had to redirect an approach march.
 - **A record cannot be shot.** Only area damage reaches it, which is correct while the promotion range is
   larger than any weapon's — and would silently stop being correct if something outranged it.
-- **The sim pass is still on the world thread**, and is now the best candidate for moving off it: it reads
-  no chunk except a heightmap, which is §1's whole argument for why the off-world tier is the easy one to
-  parallelise. At 0.05 ms/tick there is nothing to reclaim yet.
+- ~~**The sim pass is still on the world thread**~~ — done in §24. It reads no chunk except a heightmap,
+  which is §1's whole argument for why the off-world tier is the easy one to parallelise.
 - **T2 is still a separate mechanism.** A warband record and a sim record are now two things that walk
   without an entity, and only one of them can navigate terrain. Merging them is what would let a warband
   cross a map by the same rules it fights by.
+
+## 24. Implemented: the sim pass off the world thread
+
+### 24.1 Why, when it was 0.05 ms
+
+It was not worth doing at three hundred records, and saying so is the point of having measured it. §23 left the
+sim tier costing 0.05 ms/tick for 295 records, which is a rounding error against a 50 ms budget: moving it
+would have bought nothing and cost a threading contract to get wrong.
+
+What makes it worth doing is that **the pass is linear in records and the tier exists to make records cheap
+enough to have thousands of.** The same per-record cost that reads as nothing at 300 is a fifth of a
+millisecond at 2000 and a millisecond at 10,000 — spent on glyphids nobody can see, on the one thread that
+decides whether the server keeps 20 tps. Off the thread it is spent on a core that was idle, inside a window
+the vanilla tick was going to occupy anyway.
+
+The second reason is that the pass is the *easy* one. §16 refused to put the entity tier's brain off-thread
+because a body's decision reaches into the world through a navigator, a target and a raycast. A record's does
+not: it reads a heightmap column, a destination's height, and a flow field. Three reads, all of which can be
+made a tick early.
+
+### 24.2 The shape
+
+```
+tick N, world thread, Pre:   1. fill the columns last tick's pass asked for and could not answer
+                             2. re-resolve the flow field for every destination it marched to
+                             3. hand the record list to a worker and return
+tick N, vanilla level tick:  entities tick, blocks tick, chunks tick   -- concurrently
+tick N, worker:              plan + apply, every record
+tick N, world thread, Post:  4. join
+                             5. decide who changes tier -- the only step that touches an entity
+```
+
+The window is the whole of `ServerLevel.tick()`, which is where the swarm's remaining cost lives, so the pass
+has tens of milliseconds to finish something that takes a fifth of one.
+
+Four things make it safe, and each is structural rather than a rule to remember:
+
+- **The worker cannot reach the world.** It is handed a `SimWorldPrefetch`, which holds no `Level` — the same
+  compile-time guarantee `DroneSnapshot` gives the drone planner. `ServerLevel` is not thread-safe and is not
+  meant to be: `getHeight` goes through the chunk source, whose last-chunk cache is written unsynchronised and
+  which will *load* a chunk if asked for one that is not there. A worker holding a level works under test and
+  corrupts a chunk under load.
+- **Both crossings are asserted at runtime** by the drone system's `WorldThread`: the pass refuses to run on
+  the world thread, and the prefetch refuses to read a chunk anywhere else. `swarmbench simthread` reports
+  whether the assertions are armed, because an assertion that was never installed reads exactly like one that
+  never fired.
+- **Nothing but the pass may touch a record in flight**, and that is enforced at the choke point rather than
+  by convention: `SimGlyphidRegistry.view()` joins the pass before handing the list over. An explosion landing
+  on a swarm mid-tick therefore *waits* for the pass instead of racing it — a sub-millisecond stall on a rare
+  event, against a damage queue that would have needed its own ordering rules. It also means every caller
+  written after this one is safe without knowing the rule exists.
+- **One worker per level, not many.** Records do not interact during the pass — separation is a separate stage
+  and its impulses are banked in fields — so splitting further would be *safe*. It is still not worth it: a
+  pass that fits in the window does not need to be shorter, and one writer is what lets the prefetch's miss
+  list be unsynchronised.
+
+Not the drone pool, deliberately. A drone route search is explicitly allowed to take as long as it needs and
+land whenever it lands; a sim pass has to be finished by the end of the tick that started it, and queued
+behind an A* across a few thousand cells it would still be running at the join.
+
+### 24.3 The world, a tick early
+
+The prefetch answers what it was asked for last tick, and it learns what to fetch **by being missed**. There
+is no scan of the swarm to decide what to prefetch, which matters because such a scan would be O(n) of exactly
+the work being moved off the thread. A miss returns `UNKNOWN` and notes the column; the world thread fills the
+noted columns next tick; the record uses the height it had for that one tick.
+
+That one-tick lag is not a compromise bolted on to make threading work — **it is the model the tier already
+had.** A record approaches a new floor at `CLIMB_RATE` rather than snapping to it, and keeps its last height
+wherever the chunk is not loaded. It was already, by design, a tick or more behind the ground under it.
+
+Columns are cleared every tick and destinations are not, and the asymmetry is load-bearing. A record caches
+the floor of the column it stands in for as long as it stands there, so a column only has to survive from the
+fill to the one read that follows it — clearing bounds the map at the columns that changed hands last tick,
+about a seventh of the swarm. A destination has no such cache: its height is read once per repath and kept in
+`taskY` for twenty ticks, so a cleared table would miss *every single time* and the destination height would
+never update. Destinations are therefore a working set, re-resolved each tick from whatever the last pass
+asked for — which is also what keeps the flow field's idle timer fresh and picks up a field that has finished
+rebuilding.
+
+### 24.4 Measured
+
+300 grunts and 2000 grunts marching across a flat arena, one server run, arms in palindromic order so drift
+cancels, each arm run twice. Population checked at both ends of every window.
+
+**300 glyphids, nobody watching — every glyphid a record:**
+
+| arm | swarm ms/tick | sim tier on the world thread | pass wall time | world thread waited |
+|---|---|---|---|---|
+| entities only | 2.63 | — | — | — |
+| pass on the world thread | 0.159 | 0.073 | 0.031 | 0.031 (100%) |
+| pass on a worker | **0.153** | **0.057** | 0.041 | **0.000** (0%) |
+
+**2000 glyphids, nobody watching:**
+
+| arm | swarm ms/tick | sim tier on the world thread | pass wall time | world thread waited |
+|---|---|---|---|---|
+| entities only | 16.77 | — | — | — |
+| pass on the world thread | 0.870 | 0.232 | 0.167 | 0.167 (100%) |
+| pass on a worker | **0.716** | **0.068** | 0.182 | **0.001** (~0%) |
+
+**2000 glyphids, a watcher standing in the swarm — ~350 bodies, ~1650 records:**
+
+| arm | swarm ms/tick | sim tier on the world thread | pass wall time | world thread waited |
+|---|---|---|---|---|
+| pass on the world thread | 6.02 | 0.189 | 0.111 | 0.111 (100%) |
+| pass on a worker | 5.92 | **0.080** | 0.143 | 0.001 (~0%) |
+
+Three things worth stating plainly.
+
+**At 2000 records the tier's world-thread cost falls 3.4×, from 0.232 to 0.068 ms**, and the whole swarm's
+world-thread cost falls 18%. At 300 it saves 0.016 ms, which is nothing — exactly as §23.9 predicted, and the
+reason this is filed as headroom rather than as an optimisation.
+
+**What is left on the world thread barely depends on the swarm.** 0.057 ms at 300 records, 0.068 at 2000,
+0.080 at 1650-plus-350-bodies. The residual is the prefetch — bounded by how many columns changed hands, not
+by how many records exist — plus the promotion budget, which is a constant. Inline, the same figure goes
+0.073 → 0.232 with the swarm. That is the actual result: *the sim tier's cost to the tick has stopped scaling
+with the number of glyphids in it.*
+
+**The pass costs about 9% more in total.** 0.182 ms on the worker against 0.167 inline at 2000 — cross-core
+traffic on data the world thread had warm. The work went up; the world thread's share of it went to zero. A
+report that only showed the tick would have hidden that, which is why `SIM_ASYNC` is printed outside the
+headline and never added to it.
+
+### 24.5 Reporting it without lying
+
+Off-threading breaks a profiler that only knows about the tick, in both directions. Charging the pass's wall
+time to the swarm total reports a budget nothing spends. Dropping it silently reports a swarm that got cheaper
+with no line saying where the work went — the same failure as §23's headline, which used to be the entity tick
+and would have fallen toward zero as records replaced bodies.
+
+So there are three numbers, and the third is the one that decides whether the move achieved anything:
+
+- `sim tier` — what the world thread spends: prefetch, dispatch, join, and the tier decisions. In the total.
+- `- waiting for the pass` — how much of that was the world thread standing still. Inside `sim tier`.
+- `sim tier pass` — the pass's own wall time, wherever it ran. **Outside the total**, with the fraction hidden
+  behind the vanilla tick printed beside it.
+
+A stall the size of the pass means the work changed threads and the waiting did not. Measured, the world
+thread waits 0.001 ms of a 0.18 ms pass: 99–100% hidden. The stall is accumulated on the registry rather than
+timed at the join, because the join can happen anywhere — an explosion that reaches a record mid-tick joins
+early, and that stall is just as much world-thread time as the scheduled one.
+
+`swarmbench simasync off` runs the same pass inline against the same prefetched world at the same point in the
+tick, so the pair is a measurement of the move rather than of two different simulations. That is what
+`SimWorldLive` is still there for.
+
+### 24.6 The benchmark lied first. Again.
+
+The scenario had to be rebuilt twice before any of the above was worth reading, and both failures produced
+numbers rather than errors.
+
+**The march was not a march.** Left to the game, a swarm's objective comes from `GlyphidSquads` — and squads
+see only the entity tier, so as the tier promoted and demoted, the roster churned, the rally point was
+recomputed from whichever bug happened to be first in it, and it *moved*. Measured: a simulated fraction
+swinging between 35% and 81% within a minute, and the two tiers reporting speeds a factor of three apart. The
+speed gap looked exactly like the calibration constant of §23.3 having drifted. It had not; half the swarm was
+standing on its destination. `swarmbench march` now sets one destination on both tiers and writes the rally to
+match, so a reform hands every glyphid back the objective it already had.
+
+**The arena had no floor under half of it.** `/forceload add` refuses more than 256 chunks in one command and
+says so — on a line an rcon script does not read. The corridor needed 561, the command failed, and only the
+bench's own 225-chunk arena was held. The swarm marched out of the loaded world at z≈127 and stopped existing:
+**2000 glyphids draining to 3 over ninety seconds, which looks precisely like the sim tier deleting a swarm.**
+Two hours went into that as a suspected correctness bug — including reverting to `b6d4579` and reproducing it
+there, which was the right move and did prove it was not a regression, but the real answer was one unread
+reply. The harness now issues the forceload in three commands and echoes `forceload query`, and every arm
+prints its population at both ends of the window; an arm whose count moved is an arm that was leaking.
+
+Third time this project has paid for the same lesson (§16.2's unticked chunks, §23.8's roofed corridor). The
+rule that would have caught all three: **a headless harness must report its own preconditions, not just its
+results.**
+
+### 24.7 Verified at runtime
+
+With the pass on a worker: a swarm marches at 300 records and the assertions report armed; a size-5 blast
+lands mid-tick and takes the swarm 300 → 218 with 58 wounded records promoting, so the mid-tick join holds;
+`save-all flush` with a pass in flight leaves the count unchanged; `simasync` toggled off and on under a live
+swarm moves the pass to `Server thread (100% waited)` and back to `wfb-glyphid-sim-1 (1%)` without losing a
+glyphid; and records that arrive take bodies (159 records → 92, entities 58 → 125). Fifteen minutes of
+benchmark produced no thread assertion, no pass failure and no dropped tick.
+
+### 24.8 What is left
+
+- **A record climbs anything.** Found while verifying this, and pre-existing: outside a flow field a record
+  walks straight at its destination and follows the heightmap, with no bound on the rise. Measured, 244 of 300
+  records walked *over* a 21-block obsidian wall spanning the corridor, and not one of the 14,175 blocks was
+  chewed — the stuck timer never fires because the record is never stuck. The flow field bounds climbing to 8
+  blocks; PATH mode bounds it at nothing, so the two tiers disagree about what terrain is, in a direction a
+  player can see. Not touched here because it is a navigation-model question rather than a threading one.
+- **The residual is the prefetch and the tier decisions**, and both are already close to flat in the swarm
+  size. There is no next lever here worth pulling.
+- **One worker per level.** Splitting the record list across workers is safe and unnecessary; it would need
+  the prefetch's miss list to be synchronised, and it would buy latency inside a window that is already
+  mostly empty.
