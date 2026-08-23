@@ -3,6 +3,10 @@ package com.wf.wfballistics.drone.ai.coord;
 import com.wf.wfballistics.drone.ai.DroneSnapshot;
 import com.wf.wfballistics.drone.ai.DronePlan;
 import com.wf.wfballistics.drone.ai.SquadView;
+import com.wf.wfballistics.drone.ai.state.Tuning;
+import com.wf.wfballistics.drone.squad.Formation;
+import com.wf.wfballistics.drone.squad.Formations;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
@@ -90,4 +94,43 @@ public interface CoordinationModel {
      * model is responsible for, after {@link #advance} and {@link #refresh} have settled the frame.
      */
     SquadCommand guide(DroneSnapshot self, SquadView squad, SquadAnchor anchor);
+
+    /**
+     * @return true when the squad has assembled into whatever shape this model actually holds, so a form-up
+     * can end. Asked once per tick, of the leader, by {@code MusterHandler}.
+     *
+     * <p><b>The model has to answer this, because only the model knows what "in formation" means for it.</b>
+     * This used to be one hard-coded test — every member within half a spacing of
+     * {@code Formation.slot(index, leader.pos(), ...)} — which is the {@link LeaderFollower} frame written out
+     * by hand. For the three slot-flying models that is right, or near enough. For {@link Flocking} it is a
+     * question with no answer: a flock has no slots, so it was being asked how far it was from a wedge it was
+     * never going to fly, the answer was always "too far", and every flocking launch therefore sat over the
+     * pad until {@code Tuning#MUSTER_TIMEOUT} gave up on it. Sixty seconds, every time, with the flight in
+     * perfectly good order the whole while.
+     *
+     * <p>The default is that same slot test, but measured off the frame the squad is flying rather than off
+     * the leader standing in for it, and with the tolerance scaled to the ordered spacing exactly as before.
+     * A member with no thrust left is not asked: it is on its way out of the sky and cannot reach a station,
+     * so holding the flight for it holds the flight for ever.
+     *
+     * @param anchor the frame this squad is holding, or null if it has not settled one yet
+     */
+    default boolean formedUp(SquadView squad, @Nullable SquadAnchor anchor) {
+        if (anchor == null) {
+            return false;
+        }
+        Formation shape = Formations.get(squad.formationId());
+        Vec3 forward = Formation.forward(anchor.yaw());
+        double tolerance = Math.max(Tuning.MUSTER_IN_PLACE_FLOOR, squad.spacing() * Tuning.MUSTER_IN_PLACE);
+        for (DroneSnapshot member : squad.slots()) {
+            if (!member.state().powered()) {
+                continue;
+            }
+            Vec3 slot = shape.slot(squad.indexOf(member), anchor.pos(), forward, squad.spacing());
+            if (member.pos().distanceTo(slot) > tolerance) {
+                return false;
+            }
+        }
+        return true;
+    }
 }

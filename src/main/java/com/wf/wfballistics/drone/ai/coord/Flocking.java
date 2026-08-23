@@ -137,6 +137,38 @@ public final class Flocking implements CoordinationModel {
     }
 
     /**
+     * A flock is formed up when it is <em>together</em>, which is the only shape it has.
+     *
+     * <p>The inherited test asks how far each drone is from a formation slot, and this model has none: asked
+     * of a flock it is always answered "too far", so before this existed every flocking launch held over the
+     * pad for the full {@code Tuning#MUSTER_TIMEOUT} and then set off anyway, in good order, having waited a
+     * minute for a wedge it was never going to fly. Measured: eight drones at spacing 12, sixty-six seconds
+     * from assembled to departure against a slot model's five, with the low drone sitting at 31 blocks AGL
+     * against a 38-block gate the whole time — because a flock does not hold a common altitude either, and
+     * cohesion is entitled to pull a member below cruise.
+     *
+     * <p>What it asks instead is the flock's own question, and it is the same number the model is built on:
+     * everybody inside a group radius of the centre. {@link #STRAGGLER_RANGE} is the threshold the guidance
+     * already uses to decide who is a straggler, so a flight is ready exactly when it has no stragglers left,
+     * and there is no second constant to get out of step with the first.
+     */
+    @Override
+    public boolean formedUp(SquadView squad, @Nullable SquadAnchor anchor) {
+        if (anchor == null) {
+            return false;
+        }
+        for (DroneSnapshot member : squad.slots()) {
+            if (!member.state().powered()) {
+                continue;
+            }
+            if (member.pos().distanceToSqr(anchor.pos()) > STRAGGLER_RANGE * STRAGGLER_RANGE) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
      * @return the push away from squadmates that are closer than the flock wants to sit. Falls off linearly
      * to nothing at the comfortable distance, so a flock at rest is not fighting itself: see
      * {@link #SEPARATION_FRACTION} for why this exists at all when {@code Cruising#separation} is already

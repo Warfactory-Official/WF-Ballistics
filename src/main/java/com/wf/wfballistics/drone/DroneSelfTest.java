@@ -1126,11 +1126,21 @@ public final class DroneSelfTest {
                 MusterHandler.INSTANCE.next(a, full) == DroneState.TRANSIT,
                 "everyone up, at height and steady is the whole condition; the flight should depart"));
 
-        DroneSnapshot low = musterer(3, museSlot(3), Vec3.ZERO, alt * 0.5, 4);
+        DroneSnapshot climbing = musterer(3, museSlot(3), Vec3.ZERO, alt * 0.5, 4).withState(DroneState.TAKEOFF);
         out.add(check("muster/waits-for-the-climb-out",
-                MusterHandler.INSTANCE.next(a, squadOf(a, b, c, low)) == null,
-                "a drone halfway up its climb has spawned but is not ready, and a slot is at the flight's "
-                        + "altitude"));
+                MusterHandler.INSTANCE.next(a, squadOf(a, b, c, climbing)) == null,
+                "a drone still climbing out has spawned but is not ready"));
+        DroneSnapshot onThePad = musterer(3, museSlot(3), Vec3.ZERO, 0.0, 4).withState(DroneState.IDLE);
+        out.add(check("muster/waits-for-a-drone-still-on-the-ground",
+                MusterHandler.INSTANCE.next(a, squadOf(a, b, c, onThePad)) == null,
+                "a member that has spawned but not left the pad is not airborne, and the old altitude test "
+                        + "skipped it entirely because IDLE is not powered"));
+        DroneSnapshot lowButFlying = musterer(3, museSlot(3), Vec3.ZERO, alt * 0.5, 4);
+        out.add(check("muster/does-not-re-ask-the-climb-out-by-altitude",
+                MusterHandler.INSTANCE.next(a, squadOf(a, b, c, lowButFlying)) == DroneState.TRANSIT,
+                "a drone that has left TAKEOFF has climbed out; re-deriving that from its altitude is a "
+                        + "second copy of TakeoffHandler's rule, and it disagrees under any model that does "
+                        + "not hold every member at cruise height"));
         DroneSnapshot outOfPlace = musterer(3, museSlot(3).add(SPACING, 0.0, 0.0), Vec3.ZERO, alt, 4);
         out.add(check("muster/waits-for-the-squad-to-get-into-shape",
                 MusterHandler.INSTANCE.next(a, squadOf(a, b, c, outOfPlace)) == null,
@@ -1222,9 +1232,14 @@ public final class DroneSelfTest {
                 .slot(index, at(0, 0), Formation.forward(0.0f), SPACING);
     }
 
+    /**
+     * A squad carrying the frame its first tick would have settled, because form-up is judged against the
+     * frame now rather than against the leader standing in for it: a view with no anchor is a squad that has
+     * not been planned yet, and the honest answer for one of those is "not formed up".
+     */
     private static SquadView squadOf(DroneSnapshot... members) {
-        return new SquadView(9L, Formations.DEFAULT, SPACING, CoordinationModels.DEFAULT, null,
-                members[0], List.of(members));
+        return new SquadView(9L, Formations.DEFAULT, SPACING, CoordinationModels.DEFAULT,
+                SquadAnchor.on(members[0]), members[0], List.of(members));
     }
 
     /**
@@ -1320,6 +1335,53 @@ public final class DroneSelfTest {
         out.add(check("squad/coincident-drones-scatter",
                 scatterA.length() > 0.0 && scatterB.length() > 0.0 && scatterA.distanceTo(scatterB) > 1.0E-6,
                 "drones in exactly the same place must still be given different ways out"));
+
+        // The climb-out case, and the reason separation is the glyphid rule now. A squad leaves one pad, so
+        // the drones nearest each other are the ones stacked one above another, and a three-dimensional push
+        // answers a climb with a shove back down at up to SEPARATION_MAX -- nearly three times the airframe's
+        // climb rate, which holds a drone under the flight for as long as the flight waits for it.
+        DroneSnapshot below = member(1, new Vec3(0.0, 98.0, 0.0), at(300, 0));
+        SquadView column = new SquadView(7L, Formations.DEFAULT, SPACING, CoordinationModels.LEGACY, null,
+                members.get(0), List.of(members.get(0), below));
+        Vec3 climbPush = Cruising.separation(below, column);
+        out.add(check("squad/separation-never-fights-a-climb",
+                Math.abs(climbPush.y) < 1.0E-9,
+                "a drone climbing out from under its flight must be moved aside, not pushed back down; "
+                        + "vertical component was " + climbPush.y));
+        out.add(check("squad/separation-still-parts-a-stack",
+                climbPush.horizontalDistance() > 0.0,
+                "two drones in the same column are crowding each other and have to open out"));
+
+        // The invariant Tuning used to claim in a comment and get wrong: 4.5 is not under MIN_SPACING of 4.
+        out.add(check("squad/separation-never-outreaches-the-formation",
+                Cruising.separationRadius(new SquadView(7L, Formations.DEFAULT, Formation.MIN_SPACING,
+                        CoordinationModels.DEFAULT, null, members.get(0), members)) < Formation.MIN_SPACING,
+                "a rule insisting on more room than the tightest orderable formation allots does not keep "
+                        + "the squad safe, it keeps it from ever being in formation"));
+
+        // A flock has no slots, so the inherited slot test can never pass for one: it was being asked how far
+        // it was from a wedge it is never going to fly, and every flocking launch waited out the timeout.
+        DroneSnapshot flockLead = member(0, new Vec3(0.0, 100.0, 0.0), at(300, 0));
+        DroneSnapshot flockWing = member(1, new Vec3(6.0, 103.0, 6.0), at(300, 0));
+        SquadAnchor flockFrame = SquadAnchor.on(flockLead);
+        SquadView flock = new SquadView(7L, Formations.DEFAULT, SPACING,
+                CoordinationModels.rl(Flocking.INSTANCE.id()), flockFrame, flockLead,
+                List.of(flockLead, flockWing));
+        out.add(check("squad/a-flock-together-is-formed-up",
+                Flocking.INSTANCE.formedUp(flock, flockFrame),
+                "a flock is assembled when it is together; there is no other shape to be in"));
+        out.add(check("squad/a-slot-model-would-not-call-that-formed-up",
+                !LeaderFollower.INSTANCE.formedUp(flock, flockFrame),
+                "the same drones judged against wedge slots are not in formation, which is why the test "
+                        + "had to belong to the model"));
+
+        out.add(check("squad/an-escort-does-not-inherit-a-climb-out",
+                DroneBrain.inherited(DroneState.TAKEOFF, DroneState.MUSTER) == null,
+                "a follower handed its leader's TAKEOFF leaves MUSTER, is sent straight back, and resets "
+                        + "stateTicks on every hop -- which is the one thing MUSTER_TIMEOUT is counted in"));
+        out.add(check("squad/an-escort-still-inherits-everything-else",
+                DroneBrain.inherited(DroneState.TRANSIT, DroneState.MUSTER) == DroneState.TRANSIT,
+                "declining the climb-out must not stop a follower following its leader out of form-up"));
     }
 
     private static DroneSnapshot member(int index, Vec3 pos, Vec3 destination) {

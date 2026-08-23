@@ -106,18 +106,36 @@ public final class Tuning {
     /**
      * How close two squadmates may get before they actively push apart, and how hard.
      *
-     * <p>Measured against the hull rather than against the formation, and it has to be: the formation's
-     * spacing is a per-mission setting now, so a radius pegged to it would mean a squad ordered to fly loose
-     * also started avoiding at long range for no reason. What this is really about is the three blocks of
-     * airframe, and it sits just wide enough of that to be a warning rather than a collision. It is under
-     * {@code Formation.MIN_SPACING} too, so even the tightest formation anyone can order still puts its
-     * drones in slots they are not fighting to hold.
+     * <p>Measured against the hull rather than against the formation, because the formation's spacing is a
+     * per-mission setting and a radius pegged to it would mean a squad ordered to fly loose also started
+     * avoiding at long range for no reason. What this is really about is the three blocks of airframe, and it
+     * sits just wide enough of that to be a warning rather than a collision.
      *
      * <p>It exists for the moments the formation cannot help: climbing out from a shared launch point
      * before the wedge has opened up, or an attack run, where the drones break formation entirely and fly
      * their own courses.
+     *
+     * <p><b>It is a ceiling, not the figure.</b> This used to claim it sat under {@code Formation.MIN_SPACING}
+     * so that even the tightest formation orderable put its drones in slots they were not fighting to hold.
+     * The claim was simply false — {@code MIN_SPACING} is 4.0 and this is 4.5 — and the consequence was a
+     * flight that never formed up: sixteen drones ordered into a grid at spacing 4 sit in slots the avoidance
+     * rule is permanently shoving them out of, so {@code MusterHandler} never sees them on station and every
+     * launch burned the whole {@link #MUSTER_TIMEOUT} before setting off. See
+     * {@link Cruising#separationRadius}, which now holds the invariant instead of asserting it.
      */
     public static final double SEPARATION_RADIUS = 4.5;
+    /**
+     * The most of a squad's ordered spacing the avoidance rule may claim, when that is the tighter of the two.
+     *
+     * <p>Under 1, so a pair sitting exactly on neighbouring slots is not being pushed off them: the rule only
+     * has an opinion about drones that are closer together than the formation itself put them. That is the
+     * glyphid rule's {@code SPACING} in the same role — a swarm is allowed to overlap a little precisely so
+     * that a packed one does not set into a lattice it spends the whole tick fighting.
+     *
+     * <p>At the 4-block floor this gives 3.2, which is still clear of the 3-block hull, so the tightest
+     * formation anyone can order is one the drones can actually hold and still keeps them from touching.
+     */
+    public static final double SEPARATION_SPACING_SHARE = 0.8;
     public static final double SEPARATION_STRENGTH = 0.6;
     /**
      * Cap on the total push, so a drone hemmed in on all sides is nudged clear rather than fired out of the
