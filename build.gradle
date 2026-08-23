@@ -156,7 +156,12 @@ neoForge {
                 systemProperty 'acceleratedrecoiling.backend', project.property('accel')
             }
             if (project.hasProperty('jfr')) {
+                // stackdepth is 64 by default and JFR truncates the *outermost* frames, which are the ones a
+                // sample has to be attributed by: an entity tick under mixins is well past 64 frames deep, so
+                // at the default every sample inside the pathfinder arrives with `Entity.tick` already cut off
+                // and cannot be charged to a phase.
                 jvmArguments.addAll '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints',
+                        '-XX:FlightRecorderOptions=stackdepth=192',
                         '-XX:StartFlightRecording:name=idle,settings=none'
             }
         }
