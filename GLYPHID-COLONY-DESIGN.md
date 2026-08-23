@@ -1892,14 +1892,50 @@ Everything. In order, cheapest question first:
 
 1. **Is anybody near?** (48 blocks.) Off-world defence is what the record is for; a chamber that hatched into
    an empty chunk would be paying population for bugs nobody would ever see.
-2. **Is it already crowded?** A box query, not a walk of `GlyphidTracker` — a level-wide list would make one
-   chamber's tick cost the size of the swarm attacking it.
-3. **Does the colony have a population to spend?** One bug costs one, debited *after* a body reaches the
-   world, for the same reason `WarbandMaterialiser` debits by what it placed rather than by what it wanted.
+2. **Are the chunk's entities actually loaded?** `level.isPositionEntityTicking`. See §25.4 — this is the one
+   window in which the garrison could double.
+3. **Does the colony have population to spend, and room in its garrison?**
 
-That third one is the mechanic, not an accounting detail: **a nest defends itself out of the same pool it
-musters warbands from.** A colony that has just sent an army defends badly, and one that has been under siege
-cannot also attack. Two behaviours, one number.
+The third is the mechanic, not an accounting detail: **a nest defends itself out of the same pool it musters
+warbands from.** A colony that has just sent an army defends badly, and one that has been under siege cannot
+also attack. Two behaviours, one number.
+
+### 25.4 A defender is kept, and it is still the colony
+
+The first cut let defenders despawn like any idle mob, on the grounds that a colony regrows. That was wrong
+twice over. A player could bleed a nest by walking in and out of range — population spent, bugs evaporated,
+and nothing in the record to show it. And a nest that forgot its garrison every time you left is not a nest.
+
+So a defender is marked `garrison` and made persistent. Which immediately raises the real question, because
+**a retained defender that the colony also regrew the population for would be one bug counted twice.** The rest
+of the tier stack already answers this — `WarbandMaterialiser`'s count, the sim tier's records — with the same
+rule: *one bug is a body or a number, never both, never neither.*
+
+`Colony.garrison` is that rule for the nest. Growth stops at `room() = populationCap() - garrison` rather than
+at the cap, so a colony holding six defenders is six short of its numbers for as long as they live. Kill them
+and it recovers; walk away and it does not. **Measured: a tier-0 nest plateaus at 14 of 20 with six standing,
+and returns to 20 within 45 s of the garrison being killed.**
+
+Four ways that count could have drifted, and what closes each:
+
+| drift | closed by |
+|---|---|
+| a tally that has to survive chunk unload, save, `/kill` | not a tally — recounted from the world on the colony's own stagger |
+| a recount running for a nest nobody is near, seeing nothing, and zeroing | recount only where entities are ticking; nothing can die in an unloaded nest anyway |
+| a chamber hatching before the chunk's saved entities are restored | `isPositionEntityTicking` gates the hatch, so a defender is never added to a garrison that cannot be seen |
+| five chambers of one nest reading the same stale count in one interval | `garrison++` in the same breath as the population debit, before the next recount |
+
+And one more that only exists because there are two tiers: a defender demoted to a `SimGlyphid` and promoted
+back must come back flagged, or the colony would stop counting a bug still standing in front of it. The flag
+rides the record across, with the persistence flag that was already there.
+
+The recount is level-wide rather than a box around the nest, so a defender that chased somebody over the hill
+is still the colony's. Separately, an *idle* garrison bug is leashed to its mound at 24 blocks — vanilla's
+`RandomStrollGoal` has no home and one of six had drifted past 32 blocks inside 70 seconds, which would leave
+the nest undefended while the colony still paid for it. The same bleed, arriving slowly.
+
+`garrisonCap()` is six per chamber, so a tier-0 nest holds six and a tier-4 nest thirty, and a nest with its
+chambers dug out holds none. Retention without a ceiling is a nest that grows an army from being visited.
 
 A chamber finds its colony lazily, on its first tick, and remembers it. Not written in by the builder, because
 half a mound's blocks may arrive later through `PendingChunkEdits`, which knows a block id and nothing else —
@@ -1907,7 +1943,7 @@ lazy binding covers that path, the direct one, and a hand-placed block besides. 
 within its nest radius is marked orphaned once and for good, so blocks left behind by a colony that was wiped
 out are dead flesh rather than a spawner that outlived its owner.
 
-### 25.4 The chambers are the colony's life
+### 25.5 The chambers are the colony's life
 
 The block layer would otherwise be decoration, and worse than decoration: a player could raze a mound and the
 record would carry on growing and mustering out of ground that was now bare. That is §4's failure from the
@@ -1921,7 +1957,7 @@ The other half of that is `EntityGlyphid.isSpawnerBlock`, which was a `return fa
 blocks. A colony will not chew its own mound: at 0.5 hardness a single bite would take a chamber's worth of
 nest with it, which would let a colony kill itself by defending.
 
-### 25.5 Two deadlocks, found by hanging a dev server
+### 25.6 Two deadlocks, found by hanging a dev server
 
 Both in `PendingChunkEdits`, both pre-existing, and neither reachable until something actually queued edits —
 nothing ever had. Both were `jstack`, not reasoning.
@@ -1954,7 +1990,7 @@ resolving the ground to y −64, building the mound inside the bedrock and clipp
 reported "5 chambers" as "0 chambers" and 381 blocks as 21, with no error anywhere. The same shape of failure
 as `BuiltInRegistries.get` returning a default.
 
-### 25.6 Verified at runtime
+### 25.7 Verified at runtime
 
 39 checks over one server run, on a superflat bench world, driven over rcon with the answers coming back
 through a scoreboard rather than `/say` — `execute store result score` reports to the command source and so
@@ -1970,14 +2006,25 @@ game's.
 | tier 4 mound | 381 blocks, 5 chambers, 120 written and **261 owed to 3 unloaded chunks** |
 | those chunks loaded | 0 owed, and the blocks and all five chambers are there |
 | a colony founded out of sight | unbuilt and height-less until its chunk loaded, then 5 chambers with nobody asking |
-| 25 s with nobody near the nest | +8.80 population, 0 hatched |
-| 25 s with somebody standing on it | +3.70, so **5.10 spent for 5 hatched** |
+| nobody near the nest | 0 hatched, garrison 0 |
+| 70 s with somebody standing on it | 6 hatched, **stopping at the cap** rather than emptying the colony |
 | the far nest, nobody near it | 0 hatched |
+| every defender | marked `garrison` and `PersistenceRequired`; a summoned glyphid beside them, neither |
+| 45 s of growth with six standing | population plateaus at **14 of 20**, not 20 |
+| the whole garrison through the record tier and back | 6 in, 6 out, both flags intact, colony still counts 6 |
+| save, unload the arena, reload it | **6 back — none lost, none duplicated**, population unchanged |
+| kill the garrison, wait 45 s | garrison 0, population 14 → 20 |
 | chambers dug out one at a time | 4, 3, 2, 1 left and alive; at 0 the colony is gone |
 
-The growth-versus-control pair is the honest way to measure the ledger. A tier-0 colony grows at 0.35/s and one
-chamber spends 0.2/s, so population *rises* while it is being spent and the delta on its own says nothing;
-against a control window of the same length with nobody near, the difference is what the defenders cost.
+The population ledger is not measurable as a simple delta, because growth is *deliberately* throttled by the
+garrison — that is the invariant under test. What is measurable is the plateau: with six standing a tier-0
+colony converges on `cap - 6` and stops, and the moment they die it converges on `cap`.
+
+One measurement was wrong before it was right, and the correction is worth keeping: the record said six and
+`@e` said five, which looked exactly like the count over-reporting by one. It was not. **The sixth defender
+was a record, not a body** — the sim tier had demoted it — and the recount counts both tiers because the
+colony owns both. The harness now turns the sim tier off before counting, which makes one `@e` query the whole
+truth and doubles as the round-trip test.
 
 The corridor test also had to be repaired before it proved anything. At one block wide the glyphid — 1.4 blocks
 wide — was pushed out through the walls, walked away over open ground, was never stuck and so never chewed. The
@@ -1988,13 +2035,13 @@ its way out before the nest arm's result is read at all.
 The dev client bakes both block models with no missing model, missing texture or blockstate error (§17's
 lesson: a renderer problem is a client crash that server-side testing cannot see).
 
-### 25.7 What is left
+### 25.8 What is left
 
 - **Nothing gives a nest away from a distance.** A mound is a mound; there is no smell, no sound, no particle.
   A player has no way to tell a colony from terrain until they are inside its 48-block hatch radius.
-- **A garrison despawns when the player leaves**, and the population that paid for it is not refunded. That is
-  consistent — it is the same as being killed, and the colony regrows — but it does mean a player can bleed a
-  nest by walking in and out of range. Whether that is an exploit or a tactic is a design question.
+- **A garrison bug that dies is gone for good**, and the colony regrows the population rather than the bug.
+  Correct, but it does mean a nest cleared once is easier the second time until it has regrown — which may be
+  the point, or may want a rebuild timer.
 - **Nest blocks have no loot table.** Upstream drops eggs from a spawner. Nothing here has a use for them yet.
 - **`PendingChunkEdits.submit` still writes through `Level.setBlock`** for a chunk that is already loaded. That
   path is safe — the blocking `getChunk` returns immediately for a chunk that is up — but it is the same call
