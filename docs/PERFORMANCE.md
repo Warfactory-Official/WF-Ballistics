@@ -269,16 +269,86 @@ mod.** If the pack does not include it, the baseline is worse than everything me
 
 Costs are the JFR run's (17.203 ms swarm, Lithium at defaults). Items 2–8 are untouched by L3.
 
-| # | fix | measured | where |
+| # | fix | measured | where | status |
+|---|---|---|---|---|
+| 1 | Turn on `mixin.ai.pathing`, `mixin.util.block_tracking`, `mixin.experimental` | **−5.0 ms** | pack config, no code | not ours to set |
+| 2 | Cache `checkSupportingBlock` on the block underfoot | **1.97 ms** | `EntityGlyphid` | **changes behaviour** |
+| 3 | Replace the goal selector for glyphids | **2.37 ms** | `MixinMob` / `EntityGlyphid` | **changes behaviour** |
+| 4 | Index prey instead of scanning for it | **0.67 ms** | `PreyTracker` | **applied** |
+| 5 | ~~Cache `navigation.isDone()`~~ | — | — | withdrawn, see below |
+| 6 | Skip the no-op `setTicksFrozen` write | **0.28 ms** | `EntityGlyphid` | **applied** |
+| 7 | Skip equipment-change detection | **0.26 ms** | `MixinLivingEntity` | **applied** |
+| 8 | Drop vanilla's profiler churn | **0.23 ms** | falls out of #3 | blocked on #3 |
+
+### Applied: 4, 6 and 7
+
+The three that are exactly behaviour-preserving. Re-profiled over the identical 800-block corridor arm:
+
+| subtree | before | after | delta |
 |---|---|---|---|
-| 1 | Turn on `mixin.ai.pathing`, `mixin.util.block_tracking`, `mixin.experimental` | **−5.0 ms** | pack config, no code |
-| 2 | Cache `checkSupportingBlock` on the block underfoot | **1.97 ms** | `EntityGlyphid` |
-| 3 | Replace the goal selector for glyphids | **2.37 ms** | `MixinMob` / `EntityGlyphid` |
-| 4 | Stagger target acquisition | **0.67 ms** | `GlyphidTargetGoal` |
-| 5 | Cache `navigation.isDone()` for the snapshot | **0.54 ms** | `GlyphidBody` |
-| 6 | Skip the no-op `setTicksFrozen` write | **0.28 ms** | `EntityGlyphid` |
-| 7 | Skip equipment-change detection | **0.26 ms** | mixin |
-| 8 | Drop vanilla's profiler churn | **0.23 ms** | falls out of #3 |
+| `nearestPrey` (target scan) | 0.665 | **0.000** | −0.665 |
+| ├─ through `getEntitiesOfClass` | 0.883 | 0.273 | −0.610 |
+| └─ `isPrey` filtering | 0.320 | **0.000** | −0.320 |
+| `setTicksFrozen` | 0.282 | **0.000** | −0.282 |
+| `collectEquipmentChanges` | 0.256 | **0.000** | −0.256 |
+| *control:* `checkSupportingBlock` | 1.972 | 1.933 | −0.039 |
+| *control:* collision sweep internals | 1.455 | 1.404 | −0.050 |
+| **swarm total** | **17.203** | **15.392** | **−1.811** |
+
+All three vanish from the profile entirely, and the two untouched controls do not move. **The attributable
+saving is 1.203 ms (7.0%)**; the end-to-end delta was 1.811 ms, but node expansion moved 0.485 ms between
+the two runs on code neither touched, so 1.203 is the number to trust and 1.8 is the number to expect.
+
+Behaviour was checked by running the same probe (`tools/perf/behave.py`) against the tree with and without
+the change (`tools/perf/abprey.sh`, which stashes it for the before arm). **Every arm reports the same
+result in both**, including the one that looks like a failure:
+
+| check | before | after |
+|---|---|---|
+| prey in range is still hunted | 4 → 0 cows | 4 → 0 cows |
+| prey out of range | 4 → 0 cows | 4 → 0 cows |
+| the swarm is still not prey | 24 → 24 glyphids | 24 → 24 glyphids |
+| a write through `setTicksFrozen` lands | 200 → 160 in 1 s | 200 → 160 in 1 s |
+| and thaws at the vanilla rate | → 0 by 7 s | → 0 by 7 s |
+| a glyphid handed a helmet wears it | yes | yes |
+
+The frozen counter falling 200 → 160 in one second is vanilla's `max(0, i - 2)` per tick exactly, which is
+the whole claim for #6. The out-of-range cows die in **both** arms because a rallied swarm still wanders
+forty blocks in forty-five seconds — that arm measures pathfinding as much as targeting, which is why it is
+reported rather than asserted, and why the control matters more than the expectation.
+
+Why each is exactly equivalent rather than merely close:
+
+- **#4** is the same question asked of a better index. `PreyTracker` holds the *static* half of `isPrey`
+  (living, not a `Monster` — and `EntityGlyphid` is a `Monster`, so the swarm excludes itself); the dynamic
+  half still runs per candidate, and the box test is the one `getEntitiesOfClass` applies. Above
+  `SCAN_LIMIT` candidates it falls back to the original query, which answers the same by the same rule.
+- **#6** only skips writes that would have changed nothing. Vanilla's `SynchedEntityData#set` already
+  declines to mark anything dirty when the value is equal — it just pays for the accessor lookup first.
+  The shortcut is server-side only, because a client receives the counter over the wire rather than through
+  the setter and its mirror is therefore not authoritative.
+- **#7** fires only while every slot has *only ever* held an empty stack. With every slot empty the diff
+  finds no change and `detectEquipmentUpdates` does nothing at all, so cancelling it is the same as running
+  it — and an empty stack cannot be mutated in place behind the flag's back. It is server-side by
+  construction: vanilla calls it inside `if (!level().isClientSide)`.
+
+### Held back, and why
+
+- **#1** is a pack config, not this mod's code, and `experimental` is Lithium's own word for "may change
+  behaviour". Lithium is also `localRuntime` here and not shipped, so enabling it is a decision about the
+  pack rather than about this repo.
+- **#2 cannot be made exactly equivalent.** `CollisionGetter#findSupportingBlock` picks the closest
+  candidate by `distToCenterSqr(entity.position())` — the *exact* position, not the block cell. A bug moving
+  within one cell can change which candidate wins, so a cell-keyed cache is an approximation, and an
+  AABB-exact one never hits for a swarm that moves every tick. That is also why Lithium's `block_support`
+  did nothing for this workload. Worth doing, but as a deliberate behavioural trade.
+- **#3** is a rewrite of AI dispatch. Almost certainly worth it — it is the largest single item and the
+  record tier already proves a glyphid needs no goal selector — but it is not a behaviour-preserving change
+  and should not be slipped in as one.
+- **#5 was wrong and is withdrawn.** The profile says `PathNavigation.isDone` is called 483 times per tick
+  out of 485 from one site, `GlyphidBody.snapshot` — once per bug per tick. There is no redundancy to cache
+  away. The 0.49 ms is the memory latency of chasing 2000 cold `Path` objects, which is the general reason
+  the record tier is 3.7× cheaper and not something a cache fixes.
 
 **2. `checkSupportingBlock` — 1.97 ms, 11.5% of the swarm, the largest single named cost.**
 `Entity.setOnGroundWithMovement` → `checkSupportingBlock` → `findSupportingBlock` walks a `BlockCollisions`

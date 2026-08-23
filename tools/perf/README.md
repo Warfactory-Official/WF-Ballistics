@@ -9,7 +9,15 @@ the places you already suspect. JFR samples the stack instead, so it names frame
 python3 jfranalyse.py swarm.jfr # phase tree, residual breakdowns, folded stacks for a flamegraph
 
 ./lith.sh                       # A/B Lithium's default-off groups, one server boot per arm
+
+./jfr.sh behave.py out.txt      # behaviour regression check for the applied glyphid fixes
+./abprey.sh                     # runs that same check with and without the change, via git stash
 ```
+
+`abprey.sh` is the pattern worth reusing: **"did this change behaviour" is a question with a control**, and
+the control is the same probe against the unchanged tree. Its own prey arm reports that cows forty blocks
+away die — which looks like a broken targeting range until the before arm reports exactly the same thing,
+because a rallied swarm still wanders. An absolute expectation would have condemned working code.
 
 `jfr.sh` edits `run/server.properties` (rcon, a throwaway `level-name`, flat world) and **restores it on
 exit**, including on Ctrl-C. It refuses to start if 25565/25575 are already held, because an orphan server
