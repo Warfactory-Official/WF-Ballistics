@@ -7,6 +7,8 @@ the places you already suspect. JFR samples the stack instead, so it names frame
 ```bash
 ./jfr.sh                        # boots a bench server with -Pjfr, records base.jfr and swarm.jfr
 python3 jfranalyse.py swarm.jfr # phase tree, residual breakdowns, folded stacks for a flamegraph
+
+./lith.sh                       # A/B Lithium's default-off groups, one server boot per arm
 ```
 
 `jfr.sh` edits `run/server.properties` (rcon, a throwaway `level-name`, flat world) and **restores it on
@@ -39,6 +41,13 @@ under the marker (*which sub-call is this*) and by the leaf frame (*what is it e
 - `swarmbench watcher` takes three coordinates. With two it is refused and says so quietly.
 - JFR's default `stackdepth=64` truncates the *outermost* frames — the ones attribution needs. `-Pjfr`
   sets 192.
+- **Waiting for the ports to clear is not waiting for the server to exit.** A stopping server releases its
+  sockets and then spends minutes saving a forceloaded world. The first run of `lith.sh` booted each arm on
+  top of the previous arm's still-running JVM — two servers writing one save — and the result was an arm
+  that read "this flag does nothing" when a clean re-run showed it was worth 13%. `stop_server` now waits
+  for the *process*, then SIGKILLs, and every arm refuses to boot while a game JVM is alive.
+- **`pkill -f <class name>` matches the shell running the pkill.** It kills the killer and leaves the
+  servers up. Match on `pgrep -x java` plus the cmdline instead.
 
 See `docs/PERFORMANCE.md` for what the numbers were last time, and the memory note
 `headless-benchmarks-lie-silently` for the longer list.
