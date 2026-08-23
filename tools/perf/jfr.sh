@@ -15,15 +15,28 @@ LOG=$TMP/jfr-server.log
 PROBE=${1:-$TMP/jfrbench.py}
 OUT=${2:-$TMP/jfrbench.out}
 
+# Every game JVM alive. Never `pkill -f <class name>`: that pattern also matches the shell running the
+# pkill, so it kills the killer and leaves the server up.
+game_jvms() {
+    for pid in $(pgrep -x java); do
+        if tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -q 'devlaunch'; then echo "$pid"; fi
+    done
+}
+
 cleanup() {
     echo "--- cleanup ---"
     if [ -p "$FIFO" ]; then echo "stop" > "$FIFO" 2>/dev/null || true; fi
-    for _ in $(seq 1 40); do
-        ss -ltn 2>/dev/null | grep -qE ':(25565|25575)\b' || break
+    # Waiting for the ports is not waiting for the exit: a stopping server frees its sockets and then
+    # spends minutes saving a forceloaded world, and the `rm -rf` below would race that save.
+    for _ in $(seq 1 90); do
+        [ -z "$(game_jvms)" ] && break
         sleep 2
     done
-    pkill -f 'net.neoforged.devlaunch.Main' 2>/dev/null || true
-    sleep 2
+    for pid in $(game_jvms); do
+        echo "  !! JVM $pid outlived its stop by 180s; killing"
+        kill -9 "$pid" 2>/dev/null
+    done
+    sleep 5
     [ -f "$BAK" ] && cp "$BAK" "$PROPS" && rm -f "$BAK"
     rm -f "$FIFO"
     rm -rf "$PROJ/run/$WORLD"
@@ -32,7 +45,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if ss -ltn 2>/dev/null | grep -qE ':(25565|25575)\b'; then
+if [ -n "$(game_jvms)" ] || ss -ltn 2>/dev/null | grep -qE ':(25565|25575)\b'; then
     echo "FATAL: 25565/25575 already held; an orphan server would answer rcon instead of this build."
     ss -ltnp 2>/dev/null | grep -E ':(25565|25575)\b'
     trap - EXIT

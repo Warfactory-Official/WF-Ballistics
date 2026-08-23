@@ -42,6 +42,7 @@ import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.HumanoidArm;
 import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.LivingEntity;
@@ -53,6 +54,7 @@ import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
 import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
@@ -241,6 +243,19 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
      */
     private boolean climbableFlag;
     private boolean aggressiveFlag;
+
+    /**
+     * The same trick for the frozen-tick counter, which vanilla rewrites every tick from {@code aiStep}.
+     * See {@link #setTicksFrozen}. Starts at zero because that is what the synched default is, and every
+     * later write — including the one {@code readAdditionalSaveData} makes on load — goes through the
+     * override that keeps it true.
+     */
+    private int frozenTicksMirror;
+
+    /**
+     * Whether every equipment slot has only ever held an empty stack. See {@link #setItemSlot}.
+     */
+    private boolean equipmentEmpty = true;
 
     /**
      * Which squad of its warband this glyphid is in, and what that squad was sent to do.
@@ -433,6 +448,58 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         boolean inFluid = super.updateInWaterStateAndDoFluidPushing();
         SwarmProfiler.end(SwarmProfiler.Phase.FLUID, t);
         return inFluid;
+    }
+
+    // --- per-tick writes vanilla makes whether or not anything changed ---
+    // Both of the below are the same shape of waste and neither changes what a glyphid does: vanilla asks a
+    // question every tick whose answer, for a bug that is never cold and never armed, was settled when it
+    // spawned. Measured with JFR at 2000 bodies: 0.28 ms and 0.26 ms of tick respectively.
+
+    /**
+     * Mirrors the frozen-tick counter so the common no-op write never reaches the synched data.
+     *
+     * <p>{@code LivingEntity#aiStep} ends every tick with {@code setTicksFrozen(max(0, ticks - 2))}, which
+     * for a glyphid that has never touched powder snow means writing zero over zero, two thousand times a
+     * tick. Vanilla's {@code SynchedEntityData#set} already declines to mark anything dirty when the value
+     * is unchanged — but it pays for the accessor lookup first, and that lookup is a cache miss per bug.
+     *
+     * <p>Exactly equivalent to vanilla: the guard only skips writes that would have changed nothing, and
+     * every write that does change something still goes through, keeping the mirror true. Reads are left
+     * alone, so anything asking {@link #getTicksFrozen()} gets the synched value as before.
+     */
+    @Override
+    public void setTicksFrozen(int ticks) {
+        // Server side only. The freezing code that makes this call is itself server-gated, and a client
+        // receives the counter over the wire rather than through this setter -- so on a client the mirror
+        // is not authoritative and must not be allowed to swallow a write.
+        if (!level().isClientSide && ticks == frozenTicksMirror) {
+            return;
+        }
+        frozenTicksMirror = ticks;
+        super.setTicksFrozen(ticks);
+    }
+
+    /**
+     * Notes the first time this glyphid is given anything to wear, so the equipment scan can be skipped
+     * until then.
+     *
+     * <p>One-way on purpose. Going back to the fast path after a glyphid is stripped would mean proving
+     * every slot empty again, and the case worth optimising is the one where nothing is ever equipped.
+     */
+    @Override
+    public void setItemSlot(EquipmentSlot slot, ItemStack stack) {
+        super.setItemSlot(slot, stack);
+        if (!stack.isEmpty()) {
+            equipmentEmpty = false;
+        }
+    }
+
+    /**
+     * @return true while every equipment slot has only ever held {@link ItemStack#EMPTY}.
+     * @see com.wf.wfballistics.mixin.MixinLivingEntity
+     */
+    public boolean equipmentEmpty() {
+        return equipmentEmpty;
     }
 
     // --- flight ---
@@ -847,11 +914,25 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
      */
     protected @Nullable LivingEntity nearestPrey(double radius) {
         AABB box = getBoundingBox().inflate(radius);
-        List<LivingEntity> candidates = level().getEntitiesOfClass(LivingEntity.class, box, EntityGlyphid::isPrey);
+
+        // Asked through PreyTracker rather than through the level, because the level's answer to "every
+        // LivingEntity within twenty-four blocks" is, in a swarm, almost entirely this glyphid's own
+        // squadmates -- fetched one at a time and then rejected by isPrey. The index holds only what could
+        // ever be prey, so the scan is over a handful of animals instead of over the swarm.
+        //
+        // Identical results, not merely similar ones: the box test below is the one getEntitiesOfClass
+        // applies, and isPrey still decides. Above SCAN_LIMIT candidates the level's spatial index is the
+        // better one and the original query is used, which returns the same answer by the same rule.
+        Iterable<LivingEntity> candidates = PreyTracker.worthScanning(level())
+                ? PreyTracker.prey(level())
+                : level().getEntitiesOfClass(LivingEntity.class, box, EntityGlyphid::isPrey);
 
         LivingEntity best = null;
         double bestSq = Double.MAX_VALUE;
         for (LivingEntity candidate : candidates) {
+            if (!candidate.getBoundingBox().intersects(box) || !isPrey(candidate)) {
+                continue;
+            }
             double distSq = candidate.distanceToSqr(this);
             if (distSq < bestSq) {
                 bestSq = distSq;
