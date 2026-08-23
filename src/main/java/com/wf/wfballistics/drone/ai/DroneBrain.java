@@ -91,7 +91,7 @@ public final class DroneBrain {
         } else if (escorting) {
             DroneState leaderState = leaderPlan.nextState() != null
                     ? leaderPlan.nextState() : squad.leader().state();
-            next = leaderState != routed.state() ? leaderState : null;
+            next = inherited(leaderState, routed.state());
             if (routed.currentTask() != null
                     && leaderPlan.actions().stream().anyMatch(a -> a instanceof DroneAction.AdvanceTask)) {
                 actions.add(new DroneAction.AdvanceTask());
@@ -196,11 +196,34 @@ public final class DroneBrain {
     }
 
     /**
-     * @return true if {@code self} should fly as its leader's escort rather than its own route. A follower
-     * pinned to its formation slot never reaches its own waypoints, so while escorting it inherits the
-     * leader's state instead of waiting on arrivals that will never happen. Losing the mission (or dropping
-     * into a recovery state of its own) hands it back to its own handlers.
+     * @return the state an escorting follower should adopt from its leader, or null to stay as it is.
+     *
+     * <p>A follower pinned to its slot never reaches its own waypoints, so while escorting it takes the
+     * leader's state rather than waiting on arrivals that will never happen. That is the rule, and it has
+     * exactly one exception.
+     *
+     * <p><b>A climb-out is not inherited.</b> A follower already at altitude that is handed its leader's
+     * {@link DroneState#TAKEOFF} drops out of {@link DroneState#MUSTER}; {@code TakeoffHandler} then sees a
+     * drone that has finished climbing and a flight that is not ready, and sends it straight back to MUSTER;
+     * and the two hand it to each other for as long as the leader is still climbing. Every hop is a
+     * {@code DroneEntity#setState}, which puts {@code stateTicks} back to zero — and {@code MUSTER_TIMEOUT} is
+     * counted in {@code stateTicks}, so the one bound on the whole form-up cannot accumulate while that is
+     * going on. A flight in this cycle waits not for sixty seconds but for ever.
+     *
+     * <p>It needs the leader to be the last one up, which sounds unreachable for a squad that launches its
+     * leader first and is not: the leader is the drone carrying the crate, so it is the heaviest and slowest
+     * climber in the flight, and the launch gap the pad offers can be set to 0, which puts the whole squad in
+     * the air at once. Nothing is lost by declining it — the follower is already where a climb-out would have
+     * taken it.
      */
+    @Nullable
+    public static DroneState inherited(DroneState leaderState, DroneState own) {
+        if (leaderState == DroneState.TAKEOFF) {
+            return null;
+        }
+        return leaderState != own ? leaderState : null;
+    }
+
     /**
      * @return true if this drone's flying is the formation's to decide rather than its own handler's.
      *

@@ -41,6 +41,11 @@ import com.wf.wfballistics.api.WFTelemetry;
 import com.wf.wfballistics.drone.DroneSelfTest;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.wf.wfballistics.drone.ai.DroneAiScheduler;
+import com.wf.wfballistics.drone.ai.DroneSnapshot;
+import com.wf.wfballistics.drone.ai.SquadView;
+import com.wf.wfballistics.drone.ai.coord.Slots;
+import com.wf.wfballistics.drone.ai.coord.SquadAnchor;
+import com.wf.wfballistics.drone.ai.state.Tuning;
 import com.wf.wfballistics.drone.ai.TerrainSampler;
 import com.wf.wfballistics.drone.WorldThread;
 import com.wf.wfballistics.drone.nav.DronePath;
@@ -111,6 +116,7 @@ import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -496,6 +502,8 @@ public final class WFServerEvents {
                                 .executes(ctx -> droneTelemetry(ctx.getSource())))
                         .then(Commands.literal("threads")
                                 .executes(ctx -> droneThreads(ctx.getSource())))
+                        .then(Commands.literal("muster")
+                                .executes(ctx -> droneMuster(ctx.getSource())))
                         .then(Commands.literal("sim")
                                 .executes(ctx -> droneSim(ctx.getSource(), null))
                                 .then(Commands.literal("on")
@@ -579,12 +587,14 @@ public final class WFServerEvents {
                                 .then(Commands.argument("destination", Vec3Argument.vec3())
                                         .executes(ctx -> dispatchDrones(ctx.getSource(),
                                                 Vec3Argument.getVec3(ctx, "destination"), 1, "vee",
-                                                Formation.DEFAULT_SPACING, CoordinationModels.DEFAULT.getPath(), true))
+                                                Formation.DEFAULT_SPACING, CoordinationModels.DEFAULT.getPath(),
+                                                DroneMission.DEFAULT_LAUNCH_INTERVAL, true))
                                         .then(Commands.argument("count", IntegerArgumentType.integer(1, 16))
                                                 .executes(ctx -> dispatchDrones(ctx.getSource(),
                                                         Vec3Argument.getVec3(ctx, "destination"),
                                                         IntegerArgumentType.getInteger(ctx, "count"), "vee",
-                                                        Formation.DEFAULT_SPACING, CoordinationModels.DEFAULT.getPath(), true))
+                                                        Formation.DEFAULT_SPACING, CoordinationModels.DEFAULT.getPath(),
+                                                        DroneMission.DEFAULT_LAUNCH_INTERVAL, true))
                                                 .then(Commands.argument("formation", StringArgumentType.word())
                                                         .suggests((c, b) -> {
                                                             for (ResourceLocation id : Formations.ids()) {
@@ -596,7 +606,8 @@ public final class WFServerEvents {
                                                                 Vec3Argument.getVec3(ctx, "destination"),
                                                                 IntegerArgumentType.getInteger(ctx, "count"),
                                                                 StringArgumentType.getString(ctx, "formation"),
-                                                                Formation.DEFAULT_SPACING, CoordinationModels.DEFAULT.getPath(), true))
+                                                                Formation.DEFAULT_SPACING, CoordinationModels.DEFAULT.getPath(),
+                                                                DroneMission.DEFAULT_LAUNCH_INTERVAL, true))
                                                         .then(Commands.argument("spacing",
                                                                         DoubleArgumentType.doubleArg(
                                                                                 Formation.MIN_SPACING,
@@ -606,7 +617,7 @@ public final class WFServerEvents {
                                                                         IntegerArgumentType.getInteger(ctx, "count"),
                                                                         StringArgumentType.getString(ctx, "formation"),
                                                                         DoubleArgumentType.getDouble(ctx, "spacing"), CoordinationModels.DEFAULT.getPath(),
-                                                                        true))
+                                                                        DroneMission.DEFAULT_LAUNCH_INTERVAL, true))
                                                                 .then(Commands.argument("coordination", StringArgumentType.word())
                                                                         .suggests((c, b) -> {
                                                                                 for (ResourceLocation id : CoordinationModels.ids()) {
@@ -620,7 +631,23 @@ public final class WFServerEvents {
                                                                                 StringArgumentType.getString(ctx, "formation"),
                                                                                 DoubleArgumentType.getDouble(ctx, "spacing"),
                                                                                 StringArgumentType.getString(ctx, "coordination"),
-                                                                                true))))))))
+                                                                                DroneMission.DEFAULT_LAUNCH_INTERVAL, true))
+                                                                        // The launch gap, which the pad's own
+                                                                        // screen has always offered and this
+                                                                        // did not. 0 is "all at once", and it
+                                                                        // is the setting form-up was hardest
+                                                                        // to get right under.
+                                                                        .then(Commands.argument("interval",
+                                                                                        IntegerArgumentType.integer(0,
+                                                                                                DroneMission.MAX_LAUNCH_INTERVAL))
+                                                                                .executes(ctx -> dispatchDrones(ctx.getSource(),
+                                                                                        Vec3Argument.getVec3(ctx, "destination"),
+                                                                                        IntegerArgumentType.getInteger(ctx, "count"),
+                                                                                        StringArgumentType.getString(ctx, "formation"),
+                                                                                        DoubleArgumentType.getDouble(ctx, "spacing"),
+                                                                                        StringArgumentType.getString(ctx, "coordination"),
+                                                                                        IntegerArgumentType.getInteger(ctx, "interval"),
+                                                                                        true)))))))))
                         .then(programCommand())));
     }
 
@@ -848,7 +875,7 @@ public final class WFServerEvents {
      * leader; the mission is refused outright if the battery can't cover the outbound leg.
      */
     private static int dispatchDrones(CommandSourceStack src, Vec3 destination, int count, String formation,
-                                      double spacing, String coordination,
+                                      double spacing, String coordination, int interval,
                                       boolean withCrate) {
         ServerLevel level = src.getLevel();
         Vec3 origin = src.getPosition();
@@ -859,6 +886,7 @@ public final class WFServerEvents {
         mission.formationId = Formations.parse(formation);
         mission.formationSpacing = Formation.clampSpacing(spacing);
         mission.coordinationId = CoordinationModels.parse(coordination);
+        mission.launchInterval = DroneMission.clampInterval(interval);
 
         // An empty tag still means "carrying a crate": the drone holds cargo, crates are only spawned
         // when one is let go of.
@@ -1167,6 +1195,91 @@ public final class WFServerEvents {
      * AI, so it is worth being able to check rather than assume: this shows the thread the last terrain search
      * ran on, what it cost, and whether the assertions guarding the boundary are armed.
      */
+    /**
+     * Why every squad in this dimension is or is not ready to leave form-up.
+     *
+     * <p>Exists because nothing did. A flight holding over its pad reported only "holding for the flight
+     * (N of M up)", which is true of a squad that is one drone short and equally true of one that has been
+     * assembled for a minute and is being asked a question it cannot answer. Two configurations could never
+     * satisfy the old readiness test at all, and both of them looked from the outside exactly like a squad
+     * still waiting for a straggler.
+     *
+     * <p>So this prints the two gates separately, in the frame the squad is actually flying, and names the
+     * shut one.
+     */
+    private static int droneMuster(CommandSourceStack src) {
+        List<SquadView> squads = DroneAiScheduler.squadsFor(src.getLevel());
+        if (squads.isEmpty()) {
+            src.sendFailure(Component.literal("No drones in this dimension."));
+            return 0;
+        }
+        int held = 0;
+        for (SquadView squad : squads) {
+            if (squad.size() <= 1) {
+                continue;
+            }
+            int ordered = squad.leader().squadSize();
+            List<String> climbing = new ArrayList<>();
+            for (DroneSnapshot member : squad.slots()) {
+                if (member.state() == DroneState.IDLE || member.state() == DroneState.TAKEOFF) {
+                    climbing.add(member.state().name().toLowerCase(Locale.ROOT));
+                }
+            }
+            SquadAnchor anchor = squad.anchor();
+            boolean formed = squad.coordination().formedUp(squad, anchor);
+            double worst = anchor == null ? Double.NaN : Slots.worstError(squad, anchor);
+            double tolerance = Math.max(Tuning.MUSTER_IN_PLACE_FLOOR,
+                    squad.spacing() * Tuning.MUSTER_IN_PLACE);
+            boolean ready = squad.size() >= ordered && climbing.isEmpty() && formed;
+            if (!ready) {
+                held++;
+            }
+
+            src.sendSuccess(() -> Component.literal(String.format(
+                    "squad %08x: %d/%d up, %s in %s at %.0f spacing - %s",
+                    squad.squadId(), squad.size(), ordered,
+                    squad.coordination().id(),
+                    squad.formationId() == null ? "vee" : squad.formationId().getPath(),
+                    squad.spacing(), ready ? "READY" : "holding"))
+                    .withStyle(ready ? ChatFormatting.GREEN : ChatFormatting.YELLOW), false);
+            src.sendSuccess(() -> Component.literal(String.format(
+                    "  all up:      %s (%d of %d turned up)",
+                    squad.size() >= ordered ? "yes" : "NO", squad.size(), ordered))
+                    .withStyle(squad.size() >= ordered ? ChatFormatting.GRAY : ChatFormatting.RED), false);
+            src.sendSuccess(() -> Component.literal(String.format(
+                    "  climbed out: %s%s", climbing.isEmpty() ? "yes" : "NO - " + climbing,
+                    climbing.isEmpty() ? "" : " still on the way up"))
+                    .withStyle(climbing.isEmpty() ? ChatFormatting.GRAY : ChatFormatting.RED), false);
+            // The slot error is printed whichever model is flying, because it is the number that used to
+            // decide this for all of them: under a model with no slots it is the size of the mistake.
+            src.sendSuccess(() -> Component.literal(String.format(
+                    "  in formation: %s (worst slot error %.1f against a tolerance of %.1f%s)",
+                    formed ? "yes" : "NO", worst, tolerance,
+                    anchor == null ? ", no frame yet" : ""))
+                    .withStyle(formed ? ChatFormatting.GRAY : ChatFormatting.RED), false);
+            if (!formed && anchor != null) {
+                // One straggler and a squad that cannot hold its shape at all look identical from a single
+                // worst-case number, and they want opposite fixes.
+                Formation shape = Formations.get(squad.formationId());
+                Vec3 forward = Formation.forward(anchor.yaw());
+                for (DroneSnapshot member : squad.slots()) {
+                    Vec3 slot = shape.slot(squad.indexOf(member), anchor.pos(), forward, squad.spacing());
+                    double error = member.pos().distanceTo(slot);
+                    // Split by axis, because the flight model gives the two separate budgets and a squad
+                    // that is laterally perfect and vertically smeared is a different fault entirely.
+                    Vec3 gap = member.pos().subtract(slot);
+                    src.sendSuccess(() -> Component.literal(String.format(
+                            "    slot %-2d %-8s off by %5.1f (flat %5.1f, vert %+6.1f)",
+                            squad.indexOf(member), member.state().name().toLowerCase(Locale.ROOT),
+                            error, gap.horizontalDistance(), gap.y))
+                            .withStyle(error > tolerance ? ChatFormatting.RED : ChatFormatting.DARK_GRAY),
+                            false);
+                }
+            }
+        }
+        return held == 0 ? 1 : 0;
+    }
+
     private static int droneThreads(CommandSourceStack src) {
         boolean armed = WorldThread.armed();
         boolean onWorldThread = WorldThread.isWorldThread();

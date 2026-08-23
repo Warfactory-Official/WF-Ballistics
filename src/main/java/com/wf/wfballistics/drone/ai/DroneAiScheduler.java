@@ -284,6 +284,26 @@ public final class DroneAiScheduler {
     }
 
     /**
+     * @return this dimension's squads as the planner would see them this tick, for a diagnostic to read.
+     *
+     * <p>Built through the same {@link #buildSquads} the planner uses, frames included, because a report
+     * assembled any other way is a report about a different squad. World thread only, like everything else
+     * here: taking a snapshot reads the level.
+     */
+    public static List<SquadView> squadsFor(ServerLevel level) {
+        WorldThread.assertOn("squad diagnostics");
+        List<DroneCarrier> carriers = new ArrayList<>();
+        for (DroneCarrierSource source : SOURCES) {
+            source.collect(level, carriers);
+        }
+        DroneAiScheduler scheduler = BY_LEVEL.get(level.dimension());
+        if (scheduler == null || carriers.isEmpty()) {
+            return List.of();
+        }
+        return scheduler.buildSquads(level, carriers, level.getGameTime());
+    }
+
+    /**
      * Group live carriers into squads and snapshot them. Solo drones become a squad of one, so the planner
      * has exactly one shape to handle.
      */

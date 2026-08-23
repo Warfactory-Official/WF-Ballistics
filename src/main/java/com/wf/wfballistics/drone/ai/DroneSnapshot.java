@@ -212,6 +212,13 @@ public record DroneSnapshot(UUID id, boolean simulated, Vec3 pos, Vec3 velocity,
                 destinationGroundY, squadId, leader, squadSize, assignment, gameTime, seed);
     }
 
+    public DroneSnapshot withState(DroneState state) {
+        return new DroneSnapshot(id, simulated, pos, velocity, yaw, attitude, airframe, nav, state, stateTicks,
+                destination, leg, program, exfil, hasCargo, hasPayload, collecting, zoneClear, contacts, charge,
+                capacity, power, cruiseSpeed, cruiseAltitude, climbRate, releaseSpeed, groundY,
+                destinationGroundY, squadId, leader, squadSize, assignment, gameTime, seed);
+    }
+
     public DroneSnapshot withContacts(List<String> contacts) {
         return new DroneSnapshot(id, simulated, pos, velocity, yaw, attitude, airframe, nav, state, stateTicks,
                 destination, leg, program, exfil, hasCargo, hasPayload, collecting, zoneClear, contacts, charge,
