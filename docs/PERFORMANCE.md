@@ -211,6 +211,119 @@ Two more findings worth recording:
   measured here is `collideMovementWithPostponedFluidCheck`, not vanilla's. Any further work on the sweep is
   competing with Lithium rather than with Mojang.
 
+## What Lithium already fixes, and what it does not
+
+Lithium is on the dev runtime (`localRuntime`, never published), so every number above is measured *with* it.
+Two of its optimisation groups are **off by default** and both target things the profile says the swarm is
+paying for. Lithium logs its own decisions, which makes the precondition checkable rather than assumed:
+at defaults it prints `0 override(s) found` and four lines of the form
+
+```
+Option 'mixin.experimental.entity.block_caching.block_support' requires 'mixin.util.block_tracking=true'
+but found 'false'. Setting 'mixin.experimental.entity.block_caching.block_support=false'.
+```
+
+One server boot per arm, because Lithium reads its options once at startup. Same world, same 2000 bugs, same
+800-block corridor; only `lithium.properties` differs. Reproduce with `tools/perf/lith.sh`.
+
+| arm | `lithium.properties` | p50 | vs defaults |
+|---|---|---|---|
+| L0 | *(defaults)* | 20.4 ms | — |
+| L1 | `mixin.ai.pathing=true` | 17.8 ms | **−2.6 ms (−13%)** |
+| L2 | `mixin.util.block_tracking=true`<br>`mixin.experimental=true` | 17.4 ms | **−3.0 ms (−15%)** |
+| L3 | both | **15.4 ms** | **−5.0 ms (−25%)** |
+
+Where the 5 ms comes from:
+
+| phase | L0 | L3 | delta |
+|---|---|---|---|
+| path search — node expansion | 2.588 | 0.683 | **−1.905** |
+| collision sweep | 1.817 | 0.958 | **−0.859** |
+| fire scan | 0.639 | 0.036 | **−0.603** |
+| base tick | 2.405 | 1.924 | −0.481 |
+| **movement residual** | **2.975** | **2.906** | **−0.069** |
+| **ai-step residual** | **3.580** | **3.153** | **−0.427** |
+
+**Lithium fixes what was already named and leaves the residuals almost exactly where they were.** Node
+expansion falls by 74% — `ai.pathing` caches the `PathType` on the `BlockState` object itself, so
+`getPathTypeStatic` becomes a field read instead of the tag-name string comparison that was 20% of node
+expansion. The collision sweep and fire scan halve and vanish respectively. But the two residuals move by
+2% and 12%, and after L3 they are **6.06 ms of an 11.9 ms entity tick — 51%, a larger share than before.**
+
+Two specific negatives worth recording, because they are the reason the fix list below exists:
+
+- **`block_support` does not help a marching swarm.** It was applied (26 mixin references, no auto-disable
+  lines) and `checkSupportingBlock` did not get cheaper. Lithium's block-listening system invalidates on
+  *block* change; `findSupportingBlock` depends on the *entity's* position, and a marching bug moves every
+  tick, so the cache never hits. The 1.97 ms stays.
+- **Lithium has no goal-selector optimisation.** `mixin.collections.goals` only swaps the backing set for a
+  fastutil one — it is already active (the profile's `ObjectLinkedOpenHashSet$SetIterator.next` is
+  Lithium's set) and iterating it is still 12.7% of the ai-step residual. Nothing in Lithium touches
+  `canUse`/`canContinueToUse` evaluation.
+
+**Caveat that decides whether any of this is real: Lithium is `localRuntime` and is not shipped with this
+mod.** If the pack does not include it, the baseline is worse than everything measured here, not better —
+97% of the collision sweep above is Lithium's `collideMovementWithPostponedFluidCheck`, not vanilla's.
+
+## The fix list
+
+Costs are the JFR run's (17.203 ms swarm, Lithium at defaults). Items 2–8 are untouched by L3.
+
+| # | fix | measured | where |
+|---|---|---|---|
+| 1 | Turn on `mixin.ai.pathing`, `mixin.util.block_tracking`, `mixin.experimental` | **−5.0 ms** | pack config, no code |
+| 2 | Cache `checkSupportingBlock` on the block underfoot | **1.97 ms** | `EntityGlyphid` |
+| 3 | Replace the goal selector for glyphids | **2.37 ms** | `MixinMob` / `EntityGlyphid` |
+| 4 | Stagger target acquisition | **0.67 ms** | `GlyphidTargetGoal` |
+| 5 | Cache `navigation.isDone()` for the snapshot | **0.54 ms** | `GlyphidBody` |
+| 6 | Skip the no-op `setTicksFrozen` write | **0.28 ms** | `EntityGlyphid` |
+| 7 | Skip equipment-change detection | **0.26 ms** | mixin |
+| 8 | Drop vanilla's profiler churn | **0.23 ms** | falls out of #3 |
+
+**2. `checkSupportingBlock` — 1.97 ms, 11.5% of the swarm, the largest single named cost.**
+`Entity.setOnGroundWithMovement` → `checkSupportingBlock` → `findSupportingBlock` walks a `BlockCollisions`
+iterator over a 1e-6-tall box under the entity, every tick, and runs it **twice** when the first search
+comes back empty and `onGroundNoBlocks` is false. `mainSupportingBlockPos` is only read for friction, soul
+sand, honey, slime bounce and step sounds. Override it in `EntityGlyphid` and re-search only when the
+floored block position under the bug changes — a marching glyphid crosses a block boundary every ~4 ticks
+at 0.25 b/tick, so the hit rate is ~75% before any cleverness.
+
+**3. The goal selector — 2.37 ms, 78.8% of the ai-step residual.**
+Vanilla already staggers it: `Mob.serverAiStep` runs the full `tick()` on `(tickCount + id) % 2 == 0` and
+the cheap `tickRunningGoals(false)` otherwise. So 2.37 ms is the *already halved* cost of three passes over
+eight goals per bug. The leaves are set iteration (12.7%), `Path.isDone` (11.6%), `AABB.intersects` (7.3%)
+and `getHealth` (6.3%) — bookkeeping, not decisions. The brain already decides what a glyphid does, and the
+record tier proves a glyphid does not need a goal selector to do it: `SimGlyphid` has none and runs at
+2.9 µs against 7.7. Cancel `serverAiStep` for glyphids in the mixin we already have and run a purpose-built
+step (navigation, move control, the brain, staggered targeting). This also deletes #8 for free.
+
+**4. Target acquisition — 0.67 ms.** `GlyphidTargetGoal.canUse()` returns `true` unconditionally and
+`requiresUpdateEveryTick()` is `true`, so `findTargetCandidate()` runs on **every bug on every tick**. It
+ends in `nearestPrey`, which inflates the bounding box by `PREY_RANGE = 24` and asks the level for every
+`LivingEntity` in a 48-block box — then filters the other glyphids out in Java, one `isPrey` →
+`isAlive` → `getHealth` call each. Measured: 0.32 ms in `isPrey` alone, 0.31 ms in the `getHealth` beneath
+it, 0.72 ms in `AABB.intersects` under `EntitySection.getEntities`. Stagger it by entity id — a glyphid does
+not need to look for a target twenty times a second — and let the section filter reject glyphids before they
+are fetched.
+
+**5. `navigation.isDone()` in the snapshot — 0.54 ms.** `Path.isDone()` is two field reads and a
+`size()`; 0.35 ms of it is cache misses chasing 2000 cold `Path` objects. Cache the flag on the entity and
+refresh it when the path changes. The same argument applies to every per-entity pointer chase in the
+snapshot, and it is the general reason the record tier is 3.7× cheaper: an array of records has no cold
+object graph to chase.
+
+**6. `setTicksFrozen` — 0.28 ms.** `LivingEntity.aiStep` calls `setTicksFrozen(max(0, i - 2))` every tick,
+writing through `SynchedEntityData` for 2000 bugs that are never in powder snow and whose value is already
+zero. Override it to return early when the value is unchanged, mirroring it in a field so the read is not
+itself a synched-data lookup.
+
+**7. Equipment-change detection — 0.26 ms.** `collectEquipmentChanges` loops all six `EquipmentSlot`
+values every tick. Lithium's `equipment_tracking` is on and it still costs this. `detectEquipmentUpdates` is
+private, so it needs a mixin.
+
+Together, 2–8 are **5.4 ms of a 17.2 ms swarm, ~31%**, and they compose with the 25% from #1 because they
+touch disjoint code.
+
 ### What this changes
 
 The 48.8% is named, and it is three different problems:
