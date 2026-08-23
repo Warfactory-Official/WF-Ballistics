@@ -44,6 +44,15 @@ public final class Colony {
      * Whether the nest's blocks have been placed in the world yet.
      */
     public boolean built;
+    /**
+     * Egg chambers still standing in the mound, and so the colony's life.
+     *
+     * <p>Set by {@link GlyphidNest} from what it actually laid out, and decremented as a player digs them
+     * out; at zero the colony is removed. This is the only way the block layer can act on the record, and it
+     * is what stops a razed nest from carrying on growing and mustering out of a mound that is no longer
+     * there. Zero on a colony that has never been built, which is why breaking a chamber checks it.
+     */
+    public int spawners;
 
     public Colony(UUID id, int x, int y, int z, int tier) {
         this.id = id;
@@ -129,6 +138,7 @@ public final class Colony {
         tag.putDouble("aggro", aggression);
         tag.putInt("cooldown", expansionCooldown);
         tag.putBoolean("built", built);
+        tag.putInt("spawners", spawners);
         return tag;
     }
 
@@ -139,12 +149,16 @@ public final class Colony {
         colony.aggression = tag.getDouble("aggro");
         colony.expansionCooldown = tag.getInt("cooldown");
         colony.built = tag.getBoolean("built");
+        // Absent on worlds saved before the hive port, which reads back as zero -- no chambers to lose,
+        // which is the right answer for a colony that never had any blocks.
+        colony.spawners = tag.getInt("spawners");
         return colony;
     }
 
     @Override
     public String toString() {
         return String.format("colony T%d at (%d, %d) pop %.1f/%d aggro %.0f%s",
-                tier, x, z, population, populationCap(), aggression, built ? " [built]" : "");
+                tier, x, z, population, populationCap(), aggression,
+                built ? " [built, " + spawners + " chambers]" : "");
     }
 }

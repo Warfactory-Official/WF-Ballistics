@@ -5,6 +5,8 @@
   "block.wfballistics.turret_ciws": "CIWS Turret",
   "block.wfballistics.turret_interceptor": "Interceptor Battery",
   "block.wfballistics.turret_interceptor_supersonic": "Supersonic Interceptor Battery",
+  "block.wfballistics.glyphid_nest": "Glyphid Nest",
+  "block.wfballistics.glyphid_spawner": "Glyphid Egg Chamber",
   "item.wfballistics.missile_cruise": "Cruise Missile",
   "item.wfballistics.missile_ballistic": "Ballistic Missile",
   "item.wfballistics.missile_nuclear": "Nuclear Missile",

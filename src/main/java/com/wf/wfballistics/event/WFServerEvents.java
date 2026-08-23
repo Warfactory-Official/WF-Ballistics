@@ -284,6 +284,8 @@ public final class WFServerEvents {
                                 .executes(ctx -> ColonyDebug.warbands(ctx.getSource())))
                         .then(Commands.literal("found")
                                 .executes(ctx -> ColonyDebug.found(ctx.getSource())))
+                        .then(Commands.literal("nest")
+                                .executes(ctx -> ColonyDebug.nest(ctx.getSource())))
                         .then(Commands.literal("clear")
                                 .executes(ctx -> ColonyDebug.clear(ctx.getSource())))
                         .then(Commands.literal("fastforward")

@@ -6,6 +6,7 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.material.MapColor;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
@@ -67,6 +68,26 @@ public class ModBlocks {
     public static final DeferredHolder<Item, Item>TURRET_INTERCEPTOR_SUPERSONIC_ITEM =
             ITEMS.register("turret_interceptor_supersonic", () ->
                     new BlockItem(TURRET_INTERCEPTOR_SUPERSONIC.get(), new Item.Properties()));
+
+    // A colony's blocks. Soft and quiet -- a nest is flesh, not masonry -- and dropping nothing: the mound
+    // is a colony's body, and a player clearing one is not harvesting it.
+    public static final DeferredHolder<Block, Block> GLYPHID_NEST =
+            BLOCKS.register("glyphid_nest", () -> new GlyphidNestBlock(
+                    BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_ORANGE)
+                            .strength(0.5f).sound(SoundType.WOOL).noLootTable()));
+
+    public static final DeferredHolder<Item, Item> GLYPHID_NEST_ITEM =
+            ITEMS.register("glyphid_nest", () ->
+                    new BlockItem(GLYPHID_NEST.get(), new Item.Properties()));
+
+    public static final DeferredHolder<Block, Block> GLYPHID_SPAWNER =
+            BLOCKS.register("glyphid_spawner", () -> new GlyphidSpawnerBlock(
+                    BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_ORANGE)
+                            .strength(0.5f).sound(SoundType.WOOL).noLootTable()));
+
+    public static final DeferredHolder<Item, Item> GLYPHID_SPAWNER_ITEM =
+            ITEMS.register("glyphid_spawner", () ->
+                    new BlockItem(GLYPHID_SPAWNER.get(), new Item.Properties()));
 
     public static void register(IEventBus bus) {
         BLOCKS.register(bus);

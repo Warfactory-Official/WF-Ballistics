@@ -262,6 +262,17 @@ public final class SimGlyphidManager {
      */
     public static double @org.jetbrains.annotations.Nullable [] watcher;
 
+    /**
+     * Whether anybody -- a real player, or the bench's stand-in -- is within {@code radius} of a spot.
+     *
+     * <p>Public because the egg chambers ask the same question, and asking it twice would mean the bench's
+     * fake watcher worked for one tier and not for the other: a headless run would then measure a nest that
+     * never defends itself and report that as the nest not working.
+     */
+    public static boolean watched(ServerLevel level, double x, double z, double radius) {
+        return watched(level.players(), x, z, radius);
+    }
+
     private static boolean watched(List<ServerPlayer> players, double x, double z, double radius) {
         double limit = radius * radius;
         for (int i = 0; i < players.size(); i++) {

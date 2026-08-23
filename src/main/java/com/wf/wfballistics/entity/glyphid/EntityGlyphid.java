@@ -58,6 +58,8 @@ import net.minecraft.world.item.enchantment.EnchantmentHelper;
 import net.minecraft.world.item.enchantment.Enchantments;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import com.wf.wfballistics.block.GlyphidNestBlock;
+import com.wf.wfballistics.block.GlyphidSpawnerBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -909,11 +911,13 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     /**
      * Blocks the colony will not chew through, whatever their resistance.
      *
-     * <p>Currently nothing: the glyphid spawner blocks this guards are part of the hive port and have not
-     * landed yet.
+     * <p>Its own mound. At 0.5 hardness a single bite would otherwise take a chamber's worth of nest with
+     * it, so a swarm boiling out of a nest would dismantle the nest — and the chamber is the colony's life
+     * (see {@code Colony.spawners}), which would let a colony kill itself by defending.
      */
     public static boolean isSpawnerBlock(BlockState state) {
-        return false;
+        Block block = state.getBlock();
+        return block instanceof GlyphidSpawnerBlock || block instanceof GlyphidNestBlock;
     }
 
     @Override

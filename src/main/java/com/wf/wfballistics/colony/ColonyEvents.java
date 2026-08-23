@@ -30,8 +30,13 @@ public final class ColonyEvents {
             return;
         }
         try {
-            PendingChunkEdits.get(level).drain(level, event.getChunk().getPos());
+            // Build first, drain second, and the order is load-bearing. A chunk in the middle of this event
+            // does not yet answer true to level.hasChunk -- the FULL future it tests has not completed --
+            // so a nest built here queues every one of its own blocks as owed rather than writing them.
+            // Drained first, those would sit in the queue until the chunk was unloaded and loaded again,
+            // which is a nest that exists in the record and nowhere else.
             ColonyManager.onChunkLoaded(level, event.getChunk());
+            PendingChunkEdits.get(level).drain(level, event.getChunk());
         } catch (Exception | LinkageError t) {
             if (!loggedFailure) {
                 loggedFailure = true;

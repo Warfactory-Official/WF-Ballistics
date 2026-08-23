@@ -11,6 +11,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -49,6 +50,22 @@ public final class PendingChunkEdits extends SavedData {
     private static final Logger LOGGER = LogUtils.getLogger();
 
     /**
+     * Flags for the immediate write in {@link #submit}, and {@code UPDATE_KNOWN_SHAPE} is the one that matters.
+     *
+     * <p>Without it {@code setBlock} runs a shape update against all six neighbours, each of which reads a
+     * block state, and a read that lands in an unloaded chunk <em>blocks the server thread on a chunk load</em>.
+     * A nest is stamped from inside {@code ChunkEvent.Load}, where that is a deadlock: the thread waiting for
+     * the chunk is the thread that would have loaded it. Not theorised — it hung a dev server solid the first
+     * time a nest was built with an unloaded chunk beside it, and {@code jstack} had the whole chain in one
+     * stack: {@code setBlock -> updateNeighbourShapes -> getBlockState -> getChunkBlocking}.
+     *
+     * <p>{@code UPDATE_CLIENTS} alone was never enough, whatever the old comment said: the flag that
+     * suppresses neighbour <em>notification</em> is a different one from the flag that suppresses neighbour
+     * <em>shape</em> updates, and only the first was being left out.
+     */
+    public static final int FLAGS = Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE;
+
+    /**
      * Chunk -> the edits it owes.
      */
     private final Long2ObjectOpenHashMap<List<Edit>> byChunk = new Long2ObjectOpenHashMap<>();
@@ -81,7 +98,7 @@ public final class PendingChunkEdits extends SavedData {
         }
         ChunkPos chunkPos = new ChunkPos(pos);
         if (level.hasChunk(chunkPos.x, chunkPos.z)) {
-            level.setBlock(pos, block.defaultBlockState(), Block.UPDATE_CLIENTS);
+            level.setBlock(pos, block.defaultBlockState(), FLAGS);
             return true;
         }
 
@@ -97,9 +114,22 @@ public final class PendingChunkEdits extends SavedData {
     /**
      * Apply and clear everything owed to a chunk. Called once as it loads.
      *
+     * <p><b>Written through the chunk, not through the level</b>, and that is not a micro-optimisation.
+     * {@code Level.setBlock} on the chunk currently being loaded reaches a blocking {@code getChunk} for that
+     * same chunk by at least two routes — vanilla's neighbour shape update, and Lithium's hopper
+     * update-suppression hook, which runs whatever flags are passed. On the server thread inside
+     * {@code ChunkEvent.Load} either one is a deadlock: the thread waiting for the chunk is the thread that
+     * would finish loading it. Both were caught by {@code jstack} on a dev server that hung solid, one after
+     * the other, and the second is the reason the flags alone were not enough.
+     *
+     * <p>Writing into the {@link ChunkAccess} is what worldgen does and has none of that machinery. Nothing is
+     * lost by skipping it: the chunk has not been sent to a client yet, so the block packet that carries it
+     * has not been built.
+     *
      * @return how many blocks were written
      */
-    public int drain(ServerLevel level, ChunkPos chunkPos) {
+    public int drain(ServerLevel level, ChunkAccess chunk) {
+        ChunkPos chunkPos = chunk.getPos();
         List<Edit> queue = byChunk.remove(chunkPos.toLong());
         if (queue == null || queue.isEmpty()) {
             return 0;
@@ -110,11 +140,10 @@ public final class PendingChunkEdits extends SavedData {
         BlockPos.MutableBlockPos cursor = new BlockPos.MutableBlockPos();
         for (Edit edit : queue) {
             cursor.set(BlockPos.of(edit.pos()));
-            // UPDATE_CLIENTS without neighbour updates: a nest materialising should not set off a cascade
-            // of block updates across a chunk that has only just come back.
-            level.setBlock(cursor, edit.state(), Block.UPDATE_CLIENTS);
+            chunk.setBlockState(cursor, edit.state(), false);
             written++;
         }
+        chunk.setUnsaved(true);
         LOGGER.debug("[wfballistics] materialised {} pending blocks in chunk {}", written, chunkPos);
         return written;
     }

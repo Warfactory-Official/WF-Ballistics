@@ -1,5 +1,6 @@
 package com.wf.wfballistics;
 
+import com.wf.wfballistics.colony.GlyphidNest;
 import com.wf.wfballistics.config.WFClientConfig;
 import com.wf.wfballistics.config.WFConfig;
 import com.wf.wfballistics.drone.DroneTracker;
@@ -41,6 +42,10 @@ public class WFBallistics {
            MistEffects.bootstrap();
            DroneTracker.bootstrap();
            SimDroneManager.bootstrap();
+           // Fills in the hook ColonyManager was written around. Here rather than on server start so it is
+           // in place before the first chunk loads: a colony materialises on ChunkEvent.Load, and the spawn
+           // chunks are already loading by the time ServerStartingEvent fires.
+           GlyphidNest.install();
         });
     }
 }
