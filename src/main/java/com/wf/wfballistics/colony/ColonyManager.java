@@ -1,6 +1,10 @@
 package com.wf.wfballistics.colony;
 
 import com.mojang.logging.LogUtils;
+import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
+import com.wf.wfballistics.entity.glyphid.GlyphidTracker;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphid;
+import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidRegistry;
 import com.wf.wfballistics.industry.IndustryCluster;
 import com.wf.wfballistics.industry.IndustryClusters;
 import com.wf.wfballistics.industry.IndustryRegistry;
@@ -38,9 +42,10 @@ public final class ColonyManager {
     public static final int WARBAND_MAX_AGE = 72_000;
 
     /**
-     * Builds a nest's blocks once its chunk is loaded and the ground height is known. Left pluggable
-     * because the spawner block it will place is part of the hive port and has not landed yet; until then
-     * a colony materialises as data only, which the simulation does not care about.
+     * Builds a nest's blocks once its chunk is loaded and the ground height is known. Kept pluggable — it was
+     * a hook before the hive port landed, and it stays one because the simulation genuinely does not care
+     * whether a colony has blocks: with no builder installed, colonies materialise as data and behave
+     * identically. {@link GlyphidNest} is the one that ships.
      */
     public interface NestBuilder {
         void build(ServerLevel level, Colony colony);
@@ -86,8 +91,9 @@ public final class ColonyManager {
             }
             double seconds = interval / 20.0;
 
-            if (colony.population < colony.populationCap()) {
-                colony.population = Math.min(colony.populationCap(),
+            recountGarrison(level, colony);
+            if (colony.population < colony.room()) {
+                colony.population = Math.min(colony.room(),
                         colony.population + colony.growthPerSecond() * strength * seconds);
             }
 
@@ -123,8 +129,8 @@ public final class ColonyManager {
 
         for (int round = 0; round < rounds; round++) {
             for (Colony colony : new ArrayList<>(registry.colonies())) {
-                if (colony.population < colony.populationCap()) {
-                    colony.population = Math.min(colony.populationCap(),
+                if (colony.population < colony.room()) {
+                    colony.population = Math.min(colony.room(),
                             colony.population + colony.growthPerSecond() * strength * seconds);
                 }
                 int pressure = industry.pressureWithin(colony.x, colony.z, ColonyConfig.provocationRadius());
@@ -148,6 +154,37 @@ public final class ColonyManager {
             }
         }
         registry.setDirty();
+    }
+
+    /**
+     * Count the bodies this colony has standing, so its numbers cannot regrow around them.
+     *
+     * <p>Recounted from the world rather than tallied as defenders hatch and die, because a tally is a second
+     * copy of the truth and this one would have to survive a chunk unloading, a save, a record round trip and
+     * a {@code /kill}. Counting is cheap enough not to need the risk: it runs on the colony's own stagger, and
+     * only when the nest is somewhere entities are actually ticking — a nest nobody is near cannot have lost a
+     * defender since the last count, because nothing there is alive to lose one.
+     *
+     * <p>Level-wide rather than a box around the nest, so a defender that chased somebody over the hill is
+     * still this colony's. The scan is the loaded swarm, once per colony per
+     * {@link ColonyConfig#colonyTickInterval()}, and only for nests that are loaded at all.
+     */
+    private static void recountGarrison(ServerLevel level, Colony colony) {
+        if (!colony.built || !colony.hasResolvedY() || !level.isPositionEntityTicking(colony.pos())) {
+            return;
+        }
+        int standing = 0;
+        for (EntityGlyphid bug : GlyphidTracker.glyphids(level)) {
+            if (bug.garrison && bug.homeX == colony.x && bug.homeZ == colony.z && bug.isAlive()) {
+                standing++;
+            }
+        }
+        for (SimGlyphid sim : SimGlyphidRegistry.get(level).view()) {
+            if (sim.garrison && sim.homeX == colony.x && sim.homeZ == colony.z) {
+                standing++;
+            }
+        }
+        colony.garrison = standing;
     }
 
     /**

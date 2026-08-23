@@ -26,6 +26,8 @@ public final class ColonyConfig {
     private static int crowdingRadius = 1_800;
     private static int crowdingLimit = 4;
 
+    private static int garrisonPerChamber = 6;
+
     private static int materialiseRange = 128;
     private static int materialisePerTick = 4;
 
@@ -166,6 +168,14 @@ public final class ColonyConfig {
     }
 
     /**
+     * Defenders one egg chamber will keep standing. Multiplied by the chamber count, so a tier-4 nest holds
+     * five times what a tier-0 one does, and a nest with its chambers dug out holds none.
+     */
+    public static int garrisonPerChamber() {
+        return garrisonPerChamber;
+    }
+
+    /**
      * How close a player has to be before a warband stops being a record and becomes glyphids.
      */
     public static int materialiseRange() {
@@ -228,6 +238,10 @@ public final class ColonyConfig {
     public static void applyMaterialisation(int range, int perTick) {
         materialiseRange = Math.max(16, range);
         materialisePerTick = Math.max(0, perTick);
+    }
+
+    public static void applyGarrison(int perChamber) {
+        garrisonPerChamber = Math.max(0, perChamber);
     }
 
     public static void applyFlight(double chancePerTier, double speedFactor) {

@@ -92,6 +92,12 @@ public final class SimGlyphid implements GlyphidCarrier {
     public byte armor = EntityGlyphid.FULL_ARMOR;
     public byte subtype = EntityGlyphid.TYPE_NORMAL;
     public boolean persistent;
+    /**
+     * Carried across the boundary with everything else: a garrison bug demoted to a record and promoted back
+     * that lost this would stop being counted by its colony, which would then regrow the population it still
+     * has standing in front of it. See {@code EntityGlyphid.garrison}.
+     */
+    public boolean garrison;
 
     /**
      * Its own age, not the game time: {@link GlyphidBrain#repathDue} staggers off it so bodies that were
@@ -451,6 +457,7 @@ public final class SimGlyphid implements GlyphidCarrier {
         sim.armor = glyphid.armor();
         sim.subtype = glyphid.subtype();
         sim.persistent = glyphid.isPersistenceRequired();
+        sim.garrison = glyphid.garrison;
         sim.tickCount = glyphid.tickCount;
         sim.task = glyphid.getCurrentTask();
         sim.taskX = glyphid.taskX;
@@ -487,6 +494,7 @@ public final class SimGlyphid implements GlyphidCarrier {
         if (persistent) {
             glyphid.setPersistenceRequired();
         }
+        glyphid.garrison = garrison;
         glyphid.hasHome = hasHome;
         glyphid.homeX = homeX;
         glyphid.homeY = homeY;
@@ -525,6 +533,7 @@ public final class SimGlyphid implements GlyphidCarrier {
         tag.putByte("armor", armor);
         tag.putByte("subtype", subtype);
         tag.putBoolean("persistent", persistent);
+        tag.putBoolean("garrison", garrison);
         tag.putInt("age", tickCount);
         tag.putInt("task", task);
         tag.putInt("taskX", taskX);
@@ -553,6 +562,7 @@ public final class SimGlyphid implements GlyphidCarrier {
         sim.armor = tag.getByte("armor");
         sim.subtype = tag.getByte("subtype");
         sim.persistent = tag.getBoolean("persistent");
+        sim.garrison = tag.getBoolean("garrison");
         sim.tickCount = tag.getInt("age");
         sim.task = tag.getInt("task");
         sim.taskX = tag.getInt("taskX");

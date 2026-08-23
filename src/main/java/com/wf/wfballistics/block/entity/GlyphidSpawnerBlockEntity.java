@@ -20,7 +20,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
@@ -34,11 +33,16 @@ import java.util.UUID;
  * that: <b>the record simulates and the block is its view</b>, so everything this asks is asked of the
  * colony.
  *
- * <p>Three consequences, and each of them is the point rather than a simplification:
+ * <p>Four consequences, and each of them is the point rather than a simplification:
  * <ul>
  *   <li><b>Defenders are paid for.</b> One bug costs one {@link Colony#population}, from the same pool a
  *       warband is mustered out of. A nest that has been fighting cannot also be attacking, and one that has
  *       just sent an army defends itself badly — the two are the same number.</li>
+ *   <li><b>A defender is kept, not spent.</b> It is marked {@code garrison} and made persistent, so walking
+ *       away does not evaporate it, and {@link Colony#garrison} holds the colony's growth back by as many as
+ *       it has standing. One bug is a body <em>or</em> a number and never both — the same conservation rule
+ *       {@code WarbandMaterialiser} and the sim tier are built on. Kill the garrison and the colony recovers;
+ *       leave and come back and it is exactly where it was.</li>
  *   <li><b>Nothing spawns where nobody is.</b> Off-world defence is what the record is for; a chamber that
  *       spawned into an empty chunk would be paying population for bugs no one would ever see.</li>
  *   <li><b>An orphan chamber is inert.</b> Blocks left behind by a colony that no longer exists are dead
@@ -59,13 +63,6 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
      * How close a player has to be for a chamber to bother.
      */
     private static final double SPAWN_RANGE = 48.0;
-    /**
-     * Glyphids already standing around this chamber that make another one pointless. Counted with a box
-     * query rather than off {@code GlyphidTracker}, because a level-wide list would make the cost of one
-     * chamber's tick the size of the whole swarm attacking it.
-     */
-    private static final int LOCAL_CAP = 12;
-    private static final int LOCAL_RADIUS = 8;
     /**
      * How far from the chamber a defender may surface, and how many spots it tries before giving up. Failing
      * costs nothing and no population: the chamber tries again next interval.
@@ -109,11 +106,18 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
     private void hatch(ServerLevel level, BlockPos pos) {
         // Cheapest question first: the colony lookup is a scan over every colony in the level, and there is
         // no point paying for it for a nest nobody is standing near.
-        if (!watched(level, pos) || crowded(level, pos)) {
+        if (!watched(level, pos)) {
+            return;
+        }
+        // A chunk whose entities have not been restored yet reads as empty, and ColonyManager's recount would
+        // read the same emptiness -- so a chamber hatching in that window would put a second garrison on top
+        // of the one already saved in the chunk. This is the whole of "do not duplicate": never hatch
+        // anywhere the existing defenders are not there to be counted.
+        if (!level.isPositionEntityTicking(pos)) {
             return;
         }
         Colony colony = colony(level);
-        if (colony == null || colony.population < 1.0) {
+        if (colony == null || colony.population < 1.0 || colony.garrison >= colony.garrisonCap()) {
             return;
         }
 
@@ -124,7 +128,12 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
         // Debited only once a body is actually standing in the world, for the same reason
         // WarbandMaterialiser debits by what it placed rather than by what it wanted: the population is the
         // ledger, and a failed placement must not spend from it.
+        //
+        // The garrison count goes up in the same breath. ColonyManager recounts it from the world anyway, but
+        // not until this colony's next staggered tick, and between now and then every other chamber of this
+        // nest gets a turn -- reading a stale count, they would all hatch past the cap together.
         colony.population -= 1.0;
+        colony.garrison++;
         ColonyRegistry.get(level).setDirty();
     }
 
@@ -161,12 +170,19 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
             }
             bug.moveTo(px, y, pz, level.random.nextFloat() * 360F, 0F);
             // Home is the nest, not where it happens to have surfaced, so a garrison chased off comes back
-            // here rather than settling wherever the chase ended.
+            // here rather than settling wherever the chase ended. It is also how the recount recognises this
+            // bug as this colony's.
             bug.hasHome = true;
             bug.homeX = colony.x;
             bug.homeY = colony.hasResolvedY() ? colony.y : y;
             bug.homeZ = colony.z;
             bug.setCurrentTask(GlyphidTasks.TASK_IDLE, null);
+            // Kept, not left to vanilla despawning. A defender is population the colony has already spent, so
+            // letting one evaporate the moment a player walks off would bleed the nest a little every visit --
+            // and it would do it silently, because the record's numbers say nothing about what is standing on
+            // top of it. Retained instead, and held against the colony's growth for as long as it lives.
+            bug.garrison = true;
+            bug.setPersistenceRequired();
 
             if (level.addFreshEntity(bug)) {
                 return true;
@@ -242,11 +258,6 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
         // Shared with the sim tier rather than written out again here, so the bench's stand-in player counts
         // for a nest exactly as it counts for a swarm -- see SimGlyphidManager.watched.
         return SimGlyphidManager.watched(level, pos.getX() + 0.5, pos.getZ() + 0.5, SPAWN_RANGE);
-    }
-
-    private static boolean crowded(ServerLevel level, BlockPos pos) {
-        AABB box = new AABB(pos).inflate(LOCAL_RADIUS);
-        return level.getEntitiesOfClass(EntityGlyphid.class, box).size() >= LOCAL_CAP;
     }
 
     // --- persistence ---

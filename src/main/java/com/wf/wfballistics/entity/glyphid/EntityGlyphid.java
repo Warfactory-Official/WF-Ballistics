@@ -173,6 +173,18 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     public int homeY;
     public int homeZ;
 
+    /**
+     * This bug is a nest's standing defence, and the colony at {@link #homeX}/{@link #homeZ} is counting it.
+     *
+     * <p>The flag exists so the count can never double. A garrison bug has already been paid for out of
+     * {@code Colony.population} and is <em>not</em> abstract numbers any more — the colony's growth is held
+     * back by exactly as many as it has standing (see {@code Colony.garrison}). Without something on the
+     * entity to recognise, a recount would have to guess from position, and a warband from the same colony
+     * standing on its own nest would read as garrison and suppress growth that had already been spent
+     * elsewhere.
+     */
+    public boolean garrison = false;
+
     public int taskX;
     public int taskY;
     public int taskZ;
@@ -1246,6 +1258,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         compound.putInt("bombs", bombs);
 
         compound.putBoolean("hasHome", hasHome);
+        compound.putBoolean("garrison", garrison);
         compound.putInt("homeX", homeX);
         compound.putInt("homeY", homeY);
         compound.putInt("homeZ", homeZ);
@@ -1273,6 +1286,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         bombs = compound.getInt("bombs");
 
         hasHome = compound.getBoolean("hasHome");
+        garrison = compound.getBoolean("garrison");
         homeX = compound.getInt("homeX");
         homeY = compound.getInt("homeY");
         homeZ = compound.getInt("homeZ");

@@ -53,6 +53,20 @@ public final class Colony {
      * there. Zero on a colony that has never been built, which is why breaking a chamber checks it.
      */
     public int spawners;
+    /**
+     * Defenders this colony currently has standing in the world, as bodies rather than as numbers.
+     *
+     * <p>This is the anti-double-count, and it is why {@link #population} is not simply spent and forgotten
+     * when a chamber hatches. A garrison bug <em>is</em> part of the colony; it has only changed form. So the
+     * population it came out of may not regrow while it is alive — {@link #room()} holds growth back by
+     * exactly this many — and the colony is no stronger for having embodied it. Kill the garrison and the
+     * colony recovers; walk away and it does not.
+     *
+     * <p>Recounted from the world every time the nest is loaded and ticking rather than kept as a running
+     * tally, so it cannot drift. Nothing changes it while the nest is unloaded, because nothing there can
+     * die.
+     */
+    public int garrison;
 
     public Colony(UUID id, int x, int y, int z, int tier) {
         this.id = id;
@@ -88,6 +102,24 @@ public final class Colony {
 
     public int populationCap() {
         return ColonyConfig.basePopulationCap() * (tier + 1);
+    }
+
+    /**
+     * @return how much abstract population this colony is allowed, which is its cap less the bodies it
+     * already has standing. Growth stops here rather than at the cap, so a nest cannot hold a full garrison
+     * <em>and</em> a full population — that would be the same bugs counted twice.
+     */
+    public double room() {
+        return Math.max(0.0, populationCap() - garrison);
+    }
+
+    /**
+     * @return the most defenders this nest will hold, which is what its chambers can staff. A garrison is
+     * retained rather than allowed to despawn, so without a ceiling a nest visited often enough would grow
+     * one without bound.
+     */
+    public int garrisonCap() {
+        return ColonyConfig.garrisonPerChamber() * spawners;
     }
 
     public double growthPerSecond() {
@@ -139,6 +171,7 @@ public final class Colony {
         tag.putInt("cooldown", expansionCooldown);
         tag.putBoolean("built", built);
         tag.putInt("spawners", spawners);
+        tag.putInt("garrison", garrison);
         return tag;
     }
 
@@ -152,6 +185,7 @@ public final class Colony {
         // Absent on worlds saved before the hive port, which reads back as zero -- no chambers to lose,
         // which is the right answer for a colony that never had any blocks.
         colony.spawners = tag.getInt("spawners");
+        colony.garrison = tag.getInt("garrison");
         return colony;
     }
 
@@ -159,6 +193,7 @@ public final class Colony {
     public String toString() {
         return String.format("colony T%d at (%d, %d) pop %.1f/%d aggro %.0f%s",
                 tier, x, z, population, populationCap(), aggression,
-                built ? " [built, " + spawners + " chambers]" : "");
+                built ? " [built, " + spawners + " chambers, " + garrison + "/" + garrisonCap()
+                        + " garrison]" : "");
     }
 }
