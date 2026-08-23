@@ -84,7 +84,147 @@ measured:
 48.8% of the swarm — is unnamed.** No optimisation of anything on this list is worth starting before
 those three residuals are broken up, because each of them is larger than every named line.
 
+They are broken up below, under "What the residuals actually are".
+
 **Ceiling:** ~6000 bodies fills a 50 ms tick, ~3000 for half of one.
+
+## What the residuals actually are
+
+A residual is by construction the part nobody instrumented, so no further call site can name it — the
+profiler can only ever say how much it missed. Java Flight Recorder samples the stack instead of the call
+sites, so it can name frames the profiler has never heard of.
+
+Method: `./gradlew runServer -Pjfr`, `jcmd JFR.start settings=profile jdk.ExecutionSample#period=1ms`,
+`DebugNonSafepoints` on and `stackdepth=192` (the default 64 truncates the *outermost* frames, which are
+the ones a sample has to be attributed by). 60 s window, 20 204 samples, 20 178 of them on the server
+thread. Each sample is charged to the innermost `SwarmProfiler` phase marker on its stack — the same rule
+a nested begin/end pair follows — so the two views measure one tree in two ways. Reproduce with
+`tools/perf/jfr.sh` and read it with `tools/perf/jfranalyse.py`.
+
+**The mapping is only worth as much as its agreement with the profiler, so that is checked first.** Every
+phase, JFR against `SwarmProfiler` over the same window:
+
+| phase | JFR | profiler | delta |
+|---|---|---|---|
+| ai step, unnamed | 3.007 ms | 3.041 ms | −0.034 |
+| movement, unnamed (incl. fire scan) | 3.635 ms | 3.668 ms | −0.033 |
+| path search, all three levels | 3.457 ms | 3.440 ms | +0.017 |
+| base tick (incl. fluid push) | 2.282 ms | 2.293 ms | −0.011 |
+| collision sweep | 1.919 ms | 1.858 ms | +0.061 |
+| entity tick, unnamed | 1.064 ms | 1.114 ms | −0.050 |
+| path following | 0.730 ms | 0.702 ms | +0.028 |
+| separation | 0.658 ms | 0.614 ms | +0.044 |
+| collision push | 0.236 ms | 0.260 ms | −0.024 |
+| blocks inside | 0.172 ms | 0.192 ms | −0.020 |
+
+Ten phases, none off by more than 0.06 ms. One sample is 1.007 µs of tick, which makes the sample counts
+below readable as microseconds directly.
+
+*(This run marched the swarm 800 blocks down a forceloaded corridor rather than 300, so its path search is
+3.44 ms against the 1.88 ms above — more searching, not slower searching. Every other line, and all three
+residuals, reproduce the table above to within 2%.)*
+
+### The ai-step residual is the goal selector
+
+| what | ms | of the residual |
+|---|---|---|
+| `GoalSelector.tick` — re-evaluating `canUse`/`canContinueToUse` | 1.694 | 56.3% |
+| `GoalSelector.tickRunningGoals` | 0.675 | 22.5% |
+| `MoveControl.tick` | 0.290 | 9.6% |
+| `Level.getProfiler` | 0.210 | 7.0% |
+| `Sensing.tick` | 0.094 | 3.1% |
+
+**78.8% of the largest residual in the swarm is the goal selector**, and its leaf frames say what that
+means: iterating the goal set (`ObjectLinkedOpenHashSet$SetIterator.next`, 12.7%), asking a path whether it
+is finished (`Path.isDone` + `PathNavigation.isDone`, 16.2%), range checks (`AABB.intersects`, 7.3%) and
+`getHealth`/`AttributeMap.getValue` (9.6%). A glyphid registers eight goals, so at 2000 bodies this is
+320 000 `canUse` evaluations a second, nearly all of which return the same answer they returned last tick.
+
+Block-state reads are **0.3%** of this residual.
+
+`Level.getProfiler` at 7% is vanilla's own instrumentation, which `GoalSelector` pushes and pops around
+every goal. It is cheaper on a server that is not a dev run; measure it there before counting it as a win.
+
+### The movement residual is one block search
+
+| what | ms | of the residual |
+|---|---|---|
+| `Entity.setOnGroundWithMovement` | 1.972 | 54.3% |
+| the fire scan's terminal `noneMatch` (charged to `SCAN` by the profiler) | 0.454 | 12.5% |
+| `Entity.getBlockPosBelowThatAffectsMyMovement` | 0.325 | 8.9% |
+| `LivingEntity.checkFallDamage` | 0.233 | 6.4% |
+| `LivingEntity.getBlockSpeedFactor` | 0.118 | 3.2% |
+
+`setOnGroundWithMovement` is `Entity.checkSupportingBlock` → `CollisionGetter.findSupportingBlock`, which
+walks a `BlockCollisions` iterator over the entity's box to find the block it is standing on. It is 1.972 ms
+— **11.5% of the entire swarm, the largest single named cost in the tick**, larger than the collision sweep
+and larger than node expansion.
+
+Here the block-state hypothesis is right: **35.3% of this residual's leaf frames are block-state reads**
+(`SimpleBitStorage.get`, `PalettedContainer.get`, `LevelChunkSection.getBlockState`,
+`SimpleBitStorage.cellIndex`) and another 12.2% is `BlockBehaviour$BlockStateBase`. Just under half of
+movement's residual is reading block states out of palettes.
+
+### The entity-tick residual is synchronised-data bookkeeping
+
+| what | ms | of the residual |
+|---|---|---|
+| `Entity.setTicksFrozen` (a `SynchedEntityData` write) | 0.281 | 26.4% |
+| `NonNullList.get` (the data-item array behind it) | 0.193 | 18.2% |
+| `LivingEntity.refreshDirtyAttributes` | 0.142 | 13.3% |
+| `LivingEntity.getArrowCount` | 0.044 | 4.2% |
+
+**62% of it is entity-data and attribute bookkeeping** — a frozen-tick counter written every tick through
+the synched-data layer for 2000 bugs that are never in powder snow, and a dirty-attribute sweep for bugs
+whose attributes do not change.
+
+### Where the block reads actually are
+
+Across the whole swarm, by leaf frame:
+
+| kind of work | ms | share |
+|---|---|---|
+| unclassified | 6.061 | 35.2% |
+| **block state read** | **2.973** | **17.3%** |
+| collections | 2.205 | 12.8% |
+| pathfinder | 1.400 | 8.1% |
+| **block behaviour** | **1.318** | **7.7%** |
+| goals / sensing | 0.905 | 5.3% |
+| voxel / AABB | 0.729 | 4.2% |
+| math / vec | 0.612 | 3.6% |
+| wfballistics' own code | 0.515 | 3.0% |
+| attributes | 0.406 | 2.4% |
+
+**Block-state reads plus block behaviour are 4.290 ms, 24.9% of the swarm** — a quarter of the tick, which
+makes them the largest single kind of work in it. But they are not spread evenly, and that is the useful
+part: they are 47.5% of the movement residual and 48.7% of the collision sweep, 22.4% of node expansion,
+8.5% of base tick — and **0.3% of the ai-step residual**. Chasing palette lookups would do nothing at all
+to the largest residual.
+
+Two more findings worth recording:
+
+- **20.3% of node expansion is comparing tag names.** `String.equals` (9.4%), `ImmutableCollections$SetN.probe`
+  (5.0%), `TagKey.equals` (3.7%) and `Holder$Reference.is` (2.2%) inside `WalkNodeEvaluator.findAcceptedNode`
+  come to 0.658 ms/tick. That is `BlockState.is(TagKey)` resolving a tag by string on every neighbour of
+  every node.
+- **97.1% of the collision sweep is already Lithium's.** The dev runtime has Lithium in it, so the sweep
+  measured here is `collideMovementWithPostponedFluidCheck`, not vanilla's. Any further work on the sweep is
+  competing with Lithium rather than with Mojang.
+
+### What this changes
+
+The 48.8% is named, and it is three different problems:
+
+1. **2.37 ms of goal re-evaluation** that a leader/follower or cohort scheme deletes outright, because a
+   follower replaying a proven trajectory has no goals to select. This is the largest single item and the
+   one most amenable to a structural fix rather than a micro-optimisation.
+2. **1.97 ms of supporting-block search**, which is a cache: a bug that has not moved between blocks since
+   last tick is standing on the same block it was standing on.
+3. **0.62 ms of synched-data and attribute bookkeeping** for state that never changes on a glyphid.
+
+None of these is a palette problem, though palettes are what two of them spend their time in. The reads are
+a symptom of asking the world the same question every tick, for every bug, and the fixes are all upstream of
+the read.
 
 ## The sim tier
 
