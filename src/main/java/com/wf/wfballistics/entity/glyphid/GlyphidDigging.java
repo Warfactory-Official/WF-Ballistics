@@ -7,16 +7,12 @@ import net.minecraft.world.level.block.state.BlockState;
 /**
  * What a glyphid can chew, priced on block hardness.
  *
- * <p>Hardness rather than explosion resistance, which is what this used to read. The two disagree in exactly
- * the cases that matter: obsidian is 50 hardness against 1,200 resistance, and a reinforced door is tough to
- * mine but barely resists a blast at all. A glyphid is biting, not detonating, so what it is up against is how
- * long the material takes to cut — and hardness is also the number a player already has an intuition for,
- * because it is the one their pickaxe answers to.
+ * <p>Hardness, not explosion resistance: obsidian is 50 hardness against 1,200 resistance, and a glyphid is
+ * biting rather than detonating. It is also the number a player's pickaxe answers to.
  *
- * <p>Two ways to be un-chewable, and they are different. A block <em>above the caste's ceiling</em> is one this
- * caste cannot open but a bigger one could, which is what makes a wall worth building out of the right
- * material. A block of <em>negative hardness</em> — bedrock, barriers, portal frames — is unbreakable to
- * everything, and no amount of evolution changes that.
+ * <p>Two different ways to be un-chewable. Above the caste's <em>ceiling</em> means a bigger caste could open
+ * it, which is what makes the material worth building out of; <em>negative</em> hardness — bedrock, barriers,
+ * portal frames — is unbreakable to everything.
  */
 public final class GlyphidDigging {
 
@@ -39,10 +35,7 @@ public final class GlyphidDigging {
         return ticksToChew(state, level, pos, stats) > 0;
     }
 
-    /**
-     * Whether a bite stops dead here. Used by the blast-shaped dig, which takes a whole sphere at once and so
-     * cares only about the ceiling and not about how long the material would have taken.
-     */
+    /** Whether a bite stops dead here. For the blast-shaped dig, which cares only about the ceiling. */
     public static boolean stopsABite(BlockState state, BlockGetter level, BlockPos pos, double ceiling) {
         float hardness = state.getDestroySpeed(level, pos);
         return hardness < 0.0F || hardness > ceiling;

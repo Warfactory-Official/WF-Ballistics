@@ -17,35 +17,24 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Tears the floor up and throws it.
+ * Tears the floor up and throws it: a ranged attack that also removes the ground the defender is standing on,
+ * which is what turns a fortified position into an open one.
  *
- * <p>Two things at once, and the second is the point: the slam is a ranged attack that also removes the
- * ground the defender is standing on. It is the caste that turns a fortified position into an open one.
- *
- * <p>The rubble is a real {@link FallingBlockEntity}, so it lands as a block rather than evaporating — a
- * digger that has worked over a courtyard leaves the courtyard rearranged.
+ * <p>The rubble is a real {@link FallingBlockEntity} and lands as a block, so a digger leaves the ground it
+ * worked over rearranged.
  */
 public class EntityGlyphidDigger extends EntityGlyphid {
 
     private static final int SLAM_INTERVAL = 120;
     private static final double SLAM_RANGE = 30.0;
     private static final double MIN_SLAM = 3.0;
-    /**
-     * How far ahead of itself the digger rips up, and over how wide an arc.
-     */
+    /** How far ahead of itself the digger rips up, and over how wide an arc. */
     private static final int SLAM_LENGTH = 6;
     private static final int SLAM_ARC_STEPS = 5;
     private static final double SLAM_ARC = Math.PI / 3.0;
-    /**
-     * Blocks thrown per slam. A hard cap rather than "whatever the arc found": the arc is a fixed thirty
-     * samples, but a digger in the middle of a floor would otherwise launch every one of them, and several
-     * diggers in a warband multiply that by their number on the same tick.
-     */
+    /** Blocks thrown per slam. A hard cap: the arc is thirty samples, and a warband holds several diggers. */
     private static final int SLAM_MAX_BLOCKS = 8;
-    /**
-     * Blast resistance a digger can rip out. Above this the block stays and the digger has to chew it the
-     * slow way, which keeps reinforced construction meaningful.
-     */
+    /** Blast resistance a digger can rip out. Above it the block stays and has to be chewed the slow way. */
     private static final float SLAM_RESISTANCE = 100.0F;
 
     private static final double RUBBLE_SPEED = 1.2;

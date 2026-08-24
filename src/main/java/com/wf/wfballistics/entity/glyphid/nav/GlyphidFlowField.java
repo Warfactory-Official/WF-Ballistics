@@ -6,65 +6,44 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * One shared answer to "which way from here", for every glyphid walking to the same place.
+ * One shared answer to "which way from here", for every glyphid walking to the same place. Three hundred
+ * converging glyphids were three hundred A* searches over the same terrain — 212 µs and 4843 block reads
+ * each. A breadth-first flood outward from the destination pays for it once, after which a navigation
+ * decision is an array index and eight comparisons.
  *
- * <p>Three hundred glyphids converging on a base were three hundred A* searches over the same terrain to the
- * same destination — 212 µs and 4843 block reads each, re-deriving the identical route because nothing shared
- * it. A flow field pays for the terrain once: a breadth-first flood outward from the destination over walkable
- * columns, after which a glyphid's entire navigation decision is one array index and eight comparisons.
+ * <p>Usable before it is finished: the flood solves the columns nearest the destination first, which are the
+ * ones a converging swarm is in, and a glyphid in an unfilled column falls back to pathfinding.
  *
- * <p><b>Built outward from the goal, and usable before it is finished.</b> The flood starts at the destination,
- * so the columns nearest it are solved first, which are the ones a converging swarm is standing in. A glyphid
- * in an unfilled column simply falls back to pathfinding for another second. That is what makes an incremental
- * build honest rather than a way of hiding a stall: at no point is anything waiting on it.
+ * <p>Floors are sampled by the flood rather than up front, so a field around a walled base costs the inside
+ * of the wall and stops. No field value means no route, which is the cue the digging already reads.
  *
- * <p><b>Floors are sampled by the flood, not up front.</b> Only columns the flood actually reaches are ever
- * looked at, so a field around a walled base costs the inside of the wall and stops — and a destination that
- * is genuinely sealed off costs a handful of columns rather than the whole square. That also gives the digging
- * its cue for free: no field value means no route, which is the same signal the stuck timer already reads.
- *
- * <p>Not thread-safe and not meant to be: it is built and read on the world thread. The structure is the one
- * §11.10 wanted for the off-thread case — dense arrays, no block reads at lookup time — so moving the build
- * to a worker later is a scheduling change rather than a rewrite.
+ * <p>Not thread-safe: built and read on the world thread. Dense arrays and no block reads at lookup time, so
+ * moving the build to a worker later is a scheduling change.
  */
 public final class GlyphidFlowField {
 
     /**
-     * Columns from the centre to the edge. 48 covers the last 96 blocks of an approach, which is where a
-     * swarm has converged enough for its searches to be duplicates of each other; further out they are
-     * spread across different terrain and their routes genuinely differ.
+     * Columns from the centre to the edge. 48 covers the last 96 blocks, where a swarm has converged enough
+     * for its searches to be duplicates; further out the routes genuinely differ.
      */
     public static final int RADIUS = 48;
     public static final int SIZE = RADIUS * 2 + 1;
     private static final int COLUMNS = SIZE * SIZE;
 
-    /**
-     * How far above and below the destination plane a floor is looked for. Deep enough for a hillside,
-     * shallow enough that a column over a ravine finds nothing rather than finding its bottom.
-     */
+    /** How far above and below the plane a floor is looked for: a hillside, but not the bottom of a ravine. */
     private static final int VERTICAL_REACH = 12;
-    /**
-     * Clearance a glyphid needs to stand somewhere. The tallest caste is 1.5 blocks, so two.
-     */
+    /** Clearance a glyphid needs to stand somewhere. The tallest caste is 1.5 blocks, so two. */
     private static final int CLEARANCE = 2;
     /**
-     * Biggest rise between neighbouring columns that still counts as connected.
+     * Biggest rise between neighbouring columns that still counts as connected. Eight, not the one block a
+     * walker could step, because glyphids climb: on a walled compound, pathfinding got 237 of 300 inside by
+     * going over the wall while a walk-only field sent 91 the long way to the gap.
      *
-     * <p>Eight, not the one block a walker could step up, because <b>glyphids climb</b>. Anything they bump
-     * into becomes a ladder, and a field that models them as walkers is not modelling them: measured on an
-     * obsidian compound with one gap in it, pathfinding got 237 of 300 inside in a minute by walking into the
-     * wall and going over it, while a field that only knew about walking sent them the long way round to the
-     * gap and got 91 in. The cheapest route over a four-block wall is over it.
-     *
-     * <p>Charged as one step like any other move, which is a small lie — climbing is slower than walking —
-     * but the alternative is a weighted flood, and the honest version of the weight is still far below the
-     * cost of walking around a building.
+     * <p>Charged as one step, which is a small lie -- but a weighted flood's honest weight is still far below
+     * the cost of walking around the building.
      */
     private static final int CLIMB_UP = 8;
-    /**
-     * Biggest drop between neighbouring columns that still counts as connected. Glyphids take falls that
-     * would hurt a player, and a route that refuses to go downhill is a route around the whole hill.
-     */
+    /** Biggest drop that still counts as connected. A route that will not go downhill goes round the hill. */
     private static final int DROP = 8;
 
     private static final int NO_FLOOR = Integer.MIN_VALUE;
@@ -75,15 +54,9 @@ public final class GlyphidFlowField {
     private final int centreY;
     private final int centreZ;
 
-    /**
-     * Absolute floor height per column, {@link #NO_FLOOR} where a glyphid cannot stand and
-     * {@link #UNSAMPLED} where the flood has not looked yet.
-     */
+    /** Floor height per column: {@link #NO_FLOOR} where nothing can stand, {@link #UNSAMPLED} unvisited. */
     private final int[] floor = new int[COLUMNS];
-    /**
-     * Steps from the destination, {@link #UNREACHED} until the flood arrives. Short because a field this
-     * size cannot hold a longer route than 32767 steps and the array is read far more often than written.
-     */
+    /** Steps from the destination, {@link #UNREACHED} until the flood arrives. Short: no route is longer. */
     private final short[] distance = new short[COLUMNS];
 
     private final IntArrayFIFOQueue frontier = new IntArrayFIFOQueue();
@@ -103,9 +76,8 @@ public final class GlyphidFlowField {
             frontier.enqueue(origin);
             filled = 1;
         } else {
-            // A destination nobody can stand on -- inside a machine, usually. The flood has nowhere to start,
-            // so the field is finished before it began and every glyphid falls back to pathfinding, which is
-            // the behaviour that got them to the wall in the first place.
+            // A destination nobody can stand on, usually inside a machine. The flood has nowhere to start,
+            // so every glyphid falls back to pathfinding.
             complete = true;
         }
     }
@@ -183,11 +155,9 @@ public final class GlyphidFlowField {
     }
 
     /**
-     * Find the height a glyphid would stand at in this column, searching outward from the destination plane.
-     *
-     * <p>Outward rather than downward from the sky: a column under an overhang has two floors and the one
-     * that matters is the one level with everything around it. Searching from the plane finds that one, and
-     * finds it in a handful of reads rather than a hundred.
+     * The height a glyphid would stand at in this column, searched outward from the destination plane rather
+     * than down from the sky — a column under an overhang has two floors, and the one level with its
+     * neighbours is the one that matters.
      */
     private int sampleFloor(ServerLevel level, int blockX, int blockZ, int cell) {
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();

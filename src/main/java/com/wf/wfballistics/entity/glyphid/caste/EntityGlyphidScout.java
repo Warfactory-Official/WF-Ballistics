@@ -22,31 +22,20 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * How a colony becomes two colonies.
+ * How a colony becomes two colonies. The scout walks out to a spot far enough from home to be worth having,
+ * sits on it, and turns itself into a colony record — the only path in the mod that creates a colony from
+ * inside the world rather than from the simulation.
  *
- * <p>Everything else in the swarm is an attacker; the scout is the reproductive organ. It walks out to a
- * spot far enough from home to be worth having, sits on it, and turns itself into a colony record — which is
- * the whole expansion mechanic expressed as one entity, and the only path in the mod that creates a colony
- * from inside the world instead of from the simulation.
- *
- * <p>It fights badly and on purpose: fragile chitin, no extended targeting, and it only notices a player
- * standing more or less on top of it. A scout that stops to brawl is a scout that never founds anything.
+ * <p>It fights badly on purpose: fragile, no extended targeting, and it notices only a player standing on
+ * top of it. A scout that stops to brawl never founds anything.
  */
 public class EntityGlyphidScout extends EntityGlyphid {
 
-    /**
-     * How often the scouting logic runs. Site selection reads the heightmap and walks the colony registry;
-     * neither wants doing every tick, and nothing about the decision is urgent.
-     */
+    /** How often the scouting logic runs. Site selection reads the heightmap and the colony registry. */
     private static final int SCOUT_INTERVAL = 20;
-    /**
-     * How far from home a scout will look for a site.
-     */
+    /** How far from home a scout will look for a site. */
     private static final int SCOUT_RANGE = 64;
-    /**
-     * Minimum spacing between nests, measured against home and against every existing colony. Without it a
-     * scout settles next door and the map fills with overlapping colonies that all attack the same base.
-     */
+    /** Minimum spacing between nests, or the map fills with colonies all attacking the same base. */
     private static final int NEST_SPACING = 32;
     /**
      * How long a scout sits on a chosen site before committing, so a site it was chased off is not settled
@@ -91,9 +80,7 @@ public class EntityGlyphidScout extends EntityGlyphid {
         return true;
     }
 
-    /**
-     * A scout that hunts across the map is a scout doing the warband's job.
-     */
+    /** A scout that hunts across the map is a scout doing the warband's job. */
     @Override
     public boolean useExtendedTargeting() {
         return false;
@@ -107,9 +94,7 @@ public class EntityGlyphidScout extends EntityGlyphid {
         return level().getNearestPlayer(getX(), getY(), getZ(), NOTICE_RANGE, true);
     }
 
-    /**
-     * What it lacks in bite it makes up for in venom.
-     */
+    /** What it lacks in bite it makes up for in venom. */
     @Override
     public boolean doHurtTarget(Entity target) {
         if (!super.doHurtTarget(target)) {
@@ -214,9 +199,7 @@ public class EntityGlyphidScout extends EntityGlyphid {
         discard();
     }
 
-    /**
-     * Barely armoured: any hit worth the name strips a plate.
-     */
+    /** Barely armoured: any hit worth the name strips a plate. */
     @Override
     public boolean isArmorBroken(float amount) {
         return random.nextInt(100) <= Math.min(Math.pow(amount, 2), 100);

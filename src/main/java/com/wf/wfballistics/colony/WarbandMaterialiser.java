@@ -20,51 +20,31 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 
 /**
- * Turns a warband record into actual glyphids when somebody is there to be attacked by them.
+ * Turns a warband record into actual glyphids when somebody is there to be attacked by them: the T2 -> T0
+ * step, and the one place in the colony simulation where numbers can go wrong.
  *
- * <p>This is the T2 -> T0 step, and the one place in the colony simulation where numbers can go wrong.
- * {@code DroneCarrier}'s "one brain, two bodies" does not help here: that swaps <em>one</em> drone between
- * representations and keeps its identity. Turning one record holding forty into forty entities is a different
- * operation, so the three ways it usually breaks are each closed deliberately:
+ * <p>{@link Warband#count} is the only ledger and {@link #materialise} holds the only line that debits it, by
+ * exactly the number of bodies that reached the world — a glyphid that could not be placed is still owed.
+ * Nothing is placed without a loaded chunk, a real surface height and a clear box.
  *
- * <ul>
- *   <li><b>Counts not conserved.</b> {@link Warband#count} is the only ledger, and {@link #materialise} holds
- *       the only line that debits it — by exactly the number of bodies that reached the world. A glyphid that
- *       could not be placed is still owed, so it is still in the record. Conservation is not a check made
- *       afterwards; it is that nothing else can spend a warband.</li>
- *   <li><b>Bodies inside walls.</b> Nothing is placed without a loaded chunk, a real surface height and a
- *       clear bounding box. Failing all of that is normal and costs nothing: the bug waits a tick.</li>
- *   <li><b>Double-spend across two loaded regions.</b> Structurally impossible rather than guarded against —
- *       there is one record, it is debited on the server thread, and no copy of it exists anywhere.</li>
- * </ul>
- *
- * <p>A large warband streams in over several ticks rather than spawning at once, so the arrival of three
- * hundred glyphids is not a single-tick spike.
+ * <p>A large warband streams in over several ticks rather than spawning as a single-tick spike.
  */
 public final class WarbandMaterialiser {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /**
-     * Placement attempts per glyphid. Failing them all leaves it owed to the record and tried again next
-     * tick, which is the right answer for a warband standing on a lake or a cliff edge.
-     */
+    /** Placement attempts per glyphid. Failing them all leaves it owed and retried, which is fine. */
     private static final int PLACEMENT_ATTEMPTS = 12;
 
-    /**
-     * How far bodies are scattered around the record's position, so a warband arrives as a swarm rather than
-     * a column standing in one block.
-     */
+    /** How far bodies scatter around the record, so a warband arrives as a swarm and not as a column. */
     private static final int SCATTER = 8;
 
     private WarbandMaterialiser() {
     }
 
     /**
-     * Materialise whatever is owed in this dimension. Server thread only: it touches the world.
-     *
-     * <p>Deliberately not part of {@code tickWarbands}, which is pure simulation and is run many times over by
-     * {@code fastForward}. Fast-forwarding the simulation must not spawn entities.
+     * Materialise whatever is owed in this dimension. Server thread only: it touches the world. Kept out of
+     * {@code tickWarbands}, which {@code fastForward} runs many times over and which must not spawn anything.
      */
     public static void tick(ServerLevel level) {
         ColonyRegistry registry = ColonyRegistry.get(level);
@@ -152,9 +132,8 @@ public final class WarbandMaterialiser {
         int centerX = (int) Math.floor(warband.x);
         int centerZ = (int) Math.floor(warband.z);
 
-        // Rolled per bug rather than per warband, so a mixed column is the normal case: a wall of grunts with
-        // a bombardier or two behind it reads as an army, where a warband of nothing but behemoths reads as a
-        // boss fight. See GlyphidCaste for what evolution has unlocked by now.
+        // Rolled per bug rather than per warband, so a mixed column reads as an army rather than as a boss
+        // fight. See GlyphidCaste for what evolution has unlocked by now.
         GlyphidCaste caste = GlyphidCaste.roll(random, Evolution.of(level));
         EntityType<? extends EntityGlyphid> type = caste.type();
         EntityDimensions size = type.getDimensions();
@@ -171,9 +150,8 @@ public final class WarbandMaterialiser {
                 continue;
             }
 
-            // A flight arrives in the air, so it needs clearance rather than footing. That is why a flying
-            // warband crosses a coastline intact where a walking one leaves most of itself owed to the record:
-            // there is no such thing as unsuitable ground when you are not standing on it.
+            // A flight needs clearance rather than footing, which is why it crosses a coastline intact where
+            // a walking warband leaves most of itself owed.
             int y = warband.flying
                     ? Math.min(level.getMaxBuildHeight() - 2, surface + GlyphidFlight.CLEARANCE)
                     : surface;
@@ -206,10 +184,7 @@ public final class WarbandMaterialiser {
         return false;
     }
 
-    /**
-     * Give a freshly placed glyphid the two things it needs to behave like part of an attack rather than a
-     * wild spawn: somewhere to fall back to, and somewhere to go.
-     */
+    /** Give a placed glyphid what makes it part of an attack: somewhere to fall back to, somewhere to go. */
     private static void orient(EntityGlyphid glyphid, Warband warband, @Nullable Colony origin, int y) {
         glyphid.setCanFly(warband.flying);
         if (warband.flying) {
@@ -220,14 +195,14 @@ public final class WarbandMaterialiser {
         glyphid.homeY = origin != null && origin.hasResolvedY() ? origin.y : y;
         glyphid.homeZ = origin != null ? origin.z : (int) warband.z;
 
-        // The task height is a placeholder: the target column is usually still unloaded from here, so the
-        // move goal re-resolves it against real terrain as the swarm closes in.
+        // A placeholder height: the target column is usually unloaded from here, and the move goal
+        // re-resolves it against real terrain as the swarm closes in.
         glyphid.taskX = warband.targetX;
         glyphid.taskY = y;
         glyphid.taskZ = warband.targetZ;
         glyphid.setCurrentTask(GlyphidTasks.TASK_FOLLOW, null);
 
-        // Placed in the air, so it has to be flying before its first tick or it simply falls out of the sky.
+        // Placed in the air, so it must be flying before its first tick or it falls out of the sky.
         if (warband.flying) {
             glyphid.setAirborne(true);
             glyphid.setFlightTarget(

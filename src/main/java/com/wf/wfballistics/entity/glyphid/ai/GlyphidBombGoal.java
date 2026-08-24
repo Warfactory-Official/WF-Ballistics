@@ -13,26 +13,18 @@ import net.minecraft.world.phys.Vec3;
 import java.util.EnumSet;
 
 /**
- * Drops ordnance on whatever a flying glyphid happens to be over.
+ * Drops ordnance on whatever a flying glyphid happens to be over, which is what makes wings an attack rather
+ * than a way of arriving: a flight can corrode a base from above without landing.
  *
- * <p>This is what makes wings an attack rather than a way of arriving. A walking swarm has to reach a wall
- * and chew it; a flight can corrode a base from above without ever landing, which is a different kind of
- * threat and the reason bombing is gated behind the tiers that field flyers at all.
- *
- * <p>It runs <em>alongside</em> the flight goal rather than competing with it: bombing takes no movement flag,
- * so a glyphid bombs on its way past rather than stopping to aim. Aiming is deliberately crude — the bomb is
- * released on the approach and gravity does the rest.
+ * <p>Runs alongside the flight goal rather than competing with it — no movement flag, so a glyphid bombs on
+ * its way past. Aiming is crude: released on the approach, and gravity does the rest.
  */
 public class GlyphidBombGoal extends Goal {
 
-    /**
-     * Vertical clearance needed before a bomb is worth releasing. Below this it would land at its own feet.
-     */
+    /** Vertical clearance needed before a bomb is worth releasing. Below this it would land at its own feet. */
     private static final double MIN_DROP_HEIGHT = 4.0;
 
-    /**
-     * How far from the target a glyphid starts its run.
-     */
+    /** How far from the target a glyphid starts its run. */
     private static final double RUN_IN_RANGE = 24.0;
 
     private final EntityGlyphid glyphid;

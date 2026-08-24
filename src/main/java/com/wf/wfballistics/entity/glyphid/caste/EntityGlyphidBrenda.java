@@ -17,19 +17,15 @@ import net.minecraft.world.phys.Vec3;
 /**
  * The brood mother. Killing her is not the end of the fight, it is the start of the next one.
  *
- * <p>Upstream's death throe is a cloud of pheromone, which in a mod with a pheromone system means "every
- * glyphid in earshot comes here". There is no such system here and there does not need to be one: this
- * colony already has orders, waypoints and a {@link EntityGlyphid#communicate} channel, so the pheromone is
- * expressed as what it actually did — a rally on the corpse — and the brood is spawned outright.
+ * <p>Upstream's death throe is a pheromone cloud; there is no pheromone system here and none is needed, since
+ * what it did was rally the swarm on the corpse. Expressed as a rally waypoint plus an outright brood.
  *
- * <p>Not high priority, deliberately. A rally that cancelled every target would pull the whole swarm off
- * whatever it was biting at the exact moment the defender is winning.
+ * <p>Not high priority: a rally that cancelled every target would pull the swarm off whatever it was biting
+ * at the moment the defender was winning.
  */
 public class EntityGlyphidBrenda extends EntityGlyphid {
 
-    /**
-     * Grunts that boil out of her when she dies.
-     */
+    /** Grunts that boil out of her when she dies. */
     private static final int BROOD = 12;
     private static final int RALLY_RADIUS = 14;
     private static final int RALLY_MAX_AGE = 600;

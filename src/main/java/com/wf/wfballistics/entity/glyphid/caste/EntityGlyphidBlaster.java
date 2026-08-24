@@ -7,16 +7,11 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 
 /**
- * The bombardier that graduated to high explosive.
+ * The bombardier that graduated to high explosive: faster, flatter and tighter than the acid it grew out of.
+ * A bombardier corrodes what it hits; a blaster removes it.
  *
- * <p>Faster, flatter and tighter than the acid it grew out of, which is what makes it a siege caste: a
- * bombardier corrodes what it hits, a blaster removes it.
- *
- * <p>Deliberate deviation from upstream, which fires ten of these per volley. Ten is survivable when each
- * one is an acid puddle and is not when each one is a live charge run through
- * {@link com.wf.wfballistics.aef.ExplosionAEF} — the terrain damage and the per-volley cost both scale with
- * the count, and a warband can field several of these at once. Four is the number that keeps a blaster
- * frightening without turning one volley into a crater.
+ * <p>Four per volley rather than upstream's ten, which is survivable as acid puddles and is not as live
+ * charges through {@link com.wf.wfballistics.aef.ExplosionAEF}.
  */
 public class EntityGlyphidBlaster extends EntityGlyphidBombardier {
 

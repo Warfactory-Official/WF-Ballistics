@@ -16,19 +16,13 @@ import java.util.EnumSet;
  */
 public class GlyphidTargetGoal extends Goal {
 
-    /**
-     * Ticks between re-checks once a target is already held.
-     */
+    /** Ticks between re-checks once a target is already held. */
     private static final int RECHECK_INTERVAL = 100;
 
     /**
-     * Ticks between searches while the glyphid has nothing to attack.
-     *
-     * <p>Searching used to be a walk of the player list, which is free on an empty server and cheap on a busy
-     * one, so it ran every tick. It is now a box query for anything alive nearby, which at three hundred
-     * glyphids searching every tick would cost more than the rest of the swarm put together. Staggered by
-     * entity id, so the cost is spread rather than landing on one tick, at the price of up to a second before
-     * a bug notices a cow.
+     * Ticks between searches while the glyphid has nothing to attack. The search is a box query now rather
+     * than a walk of the player list, and at three hundred glyphids per tick it would cost more than the rest
+     * of the swarm. Staggered by entity id, at the price of up to a second before a bug notices a cow.
      */
     private static final int ACQUIRE_INTERVAL = 20;
 

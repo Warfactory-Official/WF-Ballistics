@@ -80,6 +80,23 @@ public class ModBlocks {
             ITEMS.register("glyphid_nest", () ->
                     new BlockItem(GLYPHID_NEST.get(), new Item.Properties()));
 
+    /**
+     * The same flesh, hardened, laid once the world has evolved past {@code colonies.reinforcedEvolution}.
+     *
+     * <p>Resistance 30, not obsidian's 1200: the nuke ray depletes by {@code pow(resistance, 7.5 - falloff)},
+     * so 1200 would make a hive shrug off a warhead outright. 30 is five times stone, which stops TNT and
+     * creepers without stopping ordnance. Hardness 2.5 plus a pickaxe tag, so the crust is expensive to blow
+     * up and cheap to dig.
+     */
+    public static final DeferredHolder<Block, Block> GLYPHID_NEST_REINFORCED =
+            BLOCKS.register("glyphid_nest_reinforced", () -> new GlyphidNestBlock(
+                    BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BROWN)
+                            .strength(2.5f, 30.0f).sound(SoundType.WOOL).noLootTable()));
+
+    public static final DeferredHolder<Item, Item> GLYPHID_NEST_REINFORCED_ITEM =
+            ITEMS.register("glyphid_nest_reinforced", () ->
+                    new BlockItem(GLYPHID_NEST_REINFORCED.get(), new Item.Properties()));
+
     public static final DeferredHolder<Block, Block> GLYPHID_SPAWNER =
             BLOCKS.register("glyphid_spawner", () -> new GlyphidSpawnerBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_ORANGE)

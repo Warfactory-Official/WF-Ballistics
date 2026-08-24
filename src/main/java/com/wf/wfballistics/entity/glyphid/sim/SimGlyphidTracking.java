@@ -13,26 +13,17 @@ import java.util.List;
 /**
  * Ships the record tier to the clients that can see it.
  *
- * <p>Nothing about the sim tier is meant to be visible, and that is the requirement rather than a nicety: a
- * swarm whose back half vanished at sixty-four blocks would be a rendering bug that happened to be a
- * performance feature. So the records are drawn, out to the same distance vanilla would have tracked the
- * entities they replaced — see {@code SimGlyphidVisual} for the drawing and
- * {@link SimGlyphidSyncPacket} for what goes on the wire.
+ * <p>Nothing about the sim tier is meant to be visible, so records are drawn out to the same distance
+ * vanilla would have tracked the entities they replaced. See {@code SimGlyphidVisual} for the drawing and
+ * {@link SimGlyphidSyncPacket} for the wire format.
  *
- * <p>Per player rather than per chunk, because the audience is a radius and not a chunk set: a record has no
- * chunk to be tracked from, which is rather the point of it.
+ * <p>Per player rather than per chunk: a record has no chunk to be tracked from, which is the point of it.
  */
 public final class SimGlyphidTracking {
 
-    /**
-     * Furthest a record is sent, in blocks. Beyond a client's own view distance there is nothing to draw, so
-     * the audience is the smaller of the two.
-     */
+    /** Furthest a record is sent. The audience is the smaller of this and the client's view distance. */
     private static final double MAX_RANGE = 256.0;
-    /**
-     * Most records sent to one player in one packet. A cap that is hit is a cap that hides glyphids, so it is
-     * set well above any swarm the colony tier will assemble and exists only to bound the packet.
-     */
+    /** Most records in one packet. A cap that is hit hides glyphids, so it only bounds the packet. */
     private static final int MAX_PER_PACKET = 2048;
 
     private SimGlyphidTracking() {
@@ -51,8 +42,7 @@ public final class SimGlyphidTracking {
         double limit = range * range;
 
         for (ServerPlayer player : players) {
-            // An empty packet still goes out: it is what tells a client that the swarm it was drawing has
-            // walked out of range or been given bodies.
+            // An empty packet still goes out: it is what tells a client the swarm it drew has gone.
             List<SimGlyphidSyncPacket.Entry> visible = new ArrayList<>();
             int originX = Mth.floor(player.getX());
             int originY = Mth.floor(player.getY());

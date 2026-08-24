@@ -3,6 +3,7 @@ package com.wf.wfballistics.config;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.colony.ColonyConfig;
+import com.wf.wfballistics.entity.glyphid.GlyphidStats;
 import com.wf.wfballistics.industry.IndustryConfig;
 import com.wf.wfballistics.industry.IndustryValues;
 import com.wf.wfballistics.sim.MissileSimConfig;
@@ -72,6 +73,12 @@ public final class WFConfig {
     public static final ModConfigSpec.IntValue COLONY_EXPANSION_POPULATION;
     public static final ModConfigSpec.IntValue COLONY_EXPANSION_COOLDOWN;
     public static final ModConfigSpec.IntValue COLONY_EXPANSION_RANGE;
+    public static final ModConfigSpec.DoubleValue COLONY_BUD_CHANCE;
+    public static final ModConfigSpec.IntValue COLONY_BUD_POPULATION;
+    public static final ModConfigSpec.IntValue COLONY_BUD_COOLDOWN;
+    public static final ModConfigSpec.IntValue COLONY_BUD_CAP_BASE;
+    public static final ModConfigSpec.IntValue COLONY_BUD_CAP_PER_TIER;
+    public static final ModConfigSpec.DoubleValue COLONY_REINFORCED_EVOLUTION;
     public static final ModConfigSpec.IntValue COLONY_TICK_INTERVAL;
     public static final ModConfigSpec.DoubleValue COLONY_WARBAND_SPEED;
     public static final ModConfigSpec.IntValue COLONY_MAX_COLONIES;
@@ -79,6 +86,8 @@ public final class WFConfig {
     public static final ModConfigSpec.IntValue COLONY_PROVOCATION_RADIUS;
     public static final ModConfigSpec.IntValue COLONY_CROWDING_RADIUS;
     public static final ModConfigSpec.IntValue COLONY_CROWDING_LIMIT;
+    public static final ModConfigSpec.IntValue COLONY_NATURAL_SPACING;
+    public static final ModConfigSpec.DoubleValue COLONY_NATURAL_CHANCE;
     public static final ModConfigSpec.IntValue COLONY_MATERIALISE_RANGE;
     public static final ModConfigSpec.IntValue COLONY_MATERIALISE_PER_TICK;
     public static final ModConfigSpec.DoubleValue COLONY_FLYING_CHANCE_PER_TIER;
@@ -87,6 +96,7 @@ public final class WFConfig {
     public static final ModConfigSpec.DoubleValue COLONY_EVOLUTION_PRESSURE_FACTOR;
     public static final ModConfigSpec.DoubleValue COLONY_EVOLUTION_STRENGTH_BONUS;
     // --- Glyphids ---
+    public static final ModConfigSpec.DoubleValue GLYPHID_PACE;
     public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG_OVERLAY;
@@ -288,6 +298,35 @@ public final class WFConfig {
         COLONY_EXPANSION_RANGE = b
                 .comment("How far from its parent a new colony is founded, outward from spawn.")
                 .defineInRange("expansionRange", 900, 16, 100_000);
+        COLONY_BUD_CHANCE = b
+                .comment("Expansion comes in two kinds. An outpost is a whole new colony expansionRange blocks",
+                        "further out; a bud is another mound welded onto this colony's own cluster, on a hex",
+                        "lattice, sharing its population and its anger. This is the share that buds when the",
+                        "colony could afford either. It is not a hard split: an outpost with nowhere to go",
+                        "falls back to budding, so a crowded region thickens instead of stalling.")
+                .defineInRange("budChance", 0.55, 0.0, 1.0);
+        COLONY_BUD_POPULATION = b
+                .comment("Population a colony must hold to bud. Cheaper than expansionPopulation because a bud",
+                        "is the same colony growing rather than a second one starting from nothing.")
+                .defineInRange("budPopulation", 12, 1, 100_000);
+        COLONY_BUD_COOLDOWN = b
+                .comment("Ticks before a colony may expand again after budding (4800 = 4 minutes). Shorter than",
+                        "the outpost cooldown, so a cluster fills in faster than the frontier moves.")
+                .defineInRange("budCooldownTicks", 4_800, 1, 10_000_000);
+        COLONY_BUD_CAP_BASE = b
+                .comment("Mounds a tier-0 colony may bud, beyond the one it starts as.")
+                .defineInRange("budCapBase", 1, 0, 1_000);
+        COLONY_BUD_CAP_PER_TIER = b
+                .comment("How many more each tier adds. At the defaults a tier-0 colony tops out at two mounds",
+                        "and a tier-4 one at six, so how sprawling a hive is says how far from spawn it is.")
+                .defineInRange("budCapPerTier", 1, 0, 1_000);
+        COLONY_REINFORCED_EVOLUTION = b
+                .comment("Evolution at which colonies start laying reinforced flesh -- the same nest block with",
+                        "a brown cast, 60x the blast resistance and a hardness that wants a pickaxe. Above this",
+                        "the hardened crust deepens with evolution until a fully evolved world builds mounds",
+                        "reinforced all the way through. Baked in at the moment each mound is laid, so an old",
+                        "hive keeps its soft shell and only the cells it grows later come up brown.")
+                .defineInRange("reinforcedEvolution", 0.35, 0.0, 1.0);
         COLONY_TICK_INTERVAL = b
                 .comment("Ticks between colony updates. Colonies are staggered across this window, so the",
                         "per-tick cost is the colony count divided by this.")
@@ -313,6 +352,17 @@ public final class WFConfig {
                 .comment("Colonies already within the crowding radius of a proposed site that will block it.",
                         "This is what makes expansion fill in territory instead of fleeing outward forever.")
                 .defineInRange("crowdingLimit", 4, 1, 1_000);
+        COLONY_NATURAL_SPACING = b
+                .comment("Side of the grid cell natural colonies are seeded on, in blocks. One cell holds at",
+                        "most one nest, at a position drawn from the world seed, so placement is reproducible",
+                        "and does not depend on which chunk a player walks into first. This is the setting that",
+                        "decides how far apart hives are; 0 turns natural seeding off entirely and leaves",
+                        "colonies to expansion and the 'colony found' command.")
+                .defineInRange("naturalSpacing", 512, 0, 100_000);
+        COLONY_NATURAL_CHANCE = b
+                .comment("Chance that a cell has a nest at all. Below 1 the frontier is patchy rather than a",
+                        "lattice, which is what stops the spacing from reading as a grid on a map.")
+                .defineInRange("naturalChance", 0.7, 0.0, 1.0);
         COLONY_MATERIALISE_RANGE = b
                 .comment("How close a player has to be before a warband stops being one record and becomes",
                         "glyphids. Nothing is ever placed in an unloaded chunk regardless of this.")
@@ -347,6 +397,12 @@ public final class WFConfig {
         b.pop();
 
         b.comment("Glyphid swarm behaviour.").push("glyphids");
+        GLYPHID_PACE = b
+                .comment("Multiplier on every caste's movement speed. The caste table is relative -- a behemoth",
+                        "is 0.8 of a grunt, a scout 1.5 -- and this sets the swarm's absolute pace without",
+                        "disturbing those ratios. A glyphid that cannot keep up with what it is chasing is",
+                        "scenery, so this is the lever for how far a player can outrun one.")
+                .defineInRange("pace", 1.25, 0.05, 8.0);
         GLYPHID_EXTENDED_TARGETING = b
                 .comment("Glyphids hunt players across 128 blocks instead of only the 16 around them.",
                         "This is what turns a nest into a base attack, and it is the single biggest lever on",
@@ -450,5 +506,10 @@ public final class WFConfig {
         ColonyConfig.applyFlight(COLONY_FLYING_CHANCE_PER_TIER.get(), COLONY_FLYING_SPEED_FACTOR.get());
         ColonyConfig.applyEvolution(COLONY_EVOLUTION_TIME_FACTOR.get(), COLONY_EVOLUTION_PRESSURE_FACTOR.get(),
                 COLONY_EVOLUTION_STRENGTH_BONUS.get());
+        ColonyConfig.applySeeding(COLONY_NATURAL_SPACING.get(), COLONY_NATURAL_CHANCE.get());
+        ColonyConfig.applyBudding(COLONY_BUD_CHANCE.get(), COLONY_BUD_POPULATION.get(),
+                COLONY_BUD_COOLDOWN.get(), COLONY_BUD_CAP_BASE.get(), COLONY_BUD_CAP_PER_TIER.get(),
+                COLONY_REINFORCED_EVOLUTION.get());
+        GlyphidStats.applyPace(GLYPHID_PACE.get());
     }
 }

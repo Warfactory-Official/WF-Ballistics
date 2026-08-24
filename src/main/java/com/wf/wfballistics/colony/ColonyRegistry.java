@@ -1,5 +1,7 @@
 package com.wf.wfballistics.colony;
 
+import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -25,10 +27,13 @@ public final class ColonyRegistry extends SavedData {
     private final List<Warband> warbands = new ArrayList<>();
 
     /**
-     * The level's evolution scalar. Lives here rather than in its own {@link SavedData} because it is
-     * colony state that happens to be scalar, and a second file for one float is a second thing to keep in
-     * step. See {@link Evolution}.
+     * Grid cells {@link ColonySeeder} has already dealt with, whether or not it put anything in them. Kept
+     * rather than derived from the colony list: "has this cell had its chance" must stay true after a hive is
+     * razed, or clearing one would be undone by walking away and coming back.
      */
+    private final LongOpenHashSet seededCells = new LongOpenHashSet();
+
+    /** The level's evolution scalar; see {@link Evolution}. Here rather than in a second file for one float. */
     private float evolution;
 
     public static ColonyRegistry get(ServerLevel level) {
@@ -54,6 +59,23 @@ public final class ColonyRegistry extends SavedData {
             evolution = clamped;
             setDirty();
         }
+    }
+
+    /**
+     * Claim a seeding cell.
+     *
+     * @return true if this cell had not been examined before, and so is this caller's to place in
+     */
+    public boolean consumeCell(long cell) {
+        if (!seededCells.add(cell)) {
+            return false;
+        }
+        setDirty();
+        return true;
+    }
+
+    public int seededCells() {
+        return seededCells.size();
     }
 
     public void add(Colony colony) {
@@ -119,6 +141,36 @@ public final class ColonyRegistry extends SavedData {
     }
 
     /**
+     * The colony whose blocks these are: the nearest one whose cluster actually <em>reaches</em> this
+     * position. Not {@link #nearest} — a chamber on the far lobe of a sprawling cluster can be nearer to a
+     * small colony next door, and binding it there would have one hive spending another's population.
+     *
+     * <p>Colonies that overlap ignore each other: no merging, no war, no eviction. This is the one place the
+     * ambiguity has to be resolved, since a block can belong to only one of them, and distance decides.
+     *
+     * @param margin extra reach beyond the cluster, for blocks on the flank of a mound
+     * @return the owning colony, or null if this position belongs to none
+     */
+    public @Nullable Colony nearestOwning(double x, double z, double margin) {
+        Colony best = null;
+        double bestSq = Double.MAX_VALUE;
+        for (Colony colony : colonies) {
+            double dx = colony.x - x;
+            double dz = colony.z - z;
+            double distSq = dx * dx + dz * dz;
+            if (distSq >= bestSq) {
+                continue;
+            }
+            double reach = colony.footprintRadius() + margin;
+            if (distSq <= reach * reach) {
+                bestSq = distSq;
+                best = colony;
+            }
+        }
+        return best;
+    }
+
+    /**
      * @return true if any colony sits within {@code radius} of this position. Guards expansion against
      * founding a new nest on top of an existing one.
      */
@@ -160,9 +212,10 @@ public final class ColonyRegistry extends SavedData {
         for (int i = 0; i < warbandList.size(); i++) {
             registry.warbands.add(Warband.load(warbandList.getCompound(i)));
         }
-        // Absent in worlds saved before evolution existed, which reads back as 0 -- a world that has not
-        // evolved yet, which is the right answer for one that never could.
+        // Both absent on older saves. Zero evolution and no examined cells are the right answers: an old
+        // world's explored chunks get their nests on the next load rather than never.
         registry.evolution = tag.getFloat("evolution");
+        registry.seededCells.addAll(LongArrayList.wrap(tag.getLongArray("seeded")));
         return registry;
     }
 
@@ -180,6 +233,7 @@ public final class ColonyRegistry extends SavedData {
         }
         tag.put("warbands", warbandList);
         tag.putFloat("evolution", evolution);
+        tag.putLongArray("seeded", seededCells.toLongArray());
         return tag;
     }
 }

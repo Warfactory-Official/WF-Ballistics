@@ -19,11 +19,9 @@ import java.util.List;
 /**
  * A marker a glyphid colony leaves in the world: "go here, and when you arrive, do this".
  *
- * <p>An entity rather than a record because it has to be found by whichever bugs happen to walk past it,
- * without any of them holding a reference first. It ticks rarely, never moves, and takes no damage.
- *
- * <p>Note for later phases: one entity per waypoint is affordable at colony scale and will not be at swarm
- * scale. This is the faithful port; the carrier work replaces it with data held by the scheduler.
+ * <p>An entity rather than a record because it has to be found by whichever bugs walk past it, none of which
+ * hold a reference first. It ticks rarely, never moves and takes no damage. One entity per waypoint is
+ * affordable at colony scale and will not be at swarm scale.
  */
 public class GlyphidWaypoint extends Entity {
 
@@ -32,9 +30,7 @@ public class GlyphidWaypoint extends Entity {
 
     public int maxAge = 2400;
     public int radius = 3;
-    /**
-     * A high-priority waypoint interrupts whatever the bug was chasing, rather than queuing behind it.
-     */
+    /** A high-priority waypoint interrupts whatever the bug was chasing, rather than queuing behind it. */
     public boolean highPriority = false;
 
     protected @Nullable GlyphidWaypoint additional;

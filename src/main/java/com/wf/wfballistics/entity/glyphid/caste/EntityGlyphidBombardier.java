@@ -22,13 +22,9 @@ import org.jetbrains.annotations.Nullable;
  */
 public class EntityGlyphidBombardier extends EntityGlyphid {
 
-    /**
-     * Ticks between volleys. Offset by one so the volley never lands on the same tick as the tracking sample.
-     */
+    /** Ticks between volleys. Offset by one so the volley never lands on the same tick as the tracking sample. */
     protected static final int VOLLEY_INTERVAL = 60;
-    /**
-     * Beyond this, shoot over rather than at: the high solution clears cover, the flat one is faster.
-     */
+    /** Beyond this, shoot over rather than at: the high solution clears cover, the flat one is faster. */
     protected static final double LOFT_RANGE = 20.0;
     /**
      * Do not bother below this: a target this close is the melee goal's problem, and the arc would drop the
@@ -120,9 +116,7 @@ public class EntityGlyphidBombardier extends EntityGlyphid {
         return 5;
     }
 
-    /**
-     * Inaccuracy multiplier, applied per bomb in the salvo so the first is aimed and the last is scattered.
-     */
+    /** Inaccuracy multiplier, applied per bomb in the salvo so the first is aimed and the last is scattered. */
     public float spread() {
         return 1.0F;
     }

@@ -31,38 +31,25 @@ import java.util.concurrent.atomic.AtomicInteger;
  *                                5. decide who changes tier, which is the only step that touches an entity
  * </pre>
  *
- * <p><b>Why this is worth doing at 0.05 ms.</b> It is not, at three hundred records — and that is the point of
- * having measured it. The tier exists so a colony can have thousands of glyphids walking somewhere, and the
- * pass is linear in them: the same per-record cost that reads as nothing at 300 is 1.7 ms at ten thousand,
- * which is a third of a tick budget spent on glyphids nobody can see. Off the thread it is spent on a core
- * that was idle, in a window that the vanilla tick is going to occupy anyway.
+ * <p>Not worth it at three hundred records (0.05 ms), and that is why it was measured: the pass is linear, so
+ * the same per-record cost is 1.7 ms at ten thousand — a third of a tick spent on glyphids nobody can see.
  *
- * <p><b>The threading contract.</b>
+ * <p>The threading contract:
  * <ul>
- *   <li>The worker cannot reach the world. It is handed a {@link SimWorldPrefetch}, which holds no
- *       {@code Level} — a compile-time guarantee, not a convention. The three world reads a record makes were
- *       all made on the world thread by {@link SimWorldPrefetch#refill}, before dispatch.</li>
- *   <li>Both directions are asserted at runtime by {@link WorldThread}: {@link #advance} refuses to run on the
- *       world thread when dispatched, and the prefetch refuses to read a chunk anywhere else.</li>
- *   <li>Nothing but the pass may touch a record while it is in flight, and that is enforced structurally
- *       rather than by memory: every other caller reaches the list through
- *       {@link SimGlyphidRegistry#view()}, which joins first. An explosion landing on a swarm mid-tick
- *       therefore waits for the pass instead of racing it — a sub-millisecond stall on a rare event, against
- *       a damage queue that would have needed its own ordering rules.</li>
- *   <li>The flow field is read but never written here. {@code GlyphidFlowFields.tick} floods it on the world
- *       thread, after the join.</li>
- *   <li>One worker per level, not many. The records do not interact during the pass — separation is a
- *       separate stage and its impulses are banked in fields — so splitting the list further would be safe,
- *       and it is still not worth it: the window is the whole vanilla level tick, tens of milliseconds wide,
- *       and a pass that fits in it does not need to be shorter. It would also break
- *       {@link SimWorldPrefetch}, whose miss list is unsynchronised precisely because one worker writes it.
- *       </li>
+ *   <li>The worker cannot reach the world. It holds a {@link SimWorldPrefetch}, which has no {@code Level},
+ *       and every world read was made on the world thread by {@link SimWorldPrefetch#refill} before
+ *       dispatch. Both directions are asserted at runtime by {@link WorldThread}.</li>
+ *   <li>Nothing else may touch a record in flight, enforced structurally: every other caller goes through
+ *       {@link SimGlyphidRegistry#view()}, which joins first.</li>
+ *   <li>The flow field is read but never written here; {@code GlyphidFlowFields.tick} floods it after the
+ *       join.</li>
+ *   <li>One worker per level. The window is the whole vanilla level tick, so a pass that fits in it does not
+ *       need splitting — and {@link SimWorldPrefetch}'s miss list is unsynchronised because one worker
+ *       writes it.</li>
  * </ul>
  *
- * <p>Not the drone pool, deliberately. A drone route search is explicitly allowed to take as long as it needs
- * and land whenever it lands; a sim pass has to be finished by the end of the tick that started it. Queued
- * behind an A* across a few thousand cells it would still be running at the join, and the world thread would
- * wait out both.
+ * <p>Not the drone pool: a route search may land whenever it lands, but a sim pass has to be done by the end
+ * of the tick that started it, and queueing behind an A* would make the world thread wait out both.
  */
 public final class SimGlyphidPass {
 
@@ -72,16 +59,10 @@ public final class SimGlyphidPass {
     private static @Nullable ExecutorService pool;
     private static int poolSize;
 
-    /**
-     * The world, as far as this level's records may see it. Refilled on the world thread each tick and read
-     * by the worker; see {@link SimWorldPrefetch} for why nothing here is synchronised.
-     */
+    /** The world as this level's records may see it. Refilled on the world thread, read by the worker. */
     private final SimWorldPrefetch world = new SimWorldPrefetch();
 
-    /**
-     * Wall time of the last pass, whichever thread ran it. Written by the worker, read on the world thread
-     * after the join, so the {@code Future} is the happens-before edge.
-     */
+    /** Wall time of the last pass. Written by the worker; the {@code Future} is the happens-before edge. */
     private long passNanos;
     private volatile String ranOn = "-";
     private boolean ranOffThread;
@@ -92,9 +73,7 @@ public final class SimGlyphidPass {
     }
 
     /**
-     * Start the worker pool. Sized like the drone pool: leave the world thread and a spare core alone, and
-     * cap it, because the work is one task per dimension and a server does not have many dimensions with a
-     * swarm marching across them.
+     * Start the worker pool. Sized like the drone pool, and capped: the work is one task per dimension.
      */
     public static void startup() {
         shutdown();
@@ -108,9 +87,8 @@ public final class SimGlyphidPass {
     }
 
     /**
-     * Stop the pool, once every level has joined whatever it had in flight. Joining first rather than
-     * interrupting: a pass killed halfway through leaves a swarm with half its records moved, which would then
-     * be saved.
+     * Stop the pool, once every level has joined what it had in flight. Interrupting instead would save a
+     * swarm with half its records moved.
      */
     public static void shutdown(Iterable<ServerLevel> levels) {
         for (ServerLevel level : levels) {
@@ -150,9 +128,8 @@ public final class SimGlyphidPass {
 
         ExecutorService workers = pool;
         if (workers == null || !SwarmBench.simAsync) {
-            // The control arm, and the fallback for a level ticking before the server has finished starting.
-            // Same view of the world and same point in the tick, so the only difference from the arm below is
-            // which thread pays for it.
+            // The control arm, and the fallback for a level ticking during startup. Same view of the world
+            // and same point in the tick; only the thread differs.
             pass.ranOffThread = false;
             pass.advance(records);
             return;
@@ -174,9 +151,8 @@ public final class SimGlyphidPass {
         if (pass == null || pass.advanced == 0) {
             return;
         }
-        // Taken from the registry rather than measured here, because the join may already have happened:
-        // anything that reaches a record mid-tick joins first, and that stall is just as much world-thread
-        // time as this one.
+        // From the registry, not measured here: anything reaching a record mid-tick joins first, and that
+        // stall is world-thread time too.
         long stall = registry.takeStall();
         pass.lastStallNanos = pass.ranOffThread ? stall : pass.passNanos;
         SwarmProfiler.charge(SwarmProfiler.Phase.SIM_ASYNC, pass.passNanos);
@@ -184,10 +160,7 @@ public final class SimGlyphidPass {
         registry.setDirty();
     }
 
-    /**
-     * Plan and move every record. The whole tier, and the reason it is worth having: one pass, no entity
-     * list, no chunk, and the same {@link GlyphidBrain} the bodies run.
-     */
+    /** Plan and move every record: one pass, no entity list, no chunk, the same {@link GlyphidBrain}. */
     private void advance(List<SimGlyphid> records) {
         long start = System.nanoTime();
         for (int i = 0; i < records.size(); i++) {
@@ -200,9 +173,7 @@ public final class SimGlyphidPass {
         ranOn = Thread.currentThread().getName();
     }
 
-    /**
-     * Forget a level's prefetched terrain, for a tier that has been switched off or a swarm that has gone.
-     */
+    /** Forget a level's prefetched terrain, for a tier that has been switched off or a swarm that has gone. */
     static void idle(ServerLevel level) {
         SimGlyphidPass pass = BY_LEVEL.get(level.dimension());
         if (pass != null) {
@@ -212,10 +183,9 @@ public final class SimGlyphidPass {
     }
 
     /**
-     * @return one line per line of {@code swarmbench simthread}: where the pass ran, what it cost, and how
-     * much of that the world thread waited out. The last of those is the number that says whether moving it
-     * off the thread achieved anything — a stall the size of the pass means the work moved and the waiting
-     * did not.
+     * @return the lines of {@code swarmbench simthread}: where the pass ran, what it cost, and how much of
+     * that the world thread waited out. A stall the size of the pass means the work moved and the wait did
+     * not.
      */
     public static List<String> report(ServerLevel level) {
         SimGlyphidPass pass = BY_LEVEL.get(level.dimension());

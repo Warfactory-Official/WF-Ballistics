@@ -1,8 +1,0 @@
-# Recordings and run output are artefacts, not source.
-*.jfr
-*.folded
-*.out
-*.log
-*.bak
-server.properties.jfrbak
-*.fifo

@@ -131,9 +131,7 @@ public class EntityGlyphidBehemoth extends EntityGlyphid {
                 BREATH_PUFF_RADIUS, BREATH_PUFF_HEIGHT, BREATH_PUFF_DURATION);
     }
 
-    /**
-     * A dead behemoth is still a hazard: whatever killed it is standing in what it was full of.
-     */
+    /** A dead behemoth is still a hazard: whatever killed it is standing in what it was full of. */
     @Override
     public void die(DamageSource source) {
         super.die(source);

@@ -11,18 +11,13 @@ import org.jetbrains.annotations.Nullable;
  * Idle wandering, suppressed whenever the bug is under colony orders: a glyphid on its way to a waypoint
  * should not be strolling off to look at something else.
  *
- * <p>A nest's garrison is leashed to its mound on top of that. A defender is retained rather than despawned
- * and its colony's growth is held back for as long as it lives, so one that strolled away for long enough
- * would leave the nest undefended <em>and</em> the colony still paying for it — the same bleed retention was
- * meant to close, arriving by a slower route. Measured before the leash: one of six defenders had drifted
- * past 32 blocks inside 70 seconds.
+ * <p>A garrison is leashed to its mound on top of that: a defender is retained and its colony's growth held
+ * back for as long as it lives, so one that strolled off would leave the nest undefended and still paid for.
+ * Measured before the leash: one of six defenders past 32 blocks inside 70 seconds.
  */
 public class GlyphidWanderGoal extends RandomStrollGoal {
 
-    /**
-     * How far a garrison bug may stroll from its nest before it starts strolling back. Inside the 48-block
-     * range a chamber hatches at, so a defender is always somewhere it would have been spawned.
-     */
+    /** How far a garrison bug may stroll before it strolls back. Inside the range a chamber hatches at. */
     private static final double LEASH = 24.0;
 
     private final EntityGlyphid glyphid;
@@ -38,11 +33,9 @@ public class GlyphidWanderGoal extends RandomStrollGoal {
     }
 
     /**
-     * Where to stroll. Unchanged for everything except a garrison bug that has wandered off its nest, which
-     * gets a destination back toward it rather than another random one.
-     *
-     * <p>A leash rather than a hard tether: it still wanders, and it still chases whatever it targets to
-     * wherever that goes. It only stops picking somewhere further out once it is already too far.
+     * Where to stroll. Unchanged except for a garrison bug off its nest, which is pointed back toward it.
+     * A leash rather than a tether: it still wanders and still chases, it just stops picking somewhere
+     * further out once it is already too far.
      */
     @Override
     protected @Nullable Vec3 getPosition() {

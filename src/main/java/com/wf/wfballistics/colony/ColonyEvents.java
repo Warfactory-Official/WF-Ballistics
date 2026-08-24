@@ -9,11 +9,8 @@ import net.neoforged.neoforge.event.level.ChunkEvent;
 import org.slf4j.Logger;
 
 /**
- * The seam where the off-world colony simulation meets the loaded world.
- *
- * <p>Everything owed to a chunk is settled the moment it loads: blocks the colonies changed while nobody
- * was there, and nests founded out of sight that now need building on ground whose height is finally
- * knowable. Nothing is written into an unloaded chunk to make this work — see {@link PendingChunkEdits}.
+ * The seam where the off-world colony simulation meets the loaded world: everything owed to a chunk is
+ * settled the moment it loads. Nothing is ever written into an unloaded one — see {@link PendingChunkEdits}.
  */
 @EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.GAME)
 public final class ColonyEvents {
@@ -30,11 +27,9 @@ public final class ColonyEvents {
             return;
         }
         try {
-            // Build first, drain second, and the order is load-bearing. A chunk in the middle of this event
-            // does not yet answer true to level.hasChunk -- the FULL future it tests has not completed --
-            // so a nest built here queues every one of its own blocks as owed rather than writing them.
-            // Drained first, those would sit in the queue until the chunk was unloaded and loaded again,
-            // which is a nest that exists in the record and nowhere else.
+            // Build first, drain second: a chunk mid-load does not answer true to level.hasChunk, so a nest
+            // built here queues its own blocks as owed. Drained first, they would sit there until the next
+            // unload and reload -- a nest that exists in the record and nowhere else.
             ColonyManager.onChunkLoaded(level, event.getChunk());
             PendingChunkEdits.get(level).drain(level, event.getChunk());
         } catch (Exception | LinkageError t) {

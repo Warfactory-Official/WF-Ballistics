@@ -14,9 +14,7 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class GlyphidBallistics {
 
-    /**
-     * Ticks over which a caste samples its target's movement before leading it.
-     */
+    /** Ticks over which a caste samples its target's movement before leading it. */
     public static final int TRACK_INTERVAL = 20;
 
     private GlyphidBallistics() {

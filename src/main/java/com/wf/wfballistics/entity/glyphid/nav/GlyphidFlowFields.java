@@ -20,43 +20,27 @@ import java.util.Map;
  * are rounded to {@link #GRAIN} blocks before they are looked up, so a squad whose objective drifts by a block
  * keeps the field it already has rather than throwing away a flood and starting another.
  *
- * <p><b>Budgeted, and deliberately small.</b> A complete field is around nine thousand columns; flooding it in
- * one tick would be a two-millisecond spike on the tick it landed, which is precisely the shape of stutter
- * §11.8 says matters more than the mean. {@link #BUDGET} columns a tick spreads it over a second or so, and
- * because the flood grows outward from the destination the glyphids nearest it are served first.
+ * <p>Budgeted: a complete field is around nine thousand columns, and flooding one in a tick would be a
+ * two-millisecond spike. {@link #BUDGET} columns a tick spreads it over a second, outward from the
+ * destination, so the glyphids nearest it are served first.
  *
- * <p><b>Invalidated by digging, not by a timer alone.</b> A swarm chewing a wall open changes what is walkable,
- * and a field that did not notice would keep steering everyone at a hole that is no longer the only way in.
- * {@link #invalidate} is called from the block-breaking path; the age limit is the backstop for everything
- * else that can change terrain.
+ * <p>Invalidated by digging rather than by a timer alone — {@link #invalidate} is called from the
+ * block-breaking path, and the age limit is the backstop for everything else that changes terrain.
  */
 public final class GlyphidFlowFields {
 
-    /**
-     * Destinations are rounded to this many blocks before a field is looked up.
-     */
+    /** Destinations are rounded to this many blocks before a field is looked up. */
     private static final int GRAIN = 8;
-    /**
-     * Columns of flood spent per level per tick, across all fields.
-     */
+    /** Columns of flood spent per level per tick, across all fields. */
     private static final int BUDGET = 768;
-    /**
-     * Fields kept per level. Four squads is the most a swarm splits into, so four destinations is the most
-     * that can be wanted at once; a fifth evicts whichever has gone longest without a reader.
-     */
+    /** Fields kept per level: one per squad, since that is the most destinations wanted at once. */
     private static final int MAX_FIELDS = 4;
     /**
-     * Ticks a completed field is trusted before it is rebuilt from scratch.
-     *
-     * <p>The backstop, not the mechanism. Glyphids chewing report their own holes and glyphids that get stuck
-     * following the field report that it is wrong, which between them cover everything that happens because
-     * of the swarm. This covers what happens to it: a player bricking up a doorway, a piston, a
-     * {@code /fill}. Twenty seconds is the longest a swarm should walk at a wall that is no longer a way in.
+     * Ticks a completed field is trusted before it is rebuilt. The backstop, not the mechanism: chewing
+     * reports its own holes, and this covers a player bricking up a doorway, a piston, a {@code /fill}.
      */
     private static final int MAX_AGE = 400;
-    /**
-     * Ticks a field with no readers is kept before it is dropped.
-     */
+    /** Ticks a field with no readers is kept before it is dropped. */
     private static final int IDLE_TIMEOUT = 200;
 
     private static final Map<ResourceKey<Level>, List<Entry>> BY_LEVEL = new HashMap<>();
@@ -127,9 +111,7 @@ public final class GlyphidFlowFields {
         return entry.field;
     }
 
-    /**
-     * Spend this level's build budget, retire fields nobody is reading, and rebuild the stale ones.
-     */
+    /** Spend this level's build budget, retire fields nobody is reading, and rebuild the stale ones. */
     public static void tick(ServerLevel level) {
         List<Entry> entries = BY_LEVEL.get(level.dimension());
         if (entries == null || entries.isEmpty()) {
@@ -164,9 +146,7 @@ public final class GlyphidFlowFields {
         SwarmProfiler.end(SwarmProfiler.Phase.FLOW, t);
     }
 
-    /**
-     * Note that terrain changed at a position, so any field covering it floods again.
-     */
+    /** Note that terrain changed at a position, so any field covering it floods again. */
     public static void invalidate(ServerLevel level, BlockPos pos) {
         List<Entry> entries = BY_LEVEL.get(level.dimension());
         if (entries == null) {

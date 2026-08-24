@@ -15,17 +15,11 @@ public final class GlyphidTasks {
     public static final int TASK_TERRAFORM = 5;
     public static final int TASK_DIG = 6;
 
-    /**
-     * Radius of the waypoint dropped on a block a glyphid decided to dig through.
-     */
+    /** Radius of the waypoint dropped on a block a glyphid decided to dig through. */
     public static final int DIG_WAYPOINT_RADIUS = 5;
-    /**
-     * Squared distance at which a glyphid with no waypoint counts as having arrived.
-     */
+    /** Squared distance at which a glyphid with no waypoint counts as having arrived. */
     public static final int DEFAULT_DESTINATION_RADIUS_SQ = 25;
-    /**
-     * How often a glyphid standing on its dig site takes another bite.
-     */
+    /** How often a glyphid standing on its dig site takes another bite. */
     public static final int DIG_EXPLOSION_INTERVAL_TICKS = 20;
 
     private GlyphidTasks() {
