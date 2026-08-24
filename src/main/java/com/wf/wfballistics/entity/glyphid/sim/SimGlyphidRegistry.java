@@ -17,19 +17,14 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
 /**
- * Per-dimension store of the glyphids that are records rather than entities, mirroring
- * {@code SimDroneRegistry}. Data only: the decisions live in {@link SimGlyphidManager}.
+ * Per-dimension store of the glyphids that are records rather than entities. Data only: the decisions live in
+ * {@link SimGlyphidManager}.
  *
- * <p><b>Persisted, and it has to be.</b> A swarm three hundred strong is mostly records for most of its
- * march, and a shutdown that dropped them would delete an attack in transit without saying so — the class of
- * failure where the simulation quietly does less than it claims. Vanilla saves entities; this saves what
- * replaced them.
+ * <p>Persisted, because a marching swarm is mostly records and a shutdown that dropped them would delete an
+ * attack in transit without saying so. Vanilla saves entities; this saves what replaced them.
  *
- * <p><b>It is also the gate on the off-thread pass.</b> {@link SimGlyphidPass} hands this list to a worker for
- * the length of a level tick, and for that window nothing else may touch it. Rather than leaving that as a
- * rule for callers to remember, {@link #view()} joins the pass before handing the list over — so the
- * invariant holds by construction for the explosion that lands mid-tick, the command that counts records, and
- * every caller written after this one.
+ * <p>Also the gate on the off-thread pass: {@link SimGlyphidPass} owns this list for a level tick, and
+ * {@link #view()} joins before handing it over, so the invariant holds by construction rather than by rule.
  */
 public final class SimGlyphidRegistry extends SavedData {
 
@@ -38,20 +33,11 @@ public final class SimGlyphidRegistry extends SavedData {
     public static final String NAME = "wfballistics_sim_glyphids";
 
     private final List<SimGlyphid> glyphids = new ArrayList<>();
-    /**
-     * Next identity to hand out, counting down. Saved so a reload cannot reissue an id a live record still
-     * holds, which on the client would be two glyphids sharing one slot in the draw list.
-     */
+    /** Next identity, counting down. Saved so a reload cannot reissue an id a live record still holds. */
     private int nextId = -1;
-    /**
-     * The pass currently allowed to mutate {@link #glyphids}, or null. Volatile only so a stale null cannot be
-     * read: it is set and cleared on the world thread and never touched by the worker.
-     */
+    /** The pass allowed to mutate {@link #glyphids}, or null. Volatile only so a stale null cannot be read. */
     private volatile @Nullable Future<?> pass;
-    /**
-     * World-thread nanos spent waiting for the pass since this was last read. Accumulated here rather than at
-     * the join because the join can happen anywhere — see {@link #await()}.
-     */
+    /** World-thread nanos spent waiting for the pass. Accumulated here, since the join can happen anywhere. */
     private long stallNanos;
 
     public static SimGlyphidRegistry get(ServerLevel level) {
@@ -82,10 +68,7 @@ public final class SimGlyphidRegistry extends SavedData {
         return tag;
     }
 
-    /**
-     * The live list, once the off-thread pass has finished with it. Mutated in place by the manager's passes,
-     * so callers that add or remove while iterating must copy first.
-     */
+    /** The live list, once the pass is done with it. Mutated in place, so copy before removing while walking. */
     public List<SimGlyphid> view() {
         await();
         return glyphids;
@@ -104,22 +87,16 @@ public final class SimGlyphidRegistry extends SavedData {
     }
 
     /**
-     * Wait for the pass, if there is one.
-     *
-     * <p>Called from every route into the list rather than from one place in the tick, because the routes are
-     * not all in the tick: an explosion damages records from inside the entity tick, and a command counts them
-     * from outside the level tick entirely. A join that only happened at the scheduled point would leave those
-     * racing a live worker, which is the kind of bug that shows up as one glyphid in a thousand having moved
-     * twice.
+     * Wait for the pass, if there is one. Called from every route into the list rather than one point in the
+     * tick, because an explosion reaches records from the entity tick and a command from outside it entirely.
      */
     public void await() {
         Future<?> running = pass;
         if (running == null) {
             return;
         }
-        // A worker waiting on its own pass is a deadlocked server, and it is the one way this gate can be
-        // worse than the rule it replaced. Nothing the pass runs reaches the registry today; this is so that
-        // whatever gets added to it later fails loudly on the first tick rather than hanging the server.
+        // A worker waiting on its own pass is a deadlocked server. Nothing does today; this makes whatever
+        // is added later fail loudly on the first tick instead.
         WorldThread.assertOn("waiting for the glyphid sim pass");
         long start = System.nanoTime();
         try {
@@ -127,8 +104,8 @@ public final class SimGlyphidRegistry extends SavedData {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException e) {
-            // The records keep last tick's positions and the next pass picks up from there. Logged rather
-            // than rethrown: a swarm that stops walking is a bug report, a server that stops is an outage.
+            // Records keep last tick's positions and the next pass carries on. Logged rather than rethrown:
+            // a swarm that stops walking is a bug report, a server that stops is an outage.
             LOGGER.error("[wfballistics] the glyphid sim pass failed", e.getCause());
         } finally {
             pass = null;

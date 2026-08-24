@@ -13,28 +13,19 @@ import java.util.Map;
 import java.util.function.Supplier;
 
 /**
- * The castes a colony can field, and when it learns to.
+ * The castes a colony can field, and when it learns to. One list, for the materialiser, the bench and
+ * {@link com.wf.wfballistics.colony.Evolution}.
  *
- * <p>Exists because three separate things need to name a caste and none of them should hold a list of entity
- * types: the materialiser turning a warband record into bugs, the bench spawning a test population, and
- * {@link com.wf.wfballistics.colony.Evolution} deciding what a colony has earned the right to send.
- *
- * <p>{@link #minEvolution} is the gate and {@link #baseWeight} is the shape. A caste is unavailable below its
- * gate, appears at {@link #UNLOCK_SHARE} of its weight the moment it clears one, and reaches full weight only
- * at full evolution — so unlocking behemoths changes the swarm's flavour before it changes its weight class.
- * Grunts are the exception: their weight is flat, which means they stay the bulk of every warband while their
- * <em>share</em> falls as the other castes ramp up.
+ * <p>{@link #minEvolution} gates and {@link #baseWeight} shapes: a caste appears at {@link #UNLOCK_SHARE} of
+ * its weight the moment it unlocks and reaches full weight only at full evolution, so unlocking behemoths
+ * changes the swarm's flavour before its weight class. Grunt weight is flat, so grunts stay the bulk while
+ * their share falls.
  */
 public enum GlyphidCaste {
 
-    /**
-     * The baseline bug. Always available, always the majority.
-     */
+    /** The baseline bug. Always available, always the majority. */
     GRUNT(0.00F, 10.0F, 1.0D, () -> ModEntities.GLYPHID.get()),
-    /**
-     * Founds nests. Available from the start because a colony that cannot expand is not a colony, and rare
-     * because one scout is worth a dozen grunts to the simulation.
-     */
+    /** Founds nests. Available from the start, and rare: one scout is worth a dozen grunts. */
     SCOUT(0.00F, 1.0F, 0.75D, () -> ModEntities.GLYPHID_SCOUT.get()),
     BOMBARDIER(0.10F, 4.0F, 1.0D, () -> ModEntities.GLYPHID_BOMBARDIER.get()),
     BRAWLER(0.25F, 4.0F, 1.25D, () -> ModEntities.GLYPHID_BRAWLER.get()),
@@ -45,11 +36,8 @@ public enum GlyphidCaste {
     BRENDA(0.90F, 0.5F, 2.0D, () -> ModEntities.GLYPHID_BRENDA.get());
 
     /**
-     * Share of its full weight a caste carries the instant it unlocks.
-     *
-     * <p>Not zero: ramping from nothing means a caste gated at 0 — the scout — never appears in a fresh
-     * world, and a colony that cannot field scouts cannot expand, which stalls the whole simulation before
-     * it starts.
+     * Share of its full weight a caste carries the instant it unlocks. Not zero, or a caste gated at 0 — the
+     * scout — never appears in a fresh world and nothing can expand.
      */
     private static final float UNLOCK_SHARE = 0.25F;
 
@@ -65,9 +53,8 @@ public enum GlyphidCaste {
         this.baseWeight = baseWeight;
         this.scale = scale;
         this.type = type;
-        // The grunt wears the unsuffixed skin the others are named against, being the glyphid every other
-        // caste is a variation on. Compared by name because a constructor may not reference a constant of
-        // its own enum.
+        // The grunt wears the unsuffixed skin. Compared by name: a constructor may not reference a constant
+        // of its own enum.
         String name = "GRUNT".equals(name()) ? "glyphid" : "glyphid_" + lowerName();
         this.skin = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "textures/entity/" + name + ".png");
     }
@@ -77,33 +64,21 @@ public enum GlyphidCaste {
     }
 
     /**
-     * How much bigger than a grunt this caste is.
-     *
-     * <p>Here rather than on the entity for the same reason {@link #skin} is: it is the caste that is a
-     * different size, not the class, and the sim tier has a caste and no class. {@code EntityGlyphid}
-     * reads it back out through {@code getGlyphidScale}, so the number exists once.
+     * How much bigger than a grunt this caste is. Here rather than on the entity because the sim tier has a
+     * caste and no class; {@code EntityGlyphid.getGlyphidScale} reads it back, so the number exists once.
      */
     public double scale() {
         return scale;
     }
 
-    /**
-     * This caste's texture.
-     *
-     * <p>Server-safe despite being a render concern: a {@link ResourceLocation} is not a client class, and
-     * keeping it here is what stops the skin naming from living as string munging inside the renderer, where
-     * a caste whose texture is not named after it would silently draw the wrong one.
-     */
+    /** This caste's texture. Server-safe, and keeps the naming out of string munging in the renderer. */
     public ResourceLocation skin() {
         return skin;
     }
 
     /**
-     * This caste's numbers, without an entity to ask.
-     *
-     * <p>Needed by the sim tier, which has a caste and no body. Kept as a switch on the enum rather than
-     * derived from {@code EntityGlyphid.getStats()} because that one is an override per subclass, and the
-     * point of a record is that no subclass has been instantiated.
+     * This caste's numbers, without an entity to ask — for the sim tier, which has a caste and no body.
+     * A switch rather than {@code EntityGlyphid.getStats()}, which is an override on a subclass.
      */
     public GlyphidStats.StatBundle stats() {
         GlyphidStats table = GlyphidStats.getStats();
@@ -167,12 +142,9 @@ public enum GlyphidCaste {
     }
 
     /**
-     * Which caste an entity type is, falling back to {@link #GRUNT}.
-     *
-     * <p>Built on first use rather than in a static initialiser: the entity types are deferred registry
-     * objects, and resolving them while this enum is still initialising would force them before the registry
-     * has them. The race between two callers building it is benign — both build the same map — and the
-     * volatile write is what publishes it safely.
+     * Which caste an entity type is, falling back to {@link #GRUNT}. Built on first use, since resolving the
+     * deferred entity types in a static initialiser would force them before the registry has them. The race
+     * between two builders is benign; the volatile write publishes the map safely.
      */
     public static GlyphidCaste byType(EntityType<?> type) {
         Map<EntityType<?>, GlyphidCaste> map = BY_TYPE;
@@ -202,8 +174,6 @@ public enum GlyphidCaste {
         return name().toLowerCase(Locale.ROOT);
     }
 
-    /**
-     * Cached because {@link #roll} walks it twice per bug and a warband materialises hundreds at once.
-     */
+    /** Cached: {@link #roll} walks it twice per bug and a warband materialises hundreds at once. */
     public static final GlyphidCaste[] VALUES = values();
 }

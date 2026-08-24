@@ -11,30 +11,19 @@ import net.minecraft.world.phys.Vec3;
 import java.util.EnumSet;
 
 /**
- * Flies a winged glyphid to where its orders point, and puts it back on the ground to fight.
+ * Flies a winged glyphid to where its orders point, and puts it back on the ground to fight. Replaces
+ * {@link GlyphidBrainGoal}'s walk rather than layering on it: a glyphid in the air does no pathfinding, which
+ * is the largest single cost in a marching swarm, so wings make a warband cheaper.
  *
- * <p>This is the flying counterpart of {@link GlyphidTaskMoveGoal}, and it replaces that goal rather than
- * layering on it: a glyphid in the air does no pathfinding at all. Since path searching is the largest single
- * cost in a marching swarm, a warband that flies is cheaper than one that walks, not dearer — the wings are a
- * performance feature as much as a gameplay one.
- *
- * <p>It lands to fight. Melee, digging and the colony task system all assume something standing on a surface,
- * and a bug that hovers just out of reach chewing a wall is neither frightening nor fair. So flight is for
- * crossing ground, and arriving means coming down.
+ * <p>It lands to fight — melee, digging and the task system all assume something standing on a surface.
  */
 public class GlyphidFlightGoal extends Goal {
 
-    /**
-     * Closer than this to the destination and it is not worth taking off for.
-     */
+    /** Closer than this to the destination and it is not worth taking off for. */
     private static final double TAKEOFF_RANGE = 24.0;
-    /**
-     * A target this close is fought on the ground, whatever the glyphid was doing.
-     */
+    /** A target this close is fought on the ground, whatever the glyphid was doing. */
     private static final double ENGAGE_RANGE = 12.0;
-    /**
-     * How far above its landing spot a glyphid switches from cruising to descending.
-     */
+    /** How far above its landing spot a glyphid switches from cruising to descending. */
     private static final double LANDING_ALTITUDE = 2.0;
 
     private final EntityGlyphid glyphid;

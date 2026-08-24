@@ -26,3 +26,6 @@ run-warforge
 # Files from Forge MDK
 forge*changelog.txt
 .claude
+
+# benchmark harnesses and asset generators -- tied to this dev setup, not to the mod
+tools

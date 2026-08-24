@@ -26,72 +26,43 @@ import org.slf4j.Logger;
 import java.util.UUID;
 
 /**
- * An egg chamber, which is a colony record's hands in a loaded chunk.
+ * An egg chamber: a colony record's hands in a loaded chunk. The record simulates and the block is its view
+ * (§4), so everything this asks is asked of the colony rather than decided here.
  *
- * <p>Deliberately not upstream's spawner. {@code TileEntityGlyphidSpawner} is the whole colony — it decides
- * how big a swarm to make out of local pollution, keeps its own cooldown, and answers to nothing. §4 inverts
- * that: <b>the record simulates and the block is its view</b>, so everything this asks is asked of the
- * colony.
+ * <p>A defender costs one {@link Colony#population} from the same pool a warband is mustered out of, and is
+ * then <em>kept</em> — marked {@code garrison}, made persistent, and held against {@link Colony#garrison} for
+ * as long as it lives. One bug is a body or a number, never both.
  *
- * <p>Four consequences, and each of them is the point rather than a simplification:
- * <ul>
- *   <li><b>Defenders are paid for.</b> One bug costs one {@link Colony#population}, from the same pool a
- *       warband is mustered out of. A nest that has been fighting cannot also be attacking, and one that has
- *       just sent an army defends itself badly — the two are the same number.</li>
- *   <li><b>A defender is kept, not spent.</b> It is marked {@code garrison} and made persistent, so walking
- *       away does not evaporate it, and {@link Colony#garrison} holds the colony's growth back by as many as
- *       it has standing. One bug is a body <em>or</em> a number and never both — the same conservation rule
- *       {@code WarbandMaterialiser} and the sim tier are built on. Kill the garrison and the colony recovers;
- *       leave and come back and it is exactly where it was.</li>
- *   <li><b>Nothing spawns where nobody is.</b> Off-world defence is what the record is for; a chamber that
- *       spawned into an empty chunk would be paying population for bugs no one would ever see.</li>
- *   <li><b>An orphan chamber is inert.</b> Blocks left behind by a colony that no longer exists are dead
- *       flesh, not a spawner that outlived its owner.</li>
- * </ul>
+ * <p>Nothing spawns where nobody is, and a chamber whose colony no longer exists is inert flesh.
  */
 public class GlyphidSpawnerBlockEntity extends BlockEntity {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /**
-     * Ticks between one chamber's spawn attempts. A nest under attack trickles rather than erupts: at a
-     * tier-4 nest's five chambers this is a bug a second, which is a defence, and one burst of thirty would
-     * be a single-tick spike (§11.8) that also emptied the colony in one go.
-     */
+    /** Ticks between spawn attempts. A tier-4 nest's five chambers trickle a bug a second, not a burst. */
     public static final int INTERVAL = 100;
-    /**
-     * How close a player has to be for a chamber to bother.
-     */
+    /** How close a player has to be for a chamber to bother. */
     private static final double SPAWN_RANGE = 48.0;
-    /**
-     * How far from the chamber a defender may surface, and how many spots it tries before giving up. Failing
-     * costs nothing and no population: the chamber tries again next interval.
-     */
+    /** How far a defender may surface and how many spots it tries. Failing costs nothing and no population. */
     private static final int SCATTER = 4;
     private static final int PLACEMENT_ATTEMPTS = 8;
     /**
-     * How far outside a colony's nest radius a chamber may still be bound to it. Covers a hand-placed block
-     * on the flank of a mound; beyond it a spawner belongs to nobody.
+     * How far outside a colony's footprint a chamber may still bind to it, covering a hand-placed block on the
+     * flank of a mound. Measured against {@link Colony#footprintRadius()}, not {@code nestRadius()} — a
+     * cluster's outer chambers are mounds away from the record and would all read as orphaned.
      */
     private static final int BIND_MARGIN = 4;
 
-    /**
-     * The colony this chamber belongs to, resolved on its first tick and then persisted.
-     */
+    /** The colony this chamber belongs to, resolved on its first tick and then persisted. */
     private @Nullable UUID colonyId;
-    /**
-     * Set once a chamber has been found to belong to no colony, so it never re-binds. Without it, a chamber
-     * orphaned by a colony being wiped out would adopt whichever nest was founded nearest to it next.
-     */
+    /** Set once a chamber belongs to no colony, so an orphan never adopts whichever nest is founded next. */
     private boolean orphaned;
 
     public GlyphidSpawnerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.GLYPHID_SPAWNER.get(), pos, state);
     }
 
-    /**
-     * Staggered by position, so the chambers of one nest do not all spawn on the same tick.
-     */
+    /** Staggered by position, so the chambers of one nest do not all spawn on the same tick. */
     public static void serverTick(Level level, BlockPos pos, BlockState state, GlyphidSpawnerBlockEntity be) {
         if (!(level instanceof ServerLevel server)
                 || Math.floorMod(server.getGameTime() + pos.asLong(), INTERVAL) != 0) {
@@ -104,15 +75,12 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
     }
 
     private void hatch(ServerLevel level, BlockPos pos) {
-        // Cheapest question first: the colony lookup is a scan over every colony in the level, and there is
-        // no point paying for it for a nest nobody is standing near.
+        // Cheapest question first: the colony lookup scans every colony in the level.
         if (!watched(level, pos)) {
             return;
         }
-        // A chunk whose entities have not been restored yet reads as empty, and ColonyManager's recount would
-        // read the same emptiness -- so a chamber hatching in that window would put a second garrison on top
-        // of the one already saved in the chunk. This is the whole of "do not duplicate": never hatch
-        // anywhere the existing defenders are not there to be counted.
+        // A chunk whose entities are not restored yet reads as empty, and so does the recount -- hatching in
+        // that window would stack a second garrison on the one already saved in the chunk.
         if (!level.isPositionEntityTicking(pos)) {
             return;
         }
@@ -125,23 +93,17 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
         if (!place(level, pos, colony, caste)) {
             return;
         }
-        // Debited only once a body is actually standing in the world, for the same reason
-        // WarbandMaterialiser debits by what it placed rather than by what it wanted: the population is the
-        // ledger, and a failed placement must not spend from it.
-        //
-        // The garrison count goes up in the same breath. ColonyManager recounts it from the world anyway, but
-        // not until this colony's next staggered tick, and between now and then every other chamber of this
-        // nest gets a turn -- reading a stale count, they would all hatch past the cap together.
+        // Debited only once a body is standing: the population is the ledger, and a failed placement must
+        // not spend from it. The garrison goes up in the same breath because the recount is a staggered tick
+        // away, and until then every other chamber would read a stale count and hatch past the cap.
         colony.population -= 1.0;
         colony.garrison++;
         ColonyRegistry.get(level).setDirty();
     }
 
     /**
-     * Put one defender on the surface of the mound.
-     *
-     * <p>The height comes off the heightmap rather than from the chamber, which is why a chamber buried
-     * inside the nest still works: the bug surfaces on top of the flesh above it instead of inside it.
+     * Put one defender on the surface of the mound. The height comes off the heightmap rather than from the
+     * chamber, so a buried chamber surfaces its bug on top of the flesh instead of inside it.
      */
     private boolean place(ServerLevel level, BlockPos pos, Colony colony, GlyphidCaste caste) {
         EntityType<? extends EntityGlyphid> type = caste.type();
@@ -169,18 +131,15 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
                 return false;
             }
             bug.moveTo(px, y, pz, level.random.nextFloat() * 360F, 0F);
-            // Home is the nest, not where it happens to have surfaced, so a garrison chased off comes back
-            // here rather than settling wherever the chase ended. It is also how the recount recognises this
-            // bug as this colony's.
+            // Home is the nest and not where it surfaced, so a garrison chased off comes back -- and it is
+            // how the recount recognises this bug as this colony's.
             bug.hasHome = true;
             bug.homeX = colony.x;
             bug.homeY = colony.hasResolvedY() ? colony.y : y;
             bug.homeZ = colony.z;
             bug.setCurrentTask(GlyphidTasks.TASK_IDLE, null);
-            // Kept, not left to vanilla despawning. A defender is population the colony has already spent, so
-            // letting one evaporate the moment a player walks off would bleed the nest a little every visit --
-            // and it would do it silently, because the record's numbers say nothing about what is standing on
-            // top of it. Retained instead, and held against the colony's growth for as long as it lives.
+            // Kept rather than despawned: a defender is population already spent, so letting one evaporate
+            // when a player walks off would silently bleed the nest every visit.
             bug.garrison = true;
             bug.setPersistenceRequired();
 
@@ -192,12 +151,9 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
     }
 
     /**
-     * Find this chamber's colony, binding it the first time.
-     *
-     * <p>Bound lazily rather than written in by {@link com.wf.wfballistics.colony.GlyphidNest}, because half
-     * a nest's blocks may be owed to a chunk that was not loaded when it was built and arrive later through
-     * {@code PendingChunkEdits} — which knows a block id and nothing else. Doing it here covers both paths,
-     * and a hand-placed chamber besides.
+     * Find this chamber's colony, binding it the first time. Lazy rather than written in by
+     * {@link com.wf.wfballistics.colony.GlyphidNest}, since half a nest's blocks can arrive later through
+     * {@code PendingChunkEdits}, which knows a block id and nothing else.
      */
     private @Nullable Colony colony(ServerLevel level) {
         if (orphaned) {
@@ -213,31 +169,25 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
             return known;
         }
 
-        BlockPos pos = getBlockPos();
-        Colony nearest = registry.nearest(pos.getX(), pos.getZ());
-        if (nearest == null) {
+        if (registry.colonies().isEmpty()) {
             // No colonies at all yet. Not orphaned — a nest may still be founded on top of this block.
             return null;
         }
-        double dx = nearest.x - pos.getX();
-        double dz = nearest.z - pos.getZ();
-        double reach = nearest.nestRadius() + BIND_MARGIN;
-        if (dx * dx + dz * dz > reach * reach) {
+        BlockPos pos = getBlockPos();
+        Colony owner = registry.nearestOwning(pos.getX(), pos.getZ(), BIND_MARGIN);
+        if (owner == null) {
             orphaned = true;
             setChanged();
             return null;
         }
-        colonyId = nearest.id;
+        colonyId = owner.id;
         setChanged();
-        return nearest;
+        return owner;
     }
 
     /**
-     * A chamber has been dug out. Take it off the colony's count, and kill the colony with its last one.
-     *
-     * <p>This is what makes clearing a nest mean something. The alternative — blocks that can be removed
-     * while the record carries on growing and mustering — is the failure §4 warns about from the other
-     * direction: the view and the truth diverging, permanently, with the player looking at the view.
+     * A chamber has been dug out. Take it off the colony's count, and kill the colony with its last one —
+     * otherwise the blocks come away while the record carries on growing and mustering.
      */
     public void onBroken(ServerLevel level) {
         Colony colony = colony(level);
@@ -255,8 +205,7 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
     }
 
     private static boolean watched(ServerLevel level, BlockPos pos) {
-        // Shared with the sim tier rather than written out again here, so the bench's stand-in player counts
-        // for a nest exactly as it counts for a swarm -- see SimGlyphidManager.watched.
+        // Shared with the sim tier so the bench's stand-in player counts for a nest as it does for a swarm.
         return SimGlyphidManager.watched(level, pos.getX() + 0.5, pos.getZ() + 0.5, SPAWN_RANGE);
     }
 

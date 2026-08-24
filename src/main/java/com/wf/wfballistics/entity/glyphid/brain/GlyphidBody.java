@@ -25,35 +25,22 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The half of a glyphid's AI that has to touch the world: reading it into a {@link GlyphidSnapshot}, and
- * carrying a {@link GlyphidPlan} back out again.
- *
- * <p>Kept out of {@code EntityGlyphid} because it is the entity-shaped implementation of a thing that will
- * shortly have a record-shaped one too. Everything here is a world read or a world write; anything that is a
- * decision belongs in {@link GlyphidBrain} instead, and the split is what lets the same behaviour run on a
- * body that has no chunk under it.
+ * The half of a glyphid's AI that touches the world: reading it into a {@link GlyphidSnapshot} and carrying a
+ * {@link GlyphidPlan} back out. Everything here is a world read or write; decisions belong in
+ * {@link GlyphidBrain}, and that split is what lets a record run the same behaviour.
  */
 public final class GlyphidBody {
 
-    /**
-     * Ticks between jaw swings while chewing. Cosmetic: it is what drives the jaws in the model.
-     */
+    /** Ticks between jaw swings while chewing. Cosmetic: it is what drives the jaws in the model. */
     private static final int SWING_INTERVAL = 10;
 
     private GlyphidBody() {
     }
 
     /**
-     * Read the world into a snapshot.
-     *
-     * <p>Two of the samples are gated rather than taken every tick, because both are reads the old goals only
-     * paid for when they were about to use the answer, and a swarm makes anything per-glyphid-per-tick
-     * expensive:
-     *
-     * <ul>
-     *   <li>melee reach is only asked when the bite cooldown is about to expire</li>
-     *   <li>the destination's real height is only pulled off the heightmap when a repath could be due</li>
-     * </ul>
+     * Read the world into a snapshot. Two samples are gated rather than taken every tick, since a swarm makes
+     * anything per-glyphid-per-tick expensive: melee reach only when the bite cooldown is about to expire,
+     * and the destination's height only when a repath could be due.
      */
     public static GlyphidSnapshot snapshot(EntityGlyphid glyphid) {
         GlyphidMind mind = glyphid.mind();
@@ -64,8 +51,7 @@ public final class GlyphidBody {
             target = null;
         }
         if (SwarmBench.vanillaMeleeGoal) {
-            // Under the A/B switch vanilla owns the fight, so the brain must not see anything to chase or it
-            // would fight the vanilla goal for the same body.
+            // Under the A/B switch vanilla owns the fight, so the brain must not see anything to chase.
             target = null;
         }
 
@@ -76,7 +62,7 @@ public final class GlyphidBody {
         if (target != null) {
             targetPosition = target.position();
             targetDistanceSq = glyphid.distanceToSqr(target);
-            // Vanilla caches line of sight per tick, so asking once here costs what the goals paid to ask twice.
+            // Vanilla caches line of sight per tick, so one ask here costs what the goals paid for two.
             targetVisible = glyphid.getSensing().hasLineOfSight(target);
             targetInReach = mind.untilAttack <= 1 && glyphid.isWithinMeleeAttackRange(target);
         }
@@ -112,13 +98,9 @@ public final class GlyphidBody {
     }
 
     /**
-     * Ask the shared field which way, for a glyphid that is marching.
-     *
-     * <p>Marching only. A field is built to one fixed destination, and a target that walks would invalidate
-     * it every few seconds — the melee case is already answered by the charge, which costs a raycast and
-     * beats any field inside twelve blocks. Sampled every tick because a field is walked by steering rather
-     * than by following a route: the cost is an array index and eight comparisons, against the 212 µs search
-     * it replaces.
+     * Ask the shared field which way, for a glyphid that is marching. Marching only: a field is built to one
+     * fixed destination, and a moving target would invalidate it every few seconds — the charge already
+     * answers melee. Sampled every tick, at an index and eight comparisons against a 212 µs search.
      */
     private static @Nullable Vec3 flowStep(EntityGlyphid glyphid, @Nullable LivingEntity target) {
         if (target != null || glyphid.getCurrentTask() != GlyphidTasks.TASK_FOLLOW || glyphid.isAirborne()
@@ -135,8 +117,8 @@ public final class GlyphidBody {
 
     public static void apply(EntityGlyphid glyphid, GlyphidPlan plan) {
         GlyphidMind mind = glyphid.mind();
-        // Any tick that is not a chew is a tick the cracks should not still be showing. Done here rather than
-        // wherever chewing stops because there are five ways to stop and one place to notice.
+        // Any tick that is not a chew should show no cracks. Here rather than at each of the five ways to
+        // stop chewing.
         if (plan.move() != GlyphidPlan.Move.CHEW) {
             clearCracks(glyphid, mind);
         }
@@ -153,7 +135,7 @@ public final class GlyphidBody {
             case CHARGE -> {
                 Vec3 destination = plan.destination();
                 if (destination != null) {
-                    // The navigator is stopped so it does not keep walking a stale path underneath the charge.
+                    // Stopped so the navigator does not walk a stale path underneath the charge.
                     if (!glyphid.getNavigation().isDone()) {
                         glyphid.getNavigation().stop();
                     }
@@ -163,8 +145,8 @@ public final class GlyphidBody {
             }
             case CHEW -> chew(glyphid, mind, plan);
             case FLOW -> {
-                // No search and no path to follow: the field said which column, the move control does the
-                // rest -- stepping up, jumping and turning are all its job already.
+                // No search and no path: the field said which column, and stepping up, jumping and turning
+                // are the move control's job already.
                 if (!glyphid.getNavigation().isDone()) {
                     glyphid.getNavigation().stop();
                 }
@@ -189,11 +171,8 @@ public final class GlyphidBody {
     }
 
     /**
-     * Age the patience and start chewing if it has run out.
-     *
-     * <p>Only on the ticks the brain actually decided something — {@code elapsed} of zero is a glyphid that
-     * was left alone this tick, and running the backoff against no elapsed time would age it to its limit
-     * within a second of walking.
+     * Age the patience and start chewing if it has run out. Only on ticks the brain decided something, or the
+     * backoff would age to its limit within a second of walking.
      */
     private static void settle(EntityGlyphid glyphid, GlyphidMind mind, GlyphidPlan plan, boolean accepted) {
         if (plan.elapsed() <= 0) {
@@ -206,11 +185,8 @@ public final class GlyphidBody {
     }
 
     /**
-     * Search to the hop the brain picked and start walking it.
-     *
-     * <p>Charged to melee or to the march by hand. The two answer to completely different fixes and the report
-     * used to lump them together; it stayed separable while there were two goals to wrap, and this is what
-     * replaces that now there is one.
+     * Search to the hop the brain picked and start walking it. Charged to melee or the march by hand, since
+     * the two answer to different fixes and there is only one goal left to wrap.
      *
      * @return true if a path was found and accepted
      */
@@ -249,10 +225,8 @@ public final class GlyphidBody {
     }
 
     /**
-     * Look for the block standing between this glyphid and where it is going, and commit to eating it if this
-     * caste's jaws are up to the material. That a swarm is slowed by terrain rather than stopped by it is the
-     * whole reason it is frightening — but only for terrain it can actually open. A wall of obsidian stops a
-     * grunt outright, and that is what makes the material worth building out of.
+     * Look for the block in the way and commit to eating it, if this caste's jaws are up to the material.
+     * A swarm slowed by terrain rather than stopped by it is the point — but obsidian still stops a grunt.
      */
     private static boolean pickBlockToChew(EntityGlyphid glyphid, Vec3 destination) {
         if (!glyphid.canDig()) {
@@ -286,13 +260,9 @@ public final class GlyphidBody {
     }
 
     /**
-     * The next block of the doorway this glyphid is opening, or null once there is one it can fit through.
-     *
-     * <p>One chewed block is a one-block hole, and a glyphid is wider than that — which is why the old
-     * blast-shaped bite worked and eating a single block did not. So a breach is a doorway: the block that was
-     * walked into, the one above it, and their neighbours to either side along the wall. Widening runs across
-     * the face rather than into it, because the axis a wall is thin on is the one the glyphid is travelling
-     * down.
+     * The next block of the doorway being opened, or null once it is wide enough to fit through. One chewed
+     * block is a one-block hole and a glyphid is wider, so a breach is the block walked into, the one above,
+     * and their neighbours along the wall — widening across the face, since that is the thin axis.
      */
     private static @Nullable BlockPos widenBreach(EntityGlyphid glyphid, Vec3 destination) {
         GlyphidMind mind = glyphid.mind();
@@ -327,10 +297,7 @@ public final class GlyphidBody {
                 && GlyphidDigging.chewable(state, glyphid.level(), pos, glyphid.getStats());
     }
 
-    /**
-     * One tick of eating a block: bank a tick against it, advance the cracks, and break it when the material
-     * runs out.
-     */
+    /** One tick of eating a block: bank progress, advance the cracks, break it when the material runs out. */
     private static void chew(EntityGlyphid glyphid, GlyphidMind mind, GlyphidPlan plan) {
         Level level = glyphid.level();
         BlockPos pos = new BlockPos(mind.chewX, mind.chewY, mind.chewZ);
@@ -352,17 +319,14 @@ public final class GlyphidBody {
         if (mind.chewProgress >= ticks) {
             clearCracks(glyphid, mind);
             mind.stopChewing();
-            // Drops nothing, but does emit the break particles and the sound, which is the whole point of
-            // going through this rather than setting the block to air.
+            // Drops nothing, but emits the break particles and sound -- the point of not setting air.
             level.destroyBlock(pos, false, glyphid);
             if (level instanceof ServerLevel server) {
-                // A hole in a wall is a new route. Without this the field keeps steering the swarm at
-                // whichever gap it knew about when it was flooded, and the one they just made is invisible.
+                // A hole in a wall is a new route the field was flooded without.
                 GlyphidFlowFields.invalidate(server, pos);
             }
-            // Straight on to the next block of the breach rather than stopping here. Making it re-earn sixty
-            // ticks of being stuck between every block turns a two-block wall into a minute of standing still.
-            // Deeper wall first, then widening the doorway; when neither finds anything the way is open.
+            // Straight on to the next block rather than re-earning sixty ticks of stuck between each one.
+            // Deeper first, then widening; when neither finds anything the way is open.
             Vec3 destination = plan.destination();
             if (destination != null && !pickBlockToChew(glyphid, destination)) {
                 BlockPos next = widenBreach(glyphid, destination);
@@ -383,10 +347,7 @@ public final class GlyphidBody {
         }
     }
 
-    /**
-     * Take this glyphid's cracks off whatever block it had them on. A negative stage is what tells a client to
-     * drop the overlay entirely.
-     */
+    /** Take this glyphid's cracks off whatever block had them. A negative stage drops the overlay. */
     public static void clearCracks(EntityGlyphid glyphid, GlyphidMind mind) {
         if (mind.chewStage < 0) {
             return;

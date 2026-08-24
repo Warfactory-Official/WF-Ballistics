@@ -3,20 +3,33 @@ package com.wf.wfballistics.entity.glyphid;
 import net.minecraft.world.damagesource.DamageSource;
 
 /**
- * The per-caste numbers: health, speed, damage, and how much of a hit the chitin turns away.
- *
- * <p>Kept as a swappable object rather than baked into the entity classes because the upstream mod ships two
- * balance tables and picks between them at {@link #getStats()}. Only the one it actually selects is ported
- * here; the abstract shape is kept so a second table can be added without touching the entities.
+ * The per-caste numbers: health, speed, damage, and how much of a hit the chitin turns away. Swappable
+ * because upstream ships two balance tables; only the one it selects is ported, and the abstract shape lets a
+ * second be added without touching the entities.
  */
 public abstract class GlyphidStats {
 
-    /**
-     * Scales the caste speed numbers into vanilla {@code MOVEMENT_SPEED} attribute units.
-     */
+    /** Scales the caste speed numbers into vanilla {@code MOVEMENT_SPEED} attribute units. */
     public static final double MOVEMENT_SPEED_SCALE = 0.25D;
 
+    /**
+     * Applied on top of {@link #MOVEMENT_SPEED_SCALE}, so the table keeps upstream's numbers and the swarm's
+     * absolute pace is tuned separately. Not folded into the caste speeds, which are relative to each other.
+     */
+    private static double pace = 1.25D;
+
     private static final GlyphidStats DEFAULT = new GlyphidStatsNT();
+
+    /**
+     * @return the multiplier every caste's speed is scaled by, on top of {@link #MOVEMENT_SPEED_SCALE}
+     */
+    public static double pace() {
+        return pace;
+    }
+
+    public static void applyPace(double multiplier) {
+        pace = Math.max(0.05D, multiplier);
+    }
 
     protected StatBundle statsGrunt;
     protected StatBundle statsBombardier;
@@ -33,8 +46,8 @@ public abstract class GlyphidStats {
     }
 
     /**
-     * Runs a caste's damage rules. Returns whether the hit landed; implementations that want the normal
-     * outcome finish by calling {@link EntityGlyphid#attackSuperclass}.
+     * Runs a caste's damage rules. Implementations wanting the normal outcome finish by calling
+     * {@link EntityGlyphid#attackSuperclass}.
      */
     public abstract boolean handleAttack(EntityGlyphid glyphid, DamageSource source, float amount);
 
@@ -83,19 +96,17 @@ public abstract class GlyphidStats {
      * @param thresholdMultForArmor  damage threshold contributed by each surviving armour plate, so a bug
      *                               that has been shelled turns away less
      * @param resistanceMult         fraction of a hit shrugged off after the threshold applies
-     * @param power                  what this caste is worth when a swarm divides itself into squads of equal
-     *                               strength. Explicit rather than derived from health and damage, because the
-     *                               castes that matter most to a split are the ones whose worth is not their
-     *                               statline: a nuclear is worth far more than its health says
+     * @param power                  what this caste is worth to an equal-strength squad split. Explicit rather
+     *                               than derived: a nuclear is worth far more than its statline says
      * @param digStrength            block hardness chewed through per second, or 0 for a caste that cannot dig
-     * @param digCeiling             hardness this caste cannot chew at any speed. Obsidian is 50 and stone is
-     *                               1.5, so this is what decides whether a wall is an obstacle or a stop
+     * @param digCeiling             hardness this caste cannot chew at any speed. Obsidian is 50 and stone
+     *                               1.5, so this decides whether a wall is an obstacle or a stop
      */
     public record StatBundle(double health, double speed, double damage, float thresholdMultForArmor,
                              float resistanceMult, double power, double digStrength, double digCeiling) {
 
         public double movementSpeed() {
-            return speed * MOVEMENT_SPEED_SCALE;
+            return speed * MOVEMENT_SPEED_SCALE * pace;
         }
 
         /**
@@ -109,9 +120,7 @@ public abstract class GlyphidStats {
         }
     }
 
-    /**
-     * The balance table the upstream mod actually selects.
-     */
+    /** The balance table the upstream mod actually selects. */
     public static final class GlyphidStatsNT extends GlyphidStats {
 
         public GlyphidStatsNT() {

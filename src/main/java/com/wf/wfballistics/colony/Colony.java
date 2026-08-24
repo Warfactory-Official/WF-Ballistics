@@ -1,5 +1,6 @@
 package com.wf.wfballistics.colony;
 
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.ChunkPos;
@@ -7,25 +8,14 @@ import net.minecraft.world.level.ChunkPos;
 import java.util.UUID;
 
 /**
- * A nest, as data. Exists and simulates whether or not its chunk is loaded — this is the tier that makes
- * the world feel inhabited rather than the world feeling empty until you walk into it.
+ * A nest, as data. Simulates whether or not its chunk is loaded, and scales with distance from world spawn.
  *
- * <p>Strength comes from distance to world spawn. Near the start everything is small and slow; far out
- * colonies are larger, grow faster and muster bigger warbands, so pushing outward is a decision with a
- * price rather than just more of the same.
+ * <p>{@link #population} grows on its own and pays for attacks; {@link #aggression} accrues from nearby
+ * industry and decides whether to attack. Separate on purpose: it is what makes a colony build up and then
+ * strike rather than trickle.
  *
- * <p>Two numbers drive behaviour, and keeping them separate is what produces the build-then-strike rhythm
- * rather than a constant trickle:
- * <ul>
- *   <li>{@link #population} — grows on its own up to a cap. What an attack is paid for out of.</li>
- *   <li>{@link #aggression} — accumulated from nearby industry. What decides <em>whether</em> to attack.</li>
- * </ul>
- * A colony with numbers and no provocation sits there; one with provocation and no numbers keeps building
- * until it can afford to act.
- *
- * <p>{@link #y} is {@link #Y_UNRESOLVED} until the nest first materialises. A colony founded in an unloaded
- * chunk cannot know how high the ground is there, so it does not guess: the surface is sampled when the
- * chunk finally loads and the nest is built.
+ * <p>{@link #y} is {@link #Y_UNRESOLVED} until the nest materialises, since a colony founded in an unloaded
+ * chunk cannot know its ground height.
  */
 public final class Colony {
 
@@ -40,33 +30,34 @@ public final class Colony {
     public double population;
     public double aggression;
     public int expansionCooldown;
-    /**
-     * Whether the nest's blocks have been placed in the world yet.
-     */
+    /** Whether the nest's blocks have been placed in the world yet. */
     public boolean built;
     /**
-     * Egg chambers still standing in the mound, and so the colony's life.
-     *
-     * <p>Set by {@link GlyphidNest} from what it actually laid out, and decremented as a player digs them
-     * out; at zero the colony is removed. This is the only way the block layer can act on the record, and it
-     * is what stops a razed nest from carrying on growing and mustering out of a mound that is no longer
-     * there. Zero on a colony that has never been built, which is why breaking a chamber checks it.
+     * Egg chambers still standing, and so the colony's life: at zero it is removed. Set by {@link GlyphidNest}
+     * from what it laid out, decremented as a player digs them out.
      */
     public int spawners;
     /**
-     * Defenders this colony currently has standing in the world, as bodies rather than as numbers.
-     *
-     * <p>This is the anti-double-count, and it is why {@link #population} is not simply spent and forgotten
-     * when a chamber hatches. A garrison bug <em>is</em> part of the colony; it has only changed form. So the
-     * population it came out of may not regrow while it is alive — {@link #room()} holds growth back by
-     * exactly this many — and the colony is no stronger for having embodied it. Kill the garrison and the
-     * colony recovers; walk away and it does not.
-     *
-     * <p>Recounted from the world every time the nest is loaded and ticking rather than kept as a running
-     * tally, so it cannot drift. Nothing changes it while the nest is unloaded, because nothing there can
-     * die.
+     * Defenders standing in the world as bodies rather than as numbers. {@link #room()} holds growth back by
+     * this many, so a hatched bug is the same bug in another form rather than a second one. Recounted from the
+     * world each tick of a loaded nest, so it cannot drift.
      */
     public int garrison;
+    /** Extra mounds grown onto this colony. A count, not positions — {@link NestCells} derives the rest. */
+    public int buds;
+    /**
+     * The ground height each budded mound was laid at, in the order they were grown. Stored because the
+     * heightmap answers with the mound itself once it is stamped, and doubles as the count of cells that have
+     * blocks in the world (shorter than {@link #buds} until their chunks load).
+     */
+    public final IntArrayList budHeights = new IntArrayList();
+
+    /**
+     * @return how many buds have been stamped into the world
+     */
+    public int builtBuds() {
+        return budHeights.size();
+    }
 
     public Colony(UUID id, int x, int y, int z, int tier) {
         this.id = id;
@@ -105,18 +96,16 @@ public final class Colony {
     }
 
     /**
-     * @return how much abstract population this colony is allowed, which is its cap less the bodies it
-     * already has standing. Growth stops here rather than at the cap, so a nest cannot hold a full garrison
-     * <em>and</em> a full population — that would be the same bugs counted twice.
+     * @return the population cap less the bodies already standing, so a garrison and a population cannot both
+     * be full — that would be the same bugs counted twice.
      */
     public double room() {
         return Math.max(0.0, populationCap() - garrison);
     }
 
     /**
-     * @return the most defenders this nest will hold, which is what its chambers can staff. A garrison is
-     * retained rather than allowed to despawn, so without a ceiling a nest visited often enough would grow
-     * one without bound.
+     * @return the most defenders this nest will hold. Garrison bugs are retained rather than despawned, so
+     * without a ceiling a nest visited often enough would grow one without bound.
      */
     public int garrisonCap() {
         return ColonyConfig.garrisonPerChamber() * spawners;
@@ -131,18 +120,43 @@ public final class Colony {
     }
 
     /**
-     * @return how wide the nest's blocks sprawl once built.
+     * @return how wide one of this colony's mounds is. For the whole cluster see {@link #footprintRadius()}.
      */
     public int nestRadius() {
         return 2 + tier;
+    }
+
+    /**
+     * @return how far the whole cluster reaches: the outermost cell plus its own mound. What anything asking
+     * "does this colony own that block" wants.
+     */
+    public int footprintRadius() {
+        return nestRadius() + NestCells.extent(this);
+    }
+
+    /**
+     * @return how many mounds this colony may grow onto itself. Rises with tier, so a frontier hive sprawls
+     * while a starting one stays a single dome.
+     */
+    public int budCap() {
+        return NestCells.cap(tier);
     }
 
     public boolean canStrike() {
         return aggression >= ColonyConfig.strikeThreshold() && population >= warbandSize();
     }
 
+    /**
+     * @return whether the lattice has room for another mound. Says nothing about affording one.
+     */
+    public boolean canBud() {
+        return buds < budCap();
+    }
+
+    /** Gated on the cheaper of the two kinds; {@code ColonyManager.expand} picks which one it can pay for. */
     public boolean canExpand() {
-        return expansionCooldown <= 0 && population >= ColonyConfig.expansionPopulation();
+        return expansionCooldown <= 0
+                && population >= Math.min(ColonyConfig.budPopulation(), ColonyConfig.expansionPopulation());
     }
 
     public ChunkPos chunk() {
@@ -172,6 +186,8 @@ public final class Colony {
         tag.putBoolean("built", built);
         tag.putInt("spawners", spawners);
         tag.putInt("garrison", garrison);
+        tag.putInt("buds", buds);
+        tag.putIntArray("budY", budHeights.toIntArray());
         return tag;
     }
 
@@ -182,10 +198,12 @@ public final class Colony {
         colony.aggression = tag.getDouble("aggro");
         colony.expansionCooldown = tag.getInt("cooldown");
         colony.built = tag.getBoolean("built");
-        // Absent on worlds saved before the hive port, which reads back as zero -- no chambers to lose,
-        // which is the right answer for a colony that never had any blocks.
+        // Both absent on older saves, and both read back as zero -- the right answer for a colony that has
+        // never had blocks, and for one that has never budded.
         colony.spawners = tag.getInt("spawners");
         colony.garrison = tag.getInt("garrison");
+        colony.buds = tag.getInt("buds");
+        colony.budHeights.addElements(0, tag.getIntArray("budY"));
         return colony;
     }
 
@@ -193,7 +211,7 @@ public final class Colony {
     public String toString() {
         return String.format("colony T%d at (%d, %d) pop %.1f/%d aggro %.0f%s",
                 tier, x, z, population, populationCap(), aggression,
-                built ? " [built, " + spawners + " chambers, " + garrison + "/" + garrisonCap()
-                        + " garrison]" : "");
+                built ? " [built, " + (buds + 1) + " cells, " + spawners + " chambers, "
+                        + garrison + "/" + garrisonCap() + " garrison]" : "");
     }
 }

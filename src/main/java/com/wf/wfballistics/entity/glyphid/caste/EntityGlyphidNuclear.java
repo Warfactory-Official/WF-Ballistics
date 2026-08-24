@@ -26,26 +26,17 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * A five-second warning with legs.
+ * A five-second warning with legs. Death does not remove it, it starts a fuse, so killing one at the wrong
+ * moment is worse than not killing it.
  *
- * <p>Death does not remove it, it starts a fuse. The colony reads that as a signal and pulls back; the
- * defender reads it as the ground they are standing on being about to stop existing. Killing one at the
- * wrong moment is worse than not killing it.
- *
- * <p>It also talks to a different audience than every other caste. {@link #communicate} here reaches only
- * scouts, because a nuclear glyphid's orders are about where the colony expands to next, not about who the
- * warband is currently biting.
+ * <p>{@link #communicate} here reaches only scouts: a nuclear glyphid's orders are about where the colony
+ * expands to next, not about what the warband is biting.
  */
 public class EntityGlyphidNuclear extends EntityGlyphid {
 
-    /**
-     * Ticks from death to detonation.
-     */
+    /** Ticks from death to detonation. */
     private static final int FUSE = 100;
-    /**
-     * When the neighbours get their parting gift, ten ticks before the blast — long enough to matter, short
-     * enough that it cannot be farmed by killing one out of range.
-     */
+    /** When the neighbours get their parting gift: late enough that it cannot be farmed from out of range. */
     private static final int BLESSING_AT = 90;
     private static final int PING_INTERVAL = 10;
     private static final int BLESSING_RADIUS = 8;
@@ -93,9 +84,7 @@ public class EntityGlyphidNuclear extends EntityGlyphid {
         return false;
     }
 
-    /**
-     * Only scouts listen. See the class note.
-     */
+    /** Only scouts listen. See the class note. */
     @Override
     public void communicate(int task, @Nullable GlyphidWaypoint waypoint) {
         int radius = waypoint != null ? waypoint.radius : 4;

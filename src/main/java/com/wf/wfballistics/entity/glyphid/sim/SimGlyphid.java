@@ -19,60 +19,36 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * One glyphid, without an entity: §2's T1 tier.
+ * One glyphid, without an entity: §2's T1 tier. A glyphid nobody is standing near needs no hitbox, collision
+ * sweep, navigator, attribute map or entity tick slot — 53% of what a marching swarm spent.
  *
- * <p>A glyphid nobody is standing near does not need a hitbox, a collision sweep, a navigator, an attribute
- * map, a data-watcher table or a slot in the entity tick list — and measured, those are where its cost is.
- * Movement and the base tick were 53% of what a marching swarm spent, and no amount of making them cheaper
- * gets to zero. Having fewer of them does.
+ * <p>What is left is a record that walks, running the same {@link GlyphidBrain} against the same
+ * {@link GlyphidMind} a body does and carrying the decision out by moving a double.
  *
- * <p>What is left is a record that walks. It runs the same {@link GlyphidBrain} against the same
- * {@link GlyphidMind} as a live body does — that boundary is exactly what phase 2 was for — and carries the
- * decision out by moving a double, so a tick of it is arithmetic and, at most, one heightmap read.
+ * <p>Two navigation models. Inside a {@link GlyphidFlowField} it walks the field, which only crosses columns
+ * a glyphid could stand in, so it needs no collision. Outside one it walks straight over the surface height —
+ * a lie about terrain told only where nobody can see it, and one that ends the moment it stops progressing.
  *
- * <p><b>Two navigation models, and the honest version of each.</b> Inside a {@link GlyphidFlowField} it walks
- * the field, which only ever crosses columns a glyphid could stand in, so it does not pass through walls and
- * does not need collision to avoid them. Outside one it walks straight at its destination over the surface
- * height, which is the same trade {@code SimDrone} makes by holding altitude and flying straight, and the
- * same one {@code Warband} makes crossing the map. It is a lie about terrain that is only told where nobody
- * can see it, and the moment a glyphid stops making progress it becomes a real body that can chew.
- *
- * <p><b>What it deliberately cannot do:</b> fight, swim, fly, dig, or found a nest. Each of those is a world
- * write or a physics problem, and each promotes the record back to an entity rather than being reimplemented
- * here — see {@link SimGlyphidManager}. The tier is the approach march, not a second game.
+ * <p>It deliberately cannot fight, swim, fly, dig or found a nest. Each of those promotes it back to an
+ * entity rather than being reimplemented here; see {@link SimGlyphidManager}.
  */
 public final class SimGlyphid implements GlyphidCarrier {
 
     /**
-     * Blocks per tick per point of the {@code MOVEMENT_SPEED} attribute.
-     *
-     * <p>Calibrated against the entity tier rather than derived, and the difference between the two is the
-     * whole reason it is a measured constant. Vanilla ground movement accelerates toward a target velocity
-     * against block friction, whose terminal speed for a grunt is about 0.375 blocks a tick — but a walking
-     * glyphid never reaches it, because path following slows at every node and every corner. Measured over a
-     * 160-block march it covers 0.130. A record walks in a straight line at whatever this says, so setting
-     * it from the physics would have made the sim tier <em>56% faster than the entity tier</em>: a swarm
-     * arriving in two waves, which reads as a design decision rather than as a bug.
-     *
-     * <p>Checked, not asserted: {@code swarmbench tiers} reports blocks per tick for each tier off the same
-     * run, which is what this number was set from and what would catch it drifting.
+     * Blocks per tick per point of {@code MOVEMENT_SPEED}. Calibrated against the entity tier, not derived:
+     * vanilla's terminal speed for a grunt is 0.375, but path following slows it to a measured 0.130 over a
+     * 160-block march. Setting this from the physics made the sim tier 56% faster and the swarm arrive in two
+     * waves. {@code swarmbench tiers} reports both tiers off one run, which is what would catch it drifting.
      */
     private static final double SPEED_PER_ATTRIBUTE = 0.55;
-    /**
-     * Blocks of height gained or lost per tick. A glyphid climbs, so the field connects columns up to eight
-     * blocks apart vertically; snapping straight to the new floor would teleport it up the side of a wall.
-     */
+    /** Height gained or lost per tick. The field connects columns eight blocks apart; snapping teleports. */
     private static final double CLIMB_RATE = 0.4;
-    /**
-     * How far the ground may be re-read from. Beyond this the record keeps the height it had, which is what
-     * happens where the chunk is not loaded.
-     */
+    /** How far the ground may be re-read from. Beyond it the record keeps the height it had. */
     private static final double MAX_FALL = 4.0;
 
     /**
      * Negative, and unique per level. Entity ids are positive, so a client can key one store by id and tell
-     * the tiers apart without a flag, and {@code GlyphidMind}'s stagger arithmetic is a {@code floorMod}
-     * that does not care about the sign.
+     * the tiers apart without a flag; the stagger arithmetic is a {@code floorMod} and does not mind.
      */
     public final int id;
     public final GlyphidCaste caste;
@@ -80,9 +56,7 @@ public final class SimGlyphid implements GlyphidCarrier {
     public double x;
     public double y;
     public double z;
-    /**
-     * Where it was last tick, so the client can interpolate and the walk cycle has something to run off.
-     */
+    /** Where it was last tick, so the client can interpolate and the walk cycle has something to run off. */
     public double prevX;
     public double prevY;
     public double prevZ;
@@ -93,16 +67,12 @@ public final class SimGlyphid implements GlyphidCarrier {
     public byte subtype = EntityGlyphid.TYPE_NORMAL;
     public boolean persistent;
     /**
-     * Carried across the boundary with everything else: a garrison bug demoted to a record and promoted back
-     * that lost this would stop being counted by its colony, which would then regrow the population it still
-     * has standing in front of it. See {@code EntityGlyphid.garrison}.
+     * Carried across the boundary: a garrison bug that lost this on a round trip would stop being counted,
+     * and its colony would regrow the population still standing in front of it.
      */
     public boolean garrison;
 
-    /**
-     * Its own age, not the game time: {@link GlyphidBrain#repathDue} staggers off it so bodies that were
-     * created together still spread their decisions out.
-     */
+    /** Its own age, not the game time, so {@link GlyphidBrain#repathDue} staggers records created together. */
     public int tickCount;
 
     public int task = GlyphidTasks.TASK_FOLLOW;
@@ -124,37 +94,24 @@ public final class SimGlyphid implements GlyphidCarrier {
 
     private final GlyphidMind mind = new GlyphidMind();
 
-    /**
-     * Set once the brain gives up on walking round something. A record cannot chew — that is a world write —
-     * so this is a request to become a body that can.
-     */
+    /** Set once the brain gives up walking round something: a request to become a body that can chew. */
     public boolean wantsChew;
-    /**
-     * Set by anything that hurts this record. A wounded glyphid becomes real: it is in a fight, and a fight
-     * is the thing this tier is not for.
-     */
+    /** Set by anything that hurts this record. A wounded glyphid becomes real; a fight needs a body. */
     public boolean wounded;
 
     private double pushX;
     private double pushZ;
     /**
-     * The last place the brain told this record to walk to, and whether there is one.
-     *
-     * <p>Load-bearing, and the one thing a record needs that a body gets for free. {@code Move.NONE} means
-     * "carry on with the walk you are already on", which for an entity is a navigator following a path it
-     * was given twenty ticks ago. A record has no navigator, so without somewhere to remember the hop it
-     * would take one step every repath interval and stand still in between — a swarm that appears to be
-     * walking at a twentieth of its speed, which reads as a movement-speed bug rather than a missing field.
+     * The last place the brain told this record to walk to. {@code Move.NONE} means "carry on with the walk
+     * you are on", which for an entity is its navigator; a record has none, so without this it would take one
+     * step per repath interval and stand still in between.
      */
     private boolean hasHop;
     private double hopX;
     private double hopY;
     private double hopZ;
     private boolean hopSampled;
-    /**
-     * Ground height under the column it is standing in, and which column that was, so the heightmap is only
-     * re-read when it changes rather than every tick.
-     */
+    /** Ground height and the column it was read for, so the heightmap is re-read only when it changes. */
     private int groundColumnX = Integer.MIN_VALUE;
     private int groundColumnZ = Integer.MIN_VALUE;
     private double ground;
@@ -217,10 +174,7 @@ public final class SimGlyphid implements GlyphidCarrier {
         pushZ += dz;
     }
 
-    /**
-     * The carrier form, for anything that drives a record through {@link GlyphidCarrier} without knowing
-     * which tier it has. Routes to the same code as the pass, with the world read straight through.
-     */
+    /** The carrier form, for callers that do not know which tier they hold. Same code, world read direct. */
     @Override
     public GlyphidSnapshot snapshot(ServerLevel level) {
         return snapshot(new SimWorldLive(level));
@@ -232,15 +186,13 @@ public final class SimGlyphid implements GlyphidCarrier {
     }
 
     /**
-     * What the brain is allowed to see. Shorter than the entity's by everything a record cannot have: there
-     * is no target, because a record that has something to fight has already been promoted, and no navigator,
-     * so the walk is always "done" and the brain is never waiting on one to finish.
+     * What the brain is allowed to see. No target, since a record with something to fight has already been
+     * promoted, and no navigator, so the walk is always "done".
      */
     public GlyphidSnapshot snapshot(SimWorld world) {
         boolean stagger = SwarmBench.staggerSearches;
-        // Asked once and used twice. Both the destination's height and the field that leads to it are only
-        // wanted while marching, and both come out of the same lookup, so a record that is not marching does
-        // not put its task position into the prefetch's working set at all.
+        // Asked once and used twice: height and field come out of one lookup, and a record that is not
+        // marching never puts its task position into the prefetch's working set.
         SimWorld.Destination destination = task == GlyphidTasks.TASK_FOLLOW
                 ? world.destination(taskX, taskY, taskZ)
                 : SimWorld.Destination.NONE;
@@ -278,14 +230,10 @@ public final class SimGlyphid implements GlyphidCarrier {
 
         switch (plan.move()) {
             case FLOW ->
-                // The field hands back the floor of the column it is pointing at, so there is nothing left
-                // to look up: the step is already a position in the world. Re-asked every tick, so there is
-                // nothing to remember either.
+                // The field hands back the floor of the column, so the step is already a world position.
                     walk(world, plan.hopX() + 0.5, plan.hopY(), plan.hopZ() + 0.5, false);
             case PATH ->
-                // No pathfinder to search with. The hop is still the right place to head for -- it is a
-                // waypoint along the bearing, which is all a straight walk needs -- and the height comes off
-                // the surface, which is the whole of this tier's terrain model.
+                // No pathfinder. The hop is a waypoint along the bearing, which is all a straight walk needs.
                     aim(world, plan.hopX() + 0.5, plan.hopY(), plan.hopZ() + 0.5, true);
             case CHARGE -> {
                 Vec3 destination = plan.destination();
@@ -308,9 +256,8 @@ public final class SimGlyphid implements GlyphidCarrier {
         }
 
         if (plan.elapsed() > 0) {
-            // A record always "found" its route, because it never searched for one. The backoff and the
-            // stuck timer therefore run entirely off whether it is closing on the destination, which is the
-            // signal that works for both tiers and the only one this one has.
+            // A record always "found" its route, never having searched, so the backoff and the stuck timer
+            // run entirely off whether it is closing on the destination.
             Vec3 chew = GlyphidBrain.resolve(plan, mind, true);
             if (chew != null) {
                 wantsChew = true;
@@ -319,12 +266,8 @@ public final class SimGlyphid implements GlyphidCarrier {
     }
 
     /**
-     * Ask the shared field which way, on the same terms the entity tier asks: marching only, and null where
-     * there is no field or it has not flooded this far.
-     *
-     * <p>The field itself is a pair of dense arrays and reading one is eight comparisons and an index, which
-     * is why the pass can do it from a worker at all. It is only ever written by
-     * {@code GlyphidFlowFields.tick}, which runs on the world thread after the pass has been joined.
+     * Ask the shared field which way, on the same terms as the entity tier. Reading one is an index and eight
+     * comparisons, which is why the worker can do it; it is only written after the pass has joined.
      */
     private @Nullable Vec3 flowStep(SimWorld.Destination destination) {
         GlyphidFlowField field = destination.field();
@@ -335,10 +278,7 @@ public final class SimGlyphid implements GlyphidCarrier {
         return step == null ? null : new Vec3(step[0], step[1], step[2]);
     }
 
-    /**
-     * Take a new walk, and remember it. The record keeps walking to this point on every tick the brain
-     * leaves it alone, which is nineteen ticks in twenty.
-     */
+    /** Take a new walk and remember it, for the nineteen ticks in twenty the brain leaves it alone. */
     private void aim(SimWorld world, double tx, double ty, double tz, boolean sampleGround) {
         hasHop = true;
         hopX = tx;
@@ -370,10 +310,7 @@ public final class SimGlyphid implements GlyphidCarrier {
         settleOnto(sampleGround ? groundAt(world, x, z) : ty);
     }
 
-    /**
-     * Standing still, but still on the ground and still shoved by the crowd. Without this a stopped glyphid
-     * inside a pile is the one thing nothing can move.
-     */
+    /** Standing still, but still on the ground and still shoved by the crowd. */
     private void drift(SimWorld world) {
         spendPush();
         settleOnto(groundAt(world, x, z));
@@ -386,10 +323,7 @@ public final class SimGlyphid implements GlyphidCarrier {
         pushZ = 0.0;
     }
 
-    /**
-     * Approach a new floor height rather than snapping to it, so climbing a wall takes about as long as an
-     * entity takes to climb it and a drop is a fall rather than a teleport.
-     */
+    /** Approach a new floor rather than snapping to it, so a climb takes as long as one and a drop falls. */
     private void settleOnto(double floor) {
         double delta = floor - y;
         if (Math.abs(delta) <= CLIMB_RATE) {
@@ -400,13 +334,11 @@ public final class SimGlyphid implements GlyphidCarrier {
     }
 
     /**
-     * Surface height in a column, re-read only when the column changes. At a fifth of a block a tick that is
-     * one lookup every five ticks or so, which is this tier's entire cost of knowing about terrain.
+     * Surface height in a column, re-read only when the column changes — about one lookup every five ticks,
+     * which is this tier's entire cost of knowing about terrain.
      *
-     * <p>The unknown case covers two things that want the same answer: a chunk that is not loaded, and a
-     * column the prefetch has not been given yet. Both keep the height already held and ask again next tick —
-     * the column cache is deliberately not advanced, so the retry happens. A record already approaches a new
-     * floor rather than snapping to it, so a tick of lag on the answer is below what the movement resolves.
+     * <p>An unloaded chunk and an unprefetched column want the same answer: keep the height already held and
+     * retry next tick, which is why the column cache is not advanced.
      */
     private double groundAt(SimWorld world, double px, double pz) {
         int columnX = Mth.floor(px);
@@ -433,8 +365,7 @@ public final class SimGlyphid implements GlyphidCarrier {
     }
 
     /**
-     * Take a hit. No damage source and no armour model: a record has no plates to knock off and nothing to
-     * shoot at it but area damage, which is the one thing that does not care where it lands.
+     * Take a hit. No damage source and no armour model: nothing but area damage can reach a record.
      *
      * @return true if this killed it
      */
@@ -444,9 +375,7 @@ public final class SimGlyphid implements GlyphidCarrier {
         return health <= 0.0F;
     }
 
-    /**
-     * Take everything off a live body that has to survive becoming a record and back again.
-     */
+    /** Take everything off a live body that has to survive becoming a record and back again. */
     public static SimGlyphid fromEntity(int id, EntityGlyphid glyphid) {
         SimGlyphid sim = new SimGlyphid(id, GlyphidCaste.byType(glyphid.getType()));
         sim.x = sim.prevX = glyphid.getX();
@@ -477,9 +406,8 @@ public final class SimGlyphid implements GlyphidCarrier {
     }
 
     /**
-     * Build the body back. Everything {@link #fromEntity} took is put back, so a round trip is invisible
-     * apart from the entity id — which is deliberately not preserved, because §16's carrier note says there
-     * is no per-glyphid identity here worth paying for.
+     * Build the body back. A round trip is invisible apart from the entity id, which is not preserved —
+     * there is no per-glyphid identity worth paying for (§16).
      */
     public @Nullable EntityGlyphid toEntity(ServerLevel level) {
         EntityType<? extends EntityGlyphid> type = caste.type();
@@ -508,9 +436,8 @@ public final class SimGlyphid implements GlyphidCarrier {
         glyphid.taskY = taskY;
         glyphid.taskZ = taskZ;
         glyphid.setCurrentTask(task, null);
-        // The memory goes across too. Without it a glyphid that spent forty ticks failing to get anywhere
-        // arrives in the world with a fresh sixty ticks of patience, and the stuck timer that was about to
-        // turn it into a digger starts again from zero every time it crosses the boundary.
+        // The memory goes across too, or the stuck timer that was about to turn this into a digger restarts
+        // from zero on every crossing.
         glyphid.mind().copyFrom(mind);
         return glyphid;
     }

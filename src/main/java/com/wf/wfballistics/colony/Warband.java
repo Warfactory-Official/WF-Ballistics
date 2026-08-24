@@ -6,15 +6,12 @@ import net.minecraft.world.level.ChunkPos;
 import java.util.UUID;
 
 /**
- * An attack in transit: one record standing in for however many glyphids are marching.
+ * An attack in transit: one record standing in for however many glyphids are marching. Five hundred glyphids
+ * crossing two thousand blocks is this object moving in a straight line, at one position update per tick
+ * regardless of {@link #count}.
  *
- * <p>This is the tier that makes the whole thing scale. Five hundred glyphids crossing two thousand blocks
- * is <em>this object</em>, moving in a straight line, not five hundred entities and not five hundred sim
- * records. It costs one position update per tick regardless of {@link #count}.
- *
- * <p>It becomes real only where somebody can see it. Until then there is no terrain to walk around, because
- * there is no terrain loaded and nobody to notice that it went through a hill — the same trade
- * {@code SimDrone} makes by holding its altitude and flying straight.
+ * <p>It becomes real only where somebody can see it, so until then there is no terrain to walk around and
+ * nobody to notice it went through a hill.
  */
 public final class Warband {
 
@@ -26,22 +23,11 @@ public final class Warband {
     public final int targetZ;
     public int count;
     public final int tier;
-    /**
-     * Whether this warband is on the wing.
-     *
-     * <p>A flying warband is the tier's own assumption made honest: a T2 record has always moved in a straight
-     * line ignoring terrain, because there is no terrain loaded to move around. Walkers only get away with that
-     * because nobody can see them do it. Flyers actually do it.
-     */
+    /** Whether this warband is on the wing -- the tier's straight-line assumption made honest. */
     public boolean flying;
-    /**
-     * Ticks since dispatch, so a warband that can never reach its target can be retired.
-     */
+    /** Ticks since dispatch, so a warband that can never reach its target can be retired. */
     public int age;
-    /**
-     * Set once the target is reached. An arrived warband stops travelling but does not disband: the base it
-     * came for is simply offline, so it waits there for somebody to show up and see it.
-     */
+    /** Set once the target is reached. An arrived warband waits there rather than disbanding. */
     public boolean arrived;
 
     public Warband(UUID id, UUID origin, double x, double z, int targetX, int targetZ, int count, int tier) {

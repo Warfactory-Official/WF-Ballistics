@@ -23,32 +23,49 @@ import java.util.UUID;
 /**
  * Runs the colonies: they grow, they take offence, they found new nests, and eventually they march.
  *
- * <p>Everything here reads colony, warband and industry-cell data and nothing else, which is what makes it
- * cheap enough to run for a whole world's worth of colonies whether or not anything is loaded. The one
- * exception is materialisation, which touches the world and therefore only ever happens on the server
- * thread as a chunk loads.
+ * <p>Reads colony, warband and industry-cell data and nothing else, so it runs for a whole world's colonies
+ * whether or not anything is loaded. Materialisation is the exception and only happens as a chunk loads.
  *
- * <p>Colonies are staggered across {@link ColonyConfig#colonyTickInterval()} by id, so the per-tick cost is
- * the colony count divided by the interval rather than the colony count.
+ * <p>Colonies are staggered across {@link ColonyConfig#colonyTickInterval()} by id.
  */
 public final class ColonyManager {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /**
-     * A warband that has not arrived in this many ticks is written off, so a target that became
-     * unreachable cannot leak records forever.
-     */
+    /** A warband that has not arrived in this long is written off, so an unreachable target cannot leak. */
     public static final int WARBAND_MAX_AGE = 72_000;
 
     /**
-     * Builds a nest's blocks once its chunk is loaded and the ground height is known. Kept pluggable — it was
-     * a hook before the hive port landed, and it stays one because the simulation genuinely does not care
-     * whether a colony has blocks: with no builder installed, colonies materialise as data and behave
-     * identically. {@link GlyphidNest} is the one that ships.
+     * Builds a nest's blocks once its chunk is loaded and the ground height is known. Pluggable: with no
+     * builder installed, colonies materialise as data and the simulation is unchanged. {@link GlyphidNest}
+     * is the one that ships.
      */
     public interface NestBuilder {
         void build(ServerLevel level, Colony colony);
+
+        /**
+         * Stamp only the cells grown since the last build. Separate from {@link #build}, which would queue a
+         * second copy of every owed block and undo whatever a player has dug out of the old mounds.
+         */
+        void growCells(ServerLevel level, Colony colony);
+    }
+
+    /**
+     * What one expansion attempt did, including the reason for a refusal so the debug command can report it
+     * rather than guess it from the config.
+     *
+     * @param child the colony that resulted — a new one for an outpost, the parent itself for a bud
+     */
+    public record Expansion(Kind kind, @Nullable Colony child, String note) {
+
+        public enum Kind {
+            /** Nowhere to put an outpost and no room to bud. */
+            NOTHING,
+            /** Another mound on this colony's own cluster. */
+            BUD,
+            /** A separate colony, {@link ColonyConfig#expansionRange()} blocks further out. */
+            OUTPOST
+        }
     }
 
     private static @Nullable NestBuilder nestBuilder;
@@ -64,8 +81,8 @@ public final class ColonyManager {
 
     public static void tick(ServerLevel level) {
         ColonyRegistry registry = ColonyRegistry.get(level);
-        // Ahead of the empty check on purpose: evolution has to keep rising while a player is building the
-        // industry that will eventually attract the first colony, not start from zero once one exists.
+        // Ahead of the empty check: evolution has to rise while the industry that attracts the first colony
+        // is being built, not start from zero once one exists.
         Evolution.tick(level, registry);
 
         if (registry.colonies().isEmpty() && registry.warbands().isEmpty()) {
@@ -111,14 +128,30 @@ public final class ColonyManager {
             } else if (colony.canExpand()) {
                 expand(level, registry, colony);
             }
+            materialiseCells(level, colony);
             registry.setDirty();
         }
     }
 
     /**
+     * Give a colony's newly budded cells their blocks, if anybody is there to see them. Guarded on the chunk
+     * being resident so a distant cluster does not persist a thousand queued blocks nobody will ever load;
+     * {@link #onChunkLoaded} lays them when somebody arrives. {@code getChunkNow}, not {@code hasChunk} — see
+     * {@link PendingChunkEdits#submit}.
+     */
+    static void materialiseCells(ServerLevel level, Colony colony) {
+        if (nestBuilder == null || !colony.built || colony.builtBuds() >= colony.buds) {
+            return;
+        }
+        if (level.getChunkSource().getChunkNow(colony.x >> 4, colony.z >> 4) == null) {
+            return;
+        }
+        nestBuilder.growCells(level, colony);
+    }
+
+    /**
      * Run {@code rounds} colony updates for every colony, ignoring the stagger, plus the matching warband
-     * movement. Exists so the simulation can be exercised in seconds instead of hours: a strike cycle is
-     * otherwise tens of minutes of real time, which is not a test.
+     * movement, so a strike cycle can be exercised in seconds rather than tens of minutes.
      */
     public static void fastForward(ServerLevel level, int rounds) {
         ColonyRegistry registry = ColonyRegistry.get(level);
@@ -145,10 +178,10 @@ public final class ColonyManager {
                 } else if (colony.canExpand()) {
                     expand(level, registry, colony);
                 }
+                materialiseCells(level, colony);
             }
-            // Warbands move every tick while colonies update every `interval` ticks, so one round of
-            // colony time is `interval` rounds of warband time. Advancing them once per round instead
-            // would under-report travel by that factor and make every strike look far slower than it is.
+            // Warbands move every tick while colonies update every `interval` ticks, so one round of colony
+            // time is `interval` rounds of warband time.
             for (int step = 0; step < interval; step++) {
                 tickWarbands(level, registry);
             }
@@ -157,17 +190,9 @@ public final class ColonyManager {
     }
 
     /**
-     * Count the bodies this colony has standing, so its numbers cannot regrow around them.
-     *
-     * <p>Recounted from the world rather than tallied as defenders hatch and die, because a tally is a second
-     * copy of the truth and this one would have to survive a chunk unloading, a save, a record round trip and
-     * a {@code /kill}. Counting is cheap enough not to need the risk: it runs on the colony's own stagger, and
-     * only when the nest is somewhere entities are actually ticking — a nest nobody is near cannot have lost a
-     * defender since the last count, because nothing there is alive to lose one.
-     *
-     * <p>Level-wide rather than a box around the nest, so a defender that chased somebody over the hill is
-     * still this colony's. The scan is the loaded swarm, once per colony per
-     * {@link ColonyConfig#colonyTickInterval()}, and only for nests that are loaded at all.
+     * Count the bodies this colony has standing, so its numbers cannot regrow around them. Recounted rather
+     * than tallied, because a tally would have to survive an unload, a save and a {@code /kill}. Level-wide,
+     * so a defender that chased somebody over the hill still counts, and only for nests that are ticking.
      */
     private static void recountGarrison(ServerLevel level, Colony colony) {
         if (!colony.built || !colony.hasResolvedY() || !level.isPositionEntityTicking(colony.pos())) {
@@ -187,14 +212,11 @@ public final class ColonyManager {
         colony.garrison = standing;
     }
 
-    /**
-     * Send a warband at the loudest base this colony can be bothered with, spending the population to do it.
-     */
+    /** Send a warband at the loudest base this colony can be bothered with, spending the population to do it. */
     private static void strike(ServerLevel level, ColonyRegistry registry, Colony colony) {
         IndustryCluster target = IndustryClusters.nearest(level, colony.x, colony.z);
         if (target == null) {
-            // Nothing worth attacking yet. Hold the aggression rather than discarding it: the colony is
-            // still annoyed, it just has nowhere to take it.
+            // Nothing worth attacking yet. Hold the aggression rather than discarding it.
             return;
         }
 
@@ -214,12 +236,67 @@ public final class ColonyManager {
     }
 
     /**
+     * Grow the colony, one way or the other: a <b>bud</b> welds another mound onto its own cluster (cheap,
+     * quick, same record), an <b>outpost</b> founds a separate colony {@link ColonyConfig#expansionRange()}
+     * blocks out (expensive, and what moves the frontier).
+     *
+     * <p>A roll on {@link ColonyConfig#budChance()} picks, except that an outpost with nowhere to go falls
+     * back to budding — so a region that has filled up thickens in place instead of stalling.
+     *
+     * <p>The cooldown is charged by outcome, so a colony that could do neither waits the full outpost
+     * cooldown rather than retrying every update.
+     */
+    static Expansion expand(ServerLevel level, ColonyRegistry registry, Colony colony) {
+        Expansion result = attempt(level, registry, colony);
+        colony.expansionCooldown = result.kind() == Expansion.Kind.BUD
+                ? ColonyConfig.budCooldownTicks()
+                : ColonyConfig.expansionCooldownTicks();
+        return result;
+    }
+
+    private static Expansion attempt(ServerLevel level, ColonyRegistry registry, Colony colony) {
+        boolean canBud = colony.canBud() && colony.population >= ColonyConfig.budPopulation();
+        boolean canFound = colony.population >= ColonyConfig.expansionPopulation();
+
+        if (canBud && (!canFound || level.random.nextDouble() < ColonyConfig.budChance())) {
+            return bud(colony);
+        }
+        if (!canFound) {
+            return new Expansion(Expansion.Kind.NOTHING, null, colony.canBud()
+                    ? String.format("%.0f population; a bud costs %d and an outpost %d",
+                            colony.population, ColonyConfig.budPopulation(),
+                            ColonyConfig.expansionPopulation())
+                    : String.format("%.0f population, and all %d cells already grown; an outpost costs %d",
+                            colony.population, colony.budCap() + 1, ColonyConfig.expansionPopulation()));
+        }
+
+        Expansion outpost = outpost(level, registry, colony);
+        if (outpost.kind() != Expansion.Kind.NOTHING) {
+            return outpost;
+        }
+        // Nowhere to put one. Thicken instead, rather than doing nothing for another ten minutes.
+        return canBud ? bud(colony) : outpost;
+    }
+
+    /**
+     * Weld another mound onto the colony where it already stands. Only the record changes; the blocks follow
+     * from {@link #materialiseCells}, now or on the next chunk load.
+     */
+    private static Expansion bud(Colony colony) {
+        colony.buds++;
+        colony.population -= ColonyConfig.budPopulation() * 0.5;
+        return new Expansion(Expansion.Kind.BUD, colony,
+                String.format("grew cell %d of %d", colony.buds + 1, colony.budCap() + 1));
+    }
+
+    /**
      * Found a new colony further out. Direction is away from world spawn, so the frontier pushes outward
      * and the new nest is at least as strong as its parent rather than weaker.
      */
-    private static void expand(ServerLevel level, ColonyRegistry registry, Colony colony) {
+    private static Expansion outpost(ServerLevel level, ColonyRegistry registry, Colony colony) {
         if (registry.colonies().size() >= ColonyConfig.maxColonies()) {
-            return;
+            return new Expansion(Expansion.Kind.NOTHING, null,
+                    "the dimension is at its " + ColonyConfig.maxColonies() + "-colony ceiling");
         }
         BlockPos spawn = level.getSharedSpawnPos();
         double dx = colony.x - spawn.getX();
@@ -242,18 +319,23 @@ public final class ColonyManager {
         int newX = (int) Math.round(colony.x + dirX * range);
         int newZ = (int) Math.round(colony.z + dirZ * range);
 
-        colony.expansionCooldown = ColonyConfig.expansionCooldownTicks();
-
-        // Crowding rather than a bare "is anything here" test: expansion should thicken a region up to a
-        // density and then stop, instead of every colony leapfrogging outward and the frontier running away.
-        if (registry.countWithin(newX, newZ, ColonyConfig.crowdingRadius()) >= ColonyConfig.crowdingLimit()) {
-            return;
+        // Crowding rather than a bare "is anything here" test, so a region thickens to a density and stops
+        // instead of the frontier running away from the player.
+        int neighbours = registry.countWithin(newX, newZ, ColonyConfig.crowdingRadius());
+        if (neighbours >= ColonyConfig.crowdingLimit()) {
+            return new Expansion(Expansion.Kind.NOTHING, null, String.format(
+                    "%d colonies already sit within %d blocks of (%d, %d)",
+                    neighbours, ColonyConfig.crowdingRadius(), newX, newZ));
         }
         Colony child = found(level, registry, newX, newZ);
-        if (child != null) {
-            colony.population -= ColonyConfig.expansionPopulation() * 0.5;
-            LOGGER.debug("[wfballistics] {} founded {}", colony, child);
+        if (child == null) {
+            return new Expansion(Expansion.Kind.NOTHING, null, String.format(
+                    "(%d, %d) is inside the safe radius or past the frontier", newX, newZ));
         }
+        colony.population -= ColonyConfig.expansionPopulation() * 0.5;
+        LOGGER.debug("[wfballistics] {} founded {}", colony, child);
+        return new Expansion(Expansion.Kind.OUTPOST, child,
+                String.format("founded an outpost %d blocks out", range));
     }
 
     /**
@@ -278,11 +360,8 @@ public final class ColonyManager {
     }
 
     /**
-     * Found a colony on ground somebody is standing on: resolve its height and build it in the same step,
-     * rather than waiting for {@link #onChunkLoaded} to notice a chunk that is already loaded.
-     *
-     * <p>This is what a scout does when it settles, and it is the only path that creates a colony from
-     * inside the world rather than from the simulation.
+     * Found a colony on ground somebody is standing on, resolving its height and building it in one step.
+     * What a scout does when it settles, and the only path that creates a colony from inside the world.
      *
      * @return the new colony, or null if this position is not allowed one
      */
@@ -316,9 +395,7 @@ public final class ColonyManager {
             if (warband.advance(own) && !wasArrived) {
                 LOGGER.debug("[wfballistics] {} reached its target", warband);
             }
-            // An arrived warband is not removed: it waits on the target for somebody to turn up, and
-            // WarbandMaterialiser turns it into glyphids when they do. Only age retires it, so a target
-            // that is never visited cannot leak a record forever.
+            // An arrived warband waits on the target for somebody to turn up; only age retires it.
             if (warband.age > WARBAND_MAX_AGE) {
                 expired.add(warband);
             }
@@ -336,13 +413,13 @@ public final class ColonyManager {
     // --- materialisation ---
 
     /**
-     * Resolve and build any colony whose chunk has just loaded.
-     *
-     * <p>The ground height is sampled here rather than at founding, because a colony founded in an unloaded
-     * chunk has no terrain to measure against and guessing would put nests inside hills.
+     * Resolve and build any colony whose chunk has just loaded. The ground height is sampled here rather than
+     * at founding, since guessing at unloaded terrain puts nests inside hills.
      */
     public static void onChunkLoaded(ServerLevel level, ChunkAccess chunk) {
         ColonyRegistry registry = ColonyRegistry.get(level);
+        // Ahead of the empty check: this is the step that creates the first colony.
+        ColonySeeder.seed(level, registry, chunk);
         if (registry.colonies().isEmpty()) {
             return;
         }
@@ -356,6 +433,10 @@ public final class ColonyManager {
             if (!colony.built && nestBuilder != null) {
                 nestBuilder.build(level, colony);
                 colony.built = true;
+                registry.setDirty();
+            } else if (colony.built && colony.builtBuds() < colony.buds && nestBuilder != null) {
+                // Cells budded while this chunk was unloaded, so a cluster is the size its record says.
+                nestBuilder.growCells(level, colony);
                 registry.setDirty();
             }
         }

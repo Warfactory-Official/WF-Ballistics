@@ -22,14 +22,10 @@ import org.jetbrains.annotations.Nullable;
  */
 public class EntityGlyphidBrawler extends EntityGlyphid {
 
-    /**
-     * Ticks between leaps, plus a random tail so a rank of brawlers does not jump in unison.
-     */
+    /** Ticks between leaps, plus a random tail so a rank of brawlers does not jump in unison. */
     private static final int LEAP_INTERVAL = 80;
     private static final int LEAP_JITTER = 30;
-    /**
-     * Do not leap further than this; past it the arc is so high the brawler spends the flight being shot at.
-     */
+    /** Do not leap further than this; past it the arc is so high the brawler spends the flight being shot at. */
     private static final double LEAP_RANGE = 20.0;
     private static final double MIN_LEAP = 3.0;
     /**
@@ -40,9 +36,7 @@ public class EntityGlyphidBrawler extends EntityGlyphid {
     private static final double LEAP_SPEED = 1.5;
     private static final double LEAP_GRAVITY = 0.05;
     private static final int LEAP_LEAD = 20;
-    /**
-     * Fall damage a brawler shrugs off, so it does not kill itself landing.
-     */
+    /** Fall damage a brawler shrugs off, so it does not kill itself landing. */
     private static final float FALL_TOLERANCE = 10.0F;
 
     private int leapCooldown;
@@ -116,9 +110,7 @@ public class EntityGlyphidBrawler extends EntityGlyphid {
         yBodyRot = getYRot();
     }
 
-    /**
-     * A caste that lands on people from twenty blocks up cannot be killed by doing so.
-     */
+    /** A caste that lands on people from twenty blocks up cannot be killed by doing so. */
     @Override
     public boolean hurt(DamageSource source, float amount) {
         if (source.is(DamageTypes.FALL) && amount <= FALL_TOLERANCE) {

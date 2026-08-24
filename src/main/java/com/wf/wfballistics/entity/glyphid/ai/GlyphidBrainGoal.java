@@ -12,15 +12,12 @@ import net.minecraft.world.entity.ai.goal.Goal;
 import java.util.EnumSet;
 
 /**
- * Runs {@link GlyphidBrain} for one live glyphid and carries out what it decides.
+ * Runs {@link GlyphidBrain} for one live glyphid and carries out what it decides. Replaces the separate melee
+ * and march goals, which arbitrated by goal priority — something a warband record has no selector to do.
+ * {@link GlyphidBrain#errand} is that rule written where a body without one can read it.
  *
- * <p>Replaces the separate melee and march goals. They arbitrated by goal priority — bite at 3, walk at 4 —
- * which works only because there is a goal selector to do the arbitrating, and a warband record has no goal
- * selector. The choice is now {@link GlyphidBrain#errand}, which is the same rule written down somewhere a
- * body without a brain stem can read it.
- *
- * <p>What is left here is the parts that are genuinely the goal selector's: holding {@code MOVE} so idle
- * wandering cannot run at the same time as a march, and releasing it again when there is nowhere to be.
+ * <p>What is left here is the selector's own job: holding {@code MOVE} so idle wandering cannot run during a
+ * march, and releasing it when there is nowhere to be.
  */
 public class GlyphidBrainGoal extends Goal {
 

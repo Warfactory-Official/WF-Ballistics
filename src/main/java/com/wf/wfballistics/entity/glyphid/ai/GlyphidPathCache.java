@@ -16,33 +16,23 @@ import java.util.Map;
 /**
  * One A* per group of glyphids going the same way, instead of one per glyphid.
  *
- * <p>Three hundred bugs marching on the same base currently run three hundred independent searches for what
- * is, to within a few blocks, the same route. Quantising both ends of the search to a {@link #CELL}-block grid
- * makes those searches collide on one key, so the first one pays and the rest copy the answer.
+ * <p>Three hundred bugs on one base run three hundred searches for what is, within a few blocks, the same
+ * route. Quantising both ends to a {@link #CELL}-block grid collides them on one key: the first pays and the
+ * rest copy. The copy matters — {@link Path} carries a mutable cursor, so sharing an instance would have two
+ * mobs advancing each other along it. The nodes themselves are immutable and shared.
  *
- * <p>The copy matters: {@link Path} carries a mutable cursor into its own node list, so two mobs sharing one
- * instance would advance each other's position along it. The nodes themselves are immutable once the search
- * has finished and are shared freely; only the cursor is duplicated.
- *
- * <p>Entries expire after {@link #TTL} ticks. A path is a statement about terrain that glyphids are actively
- * chewing through, and a stale one routes the swarm into a wall it already ate.
+ * <p>Entries expire after {@link #TTL} ticks: a stale path routes the swarm into a wall it already ate.
  */
 public final class GlyphidPathCache {
 
     /**
-     * Quantisation of both search endpoints, in blocks.
-     *
-     * <p>Trades hit rate against fidelity: bigger cells share more searches but start the shared route further
-     * from the glyphid that follows it, which reads as the swarm forming up into lanes. Four is small enough
-     * that the detour is under a body length and large enough to collapse a packed warband onto a handful of
-     * searches.
+     * Quantisation of both search endpoints. Bigger cells share more searches but start the route further
+     * from the glyphid following it, which reads as the swarm forming into lanes; four keeps the detour
+     * under a body length.
      */
     private static final int CELL = 4;
     private static final int TTL = 20;
-    /**
-     * Cleared wholesale past this size rather than evicted one at a time: the cache is rebuilt every second
-     * anyway, so the cheapest correct policy is the crude one.
-     */
+    /** Cleared wholesale past this size: the cache is rebuilt every second, so the crude policy is right. */
     private static final int MAX_ENTRIES = 512;
 
     private record Key(ResourceKey<Level> dimension, int startX, int startY, int startZ,

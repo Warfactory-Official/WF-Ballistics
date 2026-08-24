@@ -23,26 +23,20 @@ import net.minecraft.world.phys.Vec3;
 /**
  * Ordnance dropped by a glyphid on the wing.
  *
- * <p>Two payloads on one entity, chosen by {@link #setExplosive}: a pool of corrosive acid, and — for the
- * castes that get there — an actual blast. They share everything but the last few lines, so splitting them
- * into two entities would duplicate the falling, the impact test and the tracking to no purpose.
+ * <p>Two payloads on one entity, chosen by {@link #setExplosive}: corrosive acid, or an actual blast for the
+ * castes that get there. They differ only in the last few lines.
  *
- * <p>Being a {@link ThrowableProjectile} rather than a free-falling entity is what makes it hit things
- * reliably: it sweeps its path each tick instead of testing where it happens to land, so a bomb released at
- * altitude and speed cannot tunnel through the roof it was aimed at.
+ * <p>A {@link ThrowableProjectile} rather than a falling entity, so it sweeps its path each tick and cannot
+ * tunnel through the roof it was aimed at.
  */
 public class EntityGlyphidBomb extends ThrowableProjectile {
 
     private static final EntityDataAccessor<Boolean> DW_EXPLOSIVE =
             SynchedEntityData.defineId(EntityGlyphidBomb.class, EntityDataSerializers.BOOLEAN);
 
-    /**
-     * How long the acid pool lasts, in ticks.
-     */
+    /** How long the acid pool lasts, in ticks. */
     public static final int POOL_DURATION = 400;
-    /**
-     * Height of the pool. Low and wide: this is something spreading over a floor, not a cloud hanging over it.
-     */
+    /** Height of the pool. Low and wide: this is something spreading over a floor, not a cloud hanging over it. */
     public static final float POOL_HEIGHT = 2.0F;
 
     public EntityGlyphidBomb(EntityType<? extends EntityGlyphidBomb> type, Level level) {
@@ -110,9 +104,7 @@ public class EntityGlyphidBomb extends ThrowableProjectile {
         discard();
     }
 
-    /**
-     * Leave a pool of acid where it landed.
-     */
+    /** Leave a pool of acid where it landed. */
     private void splash(Vec3 at) {
         float radius = WFConfig.GLYPHID_ACID_RADIUS.get().floatValue();
         MistEntity.spawn(level(), WFFluids.GLYPHID_ACID.get(),

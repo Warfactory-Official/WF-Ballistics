@@ -12,60 +12,39 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The world as much of it as the off-thread pass needs, read on the world thread a tick ahead.
+ * As much of the world as the off-thread pass needs, read on the world thread a tick ahead. Holds no
+ * {@code Level}, {@code ChunkAccess} or {@code Entity}, so a worker given one has nothing to reach through —
+ * see {@link SimWorld}.
  *
- * <p>Holds no {@code Level}, no {@code ChunkAccess} and no {@code Entity}, so a worker given one of these has
- * nothing to reach through — see {@link SimWorld}. The world reads it serves were all made on the world
- * thread, by {@link #refill}, before the pass that reads them was dispatched.
+ * <p>It is told what to fetch by being missed, rather than by a scan of the swarm that would be O(n) of the
+ * work being moved off the thread: a miss returns {@link SimWorld#UNKNOWN} and notes the column, and the
+ * record keeps its last height for that tick. The tier is already a tick behind the ground by design.
  *
- * <p><b>It answers questions it was asked last tick, and it is asked what to fetch by being missed.</b> There
- * is no scan of the swarm to decide what to prefetch, which matters because such a scan would be O(n) of
- * exactly the work being moved off the thread. Instead a miss returns {@link SimWorld#UNKNOWN} and notes the
- * column; {@link #refill} fills the noted columns next tick; the record uses the height it had for that one
- * tick. That is not a compromise bolted on to make threading work — it is the model the tier already had. A
- * record approaches a new floor at {@code CLIMB_RATE} rather than snapping to it and keeps its last height
- * wherever the chunk is not loaded, so it is already, by design, a tick or more behind the ground under it.
+ * <p>Columns are cleared every tick, since a record caches the floor of the column it stands in. Destinations
+ * are not: a destination height is kept in {@code taskY} for twenty ticks and would miss every time, so they
+ * are a working set re-resolved from whatever the last pass asked for.
  *
- * <p><b>Columns are cleared every tick; destinations are not.</b> A record caches the floor of the column it
- * is standing in for as long as it stands there, so a column only has to survive from the fill to the one read
- * that follows it — clearing bounds the map at the columns actually changed hands last tick, about a seventh
- * of the swarm. A destination has no such cache: its height is read once per repath and kept in {@code taskY}
- * for twenty ticks, so it would miss every single time. Destinations are therefore kept as a working set,
- * re-resolved every tick from whatever the last pass asked for — which is also what keeps the flow field's
- * idle timer fresh and picks up a field that has finished rebuilding.
- *
- * <p><b>Threading.</b> Nothing here is synchronised and nothing needs to be: {@link #height} and
- * {@link #destination} are called only by the pass, {@link #refill} only by the world thread with no pass in
- * flight, and the {@code Future} the two hand across is the happens-before edge in both directions. The one
- * thing that would break it is running the pass on more than one worker, which is why it does not.
+ * <p>Nothing is synchronised and nothing needs to be — the pass calls {@link #height} and
+ * {@link #destination}, the world thread calls {@link #refill} with no pass in flight, and the
+ * {@code Future} is the happens-before edge. Two workers would break that, which is why there is one.
  */
 public final class SimWorldPrefetch implements SimWorld {
 
-    /**
-     * Surface height per column, valid for this tick only.
-     */
+    /** Surface height per column, valid for this tick only. */
     private final Long2IntOpenHashMap heights = new Long2IntOpenHashMap();
 
     {
-        // A missing column has to read as "not known" rather than as sea level, which is what fastutil's own
-        // default of zero would say.
+        // A missing column must read as "not known" rather than as sea level, which zero would say.
         heights.defaultReturnValue(UNKNOWN);
     }
-    /**
-     * Columns missed since the last refill. Written by the pass, read by the world thread.
-     */
+    /** Columns missed since the last refill. Written by the pass, read by the world thread. */
     private final LongOpenHashSet wanted = new LongOpenHashSet();
     /**
-     * Destinations resolved at the last refill, in the order they were first asked for. A linear scan, because
-     * a level has at most {@code GlyphidFlowFields.MAX_FIELDS} of them and a hash lookup on four entries costs
-     * more than four comparisons.
+     * Destinations resolved at the last refill. A linear scan: a level holds at most
+     * {@code GlyphidFlowFields.MAX_FIELDS}, and hashing four entries costs more than comparing them.
      */
     private final List<Resolved> resolved = new ArrayList<>();
-    /**
-     * Destinations asked for during the pass, which become the next refill's working set. Deliberately a
-     * fresh list rather than a diff: a destination nobody marches to any more simply stops being asked for
-     * and drops out.
-     */
+    /** Destinations asked for during the pass. A fresh list, so one nobody marches to drops out by itself. */
     private final List<Resolved> asked = new ArrayList<>();
 
     private static final class Resolved {
@@ -82,11 +61,7 @@ public final class SimWorldPrefetch implements SimWorld {
         }
     }
 
-    /**
-     * Chunks looked up but not loaded on the last refill, purely for the report: a swarm walking over
-     * unloaded terrain keeps its last height, which is correct and silent, and silent is the thing worth
-     * being able to see.
-     */
+    /** Chunks looked up but not loaded, for the report: keeping the last height is correct but silent. */
     private int unloaded;
 
     @Override
@@ -108,9 +83,8 @@ public final class SimWorldPrefetch implements SimWorld {
                 return entry.what;
             }
         }
-        // Not resolved yet: the record pathfinds towards the destination for one tick and has the field on
-        // the next. One tick of hopping along the bearing instead of following the field is a mode the tier
-        // is in whenever a field has not flooded this far anyway.
+        // Not resolved yet: hop along the bearing for one tick and have the field on the next, which is what
+        // the tier does anyway wherever a field has not flooded.
         remember(x, y, z, Destination.NONE);
         return Destination.NONE;
     }
@@ -126,11 +100,8 @@ public final class SimWorldPrefetch implements SimWorld {
     }
 
     /**
-     * Do this tick's world reads, on the world thread, before the pass that will read them is dispatched.
-     *
-     * <p>The only place in the tier that touches a chunk, and the reason the rest of it can run anywhere. Its
-     * cost is the same reads the pass used to make inline — one heightmap lookup per column a glyphid walked
-     * into — just made from here instead.
+     * Do this tick's world reads, on the world thread, before the pass is dispatched. The only place in the
+     * tier that touches a chunk, and the same reads the pass used to make inline.
      */
     public void refill(ServerLevel level) {
         WorldThread.assertOn("the glyphid sim tier's terrain prefetch");
@@ -162,9 +133,7 @@ public final class SimWorldPrefetch implements SimWorld {
         asked.clear();
     }
 
-    /**
-     * Drop everything, for a tier that has been switched off or a level that has gone away.
-     */
+    /** Drop everything, for a tier that has been switched off or a level that has gone away. */
     public void clear() {
         heights.clear();
         wanted.clear();
