@@ -5,6 +5,7 @@ import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.brain.GlyphidBrain;
 import com.wf.wfballistics.entity.glyphid.brain.GlyphidPlan;
 import com.wf.wfballistics.entity.glyphid.brain.GlyphidSnapshot;
+import com.wf.wfballistics.entity.glyphid.nav.GlyphidBridges;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -30,7 +31,9 @@ public class GlyphidBrainGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        return errand() != GlyphidBrain.ERRAND_NONE;
+        // Bridge duty holds MOVE the same way an errand does, so idle wandering cannot pull an anchor out of
+        // its slot.
+        return glyphid.hasBridgeSlot() || errand() != GlyphidBrain.ERRAND_NONE;
     }
 
     @Override
@@ -55,6 +58,11 @@ public class GlyphidBrainGoal extends Goal {
     @Override
     public void tick() {
         if (!(glyphid.level() instanceof ServerLevel level)) {
+            return;
+        }
+        // Both are one static int read with no bridge anywhere in the world; an anchor is the cheapest
+        // glyphid there is, since neither the snapshot nor the brain runs for it.
+        if (glyphid.tickBridgeSlot(level) || GlyphidBridges.recruit(level, glyphid)) {
             return;
         }
         GlyphidSnapshot self = glyphid.snapshot(level);

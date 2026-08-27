@@ -9,6 +9,9 @@ import com.wf.wfballistics.api.MissileData;
 import com.wf.wfballistics.api.WFBallisticsAPI;
 import com.wf.wfballistics.chunk.DetonationChunkGuard; // used in ModBusEvents
 import com.wf.wfballistics.compat.WarforgeCompat;
+import com.wf.wfballistics.debug.BenchPlayer;
+import com.wf.wfballistics.debug.GlyphidArena;
+import com.wf.wfballistics.debug.GlyphidDeaths;
 import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.debug.SwarmBench;
 import com.wf.wfballistics.colony.ColonyDebug;
@@ -86,6 +89,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import com.wf.wfballistics.entity.glyphid.GlyphidSeparation;
+import com.wf.wfballistics.entity.glyphid.nav.GlyphidBridges;
 import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields;
 import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidManager;
 import com.wf.wfballistics.entity.glyphid.sim.SimGlyphidPass;
@@ -174,6 +178,9 @@ public final class WFServerEvents {
             // One grid for the whole swarm instead of an entity query per glyphid. Level-wide rather than
             // per-entity precisely so the neighbourhood is built once, and over both tiers.
             GlyphidSeparation.tick(level);
+            // Before the fields, so a bridge dissolved this tick has already marked them stale and one is not
+            // rebuilt around a deck that went away half a tick later.
+            GlyphidBridges.tick(level);
             // Last, so a field built this tick is flooded from terrain the diggers have already changed.
             GlyphidFlowFields.tick(level);
             tickScenarios(level);
@@ -208,7 +215,11 @@ public final class WFServerEvents {
         SimGlyphidPass.shutdown(event.getServer().getAllLevels());
         DroneAiScheduler.shutdown();
         IndustryClusters.clear();
+        GlyphidBridges.clear();
         GlyphidFlowFields.clear();
+        // A bench player holds chunk tickets and sits in the level's player list; left behind, the next world
+        // to load inherits a defender nobody placed.
+        BenchPlayer.clear();
     }
 
     @SubscribeEvent
@@ -453,6 +464,96 @@ public final class WFServerEvents {
                                         .executes(ctx -> SwarmBench.separation(ctx.getSource(), false))))
                         .then(Commands.literal("density")
                                 .executes(ctx -> SwarmBench.density(ctx.getSource())))
+                        .then(Commands.literal("census")
+                                .executes(ctx -> SwarmBench.census(ctx.getSource(), 6.0))
+                                .then(Commands.argument("radius", DoubleArgumentType.doubleArg(0.5, 256.0))
+                                        .executes(ctx -> SwarmBench.census(ctx.getSource(),
+                                                DoubleArgumentType.getDouble(ctx, "radius")))))
+                        .then(Commands.literal("squads")
+                                .executes(ctx -> SwarmBench.squads(ctx.getSource())))
+                        .then(Commands.literal("deaths")
+                                .executes(ctx -> GlyphidDeaths.command(ctx.getSource()))
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> GlyphidDeaths.command(ctx.getSource(), true)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> GlyphidDeaths.command(ctx.getSource(), false))))
+                        .then(Commands.literal("arena")
+                                .executes(ctx -> GlyphidArena.report(ctx.getSource()))
+                                .then(Commands.literal("clear")
+                                        .executes(ctx -> GlyphidArena.clear(ctx.getSource())))
+                                .then(Commands.literal("launch")
+                                        .executes(ctx -> GlyphidArena.launch(ctx.getSource(), 150))
+                                        .then(Commands.argument("count", IntegerArgumentType.integer(1, 2048))
+                                                .executes(ctx -> GlyphidArena.launch(ctx.getSource(),
+                                                        IntegerArgumentType.getInteger(ctx, "count")))
+                                                .then(Commands.argument("caste", StringArgumentType.word())
+                                                        .suggests((c, b) -> {
+                                                            for (GlyphidCaste g : GlyphidCaste.VALUES) {
+                                                                b.suggest(g.lowerName());
+                                                            }
+                                                            return b.buildFuture();
+                                                        })
+                                                        .executes(ctx -> {
+                                                            GlyphidCaste caste = GlyphidCaste.byName(
+                                                                    StringArgumentType.getString(ctx, "caste"));
+                                                            if (caste == null) {
+                                                                ctx.getSource().sendFailure(
+                                                                        Component.literal("Unknown caste."));
+                                                                return 0;
+                                                            }
+                                                            return GlyphidArena.launch(ctx.getSource(),
+                                                                    IntegerArgumentType.getInteger(ctx, "count"),
+                                                                    caste);
+                                                        }))))
+                                .then(Commands.literal("reinforce")
+                                        .then(Commands.argument("count", IntegerArgumentType.integer(1, 2048))
+                                                .then(Commands.argument("caste", StringArgumentType.word())
+                                                        .suggests((c, b) -> {
+                                                            for (GlyphidCaste g : GlyphidCaste.VALUES) {
+                                                                b.suggest(g.lowerName());
+                                                            }
+                                                            return b.buildFuture();
+                                                        })
+                                                        .executes(ctx -> {
+                                                            GlyphidCaste caste = GlyphidCaste.byName(
+                                                                    StringArgumentType.getString(ctx, "caste"));
+                                                            if (caste == null) {
+                                                                ctx.getSource().sendFailure(
+                                                                        Component.literal("Unknown caste."));
+                                                                return 0;
+                                                            }
+                                                            return GlyphidArena.reinforce(ctx.getSource(),
+                                                                    IntegerArgumentType.getInteger(ctx, "count"),
+                                                                    caste);
+                                                        }))))
+                                .then(Commands.argument("name", StringArgumentType.word())
+                                        .suggests((c, b) -> {
+                                            for (String s : GlyphidArena.NAMES) {
+                                                b.suggest(s);
+                                            }
+                                            return b.buildFuture();
+                                        })
+                                        .executes(ctx -> GlyphidArena.build(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "name"), null))
+                                        .then(Commands.argument("material", StringArgumentType.word())
+                                                .suggests((c, b) -> {
+                                                    b.suggest("stone");
+                                                    b.suggest("obsidian");
+                                                    b.suggest("bedrock");
+                                                    return b.buildFuture();
+                                                })
+                                                .executes(ctx -> GlyphidArena.build(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "name"),
+                                                        StringArgumentType.getString(ctx, "material"))))))
+                        .then(Commands.literal("players")
+                                .executes(ctx -> BenchPlayer.report(ctx.getSource()))
+                                .then(Commands.literal("clear")
+                                        .executes(ctx -> BenchPlayer.clear(ctx.getSource())))
+                                .then(Commands.argument("name", StringArgumentType.word())
+                                        .then(Commands.argument("at", Vec3Argument.vec3())
+                                                .executes(ctx -> BenchPlayer.add(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "name"),
+                                                        Vec3Argument.getVec3(ctx, "at"))))))
                         .then(Commands.literal("flowfield")
                                 .then(Commands.literal("on")
                                         .executes(ctx -> SwarmBench.flowField(ctx.getSource(), true)))
@@ -460,6 +561,12 @@ public final class WFServerEvents {
                                         .executes(ctx -> SwarmBench.flowField(ctx.getSource(), false))))
                         .then(Commands.literal("flowfields")
                                 .executes(ctx -> SwarmBench.flowFields(ctx.getSource())))
+                        .then(Commands.literal("bridges")
+                                .executes(ctx -> SwarmBench.bridgeReport(ctx.getSource()))
+                                .then(Commands.literal("on")
+                                        .executes(ctx -> SwarmBench.bridges(ctx.getSource(), true)))
+                                .then(Commands.literal("off")
+                                        .executes(ctx -> SwarmBench.bridges(ctx.getSource(), false))))
                         .then(Commands.literal("sim")
                                 .then(Commands.literal("on")
                                         .executes(ctx -> SwarmBench.simTier(ctx.getSource(), true)))

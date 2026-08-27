@@ -77,12 +77,48 @@ public final class SwarmBench {
      * fields a random assortment is not comparable with the next one.
      */
     public static int spawn(CommandSourceStack source, int count, double radius, GlyphidCaste caste) {
-        ServerLevel level = source.getLevel();
-        Vec3 center = source.getPosition();
+        return spawn(source, count, radius, caste, source.getPosition(), radius, true, true);
+    }
 
-        int removed = clearLevel(level);
-        releaseArena();
-        forceArena(level, center, radius);
+    /**
+     * Spawn somewhere other than where the command was run, at exactly the height given, forcing chunks out
+     * to {@code forceRadius}. What {@link GlyphidArena} needs, and all three differences matter.
+     *
+     * <p>The two radii are separate because a swarm is spawned in a ring a few blocks across and then marched
+     * the length of an arena; if the forced box only covered the ring, the far half of the course would not
+     * tick, which does not read as a broken arena — it reads as a swarm that stopped walking.
+     *
+     * <p>The height is taken as given rather than from the heightmap because half of these arenas have a roof.
+     * The heightmap answers with the highest solid block, so a swarm spawned at the middle of the sealed box
+     * would materialise on top of it, and the arm testing whether it can get out would begin outside.
+     */
+    public static int spawnAt(CommandSourceStack source, int count, double radius, GlyphidCaste caste,
+                              Vec3 center, double forceRadius) {
+        return spawn(source, count, radius, caste, center, forceRadius, false, true);
+    }
+
+    /**
+     * Add to the swarm that is already standing rather than replacing it.
+     *
+     * <p>The one thing a single-caste bench cannot ask is whether the squad split balances by <em>power</em>,
+     * because a swarm of one caste balances by headcount and by power at the same time and the two answers
+     * are indistinguishable. A mixed swarm tells them apart: a behemoth is worth ten grunts, so an even
+     * partition and a fair one are different partitions.
+     */
+    public static int reinforce(CommandSourceStack source, int count, double radius, GlyphidCaste caste,
+                                Vec3 center, double forceRadius) {
+        return spawn(source, count, radius, caste, center, forceRadius, false, false);
+    }
+
+    private static int spawn(CommandSourceStack source, int count, double radius, GlyphidCaste caste,
+                             Vec3 center, double forceRadius, boolean sampleHeight, boolean replace) {
+        ServerLevel level = source.getLevel();
+
+        int removed = replace ? clearLevel(level) : 0;
+        if (replace) {
+            releaseArena();
+        }
+        forceArena(level, center, forceRadius);
 
         int spawned = 0;
         for (int i = 0; i < count; i++) {
@@ -91,7 +127,9 @@ public final class SwarmBench {
             double r = radius * (0.6 + 0.4 * ((double) i / Math.max(1, count)));
             double x = center.x + Math.cos(angle) * r;
             double z = center.z + Math.sin(angle) * r;
-            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) x, (int) z);
+            int y = sampleHeight
+                    ? level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, (int) x, (int) z)
+                    : Mth.floor(center.y);
 
             EntityGlyphid glyphid = caste.type().create(level);
             if (glyphid == null) {
@@ -107,6 +145,11 @@ public final class SwarmBench {
         }
 
         SwarmProfiler.setEnabled(true);
+        // Cleared with the swarm rather than left running, or an arm inherits the last arm's corpses.
+        // Reinforcements join an arm already under way, so they must not wipe its tally.
+        if (replace) {
+            GlyphidDeaths.setEnabled(true);
+        }
         warmup = WARMUP_TICKS;
 
         int placed = spawned;
@@ -162,6 +205,7 @@ public final class SwarmBench {
         int removed = clearLevel(source.getLevel());
         releaseArena();
         SwarmProfiler.setEnabled(false);
+        GlyphidDeaths.setEnabled(false);
         source.sendSuccess(() -> Component.literal(
                 "Removed " + removed + " glyphids, arena released, profiling off."), false);
         return removed;
@@ -311,6 +355,14 @@ public final class SwarmBench {
     public static boolean flowField = true;
 
     /**
+     * When clear, no gap is ever proposed as a crossing and any bridge already standing is dissolved on the
+     * next tick, so a swarm walks whatever route it would have found without one.
+     *
+     * <p>Read live, so both arms are the same swarm on the same tick.
+     */
+    public static boolean bridges = true;
+
+    /**
      * When clear, every glyphid is a real entity and nothing is ever a {@code SimGlyphid}.
      *
      * <p>Read live, and switching it off gives every outstanding record a body back on the next tick, so the
@@ -334,10 +386,19 @@ public final class SwarmBench {
      * run, still cost what they cost, and hand every glyphid back the destination it already had.
      */
     public static int march(CommandSourceStack source, Vec3 to) {
+        return march(source, to, true);
+    }
+
+    /**
+     * @param sampleHeight take the objective's height from the heightmap rather than from {@code to}. Right
+     *                     for a destination on open ground, and wrong for every roofed one: the heightmap
+     *                     answers with the roof, so a swarm ordered into a maze is ordered onto the top of it
+     */
+    public static int march(CommandSourceStack source, Vec3 to, boolean sampleHeight) {
         ServerLevel level = source.getLevel();
         int x = Mth.floor(to.x);
         int z = Mth.floor(to.z);
-        int y = level.hasChunk(x >> 4, z >> 4)
+        int y = sampleHeight && level.hasChunk(x >> 4, z >> 4)
                 ? level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z)
                 : Mth.floor(to.y);
 
@@ -533,9 +594,47 @@ public final class SwarmBench {
         return 1;
     }
 
+    public static int bridges(CommandSourceStack source, boolean on) {
+        bridges = on;
+        source.sendSuccess(() -> Component.literal("Glyphid bridges " + (on ? "on" : "off") + "."), false);
+        return 1;
+    }
+
+    public static int bridgeReport(CommandSourceStack source) {
+        for (String line : com.wf.wfballistics.entity.glyphid.nav.GlyphidBridges.report(source.getLevel())) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        return 1;
+    }
+
     public static int separation(CommandSourceStack source, boolean on) {
         separation = on;
         source.sendSuccess(() -> Component.literal("Glyphid separation " + (on ? "on" : "off") + "."), false);
+        return 1;
+    }
+
+    /**
+     * What the swarm is doing, rather than what it costs. See {@link GlyphidCensus}.
+     *
+     * @param arrivalRadius how near the objective counts as having arrived
+     */
+    public static int census(CommandSourceStack source, double arrivalRadius) {
+        for (String line : GlyphidCensus.report(source.getLevel(), arrivalRadius)) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        source.sendSuccess(() -> Component.literal(
+                GlyphidCensus.line(source.getLevel(), arrivalRadius)), false);
+        return 1;
+    }
+
+    /**
+     * Whether the swarm divided, and into what. See {@link GlyphidSquadCensus}.
+     */
+    public static int squads(CommandSourceStack source) {
+        for (String line : GlyphidSquadCensus.report(source.getLevel())) {
+            source.sendSuccess(() -> Component.literal(line), false);
+        }
+        source.sendSuccess(() -> Component.literal(GlyphidSquadCensus.line(source.getLevel())), false);
         return 1;
     }
 

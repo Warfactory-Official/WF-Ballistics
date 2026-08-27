@@ -11,6 +11,7 @@ import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowField;
 import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.EntitySelector;
 import net.minecraft.world.entity.LivingEntity;
@@ -19,6 +20,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.pathfinder.Path;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
@@ -227,28 +229,24 @@ public final class GlyphidBody {
     /**
      * Look for the block in the way and commit to eating it, if this caste's jaws are up to the material.
      * A swarm slowed by terrain rather than stopped by it is the point — but obsidian still stops a grunt.
+     *
+     * <p>Overhead when the destination is above this glyphid's head, ahead otherwise, and never both. The
+     * question is which obstruction is <em>in the way</em>, not which is nearer, and the two took two runs
+     * each to get right. A glyphid stopped under a lip can eat the shaft beside it all day and still not be
+     * able to go up, because the thing stopping it was never the shaft — diggers did exactly that, biting
+     * sideways for five minutes with the overhang untouched. And a glyphid at the foot of a wall with the
+     * objective on top of it should climb, not bite: falling back to the wall ahead had them tunnel into the
+     * base of the tower until they had eaten away the face they were climbing, and then stand under their
+     * own canopy with nothing left to climb.
      */
     private static boolean pickBlockToChew(EntityGlyphid glyphid, Vec3 destination) {
         if (!glyphid.canDig()) {
             return false;
         }
-        Vec3 eye = glyphid.getEyePosition();
-        double dx = destination.x - glyphid.getX();
-        double dz = destination.z - glyphid.getZ();
-        double distance = Math.sqrt(dx * dx + dz * dz);
-        if (distance < 1.0E-4) {
-            return false;
-        }
-        Vec3 ahead = eye.add(dx / distance * GlyphidBrain.CHEW_REACH, 0,
-                dz / distance * GlyphidBrain.CHEW_REACH);
-
-        BlockHitResult hit = glyphid.level().clip(new ClipContext(eye, ahead, ClipContext.Block.COLLIDER,
-                ClipContext.Fluid.NONE, glyphid));
-        if (hit.getType() != HitResult.Type.BLOCK) {
-            return false;
-        }
-        BlockPos obstruction = hit.getBlockPos();
-        if (!edible(glyphid, obstruction)) {
+        BlockPos obstruction = destination.y > glyphid.getBoundingBox().maxY
+                ? overhang(glyphid, destination)
+                : wallAhead(glyphid, destination);
+        if (obstruction == null) {
             return false;
         }
         GlyphidMind mind = glyphid.mind();
@@ -259,6 +257,56 @@ public final class GlyphidBody {
         return true;
     }
 
+    /** The block this glyphid would walk into, if it is one this caste can open. */
+    private static @Nullable BlockPos wallAhead(EntityGlyphid glyphid, Vec3 destination) {
+        Vec3 eye = glyphid.getEyePosition();
+        double dx = destination.x - glyphid.getX();
+        double dz = destination.z - glyphid.getZ();
+        double distance = Math.sqrt(dx * dx + dz * dz);
+        if (distance < 1.0E-4) {
+            return null;
+        }
+        Vec3 ahead = eye.add(dx / distance * GlyphidBrain.CHEW_REACH, 0,
+                dz / distance * GlyphidBrain.CHEW_REACH);
+
+        BlockHitResult hit = glyphid.level().clip(new ClipContext(eye, ahead, ClipContext.Block.COLLIDER,
+                ClipContext.Fluid.NONE, glyphid));
+        if (hit.getType() != HitResult.Type.BLOCK) {
+            return null;
+        }
+        BlockPos obstruction = hit.getBlockPos();
+        return edible(glyphid, obstruction) ? obstruction : null;
+    }
+
+    /**
+     * The block capping a climb, or null if nothing is.
+     *
+     * <p>A lip — a tower whose top is wider than its shaft — is the standard build for keeping spiders off a
+     * roof, and it works on a glyphid for the same reason: the climb is a vertical shove against whatever the
+     * body is already touching, and an overhang is not something to touch. The ray above can never see it,
+     * since an overhang is by definition the case where there is nothing ahead.
+     *
+     * <p>So the answer is the jaws, and the material decides whether they are enough. A grunt's ceiling is 10
+     * and obsidian is 50, so a grunt opens a stone lip and never an obsidian one; a digger's is 60 and opens
+     * both. Which leaves the anti-spider build working exactly as long as it is built out of something the
+     * swarm in front of it cannot eat — a question about who turned up rather than about the shape.
+     *
+     * <p>Three conditions, and all three are load-bearing. Pressed against something, or a glyphid standing
+     * in the open under a tree eats the tree. Somewhere above its own head to get to, or one wedged in a
+     * two-block corridor chews out through the roof rather than walking down it. And reached only from
+     * {@link GlyphidBrain#resolve}, which is to say after {@link GlyphidBrain#STUCK_TICKS} of getting
+     * nowhere: a swarm flowing up a wall is not stuck and never asks.
+     */
+    private static @Nullable BlockPos overhang(EntityGlyphid glyphid, Vec3 destination) {
+        if (!glyphid.isBesideClimbableBlock() || destination.y <= glyphid.getBoundingBox().maxY) {
+            return null;
+        }
+        // Off the hitbox rather than the eye, so a behemoth reaches the block a behemoth's head is under.
+        BlockPos above = BlockPos.containing(glyphid.getX(),
+                glyphid.getBoundingBox().maxY + 0.1, glyphid.getZ());
+        return edible(glyphid, above) ? above : null;
+    }
+
     /**
      * The next block of the doorway being opened, or null once it is wide enough to fit through. One chewed
      * block is a one-block hole and a glyphid is wider, so a breach is the block walked into, the one above,
@@ -266,6 +314,11 @@ public final class GlyphidBody {
      */
     private static @Nullable BlockPos widenBreach(EntityGlyphid glyphid, Vec3 destination) {
         GlyphidMind mind = glyphid.mind();
+        BlockPos origin = new BlockPos(mind.breachX, mind.breachY, mind.breachZ);
+        if (origin.getY() >= Mth.floor(glyphid.getBoundingBox().maxY)) {
+            return widenCeiling(glyphid, origin);
+        }
+
         double dx = destination.x - glyphid.getX();
         double dz = destination.z - glyphid.getZ();
         if (Math.abs(dx) < 1.0E-4 && Math.abs(dz) < 1.0E-4) {
@@ -275,7 +328,6 @@ public final class GlyphidBody {
         int sideX = alongX ? 0 : 1;
         int sideZ = alongX ? 1 : 0;
 
-        BlockPos origin = new BlockPos(mind.breachX, mind.breachY, mind.breachZ);
         BlockPos[] doorway = {
                 origin.above(),
                 origin.offset(sideX, 0, sideZ),
@@ -289,6 +341,32 @@ public final class GlyphidBody {
             }
         }
         return null;
+    }
+
+    /**
+     * The next block of a hole in a ceiling, or null once the hole is big enough to climb through.
+     *
+     * <p>Widened across the glyphid's own footprint rather than along the wall, because a hole overhead has
+     * to admit the whole body and a grunt is 1.4 blocks wide. The horizontal rule above opens a doorway three
+     * blocks along the face and one block deep, which is fine for walking through a wall and useless
+     * overhead: measured, a swarm of diggers chewed the overhang of a tower open and not one of them ever
+     * got above it, because a one-block slot is narrower than the thing trying to fit through it.
+     *
+     * <p>Its own footprint and no wider. A ring of nine would be eight more blocks of obsidian per glyphid
+     * for a hole nothing needs.
+     */
+    private static @Nullable BlockPos widenCeiling(EntityGlyphid glyphid, BlockPos origin) {
+        AABB box = glyphid.getBoundingBox();
+        for (int x = Mth.floor(box.minX); x <= Mth.floor(box.maxX); x++) {
+            for (int z = Mth.floor(box.minZ); z <= Mth.floor(box.maxZ); z++) {
+                BlockPos candidate = new BlockPos(x, origin.getY(), z);
+                if (edible(glyphid, candidate)) {
+                    return candidate;
+                }
+            }
+        }
+        // This layer is open; a lip thicker than one block has another above it.
+        return edible(glyphid, origin.above()) ? origin.above() : null;
     }
 
     private static boolean edible(EntityGlyphid glyphid, BlockPos pos) {

@@ -146,6 +146,8 @@ public class EntityGlyphidDigger extends EntityGlyphid {
 
         FallingBlockEntity rubble = FallingBlockEntity.fall(level(), pos, state);
         rubble.setHurtsEntities(RUBBLE_DAMAGE_PER_BLOCK, RUBBLE_MAX_DAMAGE);
+        // Named as the swarm's own, so it lands on a defender and not on the diggers standing around it.
+        rubble.addTag(RUBBLE_TAG);
         rubble.setDeltaMovement(launch.x + random.nextGaussian() * 0.05,
                 launch.y, launch.z + random.nextGaussian() * 0.05);
         return true;

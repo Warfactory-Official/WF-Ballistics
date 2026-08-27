@@ -5,6 +5,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import com.wf.wfballistics.debug.SwarmBench;
 import com.wf.wfballistics.debug.SwarmProfiler;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
+import com.wf.wfballistics.entity.glyphid.nav.GlyphidBridges;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
@@ -21,6 +22,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -115,10 +117,29 @@ public abstract class MixinEntity {
     private List<VoxelShape> wfballistics$entityCollisions(Level level, Entity entity, AABB box,
                                                           Operation<List<VoxelShape>> original) {
         if (!((Object) this instanceof EntityGlyphid)) {
-            return original.call(level, entity, box);
+            // Everything that is not a glyphid keeps vanilla's answer, with any bridge deck added to it.
+            // An anchored glyphid also reports canBeCollidedWith, which is the proper way to be standable —
+            // but a pig will not rest on a hovering boat in this dev runtime either, so that path cannot be
+            // shown to work here and the deck does not rely on it. Free when no bridge is standing: the
+            // deck lookup is a static int read that returns an empty list.
+            List<VoxelShape> shapes = original.call(level, entity, box);
+            List<VoxelShape> deck = GlyphidBridges.deckShapes(level, box);
+            if (deck.isEmpty()) {
+                return shapes;
+            }
+            if (shapes.isEmpty()) {
+                return deck;
+            }
+            List<VoxelShape> both = new ArrayList<>(shapes.size() + deck.size());
+            both.addAll(shapes);
+            both.addAll(deck);
+            return both;
         }
         if (SwarmBench.skipEntityCollisions) {
-            return List.of();
+            // Glyphids do not collide with each other, with one exception: the ones holding still to make a
+            // floor out of themselves. Answered from the bridge's own record of where its anchors sat rather
+            // than by reinstating the entity query this branch exists to avoid.
+            return GlyphidBridges.deckShapes(level, box);
         }
         if (!SwarmProfiler.enabled()) {
             return original.call(level, entity, box);
