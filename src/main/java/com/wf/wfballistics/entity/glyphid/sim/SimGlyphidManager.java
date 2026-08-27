@@ -120,6 +120,10 @@ public final class SimGlyphidManager {
         if (glyphid.isPassenger() || !glyphid.getPassengers().isEmpty()) {
             return false;
         }
+        // A bridge is made of hitboxes. An anchor without a body is a hole in the deck.
+        if (glyphid.hasBridgeSlot()) {
+            return false;
+        }
         if (glyphid.getHealth() < glyphid.getMaxHealth()) {
             return false;
         }

@@ -39,9 +39,9 @@ public final class GlyphidSquads {
     /** Ticks between reassignments. Also how stale a squad's fix on a moving player can get. */
     public static final int REFORM_INTERVAL = 100;
     /** Most squads one swarm will divide into, however many objectives are going. */
-    private static final int MAX_SQUADS = 4;
+    public static final int MAX_SQUADS = 4;
     /** Below this many bugs a squad is not a squad, it is a casualty. Bounds the split for small swarms. */
-    private static final int MIN_PER_SQUAD = 4;
+    public static final int MIN_PER_SQUAD = 4;
     /** How far from the swarm something has to be before it stops being worth splitting up over. */
     private static final double OBJECTIVE_RANGE = 96.0;
     /** How far to look along the line to an objective for the wall in the way. */
@@ -79,18 +79,40 @@ public final class GlyphidSquads {
         // one swarm, and clustering by position to work that out costs more than the split.
         Map<Long, List<EntityGlyphid>> hosts = new HashMap<>();
         for (EntityGlyphid bug : swarm) {
-            if (!bug.hasHome || bug.isScoutType()) {
+            if (!splits(bug)) {
                 continue;
             }
-            // Quantised: a warband spreads as it lands, so the exact block would give forty hosts of one.
-            long cell = ((long) (bug.homeX >> HOME_CELL_BITS) << 32) ^ (bug.homeZ >> HOME_CELL_BITS) & 0xFFFFFFFFL;
-            hosts.computeIfAbsent(cell, k -> new ArrayList<>()).add(bug);
+            hosts.computeIfAbsent(homeCell(bug), k -> new ArrayList<>()).add(bug);
         }
         for (List<EntityGlyphid> host : hosts.values()) {
-            if (host.size() >= MIN_PER_SQUAD * 2) {
+            if (splittable(host.size())) {
                 assign(level, host);
             }
         }
+    }
+
+    /** Whether a group this size is worth dividing, rather than being one squad already. */
+    public static boolean splittable(int hostSize) {
+        return hostSize >= MIN_PER_SQUAD * 2;
+    }
+
+    /**
+     * Whether this glyphid takes part in the split at all. A scout is off founding nests and a glyphid that
+     * has never ticked has no home cell to be grouped by.
+     */
+    public static boolean splits(EntityGlyphid bug) {
+        return bug.hasHome && !bug.isScoutType();
+    }
+
+    /**
+     * Which group of warbands this glyphid belongs to: where it came from, quantised, since a warband spreads
+     * as it lands and the exact block would give forty hosts of one.
+     *
+     * <p>Public so a census can group a swarm the same way the splitter does. Two copies of this arithmetic
+     * would let a report disagree with the thing it is reporting on.
+     */
+    public static long homeCell(EntityGlyphid bug) {
+        return ((long) (bug.homeX >> HOME_CELL_BITS) << 32) ^ (bug.homeZ >> HOME_CELL_BITS) & 0xFFFFFFFFL;
     }
 
     private static void assign(ServerLevel level, List<EntityGlyphid> members) {

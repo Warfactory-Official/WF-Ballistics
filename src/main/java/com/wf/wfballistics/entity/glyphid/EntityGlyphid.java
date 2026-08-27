@@ -25,6 +25,8 @@ import com.wf.wfballistics.entity.glyphid.brain.GlyphidPlan;
 import com.wf.wfballistics.entity.glyphid.brain.GlyphidSnapshot;
 import com.wf.wfballistics.entity.glyphid.flight.GlyphidFlight;
 import com.wf.wfballistics.entity.glyphid.ai.GlyphidWanderGoal;
+import com.wf.wfballistics.entity.glyphid.nav.GlyphidBridge;
+import com.wf.wfballistics.entity.glyphid.nav.GlyphidBridges;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
@@ -204,6 +206,18 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
 
     /** Whether every equipment slot has only ever held an empty stack. See {@link #setItemSlot}. */
     private boolean equipmentEmpty = true;
+
+    /**
+     * The bridge this glyphid is walking out to join or holding still in, and the slot it has on it. Not
+     * saved: a reloaded swarm rebuilds any crossing it still wants in a few seconds, which is cheaper than
+     * persisting a structure made of entities that may not have survived the reload.
+     */
+    private @Nullable GlyphidBridge bridge;
+    private @Nullable GlyphidBridge.Slot bridgeSlot;
+    /** Tick the slot was claimed on, so one that cannot reach its slot gives it back rather than blocking. */
+    private int bridgeClaimedAt;
+    /** True once in place: no AI, no gravity, and a surface the rest of the swarm can walk over. */
+    private boolean anchored;
 
     /**
      * Which squad this glyphid is in and what it was sent to do. Not saved or synced: {@code GlyphidSquads}
@@ -619,10 +633,25 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         return source.is(DamageTypeTags.IS_EXPLOSION) || source.is(WFDamageTypes.EXPLOSIVE);
     }
 
+    /**
+     * Marks a block a glyphid threw, so the swarm's own siege engineering cannot cut it down.
+     *
+     * <p>A tag rather than an owner field because the projectile is a vanilla {@code FallingBlockEntity} —
+     * it is spawned by {@code FallingBlockEntity.fall} and there is nowhere on it to record who threw it.
+     */
+    public static final String RUBBLE_TAG = "wfballistics_glyphid_rubble";
+
     @Override
     public boolean hurt(DamageSource source, float amount) {
         // Glyphids never hurt each other, so a packed swarm does not cut itself down with its own splash.
-        if (source.getEntity() instanceof EntityGlyphid) return false;
+        // The rubble counts: a digger's ground slam throws real falling blocks, and the damage they do names
+        // the block as the attacker rather than the bug that launched it, so it went straight past this test.
+        // Measured, 150 diggers under a tower killed 110 of themselves in four minutes with nothing else in
+        // the arena -- the one caste whose whole job is opening terrain, unable to do it in a group.
+        Entity attacker = source.getEntity();
+        if (attacker instanceof EntityGlyphid || (attacker != null && attacker.getTags().contains(RUBBLE_TAG))) {
+            return false;
+        }
 
         boolean landed = GlyphidStats.getStats().handleAttack(this, source, amount);
         // On the raw amount, not what got through. Server-side only: the client mirrors the bitmask.
@@ -953,12 +982,121 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
 
     @Override
     public boolean carrierPushable() {
-        return isAlive() && !isPassenger() && !isAirborne();
+        return isAlive() && !isPassenger() && !isAirborne() && !anchored;
     }
 
     @Override
     public void carrierPush(double dx, double dz) {
         push(dx, 0.0, dz);
+    }
+
+
+    /** How near the slot centre a glyphid has to get before it sits down. */
+    private static final double ANCHOR_REACH = 0.5;
+    /** Ticks to reach a claimed slot before giving it back, so one that cannot get there blocks nothing. */
+    private static final int ANCHOR_WALK_TICKS = 100;
+    /** How far below the deck a recruit has to be for its walk to count as a fall rather than a detour. */
+    private static final double ANCHOR_FALL = 4.0;
+
+    public @Nullable GlyphidBridge bridge() {
+        return bridge;
+    }
+
+    public boolean isAnchored() {
+        return anchored;
+    }
+
+    /** Whether this glyphid is doing bridge work, either walking out to a slot or holding one. */
+    public boolean hasBridgeSlot() {
+        return bridgeSlot != null;
+    }
+
+    /** Take a slot offered by {@link GlyphidBridges#recruit}. */
+    public void takeBridgeSlot(GlyphidBridge bridge, GlyphidBridge.Slot slot) {
+        this.bridge = bridge;
+        this.bridgeSlot = slot;
+        this.bridgeClaimedAt = tickCount;
+        // A glyphid at the edge of a chasm has usually given up walking and started eating the ground. That is
+        // exactly the one that should lie down instead, so the chew is abandoned rather than being a reason
+        // not to recruit it.
+        GlyphidBody.clearCracks(this, mind);
+        mind.stopChewing();
+        getNavigation().stop();
+    }
+
+    /** Stop being part of a bridge, whether seated or still walking out. */
+    public void dropBridgeSlot() {
+        if (anchored) {
+            setNoGravity(false);
+            anchored = false;
+        }
+        bridge = null;
+        bridgeSlot = null;
+    }
+
+    /**
+     * One tick of being part of a bridge: walk out to the slot, then hold it.
+     * @return true while this glyphid is on bridge duty and the brain should be left alone
+     */
+    public boolean tickBridgeSlot(ServerLevel level) {
+        GlyphidBridge span = bridge;
+        GlyphidBridge.Slot slot = bridgeSlot;
+        if (span == null || slot == null) {
+            return false;
+        }
+        if (slot.occupantId() != getId()) {
+            // The claim timed out and somebody nearer took the slot.
+            dropBridgeSlot();
+            return false;
+        }
+
+        double x = slot.x + 0.5;
+        double z = slot.z + 0.5;
+        // Pinned by the top of the hitbox, not the bottom, so the deck is flush with the bank whatever caste
+        // ends up standing in it.
+        double y = span.deckY - getBbHeight();
+
+        if (anchored) {
+            if (distanceToSqr(x, y, z) > 1.0E-6) {
+                setPos(x, y, z);
+            }
+            setDeltaMovement(Vec3.ZERO);
+            return true;
+        }
+
+        // Walked to, and stepped out from: the slot is over the gap, so approaching it directly would be
+        // walking into open air.
+        int[] approach = span.approach(slot);
+        double dx = approach[0] + 0.5 - getX();
+        double dz = approach[1] + 0.5 - getZ();
+        if (dx * dx + dz * dz <= ANCHOR_REACH * ANCHOR_REACH) {
+            anchored = true;
+            getNavigation().stop();
+            setNoGravity(true);
+            setPos(x, y, z);
+            setDeltaMovement(Vec3.ZERO);
+            GlyphidBridges.seat(level, span, slot, getBoundingBox());
+            return true;
+        }
+        // Given up on when it runs out of patience, and immediately if it has been shoved into the gap it was
+        // meant to be spanning — a slot held by something falling is a slot nobody else can take.
+        if (tickCount - bridgeClaimedAt > ANCHOR_WALK_TICKS || getY() < span.deckY - ANCHOR_FALL) {
+            GlyphidBridges.release(level, this);
+            return false;
+        }
+        getMoveControl().setWantedPosition(approach[0] + 0.5, span.deckY, approach[1] + 0.5, aiSpeed());
+        return true;
+    }
+
+    /** An anchor is a floor. Nothing else about a glyphid is solid, and nothing else here returns true. */
+    @Override
+    public boolean canBeCollidedWith() {
+        return anchored;
+    }
+
+    @Override
+    public boolean isPushable() {
+        return !anchored && super.isPushable();
     }
 
     /**
@@ -969,6 +1107,10 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     public void remove(RemovalReason reason) {
         if (!level().isClientSide) {
             GlyphidBody.clearCracks(this, mind);
+            if (bridgeSlot != null && level() instanceof ServerLevel server) {
+                // Takes the rest of the span with it: the deck past a hole cannot be reached.
+                GlyphidBridges.release(server, this);
+            }
         }
         super.remove(reason);
     }
