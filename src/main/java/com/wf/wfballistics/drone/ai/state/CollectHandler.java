@@ -13,15 +13,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * Over a rendezvous, going down for a crate somebody else left.
- *
- * <p>The mirror of {@link DeliverHandler}, and it settles the same way and for the same reason: a drone
- * grabbing a crate has to actually be over it and stopped, not sliding past. It differs in what happens if
- * the zone turns out to be occupied: a delivering drone still has its cargo and can take it home, but a
- * collecting drone arriving to find a player standing over the goods simply leaves. Descending onto a
- * watched crate would hand the watcher both the crate and the drone.
- */
+/** Over a rendezvous, going down for a crate somebody else left. */
 public final class CollectHandler implements DroneStateHandler {
 
     public static final CollectHandler INSTANCE = new CollectHandler();

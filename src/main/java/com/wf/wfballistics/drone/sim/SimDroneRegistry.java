@@ -11,10 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Per-dimension persistent store of off-world drones, mirroring {@code SimMissileRegistry}. Data only:
- * offload/onload logic lives in {@link SimDroneManager}.
- */
+/** Per-dimension persistent store of off-world drones, mirroring {@code SimMissileRegistry}. */
 public final class SimDroneRegistry extends SavedData {
 
     public static final String NAME = "wfballistics_sim_drones";

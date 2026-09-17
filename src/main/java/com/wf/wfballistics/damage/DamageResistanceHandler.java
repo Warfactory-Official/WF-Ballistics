@@ -16,28 +16,9 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * HBM's two-number armour model: every defence is a <b>damage threshold</b> (DT, a flat amount subtracted
- * before anything else) plus a <b>damage resistance</b> (DR, a percentage taken off what's left), tracked
- * <em>per damage category</em>. A plate might stop 8 flat physical damage and 50% of what gets through,
- * while barely resisting fire. Weapons fight back with <b>piercing</b>: {@code pierceDT} eats into the
- * threshold, {@code pierceDR} into the resistance.
- *
- * <p>Final damage for one hit:
- * <pre>
- *   dt = max(0, totalDT - pierceDT)
- *   if (dt &gt;= amount) -&gt; 0                       // threshold fully absorbs the hit
- *   dr = totalDR * clamp(1 - pierceDR, 0, 2)       // &gt;1 is allowed: over-piercing amplifies damage
- *   final = (amount - dt) * (1 - dr)
- * </pre>
- *
- * <p><b>How it's applied:</b> {@link com.wf.wfballistics.damage.DamageEventHandler} runs this on every
- * {@code LivingHurtEvent}, so registered armour resists matching damage from any source: not just this
- * mod's weapons. With nothing registered the maths is a no-op, so it is safe to leave enabled. Piercing for
- * a specific hit is supplied through {@link EntityDamageUtil#dealDamage}, which stashes it in a thread-local
- * for the duration of that one {@code hurt} call.
- *
- * <p>This is intentionally a thin, in-memory registry (no JSON config): register armour profiles from your
- * mod's setup; extend with set bonuses or a config loader as needed.
+ * HBM's two-number armour model: every defence is a <b>damage threshold</b> (DT, a flat amount subtracted before
+ * anything else) plus a <b>damage resistance</b> (DR, a percentage taken off what's left), tracked <em>per damage
+ * category</em>.
  */
 public final class DamageResistanceHandler {
 
@@ -47,8 +28,6 @@ public final class DamageResistanceHandler {
     public static final String CATEGORY_ENERGY = "energy";
     public static final String CATEGORY_OTHER = "other";
 
-    // Piercing for the hit currently being resolved. Thread-local because damage is applied synchronously
-    // on the server thread, and so the whole hurt()->LivingHurtEvent chain sees the value set by dealDamage.
     private static final ThreadLocal<float[]> PIERCE = ThreadLocal.withInitial(() -> new float[]{0F, 0F});
 
     private static final Map<Item, ResistanceProfile> ARMOR = new HashMap<>();
@@ -105,8 +84,8 @@ public final class DamageResistanceHandler {
     }
 
     /**
-     * As {@link #getDTDR(LivingEntity, String)}, but also consults {@link DynamicResistance} when the source
-     * of the hit is known. Prefer this: the category alone throws away detail an entity may care about.
+     * As {@link #getDTDR(LivingEntity, String)}, but also consults {@link DynamicResistance} when the source of the
+     * hit is known.
      *
      * @param source the hit being resolved, or null if only the category is known
      */
@@ -178,7 +157,6 @@ public final class DamageResistanceHandler {
         if (source.is(DamageTypeTags.IS_PROJECTILE)) return CATEGORY_PHYSICAL;
         return CATEGORY_OTHER;
     }
-
 
     /**
      * A flat threshold (DT) and a fractional resistance (DR, 0..1) for one category.

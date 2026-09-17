@@ -10,25 +10,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.saveddata.SavedData;
 
-/**
- * Per-level record of provocative industry: where it is, and what it is worth.
- *
- * <p>Two indexes over the same facts. {@code machines} is the ground truth, keyed by full block position;
- * {@code cells} is a derived sum per region cell, which is what the colony simulation actually reads. The
- * derived index is maintained incrementally on every add and remove, so querying regional pressure is a
- * map lookup rather than a scan.
- *
- * <p>Deliberately different from wfcore's radar registry in two ways, both of which are fine for a radar
- * and not for something that decides whether a base gets attacked:
- * <ul>
- *   <li><b>Keys are 3D.</b> The radar packs {@code (x,z)}, so a machine placed above another overwrites
- *       it and breaking the upper one deregisters the lower. A radar wants a footprint and does not care.
- *       Here it would undercount tall bases and make stacking machines a way to suppress aggression.</li>
- *   <li><b>Chunks get backfilled.</b> Block-place events miss worldgen, structures, KubeJS, AE2 and
- *       {@code /setblock}, and every machine that predates this feature. {@link #isScanned} lets
- *       {@link IndustryTracker} sweep each chunk exactly once, ever, so an existing base is not invisible.</li>
- * </ul>
- */
+/** Per-level record of provocative industry: where it is, and what it is worth. */
 public final class IndustryRegistry extends SavedData {
 
     public static final String NAME = "wfballistics_industry";
@@ -107,10 +89,7 @@ public final class IndustryRegistry extends SavedData {
 
     // --- mutation ---
 
-    /**
-     * Record a machine. Replacing an existing entry adjusts the cell sum by the difference, so a value
-     * change (config reload, wfcore reporting a better number) cannot drift the derived index.
-     */
+    /** Record a machine. */
     public void add(BlockPos pos, int value) {
         if (value <= 0) {
             remove(pos);
@@ -153,12 +132,7 @@ public final class IndustryRegistry extends SavedData {
 
     /**
      * @return provocation reaching this position from within {@code radiusBlocks}, falling off linearly
-     * with distance.
-     *
-     * <p>The radius is explicit rather than "the neighbouring cells" on purpose. Sampling a fixed ring of
-     * cells silently ties how far industry can be smelled to the cell size, so changing the cell size for
-     * performance reasons would quietly change the gameplay — and a colony 850 blocks from a factory would
-     * be oblivious for no reason a reader could see.
+     *      with distance.
      */
     public int pressureWithin(int blockX, int blockZ, int radiusBlocks) {
         int span = cellChunks * 16;
@@ -187,7 +161,7 @@ public final class IndustryRegistry extends SavedData {
 
     /**
      * @return every occupied cell and its value. This is what the colony simulation reads; it is orders of
-     * magnitude smaller than {@link #machineCount()}, which is what makes clustering over it cheap.
+     *      magnitude smaller than {@link #machineCount()}, which is what makes clustering over it cheap.
      */
     public Long2IntMap cells() {
         return cells;
@@ -207,12 +181,7 @@ public final class IndustryRegistry extends SavedData {
 
     // --- chunk backfill bookkeeping ---
 
-    /**
-     * Drop every machine inside these chunks, and forget that they were ever swept.
-     *
-     * <p>One pass over the whole map rather than a lookup per chunk: a rescan usually covers hundreds of
-     * chunks, and scanning the map once beats probing it once per chunk.
-     */
+    /** Drop every machine inside these chunks, and forget that they were ever swept. */
     public int forgetChunks(LongOpenHashSet chunkPositions) {
         int removed = 0;
         var iterator = machines.long2IntEntrySet().iterator();
@@ -273,8 +242,8 @@ public final class IndustryRegistry extends SavedData {
     // --- persistence ---
 
     /**
-     * Stored as parallel primitive arrays rather than a list of compounds: a megabase is tens of thousands
-     * of entries, and one {@code CompoundTag} each is both far larger on disk and far slower to write.
+     * Stored as parallel primitive arrays rather than a list of compounds: a megabase is tens of thousands of
+     * entries, and one {@code CompoundTag} each is both far larger on disk and far slower to write.
      */
     public static IndustryRegistry load(CompoundTag tag) {
         IndustryRegistry registry = new IndustryRegistry();

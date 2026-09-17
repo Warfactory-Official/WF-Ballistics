@@ -14,15 +14,7 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * The brood mother. Killing her is not the end of the fight, it is the start of the next one.
- *
- * <p>Upstream's death throe is a pheromone cloud; there is no pheromone system here and none is needed, since
- * what it did was rally the swarm on the corpse. Expressed as a rally waypoint plus an outright brood.
- *
- * <p>Not high priority: a rally that cancelled every target would pull the swarm off whatever it was biting
- * at the moment the defender was winning.
- */
+/** The brood mother. */
 public class EntityGlyphidBrenda extends EntityGlyphid {
 
     /** Grunts that boil out of her when she dies. */
@@ -46,7 +38,6 @@ public class EntityGlyphidBrenda extends EntityGlyphid {
     public GlyphidStats.StatBundle getStats() {
         return GlyphidStats.getStats().getBrenda();
     }
-
 
     @Override
     public boolean fireImmune() {
@@ -88,8 +79,6 @@ public class EntityGlyphidBrenda extends EntityGlyphid {
             grunt.moveTo(getX(), getY() + 0.5D, getZ(), random.nextFloat() * 360.0F, 0.0F);
             grunt.setSubtype(subtype());
             server.addFreshEntity(grunt);
-            // Scattered on spawn, because twelve bugs materialising in one block is a stack that has to shove
-            // itself apart -- and glyphids do not shove each other.
             grunt.move(MoverType.SELF, new Vec3(random.nextGaussian(), 0.0, random.nextGaussian()));
         }
     }

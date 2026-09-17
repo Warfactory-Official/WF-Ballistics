@@ -15,78 +15,31 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * A pile of work several workers share out between themselves, without any of them talking to each other.
- *
- * <p>Deliberately domain-blind. It knows about claims, deadlines, retries and ordering; it does not know what
- * a block is, and nothing in here imports anything from {@code build} or {@code drone}. A {@link WorkOrder}
- * is a position, an ordering key and one integer, which is enough to describe placing a block, breaking one,
- * or whatever the next thing turns out to be.
- *
- * <p>Three things make this more than a list with a lock:
- *
- * <p><b>The sequence gate.</b> Handing out any pending order would send workers to jobs that cannot be done
- * yet: you cannot place a torch before its wall, or sand with nothing under it. Rather than model
- * dependencies, every order carries a {@link WorkOrder#sequence} and the queue refuses to hand out anything
- * more than {@link #LOOKAHEAD} beyond the lowest one still outstanding. That is a coarse instrument and it is
- * meant to be: it costs one integer per order, needs no graph, and expresses "layer by layer" exactly, which
- * is what both of the jobs this was written for actually need. The lookahead is what keeps it from
- * serialising the whole job behind one slow order.
- *
- * <p><b>Deadlines scale with distance.</b> A fixed timeout is the obvious design and it is wrong: how long an
- * order should take depends on how far away it is. Set it flat and a site five hundred blocks from the depot
- * has every claim expire <em>while the worker is still flying to it</em>: the queue reissues work to workers
- * already on their way, they arrive to find the job gone, and it never converges. See {@link #deadlineFor}.
- *
- * <p><b>Claims repel each other.</b> Four workers asking at the same moment would otherwise all be given the
- * four nearest orders, which are next to each other, which puts four of them in the same place. Claiming
- * prefers orders that are clear of other live claims: see {@link #CROWDING}.
- *
- * <p>Not thread-safe, and not meant to be: everything here runs on the server thread.
- */
+/** A pile of work several workers share out between themselves, without any of them talking to each other. */
 public final class WorkQueue {
 
-    /**
-     * How far past the frontier an order may be and still be handed out, in sequence steps.
-     *
-     * <p>Zero would be a strict barrier, nothing from the next layer until this one is finished, and it
-     * throttles the job to its slowest worker at every layer boundary. Two lets workers start the next layer
-     * while the last few of this one are still in the air, which is what the parallelism was for, while
-     * staying short enough that nothing gets more than a layer or so ahead of its own support.
-     */
+    /** How far past the frontier an order may be and still be handed out, in sequence steps. */
     public static final int LOOKAHEAD = 2;
     /**
      * How many times an order is retried before it is written off as {@link WorkStatus#BLOCKED}.
      */
     public static final int MAX_ATTEMPTS = 3;
-    /**
-     * Shortest deadline a claim can be given, ticks. Covers the case of an order underfoot, where the travel
-     * time is nearly nothing but the work itself still takes as long as it takes.
-     */
+    /** Shortest deadline a claim can be given, ticks. */
     public static final int MIN_DEADLINE = 200;
     /**
-     * Ticks added on top of the travel estimate for doing the job once there: descending onto it, working,
-     * climbing away.
+     * Ticks added on top of the travel estimate for doing the job once there: descending onto it, working, climbing
+     * away.
      */
     public static final int WORK_ALLOWANCE = 100;
-    /**
-     * How much slower than a straight run at cruise a worker is allowed to be before its claim lapses. Three
-     * is generous, and should be: the cost of a deadline that is too short is a queue that thrashes, and the
-     * cost of one that is too long is only that a genuinely lost order takes a while to come back.
-     */
+    /** How much slower than a straight run at cruise a worker is allowed to be before its claim lapses. */
     public static final double DEADLINE_SLACK = 3.0;
     /**
      * How far apart claims would ideally be, blocks. Not a rule: see {@link #CROWDING}.
      */
     public static final double CLAIM_SPACING = 8.0;
-    /**
-     * What a block of crowding is worth, in blocks of travel. A soft penalty rather than a hard exclusion so
-     * that a queue whose remaining orders are all in one corner still hands them out instead of deadlocking.
-     */
+    /** What a block of crowding is worth, in blocks of travel. */
     public static final double CROWDING = 4.0;
 
-    // Orders, held as parallel arrays and sorted by sequence. The sort is what makes the ready window a
-    // contiguous run of indices starting at `cursor`, so claiming scans a layer rather than the whole job.
     private final long[] positions;
     private final int[] sequences;
     private final int[] data;
@@ -95,10 +48,7 @@ public final class WorkQueue {
 
     private final Map<Integer, Claim> claims = new LinkedHashMap<>();
 
-    /**
-     * Lowest index that is not yet terminal. Only ever moves forward, because an order that is DONE or
-     * BLOCKED never goes back.
-     */
+    /** Lowest index that is not yet terminal. */
     private int cursor;
     private int done;
     private int blocked;
@@ -112,10 +62,7 @@ public final class WorkQueue {
         recount();
     }
 
-    /**
-     * Build a queue from unordered orders. Ids are assigned here, in sequence order, and the caller's ids are
-     * discarded: an order's id is its index in this queue and means nothing outside it.
-     */
+    /** Build a queue from unordered orders. */
     public static WorkQueue of(List<WorkOrder> orders) {
         List<WorkOrder> sorted = new ArrayList<>(orders);
         sorted.sort(Comparator.comparingInt(WorkOrder::sequence));
@@ -156,7 +103,7 @@ public final class WorkQueue {
 
     /**
      * @return true when nothing is left to do, whether or not all of it worked. A job with blocked orders is
-     * finished and unsuccessful, which is a distinction the caller has to make for itself.
+     *      finished and unsuccessful, which is a distinction the caller has to make for itself.
      */
     public boolean finished() {
         return this.done + this.blocked >= this.size();
@@ -176,7 +123,7 @@ public final class WorkQueue {
 
     /**
      * @return the lowest sequence still outstanding, or {@link Integer#MAX_VALUE} if the queue is finished.
-     * What the {@link #LOOKAHEAD} window is measured from.
+     *      What the {@link #LOOKAHEAD} window is measured from.
      */
     public int frontier() {
         this.advanceCursor();
@@ -190,7 +137,7 @@ public final class WorkQueue {
 
     /**
      * @return the ids of every order somebody is holding right now. Small, one per worker, so callers that
-     * need to do something per live claim should walk this rather than scanning the whole queue
+     *      need to do something per live claim should walk this rather than scanning the whole queue
      */
     public Set<Integer> claimedIds() {
         return java.util.Collections.unmodifiableSet(this.claims.keySet());
@@ -211,12 +158,12 @@ public final class WorkQueue {
     /**
      * Hand this worker something to do.
      *
-     * @param from          where the worker is now, for both the choice and the deadline
+     * @param from where the worker is now, for both the choice and the deadline
      * @param blocksPerTick how fast it travels, for the deadline. A worker that lies about this only cheats
-     *                      itself out of time
+     *      itself out of time
      * @return an order, now marked {@link WorkStatus#CLAIMED} to this worker, or null if there is nothing
-     * available, which may mean the queue is finished, or only that everything within the lookahead is
-     * already claimed. The caller cannot tell the two apart from here and should ask {@link #finished}
+     *      available, which may mean the queue is finished, or only that everything within the lookahead is
+     *      already claimed. The caller cannot tell the two apart from here and should ask {@link #finished}
      */
     @Nullable
     public WorkOrder claim(UUID worker, Vec3 from, double blocksPerTick, long now) {
@@ -248,7 +195,7 @@ public final class WorkQueue {
 
     /**
      * @return how good a candidate order {@code i} is for a worker at {@code from}: its distance, plus what
-     * it costs to be near somebody else's claim.
+     *      it costs to be near somebody else's claim.
      */
     private double score(int i, Vec3 from) {
         Vec3 at = Vec3.atCenterOf(BlockPos.of(this.positions[i]));
@@ -264,12 +211,7 @@ public final class WorkQueue {
 
     /**
      * @return when a claim on {@code at}, made by a worker at {@code from} moving at {@code blocksPerTick},
-     * should be considered lost.
-     *
-     * <p>Straight-line distance, which understates the real route: a worker climbs to altitude, may fly a
-     * dogleg, and has to descend again. {@link #DEADLINE_SLACK} is what covers that, and it is set generously
-     * because the two failure modes are wildly asymmetric: too long merely delays the recovery of an order
-     * that was genuinely lost, while too short breaks the queue outright.
+     *      should be considered lost.
      */
     private long deadlineFor(Vec3 from, BlockPos at, double blocksPerTick, long now) {
         double speed = Math.max(0.05, blocksPerTick);
@@ -282,7 +224,7 @@ public final class WorkQueue {
      * The work got done.
      *
      * @return false if this worker did not hold that order: a stale worker finishing something that was
-     * reassigned underneath it, which must not be allowed to count
+     *      reassigned underneath it, which must not be allowed to count
      */
     public boolean complete(UUID worker, int id) {
         if (!this.holds(worker, id)) {
@@ -298,9 +240,9 @@ public final class WorkQueue {
      * Give an order back.
      *
      * @param penalise whether this counts against the order's {@link #MAX_ATTEMPTS}. True when the work was
-     *                 attempted and could not be done (the space is occupied, the material never came) and
-     *                 false when the <em>worker</em> failed rather than the order. Getting this backwards
-     *                 means three unlucky shoot-downs permanently block a perfectly placeable block
+     *      attempted and could not be done (the space is occupied, the material never came) and
+     *      false when the <em>worker</em> failed rather than the order. Getting this backwards
+     *      means three unlucky shoot-downs permanently block a perfectly placeable block
      * @return false if this worker did not hold that order
      */
     public boolean release(UUID worker, int id, boolean penalise) {
@@ -313,8 +255,7 @@ public final class WorkQueue {
     }
 
     /**
-     * Drop everything this worker was holding, without penalty. What a worker calls when it is recalled, runs
-     * out of battery, or is destroyed: none of that is the orders' fault.
+     * Drop everything this worker was holding, without penalty.
      *
      * @return how many were given back
      */
@@ -328,11 +269,7 @@ public final class WorkQueue {
     }
 
     /**
-     * Expire claims whose deadline has passed. Call once per tick from whoever owns the queue.
-     *
-     * <p>A lapse <em>does</em> count as an attempt, unlike {@link #abandon}. A worker that took a claim and
-     * then silently stopped existing is indistinguishable from an order that cannot be reached, and the only
-     * thing that separates them over time is that the unreachable one keeps happening.
+     * Expire claims whose deadline has passed.
      *
      * @return how many lapsed
      */
@@ -397,9 +334,9 @@ public final class WorkQueue {
     // --- serialisation ---
 
     /**
-     * Written as primitive arrays rather than a list of compounds, which is not premature: a build of any
-     * size is tens of thousands of orders, and a compound each would be megabytes of tag objects to allocate
-     * on every autosave.
+     * Written as primitive arrays rather than a list of compounds, which is not premature: a build of any size is
+     * tens of thousands of orders, and a compound each would be megabytes of tag objects to allocate on every
+     * autosave.
      */
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
@@ -424,8 +361,6 @@ public final class WorkQueue {
     public static WorkQueue load(CompoundTag tag) {
         long[] positions = tag.getLongArray("Positions");
         int n = positions.length;
-        // Everything is sized off the positions array, so a truncated or hand-edited tag produces a short
-        // queue rather than an exception on a mismatched index later.
         WorkQueue queue = new WorkQueue(positions, sized(tag.getIntArray("Sequences"), n),
                 sized(tag.getIntArray("Data"), n), sized(tag.getByteArray("Status"), n),
                 sized(tag.getByteArray("Attempts"), n));
@@ -433,15 +368,11 @@ public final class WorkQueue {
         for (int i = 0; i < held.size(); i++) {
             CompoundTag one = held.getCompound(i);
             int id = one.getInt("Order");
-            // A claim on an order that is no longer CLAIMED is a contradiction, and trusting it would leave
-            // the order permanently unavailable with nobody able to release it.
             if (id >= 0 && id < n && queue.statusOf(id) == WorkStatus.CLAIMED) {
                 queue.claims.put(id, new Claim(one.getUUID("Worker"), one.getLong("Since"),
                         one.getLong("Deadline")));
             }
         }
-        // Any order left CLAIMED with no surviving claim goes back in the pile, unpenalised: the world
-        // reloaded, which is nobody's fault.
         for (int i = 0; i < n; i++) {
             if (queue.statusOf(i) == WorkStatus.CLAIMED && !queue.claims.containsKey(i)) {
                 queue.status[i] = (byte) WorkStatus.PENDING.ordinal();
@@ -471,7 +402,7 @@ public final class WorkQueue {
     /**
      * Who holds an order and until when.
      *
-     * @param since    when it was taken, for diagnostics
+     * @param since when it was taken, for diagnostics
      * @param deadline the tick after which {@link #lapse} takes it back
      */
     public record Claim(UUID worker, long since, long deadline) {

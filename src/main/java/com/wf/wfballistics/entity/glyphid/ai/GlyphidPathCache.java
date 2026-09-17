@@ -13,23 +13,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * One A* per group of glyphids going the same way, instead of one per glyphid.
- *
- * <p>Three hundred bugs on one base run three hundred searches for what is, within a few blocks, the same
- * route. Quantising both ends to a {@link #CELL}-block grid collides them on one key: the first pays and the
- * rest copy. The copy matters — {@link Path} carries a mutable cursor, so sharing an instance would have two
- * mobs advancing each other along it. The nodes themselves are immutable and shared.
- *
- * <p>Entries expire after {@link #TTL} ticks: a stale path routes the swarm into a wall it already ate.
- */
+/** One A* per group of glyphids going the same way, instead of one per glyphid. */
 public final class GlyphidPathCache {
 
-    /**
-     * Quantisation of both search endpoints. Bigger cells share more searches but start the route further
-     * from the glyphid following it, which reads as the swarm forming into lanes; four keeps the detour
-     * under a body length.
-     */
+    /** Quantisation of both search endpoints. */
     private static final int CELL = 4;
     private static final int TTL = 20;
     /** Cleared wholesale past this size: the cache is rebuilt every second, so the crude policy is right. */
@@ -70,8 +57,8 @@ public final class GlyphidPathCache {
     }
 
     /**
-     * Record a search result, including a failed one — proving a route does not exist costs more than finding
-     * one, and is exactly as worth sharing.
+     * Record a search result, including a failed one: proving a route does not exist costs more than finding one,
+     * and is exactly as worth sharing.
      */
     public static void store(Level level, BlockPos start, BlockPos destination, @Nullable Path path, int tick) {
         if (CACHE.size() >= MAX_ENTRIES) {

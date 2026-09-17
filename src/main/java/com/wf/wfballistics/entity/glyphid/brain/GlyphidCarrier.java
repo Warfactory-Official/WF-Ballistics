@@ -2,13 +2,7 @@ package com.wf.wfballistics.entity.glyphid.brain;
 
 import net.minecraft.server.level.ServerLevel;
 
-/**
- * Something {@link GlyphidBrain} can drive: the live {@code EntityGlyphid} or the {@code SimGlyphid} record.
- * A record cannot run a {@code Goal}, but it can fill in a {@link GlyphidSnapshot} and act on a
- * {@link GlyphidPlan}, which is why the brain lives outside the movement goals.
- *
- * <p>Every method is called on the world thread.
- */
+/** Something {@link GlyphidBrain} can drive: the live {@code EntityGlyphid} or the {@code SimGlyphid} record. */
 public interface GlyphidCarrier {
 
     int carrierId();
@@ -18,10 +12,7 @@ public interface GlyphidCarrier {
      */
     boolean carrierAlive();
 
-    /**
-     * This body's AI memory. Owned by the carrier so it survives between decisions and so the brain never has
-     * to hold state of its own.
-     */
+    /** This body's AI memory. */
     GlyphidMind mind();
 
     /** Capture what the brain is allowed to see, sampling the world <em>now</em>. */
@@ -29,9 +20,6 @@ public interface GlyphidCarrier {
 
     /** Carry out a finished plan. The only step that touches the world. */
     void apply(ServerLevel level, GlyphidPlan plan);
-
-    // --- where the body is, for the level passes that work on a swarm rather than on a decision ---
-    // Separation is the caller, and it needs both tiers in one grid or half the swarm ends up stacked.
 
     double carrierX();
 

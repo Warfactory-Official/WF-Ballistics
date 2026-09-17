@@ -25,43 +25,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
-/**
- * Drives the drone AI for one dimension, one tick at a time.
- *
- * <pre>
- *   tick N, world thread:  1. collect finished steering jobs from tick N-1
- *                          2. adopt any route searches that have finished
- *                          3. apply the plans (the only step that touches the world)
- *                          4. snapshot every drone, group into squads
- *                          5. dispatch one steering job per squad, plus a route search for any drone due one
- *   tick N, workers:       DroneBrain.planSquad(...) -> plans    (microseconds, must land every tick)
- *                          DroneBrain.planRoute(...) -> a route  (milliseconds, lands whenever it lands)
- * </pre>
- *
- * <p>The threading contract that makes this safe:
- * <ul>
- *   <li>Workers only ever see {@link DroneSnapshot}/{@link SquadView}, which hold no world references at
- *       all. That is a compile-time guarantee, not a convention. Terrain reaches them the same way, as an
- *       immutable {@code TerrainField} condensed from chunks on this thread.</li>
- *   <li>Both boundary crossings are asserted at runtime by {@link WorldThread}: the searches refuse to run
- *       on the server thread, and the chunk reads refuse to run anywhere else. {@code DroneSelfTest} checks
- *       those assertions are armed, and {@code /wfballistics drone threads} reports which thread the
- *       searches have actually been running on.</li>
- *   <li>Every field of this class is read and written on the world thread only. The single thing that
- *       crosses threads is the {@link Future}, and it is polled, never completed into shared state, so
- *       there is nothing here to race on.</li>
- *   <li>A plan is applied at most {@link #MAX_PLAN_AGE} ticks after the snapshot it came from. Anything
- *       staler is dropped and the drone coasts, so a slow planner degrades into a hover instead of
- *       teleporting drones around on old data.</li>
- *   <li>One job per squad, so coordination needs no locks.</li>
- * </ul>
- */
+/** Drives the drone AI for one dimension, one tick at a time. */
 public final class DroneAiScheduler {
 
-    /**
-     * Ticks a plan stays usable. Normally plans land the tick after they were requested; this is the
-     * tolerance for a worker that got starved.
-     */
+    /** Ticks a plan stays usable. */
     public static final int MAX_PLAN_AGE = 4;
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -71,54 +38,26 @@ public final class DroneAiScheduler {
     private static ExecutorService pool;
     private static int poolSize;
 
-    /**
-     * Plans waiting to be applied, keyed by drone. Keying by id (not by carrier) means a drone that
-     * offloaded to the sim between request and apply still gets its plan.
-     */
+    /** Plans waiting to be applied, keyed by drone. */
     private final Map<UUID, DronePlan> ready = new HashMap<>();
     /**
      * In-flight squad jobs, keyed by the leader's id. A squad is never re-dispatched while planning.
      */
     private final Map<UUID, Future<SquadPlan>> inFlight = new HashMap<>();
-    /**
-     * Each squad's reference frame as of the last plan that landed, keyed by squad.
-     *
-     * <p>The only piece of drone AI state that lives between ticks anywhere but on a drone, and it is here
-     * rather than off-thread on purpose: a {@code CoordinationModel} that computes its reference has to
-     * remember it, and the threading contract says a worker may not remember anything. So the frame is handed
-     * out with the snapshot and handed back with the plan, and the models stay pure functions.
-     *
-     * <p>A squad that misses a tick simply gets its frame back one tick stale, which every model tolerates,
-     * and one that has been gone long enough to be forgotten entirely seeds a fresh frame, which is the same
-     * thing that happens on launch.
-     */
+    /** Each squad's reference frame as of the last plan that landed, keyed by squad. */
     private final Map<Long, SquadAnchor> anchors = new HashMap<>();
-    /**
-     * In-flight route searches, keyed by drone.
-     *
-     * <p>Kept separate from the steering jobs above, and that separation is the whole point. Steering must
-     * land every tick or the drone coasts; an A* across a few thousand cells takes far longer than a tick. In
-     * one job the search would stall the squad's steering and the flight would stutter each time it replanned.
-     * Split, a search takes as long as it needs and its route is adopted whenever it arrives: a tick or ten
-     * later, on a route that was planned hundreds of blocks ahead, makes no difference at all.
-     */
+    /** In-flight route searches, keyed by drone. */
     private final Map<UUID, Future<DronePath>> pathJobs = new HashMap<>();
 
     private DroneAiScheduler() {
     }
 
-    /**
-     * Register a place drones live. The entity and sim packages each add one, so this class never has to
-     * know about either.
-     */
+    /** Register a place drones live. */
     public static void addSource(DroneCarrierSource source) {
         SOURCES.add(source);
     }
 
-    /**
-     * Start the shared worker pool. Sized like the parallel nuke pool: leave the server thread and a spare
-     * core alone.
-     */
+    /** Start the shared worker pool. */
     public static void startup() {
         shutdown();
         WorldThread.mark();
@@ -134,6 +73,11 @@ public final class DroneAiScheduler {
      */
     public static int poolSize() {
         return poolSize;
+    }
+
+    /** The shared worker pool, or null before startup. */
+    public static ExecutorService pool() {
+        return pool;
     }
 
     public static void shutdown() {
@@ -169,10 +113,6 @@ public final class DroneAiScheduler {
 
     /**
      * @return true if there is no work outstanding, so this dimension's scheduler can be dropped.
-     *
-     * <p>Deliberately does not consider {@link #anchors}. They are only reachable through a live squad, and
-     * this is only asked when there are no drones at all, so a frame still sitting in the map is a frame for
-     * a squad that no longer exists, and dropping the scheduler is exactly what should happen to it.
      */
     private boolean isQuiet() {
         return ready.isEmpty() && inFlight.isEmpty() && pathJobs.isEmpty();
@@ -219,10 +159,7 @@ public final class DroneAiScheduler {
         }
     }
 
-    /**
-     * Drain jobs that finished since last tick. Polling rather than completing into shared state keeps all
-     * of this class's mutation on the world thread.
-     */
+    /** Drain jobs that finished since last tick. */
     private void collectFinished() {
         for (Iterator<Map.Entry<UUID, Future<SquadPlan>>> it = inFlight.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<UUID, Future<SquadPlan>> entry = it.next();
@@ -285,10 +222,6 @@ public final class DroneAiScheduler {
 
     /**
      * @return this dimension's squads as the planner would see them this tick, for a diagnostic to read.
-     *
-     * <p>Built through the same {@link #buildSquads} the planner uses, frames included, because a report
-     * assembled any other way is a report about a different squad. World thread only, like everything else
-     * here: taking a snapshot reads the level.
      */
     public static List<SquadView> squadsFor(ServerLevel level) {
         WorldThread.assertOn("squad diagnostics");
@@ -303,10 +236,7 @@ public final class DroneAiScheduler {
         return scheduler.buildSquads(level, carriers, level.getGameTime());
     }
 
-    /**
-     * Group live carriers into squads and snapshot them. Solo drones become a squad of one, so the planner
-     * has exactly one shape to handle.
-     */
+    /** Group live carriers into squads and snapshot them. */
     private List<SquadView> buildSquads(ServerLevel level, List<DroneCarrier> carriers, long now) {
         Map<Long, List<DroneCarrier>> bySquad = new LinkedHashMap<>();
         List<DroneCarrier> solo = new ArrayList<>();
@@ -345,17 +275,9 @@ public final class DroneAiScheduler {
     }
 
     /**
-     * Hand a leaderless squad to a survivor picked at random, mirroring {@code SwarmManager.promoteSuccessor}
-     * on the missile side: losing the drone that was leading is not supposed to end the mission for everyone
-     * behind it.
-     *
-     * <p>Random rather than "the next one in line" on purpose. The sort below would otherwise hand every
-     * decapitated squad to its lowest-id member, which makes the survivor predictable from the outside:
-     * shoot the leader, and you already know which drone becomes the one worth shooting next. Drawing the
-     * successor makes the flight cost of taking out a leader the same whichever one you take out.
-     *
-     * <p>Written back to the carrier rather than recomputed, so the choice is made once. Re-drawing it every
-     * tick would rebuild the formation around a different drone each time and the squad would never settle.
+     * Hand a leaderless squad to a survivor picked at random, mirroring {@code SwarmManager.promoteSuccessor} on
+     * the missile side: losing the drone that was leading is not supposed to end the mission for everyone behind
+     * it.
      */
     public static void promoteIfLeaderless(RandomSource random, List<DroneCarrier> members) {
         if (members.isEmpty()) {

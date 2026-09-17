@@ -4,8 +4,7 @@ import com.wf.wfballistics.aef.ExplosionAEF;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Supplies a Fortune level applied to a destroyed block's drops, allowing "enriching" charges that yield
- * bonus ore. Called once per destroyed block by {@link com.wf.wfballistics.aef.standard.BlockProcessorStandard}.
+ * Supplies a Fortune level applied to a destroyed block's drops, allowing "enriching" charges that yield bonus ore.
  */
 public interface IFortuneMutator {
 

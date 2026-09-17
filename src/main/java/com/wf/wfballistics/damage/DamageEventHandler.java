@@ -7,18 +7,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 
-/**
- * Applies the {@link DamageResistanceHandler} DT/DR model to incoming damage. Registered on the NeoForge game
- * event bus so it covers <em>all</em> living damage: this mod's weapons, vanilla mobs, other mods. With no armour
- * profiles registered it changes nothing.
- *
- * <p>Sources that bypass armour (void, {@code /kill}, starvation) are left alone: DT/DR is an armour-style
- * mitigation and should not make those survivable.
- *
- * <p>Note: this reduction layers <em>on top of</em> vanilla armour/enchantment mitigation, which still runs
- * later in {@code actuallyHurt}. If you want DT/DR to be the sole authority for a damage type, give that
- * type the {@code bypasses_armor} tag.
- */
+/** Applies the {@link DamageResistanceHandler} DT/DR model to incoming damage. */
 @EventBusSubscriber(modid = WFBallistics.MODID)
 public final class DamageEventHandler {
 

@@ -8,15 +8,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * One flywheel effect for the whole sim tier, rather than one per glyphid.
- *
- * <p>The entity tier gets a visual each, because flywheel builds one per entity and that is the right shape
- * when the entities exist anyway. Records do not exist as anything, so making one effect per record would be
- * inventing the per-object bookkeeping the tier was written to delete — a lifecycle, a visualisation manager
- * entry and an instancer lookup each. One effect owns the lot and hands the whole set to
- * {@link SimGlyphidVisual} to pose in one pass.
- */
+/** One flywheel effect for the whole sim tier, rather than one per glyphid. */
 public final class SimGlyphidEffect implements WFFlywheelEffect {
 
     private static @Nullable SimGlyphidEffect live;

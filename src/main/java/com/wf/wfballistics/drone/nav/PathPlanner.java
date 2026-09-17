@@ -8,53 +8,20 @@ import java.util.Collections;
 import java.util.List;
 import java.util.PriorityQueue;
 
-/**
- * Finds a route over terrain: an A* across a {@link TerrainField}, run on a planner worker.
- *
- * <p>This is the drone answer to a mob's path finder, and it is deliberately the same shape (a weighted
- * search over a discrete grid, smoothed afterwards) but it differs in the two ways that matter for something
- * that flies:
- *
- * <ul>
- *   <li><b>It searches in 2½D, not 3D.</b> A drone can be at any height, so the interesting question is never
- *       "which of these blocks can I stand in" but "how high would I have to fly here". Each cell is priced by
- *       the altitude it forces, which collapses a 3D search into a 2D one of a few thousand cells and is why
- *       this is affordable at all.</li>
- *   <li><b>Climbing is what costs, not distance.</b> The weights below make going up several times more
- *       expensive per block than going along, so the search prefers a valley to a ridge and will happily fly
- *       a long way around a mountain rather than over it, which is what a real delivery drone does, because
- *       altitude is battery.</li>
- * </ul>
- *
- * <p>Vanilla's path finder runs on the server thread and is budgeted accordingly. This one does not have to
- * be: it only ever reads the immutable field it was handed, so it runs on a worker with the rest of the brain
- * and can afford to look much further ahead than a mob ever does.
- */
+/** Finds a route over terrain: an A* across a {@link TerrainField}, run on a planner worker. */
 public final class PathPlanner {
 
-    /**
-     * How far above the terrain a route is flown. Enough to clear tree trunks and buildings, since the height
-     * map ignores leaves.
-     */
+    /** How far above the terrain a route is flown. */
     public static final double CLEARANCE = 6.0;
-    /**
-     * Half the airframe's width, near enough. Terrain is checked over this radius so the planner does not
-     * thread the drone through a gap its own body will not fit down.
-     */
+    /** Half the airframe's width, near enough. */
     public static final double BODY_RADIUS = 2.0;
-    /**
-     * Cost of a block of climb relative to a block of travel. The single most important number here: it is
-     * what makes the search go around things.
-     */
+    /** Cost of a block of climb relative to a block of travel. */
     public static final double CLIMB_WEIGHT = 2.5;
     /**
      * Descending is nearly free: a drone gets most of the way down by easing off.
      */
     public static final double DESCEND_WEIGHT = 0.15;
-    /**
-     * Cells expanded before the search gives up and returns the best it found. A ceiling on the worst case,
-     * not a budget normal routes come near.
-     */
+    /** Cells expanded before the search gives up and returns the best it found. */
     public static final int MAX_EXPANSIONS = 8000;
 
     private static final int[] NEIGHBOUR_X = {1, -1, 0, 0, 1, 1, -1, -1};
@@ -67,9 +34,9 @@ public final class PathPlanner {
      * Plan a route.
      *
      * @param ceiling the highest a route may be flown. Terrain that would push the drone above this is
-     *                impassable, so a wall too tall to climb is gone around rather than scaled
+     *      impassable, so a wall too tall to climb is gone around rather than scaled
      * @return a route, never null. If nothing was found it is a direct line high enough to clear both ends,
-     * which the reactive {@link TerrainGuard} then flies safely: a drone with a bad plan should still move
+     *      which the reactive {@link TerrainGuard} then flies safely: a drone with a bad plan should still move
      */
     public static DronePath plan(TerrainField field, Vec3 from, Vec3 to, double clearance, double ceiling,
                                  long now) {
@@ -173,7 +140,7 @@ public final class PathPlanner {
 
     /**
      * @return a straight line flown high enough to clear everything under it. The fallback when the search
-     * found nothing, and the whole route when start and goal share a cell.
+     *      found nothing, and the whole route when start and goal share a cell.
      */
     private static DronePath direct(TerrainField field, Vec3 from, Vec3 to, double clearance, long now,
                                     boolean partial) {
@@ -201,14 +168,7 @@ public final class PathPlanner {
         return out;
     }
 
-    /**
-     * String-pulling: drop every corner the drone can fly straight past.
-     *
-     * <p>A segment may be merged only if the straight line between its ends stays clear of the ground the
-     * whole way: the height is checked <em>interpolated along the leg</em> rather than against the higher
-     * end, so merging keeps the route hugging the terrain instead of flattening it out at the altitude of the
-     * tallest thing on it. That distinction is what stops a drone crossing a valley at mountain height.
-     */
+    /** String-pulling: drop every corner the drone can fly straight past. */
     private static List<Vec3> smooth(TerrainField field, List<Vec3> raw, double clearance) {
         List<Vec3> out = new ArrayList<>();
         out.add(raw.get(0));
@@ -249,8 +209,8 @@ public final class PathPlanner {
     }
 
     /**
-     * Octile distance in blocks: the shortest possible travel, never counting the climb it would also cost,
-     * so it never overestimates and A* stays optimal.
+     * Octile distance in blocks: the shortest possible travel, never counting the climb it would also cost, so it
+     * never overestimates and A* stays optimal.
      */
     private static double heuristic(TerrainField field, int fromX, int fromZ, int toX, int toZ) {
         int dx = Math.abs(toX - fromX);

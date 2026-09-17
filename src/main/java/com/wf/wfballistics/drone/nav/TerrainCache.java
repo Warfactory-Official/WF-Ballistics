@@ -13,45 +13,19 @@ import net.minecraft.world.phys.Vec3;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Per-dimension store of coarse terrain heights, and the only place a {@link TerrainField} is made.
- *
- * <p>Reading the height map is cheap; reading it for every cell of every route of every drone, every time one
- * wants to plan, is not. So a chunk is condensed once, into {@link #CELL}-block cells holding the highest
- * ground in each, and every field built over it afterwards is an array copy. A squad replanning together
- * pays for the terrain once between them, and a drone flying the same corridor home pays nothing at all.
- *
- * <p><b>World thread only.</b> Everything here touches chunk storage. The whole point of condensing terrain
- * into a {@link TerrainField} is that the field, unlike this, can leave the thread.
- *
- * <p>Chunks are never forced to load: an unloaded column is left {@link TerrainField#UNKNOWN} rather than
- * dragging world generation onto the tick to answer a question about ground a drone has not reached yet.
- */
+/** Per-dimension store of coarse terrain heights, and the only place a {@link TerrainField} is made. */
 public final class TerrainCache {
 
-    /**
-     * Blocks per cell. Four is a good match for the airframe: fine enough to find a valley, coarse enough
-     * that a long route is still only a few thousand cells.
-     */
+    /** Blocks per cell. */
     public static final int CELL = 4;
-    /**
-     * How many field builds one dimension may do per tick. Each is a few array copies plus whatever chunks it
-     * is the first to condense, and drones replan rarely, so this is a ceiling on a spike rather than a
-     * quota anyone hits in normal flight.
-     */
+    /** How many field builds one dimension may do per tick. */
     public static final int BUILDS_PER_TICK = 3;
 
     private static final int CELLS_PER_CHUNK = 16 / CELL;
     private static final int CHUNK_CELLS = CELLS_PER_CHUNK * CELLS_PER_CHUNK;
-    /**
-     * Ticks before a condensed chunk is re-read. This mod rearranges terrain with some enthusiasm, and a
-     * drone routing over a crater that is no longer there is a slow, silent kind of wrong.
-     */
+    /** Ticks before a condensed chunk is re-read. */
     private static final long MAX_AGE = 600L;
-    /**
-     * Condensed chunks kept before the store is dropped wholesale. At 16 shorts each this is well under a
-     * megabyte, and rebuilding is cheap, so an occasional clear beats tracking an eviction order.
-     */
+    /** Condensed chunks kept before the store is dropped wholesale. */
     private static final int MAX_CHUNKS = 8192;
 
     private static final Map<ResourceKey<Level>, TerrainCache> BY_LEVEL = new HashMap<>();
@@ -87,10 +61,10 @@ public final class TerrainCache {
     /**
      * Condense the terrain around a route into a field the planner can take away with it.
      *
-     * @param from     where the drone is
-     * @param to       where it is going; the field is boxed around the segment
-     * @param pad      blocks of margin around the segment, so the planner has room to route <em>around</em>
-     *                 an obstacle rather than being confined to a corridor through it
+     * @param from where the drone is
+     * @param to where it is going; the field is boxed around the segment
+     * @param pad blocks of margin around the segment, so the planner has room to route <em>around</em>
+     *      an obstacle rather than being confined to a corridor through it
      * @param maxCells hard cap on either side of the field, in cells
      * @param fallback height to assume for ground that was not loaded
      * @return the field, or null if this dimension has already spent its build allowance this tick

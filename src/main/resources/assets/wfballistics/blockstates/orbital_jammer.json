@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "wfballistics:block/orbital_jammer"
+    }
+  }
+}

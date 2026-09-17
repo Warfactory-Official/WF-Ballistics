@@ -20,22 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The recommended entity processor. It improves on a vanilla-style blast in two ways:
- *
- * <ul>
- *   <li><b>Nearest-surface falloff.</b> An entity's blast distance is measured from the closest point of
- *       its bounding box, not its feet, so a large or partially-sheltered mob is damaged consistently
- *       regardless of which part of it faces the epicentre.</li>
- *   <li><b>Multi-node line-of-sight.</b> Cover is sampled from up to seven points (the centre plus six
- *       axis-offset "nodes" at {@code nodeDist}) and the most-exposed sample wins. A target peeking around
- *       a corner therefore still takes damage, instead of being fully shadowed by a single block between it
- *       and the exact centre.</li>
- * </ul>
- *
- * <p>Damage is collected into a map and applied once per entity (keeping the maximum), so an entity sampled
- * by several nodes is never hit twice.
- */
+/** The recommended entity processor. */
 public class EntityProcessorCross implements IEntityProcessor {
 
     protected double nodeDist;
@@ -96,8 +81,16 @@ public class EntityProcessorCross implements IEntityProcessor {
         Map<Entity, Float> damageMap = new HashMap<>();
         for (Entity entity : list) {
             double distanceScaled = nearestSurfaceDistanceScaled(entity, x, y, z, size);
-            if (distanceScaled > 1.0D) continue;
-            if (!isWithinBlastShape(explosion, entity, x, y, z)) continue;
+            if (distanceScaled > 1.0D) {
+                com.wf.wfballistics.debug.ExplosionTrace.victim(entity,
+                        com.wf.wfballistics.debug.ExplosionTrace.Verdict.OUT_OF_RANGE, 0.0f);
+                continue;
+            }
+            if (!isWithinBlastShape(explosion, entity, x, y, z)) {
+                com.wf.wfballistics.debug.ExplosionTrace.victim(entity,
+                        com.wf.wfballistics.debug.ExplosionTrace.Verdict.OUTSIDE_CONE, 0.0f);
+                continue;
+            }
 
             double deltaX = entity.getX() - x;
             double deltaY = entity.getY() + entity.getEyeHeight() - y;
@@ -117,6 +110,8 @@ public class EntityProcessorCross implements IEntityProcessor {
             double knockback = (1.0D - distanceScaled) * density;
             float dmg = calculateDamage(distanceScaled, density, knockback, size);
             damageMap.merge(entity, dmg, Math::max);
+            com.wf.wfballistics.debug.ExplosionTrace.victim(entity,
+                    com.wf.wfballistics.debug.ExplosionTrace.Verdict.HIT, dmg);
 
             double enchKnockback = entity instanceof LivingEntity living
                     ? knockback * (1.0 - living.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE))
@@ -137,9 +132,6 @@ public class EntityProcessorCross implements IEntityProcessor {
             }
         }
 
-        // The glyphids that have no entity to be in that list. Done here rather than in ExplosionAEF so a
-        // blast that spares entities spares them too, and so the shape gate and the falloff are this
-        // processor's rather than a second, quietly different copy of them.
         SimGlyphidBlast.damage(this, explosion, level, x, y, z, size);
 
         // Second pass: actually deal the damage + any custom payload.
@@ -154,13 +146,7 @@ public class EntityProcessorCross implements IEntityProcessor {
         return affectedPlayers;
     }
 
-    /**
-     * The radius this blast actually reaches, after the doubling and any range mutator.
-     *
-     * <p>Named because it is asked for twice — once by {@link #process} and once by
-     * {@link SimGlyphidBlast} — and two blasts of different sizes damaging the two tiers would be a falloff
-     * bug nobody could see except as glyphids surviving where they should not.
-     */
+    /** The radius this blast actually reaches, after the doubling and any range mutator. */
     float blastRadius(ExplosionAEF explosion, float size) {
         float radius = size * 2.0F;
         return range != null ? range.mutateRange(explosion, radius) : radius;
@@ -187,10 +173,7 @@ public class EntityProcessorCross implements IEntityProcessor {
         return nodes;
     }
 
-    /**
-     * Deals the blast damage. Override to change the damage source or to route through a custom damage
-     * pipeline (see {@link EntityProcessorCrossSmooth}).
-     */
+    /** Deals the blast damage. */
     public void attackEntity(Entity entity, ExplosionAEF explosion, float amount) {
         entity.hurt(explosionDamage(explosion), amount);
     }
@@ -209,20 +192,15 @@ public class EntityProcessorCross implements IEntityProcessor {
         return true;
     }
 
-    /**
-     * Blast-shape gate, checked right after the spherical range cull. Return {@code false} to spare an entity
-     * whose position falls outside this blast's actual shape: e.g. beside or behind a shaped charge's forward
-     * cone (see {@link EntityProcessorCone}). The default whole-sphere blast lets everything in range through.
-     */
+    /** Blast-shape gate, checked right after the spherical range cull. */
     protected boolean isWithinBlastShape(ExplosionAEF explosion, Entity entity, double x, double y, double z) {
         AABB box = entity.getBoundingBox();
         return isWithinBlastShape(explosion, entity.getX(), (box.minY + box.maxY) * 0.5, entity.getZ(), x, y, z);
     }
 
     /**
-     * The same gate, asked about a position rather than an entity, so something without a bounding box can
-     * be tested too. Overriding this covers both callers; overriding the entity form covers only one, which
-     * is how a shaped charge would end up spherical for the sim tier and conical for everything else.
+     * The same gate, asked about a position rather than an entity, so something without a bounding box can be
+     * tested too.
      */
     protected boolean isWithinBlastShape(ExplosionAEF explosion, double px, double py, double pz,
                                          double x, double y, double z) {

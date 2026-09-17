@@ -1,22 +1,6 @@
 package com.wf.wfballistics.debug;
 
-/**
- * How big vanilla's shared path-type cache should be.
- *
- * <p>{@code PathTypeCache} is a direct-mapped table of exactly 4096 entries, shared by every mob on a level
- * and keyed by {@code HashCommon.mix(packedPos) & 4095}. There is no chaining: a colliding position evicts
- * the previous one outright. That is ample for the handful of mobs vanilla expects and nowhere near enough
- * for a swarm — three hundred glyphids issue tens of thousands of distinct position queries per tick, so the
- * table thrashes on capacity and conflicts together.
- *
- * <p>Measured symptom: 2.1 block reads per node expanded when the swarm is packed and its working set fits,
- * against 189.3 when it is spread out and does not. Same code, same mobs, ninety-fold difference — that is a
- * cache falling off a cliff, not terrain being harder.
- *
- * <p>Sized in megabytes because that is the unit the trade-off is actually in. An entry is a {@code long}
- * plus an object reference: eight bytes plus four under compressed oops, so twelve. Rounded down to a power
- * of two, since the index is a mask rather than a modulo.
- */
+/** How big vanilla's shared path-type cache should be. */
 public final class PathTypeCacheSize {
 
     /**

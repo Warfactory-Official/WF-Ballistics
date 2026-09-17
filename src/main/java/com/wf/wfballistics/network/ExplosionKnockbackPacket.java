@@ -9,9 +9,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Carries an explosion's knockback impulse to the affected player's client. The server cannot shove a
- * player around directly (the client owns its position), so the entity processor records the impulse and
- * this packet asks the client to apply it locally and report the new velocity back.
+ * Carries an explosion's knockback impulse to the affected player's client.
  *
  * @see PlayerProcessorStandard
  */

@@ -6,53 +6,29 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * A route over the terrain: corner points whose heights already clear the ground between them, so following
- * the line from one to the next is itself the terrain following. Produced off-thread by {@link PathPlanner}
- * and handed to the drone as inert data.
+ * A route over the terrain: corner points whose heights already clear the ground between them, so following the
+ * line from one to the next is itself the terrain following.
  *
- * <p>Drones fly it by pure pursuit: chasing a point a fixed distance ahead along the line rather than aiming
- * at the next corner. Aiming at corners makes a drone decelerate into each one and swing wide out of it;
- * chasing a carrot cuts the corner smoothly and, more usefully here, means the drone starts climbing partway
- * along the leg <em>before</em> the ridge it is climbing for.
- *
- * @param goal      what this route was planned to reach, so a retasked drone notices its path is for the old
- *                  destination
+ * @param goal what this route was planned to reach, so a retasked drone notices its path is for the old
+ *      destination
  * @param createdAt the tick it was planned on
- * @param partial   true if the planner ran out of room or budget and this only heads the right way. The drone
- *                  flies it and asks again on arrival, which is how a route longer than one planning horizon
- *                  gets covered in pieces
+ * @param partial true if the planner ran out of room or budget and this only heads the right way. The drone
+ *      flies it and asks again on arrival, which is how a route longer than one planning horizon
+ *      gets covered in pieces
  */
 public record DronePath(List<Vec3> waypoints, Vec3 goal, long createdAt, boolean partial) {
 
-    /**
-     * How far ahead along the route the drone aims. Roughly a few seconds of cruise: long enough to smooth
-     * the corners, short enough that it still follows the route rather than cutting across it.
-     */
+    /** How far ahead along the route the drone aims. */
     public static final double LOOKAHEAD = 24.0;
-    /**
-     * How far ahead the <em>altitude</em> is taken from, which is much less than the heading is.
-     *
-     * <p>Steering at a point well ahead is what smooths the corners, but taking the height from that same
-     * point makes a drone on a slope chase an altitude a whole lookahead's worth of climb above it. It
-     * saturates its climb rate, ends up flying high, and then has to reverse the whole thing when the slope
-     * does: porpoising up and down the route with the throttle slamming between shut and wide open. A short
-     * vertical lead still starts the climb before the ground arrives without ever asking for much more climb
-     * than the slope actually needs.
-     */
+    /** How far ahead the <em>altitude</em> is taken from, which is much less than the heading is. */
     public static final double ALTITUDE_LEAD = 8.0;
-    /**
-     * Ticks before a route is replanned regardless. Terrain the drone has since flown over is behind it, and
-     * the world may have changed in front of it.
-     */
+    /** Ticks before a route is replanned regardless. */
     public static final long MAX_AGE = 400L;
     /**
      * How far the destination may move before the route is thrown away.
      */
     public static final double GOAL_TOLERANCE = 8.0;
-    /**
-     * How far off the line the drone may drift before the route no longer describes where it is. Wind, a
-     * formation slot, or a battery abort can all push it off.
-     */
+    /** How far off the line the drone may drift before the route no longer describes where it is. */
     public static final double OFF_ROUTE = 48.0;
     /**
      * How close to the end of a partial route counts as having used it up.
@@ -69,8 +45,8 @@ public record DronePath(List<Vec3> waypoints, Vec3 goal, long createdAt, boolean
 
     /**
      * @return the point to fly at: {@link #LOOKAHEAD} blocks further along the route than the drone's own
-     * closest point on it. Its height is interpolated along the leg, so the drone climbs into a ridge over
-     * the length of the approach instead of at the last moment.
+     *      closest point on it. Its height is interpolated along the leg, so the drone climbs into a ridge over
+     *      the length of the approach instead of at the last moment.
      */
     public Vec3 carrot(Vec3 pos) {
         return carrot(pos, LOOKAHEAD);
@@ -140,8 +116,8 @@ public record DronePath(List<Vec3> waypoints, Vec3 goal, long createdAt, boolean
 
     /**
      * @return true if this route no longer describes where the drone is or where it is going, and should be
-     * replanned. Deliberately generous: replanning is the expensive half, and a slightly old route over
-     * terrain that has not moved is still a good route.
+     *      replanned. Deliberately generous: replanning is the expensive half, and a slightly old route over
+     *      terrain that has not moved is still a good route.
      */
     public boolean stale(Vec3 pos, @Nullable Vec3 currentGoal, long now) {
         if (waypoints.isEmpty() || currentGoal == null) {

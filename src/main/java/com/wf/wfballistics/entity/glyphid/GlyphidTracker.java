@@ -12,12 +12,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * An O(1) per-level set of live glyphids, maintained from join/leave events, mirroring {@code DroneTracker}
- * and {@code OBBEntityTracker}.
- *
- * <p>Needed before anything else can be measured: a profiler that sweeps the level to count the swarm each
- * tick would be charging its own scan to the swarm. It is also where the carrier scheduler will find its
- * in-world glyphids, so this outlives the benchmark it was written for.
+ * An O(1) per-level set of live glyphids, maintained from join/leave events, mirroring {@code DroneTracker} and
+ * {@code OBBEntityTracker}.
  */
 @EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.GAME)
 public final class GlyphidTracker {

@@ -13,10 +13,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 import java.util.Objects;
 
-/**
- * The run home. The exfil point defaults to wherever the drone was dispatched from, but it is just another
- * waypoint, so a mission can send the drone somewhere else entirely to recover.
- */
+/** The run home. */
 public final class ExfilHandler implements DroneStateHandler {
 
     public static final ExfilHandler INSTANCE = new ExfilHandler();

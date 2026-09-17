@@ -18,10 +18,7 @@ import java.util.function.Supplier;
 
 /**
  * Charges the goal/sensing layer to {@link SwarmProfiler} for glyphids, and gives them a goal selector that
- * arbitrates over an array rather than a linked hash set. A mixin because {@code Mob#serverAiStep} is final.
- *
- * <p>Gated on {@link SwarmProfiler#enabled()} before the {@code instanceof}, so with profiling off this costs
- * every mob on the server one static boolean read.
+ * arbitrates over an array rather than a linked hash set.
  */
 @Mixin(Mob.class)
 public abstract class MixinMob {
@@ -29,14 +26,7 @@ public abstract class MixinMob {
     @Unique
     private long wfballistics$aiStart;
 
-    /**
-     * Swap in {@link GlyphidGoalSelector} for glyphids.
-     *
-     * <p>At the constructor's {@code new} and not after it: {@code Mob}'s constructor calls
-     * {@code registerGoals()} on its last line, so a selector installed at RETURN would be empty. Only the
-     * class is read, which is answerable before the subclass constructor runs. The ordinal is untargeted on
-     * purpose, so the target selector is swapped too.
-     */
+    /** Swap in {@link GlyphidGoalSelector} for glyphids. */
     @WrapOperation(method = "<init>",
             at = @At(value = "NEW",
                     target = "(Ljava/util/function/Supplier;)Lnet/minecraft/world/entity/ai/goal/GoalSelector;"))

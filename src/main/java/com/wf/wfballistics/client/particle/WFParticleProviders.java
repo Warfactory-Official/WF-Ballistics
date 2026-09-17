@@ -20,5 +20,8 @@ public final class WFParticleProviders {
         event.registerSpriteSet(WFParticles.FLAME.get(), FlameParticle.Provider::new);
         event.registerSpriteSet(WFParticles.ASH.get(), AshParticle.Provider::new);
         event.registerSpriteSet(WFParticles.MIST.get(), MistParticle.Provider::new);
+        event.registerSpriteSet(WFParticles.SMOKE_PLUME.get(), SmokePlumeParticle.Provider::new);
+        // No sprite set: a debris chunk is built from the block's own baked model, not from a particle sheet.
+        event.registerSpecial(WFParticles.BLOCK_DEBRIS.get(), new BlockDebrisParticle.Provider());
     }
 }

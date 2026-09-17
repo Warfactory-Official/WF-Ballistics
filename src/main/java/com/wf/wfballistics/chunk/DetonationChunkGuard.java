@@ -14,17 +14,14 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Keeps the chunks around a detonation force-loaded for a short grace window after the missile that caused it
- * is gone, so a multi-tick effect the blast spawned (fire boxes, gas cloud, ...) isn't frozen by a chunk unload
- * the instant the missile is discarded. Tickets are BlockPos-owned (like the listener registry) and are swept
- * clean on world load by {@link WFChunkValidation}, so a restart inside the grace window can't leak them.
+ * Keeps the chunks around a detonation force-loaded for a short grace window after the missile that caused it is
+ * gone, so a multi-tick effect the blast spawned (fire boxes, gas cloud, ...) isn't frozen by a chunk unload the
+ * instant the missile is discarded.
  */
 public final class DetonationChunkGuard {
 
     public static final int DEFAULT_GRACE_TICKS = 60;
 
-    // Shared TicketController for all WF-Ballistics block-owned forced chunks.
-    // Registered via RegisterTicketControllersEvent in WFServerEvents (MOD bus).
     public static final TicketController CONTROLLER = new TicketController(
             ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "chunk_guard"),
             WFChunkValidation::validateTickets

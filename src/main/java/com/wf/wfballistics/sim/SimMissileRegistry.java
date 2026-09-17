@@ -11,10 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Per-dimension persistent store of {@link SimMissile}s. Data only: advancement/spawn logic lives
- * in {@link SimMissileManager}.
- */
+/** Per-dimension persistent store of {@link SimMissile}s. */
 public final class SimMissileRegistry extends SavedData {
     public static final String NAME = "wfballistics_sim_missiles";
 

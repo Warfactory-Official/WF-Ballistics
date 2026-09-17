@@ -10,26 +10,12 @@ import org.slf4j.Logger;
 
 import java.util.List;
 
-/**
- * What a block is worth as a provocation.
- *
- * <p>Keyed by block registry name, in the same {@code "registryId=value"} shape wfcore's radar whitelist
- * uses, so the two lists are interchangeable by eye. The weighting is the design's one editorial claim:
- * dirty industry — combustion, gas, fuel, fusion, anything radioactive — is worth several times what the
- * equivalent clean production is. A quiet electric base should be able to grow much further before it
- * draws the same attention as a diesel farm.
- *
- * <p>Values are additive per block, so a base's provocation is a fact about how much dirty industry it
- * runs, not about how many distinct machine types it has.
- */
+/** What a block is worth as a provocation. */
 public final class IndustryValues {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /**
-     * Default whitelist. Deliberately short: it is a starting point to tune against, not an attempt to
-     * enumerate GregTech. Anything absent is worth nothing and provokes nothing.
-     */
+    /** Default whitelist. */
     public static final List<String> DEFAULTS = List.of(
             // Dirty: combustion and fuel burning.
             "gtceu:combustion_generator=30",
@@ -105,13 +91,7 @@ public final class IndustryValues {
         }
     }
 
-    /**
-     * Register or override one block's value at runtime.
-     *
-     * <p>This is the seam wfcore uses: it already depends on this mod, so it can report what a GregTech
-     * machine is actually worth instead of the value being guessed from a config list here. See
-     * {@link IndustryApi}.
-     */
+    /** Register or override one block's value at runtime. */
     public static void put(ResourceLocation id, int value) {
         if (value > 0) {
             WHITELIST.put(id, value);

@@ -2,9 +2,12 @@ package com.wf.wfballistics;
 
 import com.wf.wfballistics.drone.CrateEntity;
 import com.wf.wfballistics.debug.EntityDebugDummy;
+import com.wf.wfballistics.drone.DroneDebrisEntity;
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.entity.*;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
+import com.wf.wfballistics.kinetic.KineticShellEntity;
+import com.wf.wfballistics.mine.MineEntity;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphidBomb;
 import com.wf.wfballistics.entity.glyphid.GlyphidWaypoint;
 import com.wf.wfballistics.entity.glyphid.caste.EntityGlyphidBehemoth;
@@ -28,19 +31,21 @@ public class ModEntities {
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
             DeferredRegister.create(Registries.ENTITY_TYPE, WFBallistics.MODID);
 
-    // 2. Register your specific entity
-    // Replace 'YourEntityClass::new' with your actual custom entity class constructor later
-    // Fallback size only: MissileEntity#makeBoundingBox fits the real AABB to the oriented model each tick.
     public static final DeferredHolder<EntityType<?>, EntityType<MissileEntity>> STEALTH_MISSILE =
             ENTITY_TYPES.register("missile", () -> EntityType.Builder.of(MissileEntity::new, MobCategory.MISC)
                     .sized(2.0F, 2.0F)
-                    // 32 chunks = 512 blocks, the vanilla max view distance, so the missile is tracked (and, with
-                    // MissileEntity#shouldRenderAtSqrDistance returning true, rendered) as far as the client can see;
-                    // the effective range is min(this, serverViewDistance*16), horizontal only. Flight AUDIO no longer
-                    // depends on tracking - it is pushed by the server independently; see MissileFlightAudioPacket.
                     .clientTrackingRange(32)
                     .updateInterval(1)
                     .build("missile")
+            );
+
+    public static final DeferredHolder<EntityType<?>, EntityType<KineticShellEntity>> KINETIC_SHELL =
+            ENTITY_TYPES.register("kinetic_shell", () -> EntityType.Builder.<KineticShellEntity>of(KineticShellEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.5F)
+                    .clientTrackingRange(32)
+                    .updateInterval(1)
+                    .fireImmune()
+                    .build("kinetic_shell")
             );
 
     public static final DeferredHolder<EntityType<?>, EntityType<BombletEntity>> BOMBLET =
@@ -50,6 +55,14 @@ public class ModEntities {
                     .updateInterval(1)
                     .fireImmune()
                     .build("bomblet")
+            );
+
+    public static final DeferredHolder<EntityType<?>, EntityType<MineEntity>> MINE =
+            ENTITY_TYPES.register("mine", () -> EntityType.Builder.<MineEntity>of(MineEntity::new, MobCategory.MISC)
+                    .sized(0.75F, 0.25F)
+                    .clientTrackingRange(8)
+                    .updateInterval(3)
+                    .build("mine")
             );
 
     // Mist effect cloud: a stationary, fluid-imbued area entity.
@@ -73,8 +86,6 @@ public class ModEntities {
                     .build("fire_lingering")
             );
 
-    // Autonomous rotor drone. Fallback size only: DroneEntity#makeBoundingBox fits the AABB to the
-    // oriented model each tick. Tracked as far as a missile so a delivery run is visible on approach.
     public static final DeferredHolder<EntityType<?>, EntityType<DroneEntity>> DRONE =
             ENTITY_TYPES.register("drone", () -> EntityType.Builder.<DroneEntity>of(DroneEntity::new, MobCategory.MISC)
                     .sized(3.0F, 1.2F)
@@ -83,8 +94,14 @@ public class ModEntities {
                     .build("drone")
             );
 
-    // Cargo crate. Only ever exists loose in the world: a drone in flight holds its cargo as items and
-    // draws the crate itself, so there is no such thing as a crate riding along attached to something.
+    public static final DeferredHolder<EntityType<?>, EntityType<DroneDebrisEntity>> DRONE_DEBRIS =
+            ENTITY_TYPES.register("drone_debris", () -> EntityType.Builder.<DroneDebrisEntity>of(DroneDebrisEntity::new, MobCategory.MISC)
+                    .sized(0.5F, 0.3F)
+                    .clientTrackingRange(8)
+                    .updateInterval(2)
+                    .build("drone_debris")
+            );
+
     public static final DeferredHolder<EntityType<?>, EntityType<CrateEntity>> CRATE =
             ENTITY_TYPES.register("crate", () -> EntityType.Builder.<CrateEntity>of(CrateEntity::new, MobCategory.MISC)
                     .sized(CrateEntity.SIZE, CrateEntity.SIZE)
@@ -111,8 +128,6 @@ public class ModEntities {
                     .build("torex")
             );
 
-    // Swarm mob. Climbs walls and chews terrain, so it is tracked at normal mob range but updated every
-    // tick: a glyphid that stutters on a wall reads as broken.
     public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphid>> GLYPHID =
             ENTITY_TYPES.register("glyphid", () -> EntityType.Builder.<EntityGlyphid>of(EntityGlyphid::new, MobCategory.MONSTER)
                     .sized(1.4F, 1.0F)
@@ -121,8 +136,6 @@ public class ModEntities {
                     .build("glyphid")
             );
 
-    // The castes. Same tracking settings as the grunt throughout -- they differ in what they do, not in how
-    // often a client needs to hear about them -- and sized from GlyphidCaste's body scales.
     public static final DeferredHolder<EntityType<?>, EntityType<EntityGlyphidScout>> GLYPHID_SCOUT =
             ENTITY_TYPES.register("glyphid_scout", () -> caste(EntityGlyphidScout::new, 1.25F, 0.75F)
                     .build("glyphid_scout")
@@ -183,8 +196,6 @@ public class ModEntities {
                     .build("glyphid_bomb")
             );
 
-    // Colony order marker. Never moves, never renders, and only ticks every 40th tick, so it costs almost
-    // nothing to leave lying around.
     public static final DeferredHolder<EntityType<?>, EntityType<GlyphidWaypoint>> GLYPHID_WAYPOINT =
             ENTITY_TYPES.register("glyphid_waypoint", () -> EntityType.Builder.<GlyphidWaypoint>of(GlyphidWaypoint::new, MobCategory.MISC)
                     .fireImmune()
@@ -194,8 +205,6 @@ public class ModEntities {
                     .build("glyphid_waypoint")
             );
 
-    // Benchmark target. Never moves and never dies, so a melee window measures the swarm rather than what
-    // the swarm is chewing on.
     public static final DeferredHolder<EntityType<?>, EntityType<EntityDebugDummy>> DEBUG_DUMMY =
             ENTITY_TYPES.register("debug_dummy", () -> EntityType.Builder.<EntityDebugDummy>of(EntityDebugDummy::new, MobCategory.MISC)
                     .sized(0.6F, 1.8F)

@@ -16,11 +16,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Launch and recovery pad for delivery drones. Load its cargo slots, point it at a destination, and a
- * redstone rising edge sends a drone (or a squad) out with a crate; a drone that lands back on the pad is
- * recharged.
- */
+/** Launch and recovery pad for delivery drones. */
 public class DronePadBlock extends BaseEntityBlock {
 
     public static final MapCodec<DronePadBlock> CODEC = simpleCodec(DronePadBlock::new);
@@ -73,8 +69,6 @@ public class DronePadBlock extends BaseEntityBlock {
         if (!level.isClientSide && level.getBlockEntity(pos) instanceof DronePadBlockEntity pad) {
             pad.initPowered(level.hasNeighborSignal(pos));
             if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-                // Give it an identity the moment it exists, so its code can be read off the screen and
-                // handed to a trading partner before it has ever flown anything.
                 pad.stationCode(serverLevel);
             }
         }

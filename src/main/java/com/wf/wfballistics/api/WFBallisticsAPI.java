@@ -32,11 +32,7 @@ public final class WFBallisticsAPI {
         return WFTelemetryService.get(id);
     }
 
-    /**
-     * Open a telemetry queue for every launched missile automatically, independent of the debug toggle. Lets an
-     * addon flip one switch and then read {@link #getTelemetry} for any launch. Queues are bounded (oldest
-     * evicted past {@link WFTelemetryService#MAX_TRACKED}), so consume them while the missile is live.
-     */
+    /** Open a telemetry queue for every launched missile automatically, independent of the debug toggle. */
     public static void setAutoTelemetry(boolean enabled) {
         WFTelemetryService.setAutoOpen(enabled);
     }

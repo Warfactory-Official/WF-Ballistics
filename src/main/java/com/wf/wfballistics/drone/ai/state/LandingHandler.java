@@ -12,10 +12,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * Controlled descent onto whatever is below, ending the mission. Reached from the exfil point normally, or
- * early when the battery can no longer cover the next leg.
- */
+/** Controlled descent onto whatever is below, ending the mission. */
 public final class LandingHandler implements DroneStateHandler {
 
     public static final LandingHandler INSTANCE = new LandingHandler();

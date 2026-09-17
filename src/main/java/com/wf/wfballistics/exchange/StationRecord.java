@@ -14,33 +14,15 @@ import java.util.EnumSet;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-/**
- * One registered station: its code, where it actually is, and who it will accept cargo from.
- *
- * <p><b>Server-side only, and deliberately so.</b> This object is the mapping from a code to a position, and
- * it must never be serialised toward a client. Nothing here is written to a packet anywhere in the mod; the
- * only thing that crosses to a client is the twelve-character code itself.
- */
+/** One registered station: its code, where it actually is, and who it will accept cargo from. */
 public final class StationRecord {
 
     private final String code;
     private final ResourceKey<Level> dimension;
     private final BlockPos pos;
-    /**
-     * Station codes this one will accept a handshake from.
-     *
-     * <p>Knowing someone's code is not enough to send them anything. Without this, a leaked code lets anyone
-     * make a station spend drones and battery collecting whatever they were sent, or bait its drone out to a
-     * rendezvous the sender intends to camp.
-     */
+    /** Station codes this one will accept a handshake from. */
     private final Set<String> allowed = new LinkedHashSet<>();
-    /**
-     * What this station is willing to do. A set rather than a type: see {@link StationRole}.
-     *
-     * <p>Defaults to everything, which is both the useful default and the only one that is honest about
-     * history: every pad registered before roles existed did all four things, and a world reload is not the
-     * moment to quietly stop half of them working.
-     */
+    /** What this station is willing to do. */
     private final EnumSet<StationRole> roles = EnumSet.copyOf(StationKind.STATION.roles());
     private final long registeredAt;
 
@@ -152,9 +134,6 @@ public final class StationRecord {
         for (int i = 0; i < list.size(); i++) {
             record.allowed.add(list.getString(i));
         }
-        // No Roles tag means a station saved before roles existed, which did everything. Absent rather than
-        // empty is the distinction: an operator who deliberately turned every role off gets an empty list
-        // back, and must not have it silently read as "all of them".
         if (tag.contains("Roles", Tag.TAG_LIST)) {
             record.roles.clear();
             ListTag roleList = tag.getList("Roles", Tag.TAG_STRING);
@@ -162,8 +141,6 @@ public final class StationRecord {
                 try {
                     record.roles.add(StationRole.valueOf(roleList.getString(i)));
                 } catch (IllegalArgumentException ignored) {
-                    // A role this build no longer has. Dropping it is right: whatever it meant, this server
-                    // cannot do it.
                 }
             }
         }

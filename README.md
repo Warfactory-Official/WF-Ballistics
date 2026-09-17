@@ -69,6 +69,8 @@ com.wf.wfballistics
 ├── damage/  fire/  fluid/     custom damage classes, fire type, kerosene fluid
 ├── entity/                    bomblets, gas mist, nuke-explosion + torex entities
 ├── compat/                    optional GregTech Modern (EMP) + WarForge integrations (compile-against)
+├── door/                      the NTM door roster: multiblock frame, DoorType table, GemRender visuals
+├── probe/                      the look-at panel: elements, providers, registry, HUD layer
 ├── config/                    WFConfig (Forge ModConfig) mirrored into MissileSimConfig statics
 └── mixin/ · network/ · client/   engine hooks, packets, client-only rendering/particles
 ```

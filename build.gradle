@@ -70,6 +70,13 @@ repositories {
         url = 'https://cursemaven.com'
         content { includeGroup 'curse.maven' }
     }
+    maven {
+        // JourneyMap's own maven, which is the only place the client API is published. Scoped to
+        // info.journeymap; the mod itself comes from Modrinth above.
+        name = 'JourneyMap'
+        url = 'https://jm.gserv.me/repository/maven-public/'
+        content { includeGroup 'info.journeymap' }
+    }
 
     // --- WarForge Factions Remaintained ------------------------------------------------------
     // Its own release maven, then mavenLocal. Both scoped to com.flansmod.warforge so mavenLocal
@@ -116,6 +123,19 @@ neoForge {
             if (systemOpenAl != null) {
                 systemProperty 'org.lwjgl.openal.libname', systemOpenAl.absolutePath
             }
+            // -PquickPlay=<world> boots straight into a save instead of the main menu. Client-side work
+            // (renderers, HUDs, the scope) can only be checked by looking at it, and every menu click
+            // between launch and the world is a step an automated check has to get right blind.
+            if (project.hasProperty('quickPlay')) {
+                programArguments.addAll '--quickPlaySingleplayer', project.property('quickPlay').toString()
+            }
+            // -PquickJoin=<host:port> connects straight to a server, the multiplayer counterpart of the
+            // above. Some behaviour only exists on a server (the recon map overlay treats a singleplayer
+            // host as an operator by design, so its permission rule cannot be checked in a single-player
+            // world at all), and the menu path to a join is four blind clicks and a typed address.
+            if (project.hasProperty('quickJoin')) {
+                programArguments.addAll '--quickPlayMultiplayer', project.property('quickJoin').toString()
+            }
         }
         server {
             server()
@@ -146,14 +166,31 @@ neoForge {
             //
             // DebugNonSafepoints is the flag that makes the profile worth reading. Without it the JIT only
             // emits stack-trace metadata at safepoints, so every sample is attributed to the nearest safepoint
-            // rather than to where the time actually went -- hot leaf methods vanish and their callers inherit
+            // rather than to where the time actually went: hot leaf methods vanish and their callers inherit
             // the cost. Left off by default because it slightly constrains optimisation.
 
             // -Paccel=FFM pins Accelerated Recoiling's collision backend. Explicit rather than AUTO, because
-            // AUTO prefers its OpenCL backend and a headless server has no GPU to prefer -- benchmarking the
+            // AUTO prefers its OpenCL backend and a headless server has no GPU to prefer: benchmarking the
             // GPU path on a dev box reports a number no server can reproduce.
+            // -PprobeTrace logs every scroll the probe sees, for diagnosing a modifier that is not arriving.
+            if (project.hasProperty('probeTrace')) {
+                systemProperty 'wfballistics.probeInputTrace', 'true'
+            }
+
             if (project.hasProperty('accel')) {
                 systemProperty 'acceleratedrecoiling.backend', project.property('accel')
+            }
+
+            // Gas clouds are raymarched in the dev run. This is the client.gas.volumetric config option,
+            // forced from here rather than by writing the toml, because the config file is generated on
+            // first launch and a run directory that already has one would silently keep the old value.
+            // -PvolumetricGas=false turns it back off for an A/B against the billboard path;
+            // -PvolumetricGasQuality=LOW|MEDIUM|HIGH picks the step count.
+            systemProperty 'wfballistics.volumetricGas',
+                    project.hasProperty('volumetricGas') ? project.property('volumetricGas').toString() : 'true'
+            if (project.hasProperty('volumetricGasQuality')) {
+                systemProperty 'wfballistics.volumetricGasQuality',
+                        project.property('volumetricGasQuality').toString()
             }
             if (project.hasProperty('jfr')) {
                 // stackdepth is 64 by default and JFR truncates the *outermost* frames, which are the ones a
@@ -183,16 +220,44 @@ configurations {
 dependencies {
     // --- Benchmarking company ----------------------------------------------------------------
     // Lithium is dev-runtime only and never published. It is here so the swarm work is measured in
-    // the environment it will actually ship into, and -- more pointedly -- so that anywhere we patch
+    // the environment it will actually ship into, and (more pointedly), so that anywhere we patch
     // vanilla for performance, we find out immediately whether Lithium already patched it or, worse,
     // patched it a different way. Vanilla's PathTypeCache is exactly that kind of contested ground.
     localRuntime "maven.modrinth:lithium:${lithium_version}"
 
+    // Sodium, behind -PwithSodium, because it is an A/B and not a baseline. The drone camera renders the
+    // world a second time from a second camera, which is exactly the thing a rewritten chunk renderer is
+    // entitled to break, and Sodium keeps its own per-camera state (SodiumWorldRenderer.lastCameraPos,
+    // RenderSectionManager.needsGraphUpdate) that alternating cameras fight over. There is no compileOnly
+    // counterpart on purpose: everything we touch of Sodium's goes through reflection in SodiumChunkProbe,
+    // so the mod builds and runs identically whether or not Sodium is installed.
+    //     ./gradlew runClient -PwithSodium
+    if (project.hasProperty('withSodium')) {
+        localRuntime "maven.modrinth:sodium:${sodium_version}"
+    }
+
+    // --- GemRender (skinned/rigged models on Flywheel) ---------------------------------------
+    // Every animated entity draws through it: drones, missiles and both tiers of the glyphid swarm are
+    // one instance each posed from a shared bone palette, instead of one instance per moving part.
+    // A local jar because GemRender is not published anywhere yet; declared required in the toml, so
+    // it is not jar-in-jar'd either.
+    compileOnly files('libs/gemrender-1.21.1-0.1.0.jar')
+    // Client runs only, for the same reason as JourneyMap below: GemRender jar-in-jars lwjgl-ktx for its
+    // KTX2 textures, and that module requires org.lwjgl, which a dedicated server does not have on its
+    // module path. FML dies building the transforming module layer before any mod is constructed. The
+    // dependency is declared side = "CLIENT" in neoforge.mods.toml, so the server never wanted it: the
+    // server does not build a rig.
+    if (!gradle.startParameter.taskNames.any { it.toLowerCase().contains('server') }) {
+        localRuntime files('libs/gemrender-1.21.1-0.1.0.jar')
+    }
+
     // --- Flywheel (Engine-Room, NeoForge 1.21.1) ---------------------------------------------
-    // compileOnly API for types at compile time; the full jar is present in dev via localRuntime.
     // Flywheel is declared a required dependency in neoforge.mods.toml, so it is NOT jar-in-jar'd
     // (ships separately, avoids clashing with the copy Create bundles).
-    compileOnly "dev.engine-room.flywheel:flywheel-neoforge-api-1.21.1:${flywheel_version}"
+    //
+    // The FULL jar rather than flywheel-neoforge-api, matching what GemRender compiles against:
+    // GemRenderInstance extends ColoredLitInstance, which lives in flywheel-lib and not in the API.
+    compileOnly "dev.engine-room.flywheel:flywheel-neoforge-1.21.1:${flywheel_version}"
     localRuntime "dev.engine-room.flywheel:flywheel-neoforge-1.21.1:${flywheel_version}"
 
     // --- spark profiler (runtime-only) -------------------------------------------------------
@@ -212,6 +277,30 @@ dependencies {
     // Newer LDLib (1.0.41) dropped IEnhancedManaged, which GregTech's MetaMachine still implements.
     compileOnly("com.lowdragmc.ldlib:ldlib-neoforge-1.21.1:1.0.35.a") { transitive = false }
     runtimeOnly("curse.maven:spark-361579:6225208")
+
+    // --- JourneyMap (compile-only API, dev-runtime mod) ---------------------------------------
+    // The recon grid overlay draws through JourneyMap's client API. compileOnly + never shaded, same
+    // rationale as GregTech: the plugin class is only ever classloaded by JourneyMap's own annotation
+    // scan, so the mod builds and runs identically with JourneyMap absent.
+    //
+    // The API is published only as a live SNAPSHOT, so the version is pinned to a timestamped build
+    // rather than to -SNAPSHOT: the latter would silently change what this compiles against between
+    // one build and the next, and the 2.0 API is still moving.
+    compileOnly "info.journeymap:journeymap-api-neoforge:${journeymap_api_version}"
+
+    // The mod itself, dev-runtime only and never published; there is nothing to draw on without it.
+    // Not behind a -P flag (unlike Sodium) because this one is the feature under test rather than an
+    // A/B: a dev client with no minimap cannot show whether the overlay works.
+    //
+    // Client runs only, and not by preference: JourneyMap jar-in-jars lwjgl-ktx, whose module descriptor
+    // requires org.lwjgl. A dedicated server has no lwjgl on its module path, so FML fails to build the
+    // transforming module layer ("Module org.lwjgl not found, required by org.lwjgl.ktx") before any
+    // mod is constructed and runServer dies in about a second. Keyed off the task name rather than a
+    // property so that `./gradlew runServer` simply works; a minimap is client-side anyway, so nothing
+    // server-side loses a dependency it was using.
+    if (!gradle.startParameter.taskNames.any { it.toLowerCase().contains('server') }) {
+        localRuntime "maven.modrinth:journeymap:${journeymap_version}"
+    }
 
     // --- WarForge Factions Remaintained (compile-only optional integration) -------------------
     //     Backs compat/warforge/WarforgeApi: faction friend-or-foe and claim-aware explosions.

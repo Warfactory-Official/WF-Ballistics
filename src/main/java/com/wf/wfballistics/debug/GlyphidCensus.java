@@ -16,7 +16,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-
 public final class GlyphidCensus {
 
     /** Stuck for longer than this and a glyphid has given up walking; see {@link GlyphidBrain#STUCK_TICKS}. */
@@ -25,15 +24,12 @@ public final class GlyphidCensus {
     private GlyphidCensus() {
     }
 
+    /** One tally of the swarm. */
     /**
-     * One tally of the swarm. Entities and records are counted separately where the distinction is real —
-     * a record has no body to climb with — and together where it is not.
-     */
-    /**
-     * @param highest  the top of the swarm. In an arena with a vertical problem in it this is the result:
-     *                 "how many are chewing" cannot tell a swarm eating into the foot of a tower from one
-     *                 eating through the overhang at the top, and those are opposite outcomes
-     * @param chewY    mean height of the blocks being eaten, or {@code NaN} if nothing is being eaten
+     * @param highest the top of the swarm. In an arena with a vertical problem in it this is the result:
+     *      "how many are chewing" cannot tell a swarm eating into the foot of a tower from one
+     *      eating through the overhang at the top, and those are opposite outcomes
+     * @param chewY mean height of the blocks being eaten, or {@code NaN} if nothing is being eaten
      */
     public record Tally(int entities, int records, int chewing, int climbing, int airborne, int anchored,
                         int hunting, int stuck, int flowing, int walking, int idle, double meanDistance,
@@ -61,8 +57,6 @@ public final class GlyphidCensus {
         double highest = Double.NEGATIVE_INFINITY;
         double chewTotal = 0.0;
         int chewCounted = 0;
-        // Taken from the swarm rather than passed in: the objective is whatever the swarm was last ordered
-        // at, and asking the swarm means the report cannot disagree with it.
         int destX = 0;
         int destY = 0;
         int destZ = 0;
@@ -98,9 +92,6 @@ public final class GlyphidCensus {
             if (mind.stuckFor >= STUCK_REPORTABLE) {
                 stuck++;
             }
-            // Which navigation a glyphid is actually on, asked the same way the brain asks it. A field that
-            // covers the destination but has not flooded this far yet answers null, and that glyphid is
-            // pathfinding — which is the case worth seeing, because it is the expensive one.
             if (onField(level, glyphid)) {
                 flowing++;
             } else if (!glyphid.getNavigation().isDone()) {
@@ -151,12 +142,8 @@ public final class GlyphidCensus {
     }
 
     /**
-     * Whether this glyphid is being steered by the field <em>this tick</em>, gated exactly as
-     * {@code GlyphidBody.flowStep} gates it.
-     *
-     * <p>Asking the field on its own is a different and much less useful question. A swarm at a tower with a
-     * player on it reported nineteen of twenty on the field while every one of them was charging a target and
-     * none of them had consulted it: the field would have answered, and nobody asked.
+     * Whether this glyphid is being steered by the field <em>this tick</em>, gated exactly as {@code
+     * GlyphidBody.flowStep} gates it.
      */
     private static boolean onField(ServerLevel level, EntityGlyphid glyphid) {
         if (glyphid.getTarget() != null || glyphid.getCurrentTask() != GlyphidTasks.TASK_FOLLOW

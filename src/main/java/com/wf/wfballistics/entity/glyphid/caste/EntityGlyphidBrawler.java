@@ -13,13 +13,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Closes the distance by throwing itself.
- *
- * <p>The answer to standing behind something. A brawler solves the same launch problem the bombardier does,
- * except the projectile is the brawler, so a wall or a gap that a walking swarm has to chew through is one
- * the brawler is already over.
- */
+/** Closes the distance by throwing itself. */
 public class EntityGlyphidBrawler extends EntityGlyphid {
 
     /** Ticks between leaps, plus a random tail so a rank of brawlers does not jump in unison. */
@@ -28,11 +22,7 @@ public class EntityGlyphidBrawler extends EntityGlyphid {
     /** Do not leap further than this; past it the arc is so high the brawler spends the flight being shot at. */
     private static final double LEAP_RANGE = 20.0;
     private static final double MIN_LEAP = 3.0;
-    /**
-     * Muzzle speed of the brawler itself, and the gravity it falls under. Vanilla entity gravity is 0.08,
-     * but a leap that solves against the full value comes out flat and fast; the shallower figure gives the
-     * lofted, deliberate arc the animation reads as.
-     */
+    /** Muzzle speed of the brawler itself, and the gravity it falls under. */
     private static final double LEAP_SPEED = 1.5;
     private static final double LEAP_GRAVITY = 0.05;
     private static final int LEAP_LEAD = 20;
@@ -62,7 +52,6 @@ public class EntityGlyphidBrawler extends EntityGlyphid {
         return GlyphidStats.getStats().getBrawler();
     }
 
-
     @Override
     protected void customServerAiStep() {
         super.customServerAiStep();
@@ -87,8 +76,8 @@ public class EntityGlyphidBrawler extends EntityGlyphid {
     }
 
     /**
-     * A leap is a launch solution applied to {@code setDeltaMovement}, so the same arc the bombardier throws
-     * acid along is the one the brawler rides.
+     * A leap is a launch solution applied to {@code setDeltaMovement}, so the same arc the bombardier throws acid
+     * along is the one the brawler rides.
      */
     private void leap(LivingEntity target) {
         double distance = distanceTo(target);

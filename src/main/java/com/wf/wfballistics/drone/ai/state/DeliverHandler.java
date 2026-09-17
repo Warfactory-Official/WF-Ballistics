@@ -14,8 +14,8 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * Over the destination: descend to release height, drop the crate, then head home, or, if the battery
- * can't cover the return leg, land here and park. Delivering and stranding beats hauling the cargo back.
+ * Over the destination: descend to release height, drop the crate, then head home, or, if the battery can't cover
+ * the return leg, land here and park.
  */
 public final class DeliverHandler implements DroneStateHandler {
 
@@ -31,12 +31,6 @@ public final class DeliverHandler implements DroneStateHandler {
 
     /**
      * @return true once the drone is settled over the destination and low enough to let go of the crate.
-     *
-     * <p>Being <em>there</em> is not enough: it also has to have stopped. A drone that releases while still
-     * sliding across the drop point throws the crate instead of placing it, and the whole reason this state
-     * hovers rather than flying through is to be able to put the thing down where it was asked to. The
-     * timeout is the escape hatch for a drone that cannot get steady: better a sloppy delivery than one that
-     * hovers over the spot until its battery runs out.
      */
     private static boolean atReleasePoint(DroneSnapshot self) {
         if (!self.hasMission()) {

@@ -27,23 +27,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-/**
- * Spawns a glyphid swarm on demand and reports what it costs.
- *
- * <p>The point is a <em>controlled</em> before/after: the same command, at the same counts, on the same
- * arena, run against each stage of the swarm work. Numbers taken from an incidental nest in a live world
- * are not comparable between runs and cannot show whether an optimisation helped.
- *
- * <p>Spawns in a ring so the swarm starts spread out and converges, which is the expensive case: every bug
- * pathing to the same place and then packed tightly enough to push against its neighbours. A swarm dropped
- * in a heap and left idle measures almost nothing.
- */
+/** Spawns a glyphid swarm on demand and reports what it costs. */
 public final class SwarmBench {
 
-    /**
-     * Ticks to let the swarm settle into steady-state before the window is worth reading. A swarm measured
-     * from the spawn tick is measuring spawning, not swarming.
-     */
+    /** Ticks to let the swarm settle into steady-state before the window is worth reading. */
     public static final int WARMUP_TICKS = 60;
 
     /**
@@ -53,11 +40,7 @@ public final class SwarmBench {
 
     private static int warmup;
 
-    /**
-     * The arena's forced chunks, held so they can be released again. Without this the benchmark silently
-     * measures nothing: with no player logged in, chunks outside spawn do not tick, so the swarm exists,
-     * is counted, and never runs a single tick of AI.
-     */
+    /** The arena's forced chunks, held so they can be released again. */
     private static final Set<ChunkPos> FORCED = new HashSet<>();
     private static @Nullable ServerLevel arenaLevel;
 
@@ -65,46 +48,28 @@ public final class SwarmBench {
     }
 
     /**
-     * Spawn {@code count} glyphids in a ring around the source, clearing any previous run first so two
-     * benchmarks never overlap.
+     * Spawn {@code count} glyphids in a ring around the source, clearing any previous run first so two benchmarks
+     * never overlap.
      */
     public static int spawn(CommandSourceStack source, int count, double radius) {
         return spawn(source, count, radius, GlyphidCaste.GRUNT);
     }
 
-    /**
-     * As above, of one named caste. Explicitly one caste rather than a rolled mix: a benchmark arm that
-     * fields a random assortment is not comparable with the next one.
-     */
+    /** As above, of one named caste. */
     public static int spawn(CommandSourceStack source, int count, double radius, GlyphidCaste caste) {
         return spawn(source, count, radius, caste, source.getPosition(), radius, true, true);
     }
 
     /**
-     * Spawn somewhere other than where the command was run, at exactly the height given, forcing chunks out
-     * to {@code forceRadius}. What {@link GlyphidArena} needs, and all three differences matter.
-     *
-     * <p>The two radii are separate because a swarm is spawned in a ring a few blocks across and then marched
-     * the length of an arena; if the forced box only covered the ring, the far half of the course would not
-     * tick, which does not read as a broken arena — it reads as a swarm that stopped walking.
-     *
-     * <p>The height is taken as given rather than from the heightmap because half of these arenas have a roof.
-     * The heightmap answers with the highest solid block, so a swarm spawned at the middle of the sealed box
-     * would materialise on top of it, and the arm testing whether it can get out would begin outside.
+     * Spawn somewhere other than where the command was run, at exactly the height given, forcing chunks out to
+     * {@code forceRadius}.
      */
     public static int spawnAt(CommandSourceStack source, int count, double radius, GlyphidCaste caste,
                               Vec3 center, double forceRadius) {
         return spawn(source, count, radius, caste, center, forceRadius, false, true);
     }
 
-    /**
-     * Add to the swarm that is already standing rather than replacing it.
-     *
-     * <p>The one thing a single-caste bench cannot ask is whether the squad split balances by <em>power</em>,
-     * because a swarm of one caste balances by headcount and by power at the same time and the two answers
-     * are indistinguishable. A mixed swarm tells them apart: a behemoth is worth ten grunts, so an even
-     * partition and a fair one are different partitions.
-     */
+    /** Add to the swarm that is already standing rather than replacing it. */
     public static int reinforce(CommandSourceStack source, int count, double radius, GlyphidCaste caste,
                                 Vec3 center, double forceRadius) {
         return spawn(source, count, radius, caste, center, forceRadius, false, false);
@@ -136,8 +101,6 @@ public final class SwarmBench {
                 continue;
             }
             glyphid.moveTo(x, y, z, level.random.nextFloat() * 360F, 0F);
-            // Benchmark bugs must not despawn, or the population drifts mid-window and the per-entity
-            // figure is measured against a count that was never true.
             glyphid.setPersistenceRequired();
             if (level.addFreshEntity(glyphid)) {
                 spawned++;
@@ -145,8 +108,6 @@ public final class SwarmBench {
         }
 
         SwarmProfiler.setEnabled(true);
-        // Cleared with the swarm rather than left running, or an arm inherits the last arm's corpses.
-        // Reinforcements join an arm already under way, so they must not wipe its tally.
         if (replace) {
             GlyphidDeaths.setEnabled(true);
         }
@@ -162,10 +123,7 @@ public final class SwarmBench {
         return placed;
     }
 
-    /**
-     * Forceload the ring and its margin. The arena has to tick for any of this to mean anything, and with
-     * nobody logged in nothing outside the spawn chunks does.
-     */
+    /** Forceload the ring and its margin. */
     private static void forceArena(ServerLevel level, Vec3 center, double radius) {
         int reach = (int) Math.ceil(radius) + 16;
         int minChunkX = SectionPos.blockToSectionCoord(center.x - reach) - ARENA_MARGIN_CHUNKS;
@@ -196,11 +154,7 @@ public final class SwarmBench {
         arenaLevel = null;
     }
 
-    /**
-     * Remove every glyphid and hand the arena's chunks back. Clears before releasing: a glyphid in a chunk
-     * that has already been let go is not loaded, so it is not in the tracker, so it would survive the
-     * clear and contaminate the next run's population.
-     */
+    /** Remove every glyphid and hand the arena's chunks back. */
     public static int clear(CommandSourceStack source) {
         int removed = clearLevel(source.getLevel());
         releaseArena();
@@ -216,8 +170,6 @@ public final class SwarmBench {
         for (EntityGlyphid glyphid : doomed) {
             glyphid.discard();
         }
-        // The records too, or the next run's population starts with the survivors of the last one -- the
-        // same contamination §16.2 found when a marching column walked out of the forceloaded box.
         SimGlyphidRegistry registry = SimGlyphidRegistry.get(level);
         int records = registry.count();
         registry.view().clear();
@@ -225,12 +177,7 @@ public final class SwarmBench {
         return doomed.size() + records;
     }
 
-    /**
-     * Scatter {@code count} dummies across a square of {@code spread} blocks, clearing any previous set.
-     *
-     * <p>Square rather than ring: the swarm materialises into a square, and the interesting failure is a
-     * target sitting just outside the attacker's follow range, which a ring of one radius cannot produce.
-     */
+    /** Scatter {@code count} dummies across a square of {@code spread} blocks, clearing any previous set. */
     public static int dummies(CommandSourceStack source, int count, double spread, double drift) {
         ServerLevel level = source.getLevel();
         Vec3 center = source.getPosition();
@@ -322,15 +269,7 @@ public final class SwarmBench {
         return 1;
     }
 
-    /**
-     * When set, glyphids skip vanilla's entity-overlap query inside the collision sweep.
-     *
-     * <p>Exists to measure what that query is worth rather than argue about it. Only {@code Boat} and
-     * {@code Shulker} answer yes to {@code canBeCollidedWith}, so for a glyphid the query walks the entity
-     * sections over its swept box and returns an empty list every time — but "should be free" and "is free"
-     * are different claims, and a toggle lets both be measured against the same world in one server run.
-     * Defaults off, so nothing changes until a benchmark asks for it.
-     */
+    /** When set, glyphids skip vanilla's entity-overlap query inside the collision sweep. */
     public static boolean skipEntityCollisions = true;
 
     public static int entityCollisions(CommandSourceStack source, boolean on) {
@@ -339,60 +278,30 @@ public final class SwarmBench {
         return 1;
     }
 
-    /**
-     * When clear, the swarm does not push itself apart at all.
-     *
-     * <p>Read live, so both arms are the same swarm on the same tick — which matters here more than usual,
-     * because what separation is worth depends entirely on how packed the swarm already is.
-     */
+    /** When clear, the swarm does not push itself apart at all. */
     public static boolean separation = true;
 
-    /**
-     * When clear, glyphids march by pathfinding to a hop rather than by following the shared field.
-     *
-     * <p>Read live, so both arms are the same swarm on the same tick.
-     */
+    /** When clear, glyphids march by pathfinding to a hop rather than by following the shared field. */
     public static boolean flowField = true;
 
     /**
-     * When clear, no gap is ever proposed as a crossing and any bridge already standing is dissolved on the
-     * next tick, so a swarm walks whatever route it would have found without one.
-     *
-     * <p>Read live, so both arms are the same swarm on the same tick.
+     * When clear, no gap is ever proposed as a crossing and any bridge already standing is dissolved on the next
+     * tick, so a swarm walks whatever route it would have found without one.
      */
     public static boolean bridges = true;
 
-    /**
-     * When clear, every glyphid is a real entity and nothing is ever a {@code SimGlyphid}.
-     *
-     * <p>Read live, and switching it off gives every outstanding record a body back on the next tick, so the
-     * two arms are the same swarm rather than two populations that happen to be the same size.
-     */
+    /** When clear, every glyphid is a real entity and nothing is ever a {@code SimGlyphid}. */
     public static boolean simTier = true;
 
-    /**
-     * Point every glyphid in both tiers at one place, and make that place stick.
-     *
-     * <p>The benchmark needs a swarm that marches, because the sim tier is the approach march and a glyphid
-     * standing still is not in it. Left to the game the objective comes from {@link GlyphidSquads}, and that
-     * is not usable as a control: squads see only the entity tier, so as the tier promotes and demotes the
-     * roster churns, the rally point is recomputed from whichever bug happens to be first, and it moves.
-     * Measured, that gave a swarm whose simulated fraction swung between 35% and 81% within a minute and
-     * whose two tiers reported speeds a factor of three apart — a benchmark measuring its own scenario
-     * drifting rather than anything about the code.
-     *
-     * <p>The rally is written as well as the task, and that is the load-bearing half. A reform recomputes
-     * every objective from the rally, so setting them equal makes reassignment idempotent: the squads still
-     * run, still cost what they cost, and hand every glyphid back the destination it already had.
-     */
+    /** Point every glyphid in both tiers at one place, and make that place stick. */
     public static int march(CommandSourceStack source, Vec3 to) {
         return march(source, to, true);
     }
 
     /**
      * @param sampleHeight take the objective's height from the heightmap rather than from {@code to}. Right
-     *                     for a destination on open ground, and wrong for every roofed one: the heightmap
-     *                     answers with the roof, so a swarm ordered into a maze is ordered onto the top of it
+     *      for a destination on open ground, and wrong for every roofed one: the heightmap
+     *      answers with the roof, so a swarm ordered into a maze is ordered onto the top of it
      */
     public static int march(CommandSourceStack source, Vec3 to, boolean sampleHeight) {
         ServerLevel level = source.getLevel();
@@ -431,14 +340,7 @@ public final class SwarmBench {
         return marching;
     }
 
-    /**
-     * When clear, the sim pass runs inline on the world thread instead of on a worker.
-     *
-     * <p>The control arm, and the reason {@link com.wf.wfballistics.entity.glyphid.sim.SimWorldLive} still
-     * exists. Both arms read the same prefetched world at the same point in the tick, so the only difference
-     * between them is which thread pays — which is what makes the pair a measurement of the move rather than
-     * of two different simulations.
-     */
+    /** When clear, the sim pass runs inline on the world thread instead of on a worker. */
     public static boolean simAsync = true;
 
     public static int simAsync(CommandSourceStack source, boolean on) {
@@ -472,13 +374,7 @@ public final class SwarmBench {
         return 1;
     }
 
-    /**
-     * Set the distance inside which a glyphid must be a real entity.
-     *
-     * <p>Exists because the interesting arms are the extremes as well as the default: at zero nothing is ever
-     * a body once it starts marching, which measures what the tier costs, and at a few hundred nothing is
-     * ever a record, which measures what it saves.
-     */
+    /** Set the distance inside which a glyphid must be a real entity. */
     public static int simRange(CommandSourceStack source, double blocks) {
         SimGlyphidManager.range = Math.max(0.0, blocks);
         source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
@@ -486,12 +382,7 @@ public final class SwarmBench {
         return 1;
     }
 
-    /**
-     * Stand a pretend player somewhere, or clear the one that is there.
-     *
-     * <p>See {@link SimGlyphidManager#watcher}. The headless harness has nobody logged in, so without this
-     * every arm measures a swarm that is entirely records.
-     */
+    /** Stand a pretend player somewhere, or clear the one that is there. */
     public static int watcher(CommandSourceStack source, @Nullable Vec3 at) {
         SimGlyphidManager.watcher = at == null ? null : new double[]{at.x, at.z};
         source.sendSuccess(() -> Component.literal(at == null
@@ -500,14 +391,7 @@ public final class SwarmBench {
         return 1;
     }
 
-    /**
-     * Count the records in a box.
-     *
-     * <p>Records are invisible to {@code @e}, which is most of the point of them and a real problem for a
-     * benchmark: every question the harness asks about where a swarm is, it asks with an entity selector.
-     * This is the same question for the other tier, so "did any of them end up inside the sealed box" is
-     * answerable at all.
-     */
+    /** Count the records in a box. */
     public static int simCount(CommandSourceStack source, Vec3 from, Vec3 to) {
         double minX = Math.min(from.x, to.x);
         double maxX = Math.max(from.x, to.x);
@@ -527,14 +411,7 @@ public final class SwarmBench {
         return found;
     }
 
-    /**
-     * Set off a standard AEF blast where the command was run.
-     *
-     * <p>Here rather than in a test because the thing worth checking is that a blast kills <em>both</em>
-     * tiers, and the only honest way to ask is to detonate one over a real swarm and count what is left. A
-     * sim tier that quietly made a swarm immune to the mod's own explosions would be a exploit that looked
-     * exactly like a performance win.
-     */
+    /** Set off a standard AEF blast where the command was run. */
     public static int blast(CommandSourceStack source, float size) {
         Vec3 at = source.getPosition();
         int before = GlyphidTracker.count(source.getLevel()) + SimGlyphidManager.count(source.getLevel());
@@ -547,13 +424,7 @@ public final class SwarmBench {
         return 1;
     }
 
-    /**
-     * How the swarm is split between the tiers, and how fast each half is walking.
-     *
-     * <p>The speeds are the point. Two tiers that move at different rates deliver a swarm in two waves, and
-     * that failure looks exactly like a design decision from the outside — so the calibration constant that
-     * ties them together is checked by reading both numbers off the same run rather than by argument.
-     */
+    /** How the swarm is split between the tiers, and how fast each half is walking. */
     public static int tiers(CommandSourceStack source) {
         ServerLevel level = source.getLevel();
         int bodies = GlyphidTracker.count(level);
@@ -614,7 +485,7 @@ public final class SwarmBench {
     }
 
     /**
-     * What the swarm is doing, rather than what it costs. See {@link GlyphidCensus}.
+     * What the swarm is doing, rather than what it costs.
      *
      * @param arrivalRadius how near the objective counts as having arrived
      */
@@ -643,8 +514,6 @@ public final class SwarmBench {
      */
     public static int density(CommandSourceStack source) {
         double[] density = GlyphidSeparation.density(source.getLevel());
-        // Both tiers, because the grid the numbers come out of holds both. Counting only the entities was
-        // the same mistake as counting only them in the profiler's population.
         int count = GlyphidTracker.count(source.getLevel()) + SimGlyphidManager.count(source.getLevel());
         source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
                 "%d glyphids: %.2fb to the nearest neighbour on average, closest pair %.2fb, %.0f overlapping",
@@ -652,20 +521,10 @@ public final class SwarmBench {
         return 1;
     }
 
-    /**
-     * When set, glyphids spawn with vanilla's {@code MeleeAttackGoal} instead of the brain goal.
-     *
-     * <p>Read at spawn, so a benchmark switches arms by re-materialising the swarm — which every run does
-     * anyway. Kept past the measurement it was written for because a melee goal is exactly the kind of thing
-     * that quietly regresses, and this makes checking it a two-command job rather than a git bisect.
-     */
+    /** When set, glyphids spawn with vanilla's {@code MeleeAttackGoal} instead of the brain goal. */
     public static boolean vanillaMeleeGoal;
 
-    /**
-     * When set, a glyphid may only start a path search on its own slot: one per entity per repath interval.
-     *
-     * <p>Read live rather than at spawn, so the two arms are the same swarm on the same tick.
-     */
+    /** When set, a glyphid may only start a path search on its own slot: one per entity per repath interval. */
     public static boolean staggerSearches = true;
 
     /**
@@ -679,14 +538,7 @@ public final class SwarmBench {
      */
     public static boolean sharedPaths = true;
 
-    /**
-     * Restore vanilla entity-vs-entity pushing for glyphids.
-     *
-     * <p>Only exists so that third-party collision optimisations can be measured against something. With the
-     * shipping behaviour there is nothing left for them to optimise -- glyphids do not push each other at all
-     * -- which would read as "the mod does nothing" when the honest statement is "we already deleted the work
-     * it speeds up".
-     */
+    /** Restore vanilla entity-vs-entity pushing for glyphids. */
     public static boolean vanillaPush;
 
     public static int charge(CommandSourceStack source, boolean on) {
@@ -759,17 +611,8 @@ public final class SwarmBench {
         return 1;
     }
 
-    /**
-     * Close the profiler's tick. Driven from the server tick rather than the level tick so that one game
-     * tick is one sample even with several dimensions loaded.
-     */
-    /**
-     * Bytes the server thread has allocated, or -1 where the JVM will not say.
-     *
-     * <p>Worth having because "is it allocation or is it work?" is otherwise unanswerable from timings alone:
-     * garbage does not show up where it is created, it shows up later as a GC pause on some unrelated tick,
-     * which is exactly the shape of an unexplained p95.
-     */
+    /** Close the profiler's tick. */
+    /** Bytes the server thread has allocated, or -1 where the JVM will not say. */
     private static long lastAllocated = -1L;
 
     private static long threadAllocatedBytes() {
@@ -802,9 +645,6 @@ public final class SwarmBench {
         }
         int population = 0;
         for (ServerLevel level : server.getAllLevels()) {
-            // Both tiers. Counting only the entities would make a swarm that moved half of itself into
-            // records look like a swarm that halved -- and the per-glyphid figure derived from it would be
-            // twice what it is.
             population += GlyphidTracker.count(level) + SimGlyphidManager.count(level);
         }
         SwarmProfiler.sample(population);

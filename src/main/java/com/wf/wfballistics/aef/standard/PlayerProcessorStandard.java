@@ -12,9 +12,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Map;
 
 /**
- * Ships the knockback impulses computed by the entity processor to each affected player's client, which
- * applies them locally. This is the standard fix for the long-standing issue where server-applied
- * explosion knockback feels mushy or gets eaten by client reconciliation.
+ * Ships the knockback impulses computed by the entity processor to each affected player's client, which applies
+ * them locally.
  */
 public class PlayerProcessorStandard implements IPlayerProcessor {
 

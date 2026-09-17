@@ -10,12 +10,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.Set;
 
 /**
- * A non-destructive processor: it leaves every block intact but still runs an optional {@link IBlockMutator}
- * over the allocated area. Use it for shockwaves that should scorch/ignite the surface without cratering it.
- *
- * <p>It clears {@code affectedBlocks} on the way out, which doubles as the signal that tells
- * {@link ExplosionEffectStandard} to skip its per-block debris particles (no blocks were broken, so no
- * debris should fly).
+ * A non-destructive processor: it leaves every block intact but still runs an optional {@link IBlockMutator} over
+ * the allocated area.
  */
 public class BlockProcessorNoDamage implements IBlockProcessor {
 

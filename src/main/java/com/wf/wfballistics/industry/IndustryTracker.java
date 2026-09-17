@@ -16,17 +16,7 @@ import net.neoforged.neoforge.event.level.LevelEvent;
 import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
-/**
- * Keeps {@link IndustryRegistry} in step with the world.
- *
- * <p>Three sources, because block events alone are not enough. Placement and breaking cover what a player
- * does; the chunk sweep covers everything else — worldgen and structures, KubeJS, AE2 and robot placement,
- * {@code /setblock}, and every machine that was already standing before this feature existed. Without the
- * sweep an established base reads as provoking nothing at all, which is the opposite of the intent.
- *
- * <p>Every registry update is wrapped: industry tracking is not worth crashing a block placement or a chunk
- * load over, so a failure degrades to one logged warning.
- */
+/** Keeps {@link IndustryRegistry} in step with the world. */
 @EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.GAME)
 public final class IndustryTracker {
 
@@ -67,15 +57,7 @@ public final class IndustryTracker {
         }
     }
 
-    /**
-     * Schedule the first scan of a session.
-     *
-     * <p>The pressure field is saved data and comes back with the world; the cluster list is derived and
-     * does not. Nothing else would ask for it: the scan is event-driven off placements and first-time chunk
-     * sweeps, and an established base triggers neither on a restart -- every chunk of it has been swept
-     * before. Without this, a server that has been restarted reports no bases at all until somebody places
-     * a machine, and everything that targets one quietly does nothing.
-     */
+    /** Schedule the first scan of a session. */
     @SubscribeEvent
     public static void onLevelLoad(LevelEvent.Load event) {
         if (event.getLevel() instanceof ServerLevel level) {
@@ -83,11 +65,7 @@ public final class IndustryTracker {
         }
     }
 
-    /**
-     * Sweep a chunk the first time it is ever loaded. Only block entities are examined, not every block in
-     * the section: the machines this cares about all have one, and iterating 98k block states per chunk to
-     * find them would be a real cost on a pipeline that is already the pack's most expensive.
-     */
+    /** Sweep a chunk the first time it is ever loaded. */
     @SubscribeEvent
     public static void onChunkLoad(ChunkEvent.Load event) {
         if (!IndustryConfig.backfillEnabled() || !(event.getLevel() instanceof ServerLevel level)) {
@@ -121,22 +99,9 @@ public final class IndustryTracker {
     /**
      * The machine most worth attacking near a position, over loaded chunks only.
      *
-     * <p><b>Worth, not distance.</b> Standing inside a base, the nearest machine is whichever one a glyphid
-     * happens to have walked past, and a swarm that eats the first furnace it trips over is not attacking a
-     * factory — it is grazing. The whitelist is already a ranking of how much a block provokes: a fusion
-     * reactor is 400 against a furnace's 1, and the generators are the part of a base that hurts to lose.
-     * So a candidate scores {@code value * (1 - distance/radius)}, the same linear falloff
-     * {@link IndustryRegistry#pressureWithin} weighs a region by. A reactor anywhere in range outranks every
-     * furnace in the building; two similar machines are decided by which is closer.
-     *
-     * <p>Block entities rather than block states, for the same reason the chunk sweep does it: everything
-     * this tracks has one, and 98k states a chunk to find them is not affordable on something that runs
-     * while a swarm is standing on the doorstep. Unloaded chunks are skipped rather than loaded — a machine
-     * nobody has loaded is not one a glyphid can chew.
-     *
-     * @param awayFrom  a machine already spoken for, or null. Candidates within {@code separation} of it are
-     *                  skipped, which is how a second squad is given a different part of the same base
-     *                  instead of a neighbour of the block the first one is already eating.
+     * @param awayFrom a machine already spoken for, or null. Candidates within {@code separation} of it are
+     *      skipped, which is how a second squad is given a different part of the same base
+     *      instead of a neighbour of the block the first one is already eating.
      * @return the best machine within {@code radius} horizontally, or null if there is none.
      */
     public static @Nullable BlockPos pressingMachine(ServerLevel level, double x, double z, double radius,

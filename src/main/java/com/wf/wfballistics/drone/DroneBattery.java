@@ -3,8 +3,8 @@ package com.wf.wfballistics.drone;
 import net.minecraft.nbt.CompoundTag;
 
 /**
- * A drone's battery: the drone equivalent of {@code MissileEntity}'s fuel tank, held by both the live entity
- * and its off-world {@code SimDrone} snapshot so charge keeps draining across the offload round-trip.
+ * A drone's battery: the drone equivalent of {@code MissileEntity}'s fuel tank, held by both the live entity and
+ * its off-world {@code SimDrone} snapshot so charge keeps draining across the offload round-trip.
  */
 public final class DroneBattery {
 
@@ -48,7 +48,7 @@ public final class DroneBattery {
     }
 
     /**
-     * Burn charge for one tick (or one simulated step). Never goes negative.
+     * Burn charge for one tick (or one simulated step).
      *
      * @return true if this call emptied the battery
      */
@@ -64,10 +64,7 @@ public final class DroneBattery {
         charge = Math.min(capacity, charge + Math.max(0.0, amount));
     }
 
-    /**
-     * Set the remaining charge outright. Used when restoring a drone from an off-world record: recharging
-     * would top up a battery that starts full rather than restoring what it had left.
-     */
+    /** Set the remaining charge outright. */
     public void setCharge(double value) {
         charge = Math.clamp(value, 0.0, capacity);
     }

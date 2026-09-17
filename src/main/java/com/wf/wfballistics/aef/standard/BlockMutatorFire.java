@@ -8,13 +8,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
-/**
- * Leaves scattered fires in the blast's wake. For each cleared position it places vanilla fire (1-in-3
- * chance) when the spot is empty and sits on a face that can actually hold fire, so the result looks like
- * patchy burning rather than a solid sheet of flame.
- *
- * <p>Pair with a {@link BlockProcessorStandard} via {@code withBlockEffect(new BlockMutatorFire())}.
- */
+/** Leaves scattered fires in the blast's wake. */
 public class BlockMutatorFire implements IBlockMutator {
 
     @Override

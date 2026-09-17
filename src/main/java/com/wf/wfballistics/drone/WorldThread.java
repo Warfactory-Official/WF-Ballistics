@@ -1,19 +1,6 @@
 package com.wf.wfballistics.drone;
 
-/**
- * Which thread is the world thread, and assertions that the drone system stays on the right side of it.
- *
- * <p>The whole drone AI rests on one split: <b>anything that reads the world runs on the world thread, and
- * anything expensive runs off it.</b> Chunk reads and entity mutation on the server thread; terrain search
- * and flight decisions on the pool; results handed back and applied on the server thread again.
- *
- * <p>That split is mostly enforced by the type system: {@code DroneSnapshot} and {@code TerrainField} hold
- * no {@code Level}, {@code Entity} or {@code ChunkAccess}, so a worker has nothing to reach through. But
- * types cannot express "this method must not be called from over there", and the failure mode if someone
- * later moves a call across the line is the worst kind: it works fine until it corrupts a chunk under load.
- * So the two boundary crossings assert it outright, and {@code DroneSelfTest} checks the assertions are armed
- * and firing.
- */
+/** Which thread is the world thread, and assertions that the drone system stays on the right side of it. */
 public final class WorldThread {
 
     private static volatile Thread world;

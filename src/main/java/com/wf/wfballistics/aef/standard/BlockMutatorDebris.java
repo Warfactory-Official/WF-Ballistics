@@ -12,9 +12,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.core.registries.BuiltInRegistries;
 
 /**
- * Fills cleared positions that border surviving solid terrain with a "debris" block (rubble/scorched
- * stone), giving craters a ragged lining instead of a clean spherical cut. A position only becomes debris
- * if at least one of its six neighbours is a solid block that isn't already the debris block.
+ * Fills cleared positions that border surviving solid terrain with a "debris" block (rubble/scorched stone), giving
+ * craters a ragged lining instead of a clean spherical cut.
  */
 public class BlockMutatorDebris implements IBlockMutator {
 

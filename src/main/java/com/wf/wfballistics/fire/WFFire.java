@@ -11,11 +11,8 @@ import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
 /**
  * Public entry point for the custom-fire system: the per-entity {@link WFFireData} data attachment plus the
- * convenience methods other systems use to set things alight ({@code WFFire.ignite(entity, FireType.PHOSPHORUS, 200)}).
- *
- * <p>On NeoForge the state is a serializable {@link AttachmentType} (registered on the mod event bus) that
- * copies across death; there is no explicit per-entity attach step. The burning logic lives in
- * {@link FireHandler}.
+ * convenience methods other systems use to set things alight ({@code WFFire.ignite(entity, FireType.PHOSPHORUS,
+ * 200)}).
  */
 public final class WFFire {
 

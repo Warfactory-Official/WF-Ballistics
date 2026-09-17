@@ -9,22 +9,10 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-/**
- * One arranged meeting between two stations at a neutral point.
- *
- * <p>A plain one-way delivery is just an exchange where only one side has anything to send, so there is a
- * single shape to reason about whether it is a gift, a delivery or a trade. Each side independently drops
- * what it brought and collects what the other left, which is what makes bidirectional trade fall out for
- * free: neither side has to wait for the other, and neither ever visits the other's station.
- *
- * <p>Server-side only. Holds a position, so like {@link StationRecord} it must never reach a client.
- */
+/** One arranged meeting between two stations at a neutral point. */
 public final class Exchange {
 
-    /**
-     * How long an arrangement stands before it is written off. Long enough for two slow round trips, short
-     * enough that an abandoned crate does not sit in the world forever.
-     */
+    /** How long an arrangement stands before it is written off. */
     public static final long DEFAULT_LIFETIME_TICKS = 24000L;
 
     public enum Phase {
@@ -36,10 +24,7 @@ public final class Exchange {
          * At least one drone is flying, or cargo is on the ground waiting to be collected.
          */
         RUNNING,
-        /**
-         * A player came within sight of the zone, or it timed out. No further drones are sent; anything
-         * already on the ground stays there and is anyone's.
-         */
+        /** A player came within sight of the zone, or it timed out. */
         CANCELLED,
         COMPLETE
     }

@@ -6,37 +6,21 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * One step of a {@link DroneProgram}: somewhere to be, and what to do once there.
- *
- * <p>A task is not a state. It says <em>where</em> the drone is going and <em>which</em> {@link DroneState}
- * takes over when it arrives; the state machine still flies it. That split is what keeps the queue from
- * being a second, competing brain: {@code TransitHandler} asks the current task what to hand over to
- * instead of deciding for itself, and everything downstream of that is unchanged.
- *
- * <p>Immutable, and holding nothing but numbers, so a whole program can ride along in a
- * {@code DroneSnapshot} and be read by the off-thread planner.
- */
+/** One step of a {@link DroneProgram}: somewhere to be, and what to do once there. */
 public sealed interface DroneTask {
 
-    /**
-     * How many steps one program may hold. A cap rather than a guideline: a program arrives from the drone
-     * pad screen, which means it arrives from a client, and an unbounded list on the wire is an unbounded
-     * allocation on the server.
-     */
+    /** How many steps one program may hold. */
     int MAX_STEPS = 32;
     /** Widest circle a drone will be asked to fly, blocks. */
     double MAX_LOITER_RADIUS = 256.0;
 
-    /**
-     * The discriminant. Also what the pad screen cycles through and what the command parses, so the set of
-     * kinds and the set of authorable steps cannot drift apart.
-     */
+    /** The discriminant. */
     enum Kind {
         MOVE_TO("moveto"),
         DELIVER("deliver"),
         COLLECT("collect"),
         STRIKE("strike"),
+        MINELAY("minelay"),
         LOITER("loiter"),
         EXFIL("exfil");
 
@@ -61,7 +45,7 @@ public sealed interface DroneTask {
 
         /**
          * @return a step of this kind at {@code at}, with defaults for anything the kind needs beyond a
-         * position. What the pad screen builds when a step is added.
+         *      position. What the pad screen builds when a step is added.
          */
         public DroneTask at(Vec3 at) {
             return switch (this) {
@@ -69,6 +53,7 @@ public sealed interface DroneTask {
                 case DELIVER -> new Deliver(at);
                 case COLLECT -> new Collect(at);
                 case STRIKE -> new Strike(at);
+                case MINELAY -> new Minelay(at);
                 case LOITER -> new Loiter(at, Loiter.DEFAULT_RADIUS, 0);
                 case EXFIL -> new Exfil();
             };
@@ -79,21 +64,21 @@ public sealed interface DroneTask {
 
     /**
      * @return where this step happens, or null if it has no place of its own: {@link Exfil} goes to
-     * whatever the drone's exfil point is, which is not knowable when the program is written.
+     *      whatever the drone's exfil point is, which is not knowable when the program is written.
      */
     @Nullable
     Vec3 at();
 
     /**
      * @return the state to enter once the drone reaches {@link #at()}, or null to simply move on to the next
-     * step. A null is what makes {@link MoveTo} a waypoint rather than a destination.
+     *      step. A null is what makes {@link MoveTo} a waypoint rather than a destination.
      */
     @Nullable
     DroneState arrivalState();
 
     /**
      * @return a one-line description, for the pad screen's step list and {@code /wfballistics drone program
-     * list}.
+     *      list}.
      */
     String label();
 
@@ -192,10 +177,7 @@ public sealed interface DroneTask {
         }
     }
 
-    /**
-     * Run in on this point and pickle the payload. Breaks off cruise well short of it, see
-     * {@code Tuning.PAYLOAD_RUN_IN}, because the run needs room to reach release speed.
-     */
+    /** Run in on this point and pickle the payload. */
     record Strike(Vec3 at) implements DroneTask {
         @Override
         public Kind kind() {
@@ -223,12 +205,40 @@ public sealed interface DroneTask {
         }
     }
 
+    /** Lay the rack across this point. */
+    record Minelay(Vec3 at) implements DroneTask {
+        @Override
+        public Kind kind() {
+            return Kind.MINELAY;
+        }
+
+        @Override
+        public DroneState arrivalState() {
+            return DroneState.MINELAY;
+        }
+
+        @Override
+        public String label() {
+            return "Mine " + pos(at);
+        }
+
+        @Override
+        public void write(FriendlyByteBuf buf) {
+            writeVec(buf, at);
+        }
+
+        @Override
+        public CompoundTag save() {
+            return saveVec(new CompoundTag(), at);
+        }
+    }
+
     /**
      * Watch a place: orbit it at {@code radius}, or hold station over it when the radius is zero.
      *
      * @param ticks how long to stay, or 0 to stay until the battery says otherwise. Open-ended is the
-     *              interesting setting: a drone told to watch somewhere until it is nearly out of charge is
-     *              one whose loiter time is a real consequence of how far away the place is
+     *      interesting setting: a drone told to watch somewhere until it is nearly out of charge is
+     *      one whose loiter time is a real consequence of how far away the place is
      */
     record Loiter(Vec3 at, double radius, int ticks) implements DroneTask {
 
@@ -278,10 +288,7 @@ public sealed interface DroneTask {
         }
     }
 
-    /**
-     * Go home. Ends the program; anything queued after it is never reached, which makes this the explicit
-     * way to say "and then stop" rather than letting the queue simply run out.
-     */
+    /** Go home. */
     record Exfil() implements DroneTask {
         @Override
         public Kind kind() {
@@ -321,6 +328,7 @@ public sealed interface DroneTask {
             case DELIVER -> new Deliver(readVec(buf));
             case COLLECT -> new Collect(readVec(buf));
             case STRIKE -> new Strike(readVec(buf));
+            case MINELAY -> new Minelay(readVec(buf));
             case LOITER -> new Loiter(readVec(buf), buf.readDouble(), buf.readVarInt());
             case EXFIL -> new Exfil();
         };
@@ -344,6 +352,7 @@ public sealed interface DroneTask {
             case DELIVER -> new Deliver(at);
             case COLLECT -> new Collect(at);
             case STRIKE -> new Strike(at);
+            case MINELAY -> new Minelay(at);
             case LOITER -> new Loiter(at, tag.contains("Radius")
                     ? tag.getDouble("Radius") : Loiter.DEFAULT_RADIUS, tag.getInt("Ticks"));
             case EXFIL -> new Exfil();

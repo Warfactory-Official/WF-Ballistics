@@ -4,19 +4,13 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.neoforged.neoforge.common.util.INBTSerializable;
 
-/**
- * Per-entity custom-fire state: how many ticks of burning remain and which {@link FireType} is active. Held
- * as a NeoForge data attachment (see {@link WFFire}) so it persists across saves and rides along with the entity.
- */
+/** Per-entity custom-fire state: how many ticks of burning remain and which {@link FireType} is active. */
 public class WFFireData implements INBTSerializable<CompoundTag> {
 
     private int ticks;
     private FireType type = FireType.NORMAL;
 
-    /**
-     * Sets the entity alight, or refreshes an existing burn. The longer remaining duration wins, and a
-     * hotter type upgrades a cooler one (so a balefire hit isn't downgraded by a subsequent normal hit).
-     */
+    /** Sets the entity alight, or refreshes an existing burn. */
     public void ignite(FireType type, int ticks) {
         if (!isBurning() || type.ordinal() > this.type.ordinal()) {
             this.type = type;

@@ -15,11 +15,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
-/**
- * The drone pad's config screen talking to its block entity: store the mission, and optionally act on it.
- * Mirrors {@code SpawnMissilePacket}, including the re-validation on arrival: the client is never trusted
- * about which block it is operating or how far away it is.
- */
+/** The drone pad's config screen talking to its block entity: store the mission, and optionally act on it. */
 public record DronePadConfigPacket(BlockPos pos, DroneMission mission, Action action) implements CustomPacketPayload {
 
     /**
@@ -93,8 +89,8 @@ public record DronePadConfigPacket(BlockPos pos, DroneMission mission, Action ac
         SAVE,
         DISPATCH,
         /**
-         * Send every drone this pad launched straight back to it: the testing escape hatch for a flight
-         * that is halfway across the world.
+         * Send every drone this pad launched straight back to it: the testing escape hatch for a flight that is
+         * halfway across the world.
          */
         RECALL,
         /**

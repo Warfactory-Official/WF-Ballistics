@@ -16,26 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Finds bases in the industry registry, off-thread and only when something changed.
- *
- * <p>Event-driven rather than periodic, because building a base is the only thing that moves this data and
- * nobody does it every tick. A change sets a dirty mark; once the world has been quiet for
- * {@link IndustryConfig#recomputeDelayTicks()} the scan runs on a worker. The debounce is doing real work:
- * laying down a factory is hundreds of placements inside a few seconds, and without it each one would queue
- * its own scan.
- *
- * <p>Clusters over <em>region cells</em>, not raw machine positions. That is the difference between a
- * megabase costing tens of thousands of points to cluster and costing a few hundred, and it is why this
- * needs neither a spatial index nor a DBSCAN dependency: in cell space the equivalent algorithm is a
- * flood fill, which is linear and about forty lines. {@code eps} becomes
- * {@link IndustryConfig#clusterGapCells()} and {@code minPts} becomes
- * {@link IndustryConfig#clusterMinValue()}, expressed in provocation rather than point count so one dirty
- * plant outweighs a scattering of furnaces.
- *
- * <p>All mutable state is touched on the server thread only; the worker sees an immutable snapshot of
- * primitive arrays and returns a fresh list.
- */
+/** Finds bases in the industry registry, off-thread and only when something changed. */
 public final class IndustryClusters {
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -55,10 +36,7 @@ public final class IndustryClusters {
         return BY_LEVEL.computeIfAbsent(level.dimension(), k -> new State());
     }
 
-    /**
-     * Note that the registry changed. Cheap and idempotent: the first change starts the quiet timer and
-     * later ones before the scan fires simply extend it.
-     */
+    /** Note that the registry changed. */
     public static void markDirty(ServerLevel level) {
         State state = state(level);
         if (state.dirtySinceTick < 0) {
@@ -158,10 +136,7 @@ public final class IndustryClusters {
                 });
     }
 
-    /**
-     * Connected components over occupied cells, joining any two within {@code gap} empty cells of each
-     * other. The cell-space equivalent of DBSCAN's density reachability, minus the distance matrix.
-     */
+    /** Connected components over occupied cells, joining any two within {@code gap} empty cells of each other. */
     static List<IndustryCluster> floodFill(long[] keys, int[] values, int cellChunks, int gap, int minValue) {
         Long2IntOpenHashMap valueByCell = new Long2IntOpenHashMap(keys.length);
         for (int i = 0; i < keys.length; i++) {

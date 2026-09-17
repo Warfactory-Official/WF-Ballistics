@@ -18,11 +18,7 @@ import org.joml.Quaternionf;
 
 import java.util.List;
 
-/**
- * Draws {@link OBB} wireframes for the F3+B debug hitbox overlay. Ported from SuperbWarfare's
- * {@code OBBRenderer} (Kotlin). Invoked from {@link com.wf.wfballistics.mixin.MixinEntityRenderDispatcher}
- * after the vanilla AABB box is drawn; the pose stack is already at the entity's render origin.
- */
+/** Draws {@link OBB} wireframes for the F3+B debug hitbox overlay. */
 public final class OBBRenderer {
 
     private OBBRenderer() {
@@ -31,8 +27,6 @@ public final class OBBRenderer {
     public static void render(Entity entity, List<OBB> obbList, PoseStack poseStack, VertexConsumer buffer,
                               float red, float green, float blue, float alpha, float partialTicks) {
         Vec3 position = entity.position();
-        // Members of a swarm are drawn in that swarm's colour so distinct clusters are separable on F3+B;
-        // a lone (non-swarm) missile keeps the caller's colour.
         float[] tint = swarmTint(entity);
         float r = tint != null ? tint[0] : red;
         float g = tint != null ? tint[1] : green;
@@ -74,13 +68,7 @@ public final class OBBRenderer {
         poseStack.popPose();
     }
 
-    /**
-     * Debug overlay for the continuous-collision sweep (shown with the OBB on F3+B). Draws the
-     * nose-extended corridor the block DDA walks (red centerline) and the body OBB stepped along this
-     * tick's movement at the same substep cadence the server uses ({@link MissileSimConfig}), so the
-     * swept volume, the thing that stops fast missiles tunnelling, is visible. Client-side, rebuilt
-     * from the synced velocity; geometry only, it does not show the server's actual hit point.
-     */
+    /** Debug overlay for the continuous-collision sweep (shown with the OBB on F3+B). */
     public static void renderSweep(Entity entity, List<OBB> obbList, PoseStack poseStack, VertexConsumer buffer) {
         Vec3 delta = entity.getDeltaMovement();
         double moveDist = delta.length();
@@ -100,8 +88,6 @@ public final class OBBRenderer {
                 heading.x * sweepLen, heading.y * sweepLen, heading.z * sweepLen,
                 1f, 0.15f, 0.15f, 1f);
 
-        // Body OBB stepped along this tick's move at the server substep cadence: ghost boxes.
-        // Tinted by swarm (else yellow). i = 0 is the current pose (already drawn), so start at 1.
         float[] tint = swarmTint(entity);
         float gr = tint != null ? tint[0] : 1f;
         float gg = tint != null ? tint[1] : 0.9f;
@@ -125,8 +111,8 @@ public final class OBBRenderer {
     }
 
     /**
-     * Colour derived from a missile's swarm id (so distinct swarms are visually separable), or null when
-     * the entity isn't a swarmed missile: the caller then keeps its default colour.
+     * Colour derived from a missile's swarm id (so distinct swarms are visually separable), or null when the entity
+     * isn't a swarmed missile: the caller then keeps its default colour.
      */
     private static float[] swarmTint(Entity entity) {
         if (!(entity instanceof MissileEntity missile)) {

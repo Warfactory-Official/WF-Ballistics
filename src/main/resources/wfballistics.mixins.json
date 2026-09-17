@@ -6,6 +6,7 @@
   "plugin": "com.wf.wfballistics.mixin.WFMixinPlugin",
   "mixins": [
     "MixinEntity",
+    "MixinLevelChunk",
     "MixinLivingEntity",
     "MixinMob",
     "MixinPathNavigation",
@@ -13,11 +14,19 @@
     "MixinPathNavigationRegion",
     "MixinWalkNodeEvaluator",
     "MixinProjectileUtil",
+    "AccessorChunkMap",
+    "AccessorLivingEntity",
+    "MixinChunkMapTrackedEntity",
     "gt.MixinNotifiableEnergyContainer"
   ],
   "client": [
     "MixinEntityRenderDispatcher",
-    "MixinLevelRenderer"
+    "MixinLevelRenderer",
+    "MixinLevelRendererFeed",
+    "MixinViewArea",
+    "MixinClientChunkCache",
+    "MixinParticleEngine",
+    "MixinRenderSectionSort"
   ],
   "injectors": {
     "defaultRequire": 1

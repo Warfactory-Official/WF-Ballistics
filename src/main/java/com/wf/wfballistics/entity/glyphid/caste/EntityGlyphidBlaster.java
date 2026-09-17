@@ -6,13 +6,7 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 
-/**
- * The bombardier that graduated to high explosive: faster, flatter and tighter than the acid it grew out of.
- * A bombardier corrodes what it hits; a blaster removes it.
- *
- * <p>Four per volley rather than upstream's ten, which is survivable as acid puddles and is not as live
- * charges through {@link com.wf.wfballistics.aef.ExplosionAEF}.
- */
+/** The bombardier that graduated to high explosive: faster, flatter and tighter than the acid it grew out of. */
 public class EntityGlyphidBlaster extends EntityGlyphidBombardier {
 
     public EntityGlyphidBlaster(EntityType<? extends EntityGlyphidBlaster> type, Level level) {
@@ -31,7 +25,6 @@ public class EntityGlyphidBlaster extends EntityGlyphidBombardier {
     public GlyphidStats.StatBundle getStats() {
         return GlyphidStats.getStats().getBlaster();
     }
-
 
     @Override
     public boolean dropsExplosives() {
@@ -54,8 +47,8 @@ public class EntityGlyphidBlaster extends EntityGlyphidBombardier {
     }
 
     /**
-     * Plated heavily enough that small-arms fire strips it slowly: the exponent is quartered against a
-     * grunt's, so it takes roughly four times the hit to knock a plate off.
+     * Plated heavily enough that small-arms fire strips it slowly: the exponent is quartered against a grunt's, so
+     * it takes roughly four times the hit to knock a plate off.
      */
     @Override
     public boolean isArmorBroken(float amount) {

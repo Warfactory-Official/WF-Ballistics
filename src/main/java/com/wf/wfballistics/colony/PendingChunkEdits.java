@@ -23,12 +23,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Block changes owed to chunks that are not loaded, applied the moment they are — the answer to "the colony
- * expanded while nobody was watching". Writing into an unloaded chunk races the chunk pipeline, and loading
- * one to write it defeats the point; a nest nobody can see needs no blocks at all.
- *
- * <p>Edits are queued per chunk and drained on {@code ChunkEvent.Load}. If the chunk is already resident,
- * {@link #submit} writes immediately instead of queueing.
+ * Block changes owed to chunks that are not loaded, applied the moment they are: the answer to "the colony expanded
+ * while nobody was watching".
  */
 public final class PendingChunkEdits extends SavedData {
 
@@ -59,11 +55,6 @@ public final class PendingChunkEdits extends SavedData {
     /**
      * Set a block, now if the chunk is resident and later if it is not.
      *
-     * <p>Never {@code hasChunk} plus {@code Level.setBlock}, which deadlocked a dev server: {@code hasChunk}
-     * reads a promoted snapshot and can say yes about a chunk still loading, and {@code setBlock} then parks
-     * the server thread on {@code getChunkBlocking} for the chunk that thread is loading. {@code getChunkNow}
-     * cannot block — null just means "owe it", which is this class's normal path.
-     *
      * @return true if the write happened immediately
      */
     public boolean submit(ServerLevel level, BlockPos pos, Block block) {
@@ -76,8 +67,6 @@ public final class PendingChunkEdits extends SavedData {
         if (resident != null) {
             resident.setBlockState(pos, block.defaultBlockState(), false);
             resident.setUnsaved(true);
-            // The chunk write skips the packet Level.setBlock would have sent. Non-blocking: it marks the
-            // position dirty on the holder rather than fetching anything.
             level.getChunkSource().blockChanged(pos);
             return true;
         }
@@ -92,12 +81,7 @@ public final class PendingChunkEdits extends SavedData {
     }
 
     /**
-     * Apply and clear everything owed to a chunk. Called once as it loads.
-     *
-     * <p>Written through the {@link ChunkAccess} rather than the level, which is what worldgen does.
-     * {@code Level.setBlock} would reach a blocking {@code getChunk} for the chunk being loaded — via the
-     * neighbour shape update, and via Lithium's hopper hook, which ignores the suppression flags. Nothing is
-     * lost: the chunk has not been sent to a client, so there is no packet to build.
+     * Apply and clear everything owed to a chunk.
      *
      * @return how many blocks were written
      */

@@ -25,13 +25,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * A five-second warning with legs. Death does not remove it, it starts a fuse, so killing one at the wrong
- * moment is worse than not killing it.
- *
- * <p>{@link #communicate} here reaches only scouts: a nuclear glyphid's orders are about where the colony
- * expands to next, not about what the warband is biting.
- */
+/** A five-second warning with legs. */
 public class EntityGlyphidNuclear extends EntityGlyphid {
 
     /** Ticks from death to detonation. */
@@ -42,10 +36,7 @@ public class EntityGlyphidNuclear extends EntityGlyphid {
     private static final int BLESSING_RADIUS = 8;
 
     private static final float BLAST_SIZE = 25.0F;
-    /**
-     * Allocator resolution. The blast is large enough that the default ray count leaves visible gaps in the
-     * crater wall.
-     */
+    /** Allocator resolution. */
     private static final int BLAST_RESOLUTION = 24;
 
     private int fuse;
@@ -67,7 +58,6 @@ public class EntityGlyphidNuclear extends EntityGlyphid {
     public GlyphidStats.StatBundle getStats() {
         return GlyphidStats.getStats().getNuclear();
     }
-
 
     @Override
     public boolean fireImmune() {
@@ -99,8 +89,8 @@ public class EntityGlyphidNuclear extends EntityGlyphid {
     }
 
     /**
-     * Replaces the vanilla death animation outright rather than running alongside it: the entity has to stay
-     * in the world for the whole fuse, and vanilla discards it after twenty ticks.
+     * Replaces the vanilla death animation outright rather than running alongside it: the entity has to stay in the
+     * world for the whole fuse, and vanilla discards it after twenty ticks.
      */
     @Override
     protected void tickDeath() {
@@ -127,10 +117,7 @@ public class EntityGlyphidNuclear extends EntityGlyphid {
         }
     }
 
-    /**
-     * Upstream applies these to the corpse rather than to the bugs it found, which does nothing. The intent
-     * is plainly the opposite: the swarm around a detonating nuclear glyphid walks out of the fireball.
-     */
+    /** Upstream applies these to the corpse rather than to the bugs it found, which does nothing. */
     private void blessNeighbours() {
         AABB box = new AABB(getX(), getY(), getZ(), getX(), getY(), getZ()).inflate(BLESSING_RADIUS);
 

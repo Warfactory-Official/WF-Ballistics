@@ -7,8 +7,7 @@ package com.wf.wfballistics.aef.nuke;
  */
 public interface IExplosionRay {
     /**
-     * Called every tick. Caches the chunks affected by the explosion.
-     * All heavy calculations are recommended to be done off the main thread.
+     * Called every tick.
      *
      * @param processTimeMs maximum time to process in this tick
      */
@@ -25,7 +24,6 @@ public interface IExplosionRay {
      * Immediately cancels the explosion.
      */
     void cancel();
-
 
     /**
      * @return true if the explosion is finished or cancelled.

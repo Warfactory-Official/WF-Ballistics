@@ -9,73 +9,25 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * No slots at all: the squad is a flock, and its shape is whatever falls out of three rules.
- *
- * <p>The behaviour-based architecture, and Reynolds' boids almost unchanged: cohesion pulls a drone toward
- * the rest of the group, alignment matches its velocity to theirs, and separation (applied by
- * {@code DroneBrain} for every model, so it is not repeated here) keeps them from touching. A fourth term,
- * migration, is what stops a flock that is beautifully coordinated about going nowhere: it is the pull
- * toward the leader, which is the one drone still flying the actual mission.
- *
- * <p><b>It will not hold a formation and it is not meant to.</b> There is no defined shape to hold, so there
- * is no error to measure, and asking it for the precision {@link VirtualStructure} gives is asking the wrong
- * question. What it has instead is that nothing can break it: no anchor to drift, no slot to be unreachable,
- * no leader whose noise becomes everybody's problem, and no assumption at all about how many drones there
- * are or where they started. A squad scattered across half a kilometre by a near miss re-gathers under this
- * when a slot-based model would still be flying each survivor at a station on the far side of the group.
- *
- * <p>Useful as a swarm (drones milling over an area, a search, an escort that only has to stay roughly
- * together) and as the thing to fall back on when the terrain is bad enough that holding a rigid shape is
- * fighting the ground rather than flying.
- */
+/** No slots at all: the squad is a flock, and its shape is whatever falls out of three rules. */
 public final class Flocking implements CoordinationModel {
 
     public static final Flocking INSTANCE = new Flocking();
 
     /**
-     * How far apart the flock tries to sit, as a fraction of the squad's ordered spacing, and how hard it
-     * pushes to get there.
-     *
-     * <p>The term that decides what size the flock is, and the one it is easiest to leave out. Cohesion has
-     * no preferred distance in it, it pulls toward the centroid and keeps pulling, so a flock with only
-     * cohesion collapses to a point and stays there. The shared {@code Tuning#SEPARATION_RADIUS} does not
-     * save it either: that is a hull-clearance backstop measured in single-figure blocks, so the flock simply
-     * settles at the width of the backstop and flies the whole mission grinding against it. Measured, that
-     * was every drone touching another on essentially every tick of a two-thousand-tick leg.
-     *
-     * <p>Scaled off the squad's spacing so the one number a player sets means the same thing here as it does
-     * to a formation: order a loose flight and you get a loose flight, rather than the same huddle either
-     * way.
+     * How far apart the flock tries to sit, as a fraction of the squad's ordered spacing, and how hard it pushes to
+     * get there.
      */
     public static final double SEPARATION_FRACTION = 0.9;
     public static final double SEPARATION_GAIN = 0.35;
-    /**
-     * How strongly a drone is drawn toward the middle of the flock, as a fraction of the offset per tick.
-     * Gentle, and much weaker than the separation it is balanced against: cohesion that is too eager wins the
-     * argument close in, and the group spends the flight breathing in and out.
-     */
+    /** How strongly a drone is drawn toward the middle of the flock, as a fraction of the offset per tick. */
     public static final double COHESION_GAIN = 0.04;
-    /**
-     * How much of the flock's mean velocity a drone adopts, against its own. This is the term that makes a
-     * flock look like a flock rather than a crowd: it propagates a turn through the group faster than
-     * cohesion alone could.
-     */
+    /** How much of the flock's mean velocity a drone adopts, against its own. */
     public static final double ALIGNMENT = 0.35;
-    /**
-     * How strongly the flock is drawn along after the leader, and how far behind it settles.
-     *
-     * <p>Aimed at a point short of the leader rather than at the leader itself, so the flock trails it rather
-     * than piling onto it: with no slots there is nothing else keeping the group off the one drone
-     * everybody is attracted to.
-     */
+    /** How strongly the flock is drawn along after the leader, and how far behind it settles. */
     public static final double MIGRATION_GAIN = 0.10;
     public static final double MIGRATION_STANDOFF = 1.5;
-    /**
-     * How far a drone may stray before cohesion is all it is allowed to think about. Beyond this the
-     * alignment and migration terms are dropped: a straggler's job is to rejoin, and matching the group's
-     * velocity while it is a hundred blocks adrift is how it stays a hundred blocks adrift.
-     */
+    /** How far a drone may stray before cohesion is all it is allowed to think about. */
     public static final double STRAGGLER_RANGE = 48.0;
 
     private Flocking() {
@@ -86,11 +38,7 @@ public final class Flocking implements CoordinationModel {
         return "flocking";
     }
 
-    /**
-     * The flock's own centre and mean motion. There is no rigid frame here, so this is a summary of the group
-     * rather than a reference anybody is being held to, but {@link SquadAnchor} is the right shape for it,
-     * and computing it once per tick rather than once per drone is worth having.
-     */
+    /** The flock's own centre and mean motion. */
     @Override
     public SquadAnchor advance(SquadView squad, @Nullable SquadAnchor previous) {
         Vec3 centre = Vec3.ZERO;
@@ -136,22 +84,7 @@ public final class Flocking implements CoordinationModel {
         return SquadCommand.of(new Vec3(velocity.x, vy, velocity.z));
     }
 
-    /**
-     * A flock is formed up when it is <em>together</em>, which is the only shape it has.
-     *
-     * <p>The inherited test asks how far each drone is from a formation slot, and this model has none: asked
-     * of a flock it is always answered "too far", so before this existed every flocking launch held over the
-     * pad for the full {@code Tuning#MUSTER_TIMEOUT} and then set off anyway, in good order, having waited a
-     * minute for a wedge it was never going to fly. Measured: eight drones at spacing 12, sixty-six seconds
-     * from assembled to departure against a slot model's five, with the low drone sitting at 31 blocks AGL
-     * against a 38-block gate the whole time — because a flock does not hold a common altitude either, and
-     * cohesion is entitled to pull a member below cruise.
-     *
-     * <p>What it asks instead is the flock's own question, and it is the same number the model is built on:
-     * everybody inside a group radius of the centre. {@link #STRAGGLER_RANGE} is the threshold the guidance
-     * already uses to decide who is a straggler, so a flight is ready exactly when it has no stragglers left,
-     * and there is no second constant to get out of step with the first.
-     */
+    /** A flock is formed up when it is <em>together</em>, which is the only shape it has. */
     @Override
     public boolean formedUp(SquadView squad, @Nullable SquadAnchor anchor) {
         if (anchor == null) {
@@ -170,9 +103,9 @@ public final class Flocking implements CoordinationModel {
 
     /**
      * @return the push away from squadmates that are closer than the flock wants to sit. Falls off linearly
-     * to nothing at the comfortable distance, so a flock at rest is not fighting itself: see
-     * {@link #SEPARATION_FRACTION} for why this exists at all when {@code Cruising#separation} is already
-     * applied to every model.
+     *      to nothing at the comfortable distance, so a flock at rest is not fighting itself: see
+     *      {@link #SEPARATION_FRACTION} for why this exists at all when {@code Cruising#separation} is already
+     *      applied to every model.
      */
     private static Vec3 spread(DroneSnapshot self, SquadView squad) {
         double want = squad.spacing() * SEPARATION_FRACTION;

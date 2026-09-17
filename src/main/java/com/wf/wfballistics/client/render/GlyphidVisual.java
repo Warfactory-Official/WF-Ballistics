@@ -1,85 +1,74 @@
 package com.wf.wfballistics.client.render;
 
+import com.wf.gemrender.gltf.GemRenderGltfModel;
+import com.wf.gemrender.gltf.GltfAnimation;
+import com.wf.gemrender.render.GemRenderInstance;
+import com.wf.gemrender.render.GemRenderInstanceTypes;
+import com.wf.gemrender.render.PoseCache;
+import com.wf.gemrender.render.PoseLod;
+import com.wf.gemrender.render.PosedBound;
 import com.wf.wfballistics.client.model.GlyphidModel;
-import com.wf.wfballistics.client.model.GlyphidPoses;
 import com.wf.wfballistics.client.model.GlyphidRig;
 import com.wf.wfballistics.drone.flight.FlightAttitude;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
-import dev.engine_room.flywheel.api.model.Model;
 import dev.engine_room.flywheel.api.task.Plan;
 import dev.engine_room.flywheel.api.visual.DynamicVisual;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
-import dev.engine_room.flywheel.lib.instance.InstanceTypes;
-import dev.engine_room.flywheel.lib.instance.TransformedInstance;
 import dev.engine_room.flywheel.lib.task.SimplePlan;
 import dev.engine_room.flywheel.lib.visual.AbstractEntityVisual;
 import net.minecraft.core.Vec3i;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
+import org.joml.FrustumIntersection;
 import org.joml.Matrix4f;
 import org.joml.Quaternionf;
+import org.joml.Vector4f;
 
 /**
- * Draws a glyphid: one shared mesh, the caste's skin and size, six legs walking, jaws that snap when it
- * bites, and armour plates that vanish as they are shot off.
- *
- * <p>Instanced rather than drawn part by part because the point of the subsystem is three hundred of them at
- * once. Every joint pose comes out of {@link GlyphidPoses}' tables, so posing one bug is twenty-seven matrix
- * multiplies against its body transform and no trigonometry at all — the difference between a swarm and a
- * slideshow.
- *
- * <p>The body transform is built the long way round — flip, drop, flip back — rather than as the single
- * rotation those three collapse to. The mesh is authored in the frame a vanilla mob model lives in, which is
- * upside down and offset by the {@code 1.5078} a living renderer subtracts; writing each of those out means
- * the numbers here are the ones the mesh was built against, and anything hung off the animal later has an
- * obvious place to go in the chain.
+ * Draws a glyphid: one shared rig, the caste's skin and size, six legs walking, jaws that snap when it bites, and
+ * armour plates that vanish as they are shot off.
  */
 public class GlyphidVisual extends AbstractEntityVisual<EntityGlyphid> implements DynamicVisual {
 
-    /**
-     * How far a corpse has rolled over by, at most. Vanilla's, so a dead glyphid ends up on its side like
-     * everything else does.
-     */
+    /** How far a corpse has rolled over by, at most. */
     private static final float DEATH_ROLL = 90.0f;
-    /**
-     * Ticks the nuclear caste takes to swell to its full size. Deliberately a little longer than its
-     * hundred-tick fuse, so it is still visibly growing at the moment it goes off rather than sitting at
-     * full size waiting.
-     */
+    /** Ticks the nuclear caste takes to swell to its full size. */
     private static final float SWELL_TICKS = 95.0f;
+
+    private static final int WALK_LAYER = 0;
+    private static final int BITE_LAYER = 1;
+    private static final int ARMOR_LAYER = 2;
 
     private final GlyphidCaste caste;
     private final float scale;
-    private final TransformedInstance[] parts;
-    /**
-     * The infestation overlay, or null until this glyphid is seen to be infected. Built on demand rather than
-     * up front: it is a second full set of instances, and most bugs never need it.
-     */
-    private TransformedInstance[] infested;
+
+    private GemRenderInstance instance;
+    /** The infestation overlay, or null until this glyphid is seen to be infected. */
+    private GemRenderInstance infested;
+    /** Which model the instances were made against. */
+    private GlyphidModel.Skin skin;
 
     /**
      * Per-frame scratch, owned rather than shared: flywheel runs visuals across several threads at once, so a
-     * static scratch matrix would be two glyphids writing the same transform.
+     * static scratch would be two glyphids writing the same transform.
      */
     private final Matrix4f root = new Matrix4f();
     private final Quaternionf lean = new Quaternionf();
+    /** The bound of the animal as it was last posed, in model space, and whether it has been posed at all. */
+    private final Vector4f bound = new Vector4f();
+    private boolean bounded;
+    private final GltfAnimation[] layers = new GltfAnimation[3];
+    private final float[] times = new float[3];
 
-    /**
-     * State resampled once a tick rather than once a frame. All of it is synced entity data or derived from
-     * the block the bug is standing in, so it cannot change any faster than this, and reading it per frame
-     * cost a lock on the data table five times over plus a chunk lookup to arrive at the same answers.
-     */
+    /** State resampled once a tick rather than once a frame. */
     private int sampledTick = Integer.MIN_VALUE;
     private int packedLight;
     private byte armor = EntityGlyphid.FULL_ARMOR;
     private boolean flying;
     private float roll;
     private float pitch;
-    /**
-     * The tick this glyphid was first seen dying on, or -1. Read off {@code tickCount} rather than counted,
-     * so the distance limiter skipping updates cannot make the animation run slow.
-     */
+    /** The tick this glyphid was first seen dying on, or -1. */
     private int deathStartTick = -1;
 
     public GlyphidVisual(VisualizationContext context, EntityGlyphid entity, GlyphidCaste caste) {
@@ -87,16 +76,8 @@ public class GlyphidVisual extends AbstractEntityVisual<EntityGlyphid> implement
         this.caste = caste;
         this.scale = (float) entity.getGlyphidScale();
 
-        Model[] models = GlyphidModel.parts(caste);
-        this.parts = new TransformedInstance[models.length];
-        for (int i = 0; i < models.length; i++) {
-            parts[i] = context.instancerProvider()
-                    .instancer(InstanceTypes.TRANSFORMED, models[i])
-                    .createInstance();
-        }
-
         sampleTick();
-        updatePose(0.0f);
+        updatePose(0.0f, 0);
     }
 
     /**
@@ -116,10 +97,23 @@ public class GlyphidVisual extends AbstractEntityVisual<EntityGlyphid> implement
         packedLight = computePackedLight(0.0f);
     }
 
-    private void updatePose(float partialTick) {
-        if (parts.length == 0) {
+    private void updatePose(float partialTick, int lod) {
+        GlyphidModel.Skin current = GlyphidModel.body();
+        if (current == null) {
+            release();
             return;
         }
+        if (skin != current) {
+            release();
+            skin = current;
+            instance = instancerProvider()
+                    .instancer(GemRenderInstanceTypes.SKINNED, current.model()
+                            .model())
+                    .createInstance();
+            instance.colorArgb(0xFFFFFFFF);
+            instance.variant(current.variant(caste));
+        }
+
         if (entity.tickCount != sampledTick) {
             sampleTick();
         }
@@ -133,9 +127,6 @@ public class GlyphidVisual extends AbstractEntityVisual<EntityGlyphid> implement
         Matrix4f matrix = root.translation(x, y, z);
 
         if (flying) {
-            // The lean is a world-frame tilt of the lift axis, exactly as a drone's is, so it goes on
-            // outside the heading: see FlightAttitude. Roll and pitch were projected onto the body's own
-            // axes to quantise them for the wire, and this projects them back.
             float heading = (float) ((entity.getYRot() + 90.0f) * (Math.PI / 180.0));
             double tiltX = roll * Math.cos(heading) + pitch * Math.sin(heading);
             double tiltZ = pitch * Math.cos(heading) - roll * Math.sin(heading);
@@ -144,8 +135,6 @@ public class GlyphidVisual extends AbstractEntityVisual<EntityGlyphid> implement
 
         matrix.rotateY((float) Math.toRadians(180.0f - yaw));
 
-        // Vanilla's corpse roll. The nuclear caste never gets here: it replaces tickDeath outright to run its
-        // fuse, so its deathTime stays at zero and it stands upright until it goes off.
         if (entity.deathTime > 0) {
             float fall = Math.min(Mth.sqrt((entity.deathTime + partialTick - 1.0f) / 20.0f * 1.6f), 1.0f);
             matrix.rotateZ((float) Math.toRadians(fall * DEATH_ROLL));
@@ -157,12 +146,26 @@ public class GlyphidVisual extends AbstractEntityVisual<EntityGlyphid> implement
         }
         GlyphidRig.mount(matrix, scale);
 
-        int light = packedLight;
-        GlyphidRig.place(parts, matrix,
-                GlyphidPoses.bite(entity.getAttackAnim(partialTick)),
-                GlyphidPoses.walk(entity.walkAnimation.position(partialTick)),
-                armor, light);
-        overlay(light);
+        layers[WALK_LAYER] = current.walk()
+                .clip();
+        times[WALK_LAYER] = current.walk()
+                .timeAt(entity.walkAnimation.position(partialTick));
+        layers[BITE_LAYER] = current.bite()
+                .clip();
+        times[BITE_LAYER] = current.bite()
+                .timeAt(entity.getAttackAnim(partialTick));
+        layers[ARMOR_LAYER] = current.armor(armor);
+        times[ARMOR_LAYER] = 0.0f;
+
+        GemRenderGltfModel gltf = current.model();
+        PoseCache.Pose posed = PoseCache.getInstance()
+                .pose(gltf.layout(), gltf.bounds(), gltf.morphs(), layers, times, lod);
+
+        bound.set(posed.sphere());
+        bounded = true;
+
+        write(instance, matrix, posed, packedLight);
+        overlay(matrix, posed, packedLight);
     }
 
     /**
@@ -179,66 +182,71 @@ public class GlyphidVisual extends AbstractEntityVisual<EntityGlyphid> implement
         matrix.scale(horizontal, (1.0f + swell * 0.1f) / flash, horizontal);
     }
 
-    /**
-     * The infestation growing through an infected glyphid, drawn over whatever skin its caste already wears.
-     * Copies the poses rather than recomputing them, so it costs a matrix copy per part and picks up shot-off
-     * armour for free.
-     */
-    private void overlay(int light) {
-        boolean infectedNow = entity.subtype() == EntityGlyphid.TYPE_INFECTED;
+    /** The infestation growing through an infected glyphid, drawn over whatever skin its caste already wears. */
+    private void overlay(Matrix4f pose, PoseCache.Pose posed, int light) {
+        if (entity.subtype() != EntityGlyphid.TYPE_INFECTED) {
+            if (infested != null) {
+                infested.delete();
+                infested = null;
+            }
+            return;
+        }
+
         if (infested == null) {
-            if (!infectedNow) {
+            GlyphidModel.Skin overlay = GlyphidModel.infested();
+            if (overlay == null) {
                 return;
             }
-            Model[] models = GlyphidModel.infested();
-            if (models.length != parts.length) {
-                return;
-            }
-            infested = new TransformedInstance[models.length];
-            for (int i = 0; i < models.length; i++) {
-                // Biased after the body so the decal lands on a depth the body has already written.
-                infested[i] = instancerProvider()
-                        .instancer(InstanceTypes.TRANSFORMED, models[i], 1)
-                        .createInstance();
-            }
+            // Biased after the body so the decal lands on a depth the body has already written.
+            infested = instancerProvider()
+                    .instancer(GemRenderInstanceTypes.SKINNED, overlay.model()
+                            .model(), 1)
+                    .createInstance();
+            infested.colorArgb(0xFFFFFFFF);
         }
-        for (int i = 0; i < infested.length; i++) {
-            if (infectedNow) {
-                infested[i].pose.set(parts[i].pose);
-            } else {
-                infested[i].setZeroTransform();
-            }
-            infested[i].light(light);
-            infested[i].setChanged();
+        write(infested, pose, posed, light);
+    }
+
+    private static void write(GemRenderInstance instance, Matrix4f pose, PoseCache.Pose posed, int light) {
+        instance.pose.set(pose);
+        instance.boneBase = posed.boneBase();
+        instance.morphBase = posed.morphBase();
+        instance.boneSphere.set(posed.sphere());
+        instance.light(light);
+        instance.setChanged();
+    }
+
+    /** Whether the animal is on screen, tested against the model rather than against its hitbox. */
+    @Override
+    public boolean isVisible(FrustumIntersection frustum) {
+        return super.isVisible(frustum) || (bounded && PosedBound.test(frustum, root, bound));
+    }
+
+    private void release() {
+        if (instance != null) {
+            instance.delete();
+            instance = null;
         }
+        if (infested != null) {
+            infested.delete();
+            infested = null;
+        }
+        skin = null;
+        bounded = false;
     }
 
     @Override
     protected void _delete() {
-        for (TransformedInstance part : parts) {
-            part.delete();
-        }
-        if (infested != null) {
-            for (TransformedInstance part : infested) {
-                part.delete();
-            }
-        }
+        release();
     }
 
     @Override
     public Plan<Context> planFrame() {
         return SimplePlan.of(context -> {
-            // Off-screen bugs keep the pose they were last drawn in. Flywheel runs this plan for every
-            // visual in range whether or not it is in front of the camera, and a swarm behind you is still
-            // three hundred rigs' worth of work.
-            if (!isVisible(context.frustum())) {
-                return;
-            }
-            Vec3 camera = context.camera().getPosition();
-            if (!context.limiter().shouldUpdate(distanceSquared(camera.x, camera.y, camera.z))) {
-                return;
-            }
-            updatePose(context.partialTick());
+            Vec3 camera = context.camera()
+                    .getPosition();
+            updatePose(context.partialTick(), PoseLod.getInstance()
+                    .levelAt(distanceSquared(camera.x, camera.y, camera.z)));
         });
     }
 }

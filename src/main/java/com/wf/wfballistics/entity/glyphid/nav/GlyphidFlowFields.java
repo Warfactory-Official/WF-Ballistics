@@ -13,20 +13,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The few flow fields a level has going, and the budget they are built inside.
- *
- * <p>One field per place a swarm is walking to, not one per glyphid — which is the entire saving. Destinations
- * are rounded to {@link #GRAIN} blocks before they are looked up, so a squad whose objective drifts by a block
- * keeps the field it already has rather than throwing away a flood and starting another.
- *
- * <p>Budgeted: a complete field is around nine thousand columns, and flooding one in a tick would be a
- * two-millisecond spike. {@link #BUDGET} columns a tick spreads it over a second, outward from the
- * destination, so the glyphids nearest it are served first.
- *
- * <p>Invalidated by digging rather than by a timer alone — {@link #invalidate} is called from the
- * block-breaking path, and the age limit is the backstop for everything else that changes terrain.
- */
+/** The few flow fields a level has going, and the budget they are built inside. */
 public final class GlyphidFlowFields {
 
     /** Destinations are rounded to this many blocks before a field is looked up. */
@@ -35,10 +22,7 @@ public final class GlyphidFlowFields {
     private static final int BUDGET = 768;
     /** Fields kept per level: one per squad, since that is the most destinations wanted at once. */
     private static final int MAX_FIELDS = 4;
-    /**
-     * Ticks a completed field is trusted before it is rebuilt. The backstop, not the mechanism: chewing
-     * reports its own holes, and this covers a player bricking up a doorway, a piston, a {@code /fill}.
-     */
+    /** Ticks a completed field is trusted before it is rebuilt. */
     private static final int MAX_AGE = 400;
     /** Ticks a field with no readers is kept before it is dropped. */
     private static final int IDLE_TIMEOUT = 200;
@@ -51,12 +35,7 @@ public final class GlyphidFlowFields {
     private static final class Entry {
         final int keyX;
         final int keyZ;
-        /**
-         * What readers get. Never replaced by a half-flooded one: a rebuild floods {@link #building}
-         * alongside it and only swaps when that is finished, so terrain changing under a swarm never leaves
-         * it with no field at all — which is worse than a slightly stale one, because it puts three hundred
-         * glyphids back on the pathfinder for the dozen ticks the reflood takes.
-         */
+        /** What readers get. */
         GlyphidFlowField field;
         @Nullable GlyphidFlowField building;
         long builtAtTick;
@@ -74,7 +53,7 @@ public final class GlyphidFlowFields {
 
     /**
      * @return the field for this destination, building one if the level has room. Null when flow navigation
-     * is switched off, or while a brand new field has not yet flooded as far as the caller.
+     *      is switched off, or while a brand new field has not yet flooded as far as the caller.
      */
     public static @Nullable GlyphidFlowField fieldFor(ServerLevel level, int x, int y, int z) {
         if (!SwarmBench.flowField) {

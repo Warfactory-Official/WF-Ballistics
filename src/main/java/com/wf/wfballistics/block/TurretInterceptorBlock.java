@@ -17,9 +17,8 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Auto-defense interceptor battery block: hosts a {@link TurretInterceptorBlockEntity} that automatically
- * launches guided interceptor missiles at nearby hostile missiles. Passive/automatic: no player interaction.
- * The {@code supersonic} flag selects the target class + interceptor (see the block entity).
+ * Auto-defense interceptor battery block: hosts a {@link TurretInterceptorBlockEntity} that automatically launches
+ * guided interceptor missiles at nearby hostile missiles.
  */
 public class TurretInterceptorBlock extends BaseEntityBlock {
 

@@ -15,10 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Per-level store of colonies and the warbands they have sent out. Data only; the simulation lives in
- * {@link ColonyManager}, mirroring how {@code SimDroneRegistry} splits from {@code SimDroneManager}.
- */
+/** Per-level store of colonies and the warbands they have sent out. */
 public final class ColonyRegistry extends SavedData {
 
     public static final String NAME = "wfballistics_colonies";
@@ -26,11 +23,7 @@ public final class ColonyRegistry extends SavedData {
     private final List<Colony> colonies = new ArrayList<>();
     private final List<Warband> warbands = new ArrayList<>();
 
-    /**
-     * Grid cells {@link ColonySeeder} has already dealt with, whether or not it put anything in them. Kept
-     * rather than derived from the colony list: "has this cell had its chance" must stay true after a hive is
-     * razed, or clearing one would be undone by walking away and coming back.
-     */
+    /** Grid cells {@link ColonySeeder} has already dealt with, whether or not it put anything in them. */
     private final LongOpenHashSet seededCells = new LongOpenHashSet();
 
     /** The level's evolution scalar; see {@link Evolution}. Here rather than in a second file for one float. */
@@ -141,12 +134,7 @@ public final class ColonyRegistry extends SavedData {
     }
 
     /**
-     * The colony whose blocks these are: the nearest one whose cluster actually <em>reaches</em> this
-     * position. Not {@link #nearest} — a chamber on the far lobe of a sprawling cluster can be nearer to a
-     * small colony next door, and binding it there would have one hive spending another's population.
-     *
-     * <p>Colonies that overlap ignore each other: no merging, no war, no eviction. This is the one place the
-     * ambiguity has to be resolved, since a block can belong to only one of them, and distance decides.
+     * The colony whose blocks these are: the nearest one whose cluster actually <em>reaches</em> this position.
      *
      * @param margin extra reach beyond the cluster, for blocks on the flank of a mound
      * @return the owning colony, or null if this position belongs to none
@@ -172,7 +160,7 @@ public final class ColonyRegistry extends SavedData {
 
     /**
      * @return true if any colony sits within {@code radius} of this position. Guards expansion against
-     * founding a new nest on top of an existing one.
+     *      founding a new nest on top of an existing one.
      */
     public boolean anyWithin(double x, double z, double radius) {
         double limit = radius * radius;
@@ -212,8 +200,6 @@ public final class ColonyRegistry extends SavedData {
         for (int i = 0; i < warbandList.size(); i++) {
             registry.warbands.add(Warband.load(warbandList.getCompound(i)));
         }
-        // Both absent on older saves. Zero evolution and no examined cells are the right answers: an old
-        // world's explored chunks get their nests on the next load rather than never.
         registry.evolution = tag.getFloat("evolution");
         registry.seededCells.addAll(LongArrayList.wrap(tag.getLongArray("seeded")));
         return registry;

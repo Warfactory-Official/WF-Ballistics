@@ -15,25 +15,15 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Decides which tier each glyphid belongs in, and runs the ones that are records: <b>a glyphid is an entity
- * when something could interact with it, and a record the rest of the time</b>, with hysteresis so one on
- * the boundary does not flicker.
- *
- * <p>§22.1 measured a marching swarm as nearly two thirds entity overhead — {@code Entity.move} and
- * collision, {@code baseTick}, data sync, attribute lookups. A record pays none of it and makes the same
- * decisions through the same brain.
- *
- * <p>Both directions are budgeted per tick, since a player walking at a swarm crosses the boundary for
- * hundreds of glyphids at once and {@code addFreshEntity} is not free.
+ * Decides which tier each glyphid belongs in, and runs the ones that are records: <b>a glyphid is an entity when
+ * something could interact with it, and a record the rest of the time</b>, with hysteresis so one on the boundary
+ * does not flicker.
  */
 public final class SimGlyphidManager {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /**
-     * Inside this range of a player a glyphid is a real entity. An interaction distance, not a render one —
-     * sim glyphids are drawn. A bug covers four blocks a second, so 64 is three seconds of warning.
-     */
+    /** Inside this range of a player a glyphid is a real entity. */
     public static double range = 64.0;
     /** Extra distance before a glyphid may go back to a record, so one on the boundary does not flicker. */
     private static final double HYSTERESIS = 24.0;
@@ -47,8 +37,8 @@ public final class SimGlyphidManager {
     }
 
     /**
-     * The front half of the tick, from {@code LevelTickEvent.Pre}: read the world, then set the pass going,
-     * so records advance <em>during</em> the vanilla level tick. See {@link SimGlyphidPass}.
+     * The front half of the tick, from {@code LevelTickEvent.Pre}: read the world, then set the pass going, so
+     * records advance <em>during</em> the vanilla level tick.
      */
     public static void beginTick(ServerLevel level) {
         if (!SwarmBench.simTier) {
@@ -60,10 +50,7 @@ public final class SimGlyphidManager {
         SwarmProfiler.end(SwarmProfiler.Phase.SIM, t);
     }
 
-    /**
-     * The back half, from {@code LevelTickEvent.Post}: join the pass, then decide who belongs in which tier.
-     * Decisions come after the walk, so nothing loses a tick or moves twice on the tick it changes form.
-     */
+    /** The back half, from {@code LevelTickEvent.Post}: join the pass, then decide who belongs in which tier. */
     public static void tick(ServerLevel level) {
         SimGlyphidRegistry registry = SimGlyphidRegistry.get(level);
         if (!SwarmBench.simTier) {
@@ -100,10 +87,7 @@ public final class SimGlyphidManager {
         }
     }
 
-    /**
-     * Whether a live glyphid is doing nothing that needs a body. Every clause is a capability a record does
-     * not have; what is left is a glyphid walking somewhere, which is what a swarm mostly is.
-     */
+    /** Whether a live glyphid is doing nothing that needs a body. */
     private static boolean simmable(List<ServerPlayer> players, EntityGlyphid glyphid) {
         if (!glyphid.isAlive() || glyphid.isRemoved()) {
             return false;
@@ -134,8 +118,8 @@ public final class SimGlyphidManager {
     }
 
     /**
-     * Two castes never leave the entity tier: the scout founds nests, which is a world write, and the nuclear
-     * one detonates on death, where a record's death is a list removal.
+     * Two castes never leave the entity tier: the scout founds nests, which is a world write, and the nuclear one
+     * detonates on death, where a record's death is a list removal.
      */
     private static boolean simmableCaste(GlyphidCaste caste) {
         return caste != GlyphidCaste.SCOUT && caste != GlyphidCaste.NUCLEAR;
@@ -143,11 +127,7 @@ public final class SimGlyphidManager {
 
     // --- record -> entity ---
 
-    /**
-     * Give a body back to every record that has run into something only a body can do. Walked backwards so a
-     * removal cannot skip an entry, and a record is dropped only once it is dead or standing in the world —
-     * a failed spawn stays a record to be retried.
-     */
+    /** Give a body back to every record that has run into something only a body can do. */
     private static void promote(ServerLevel level, SimGlyphidRegistry registry) {
         List<ServerPlayer> players = level.players();
         int budget = PROMOTE_PER_TICK;
@@ -214,16 +194,10 @@ public final class SimGlyphidManager {
         promoteAll(level, SimGlyphidRegistry.get(level));
     }
 
-    /**
-     * A place the benchmark says to treat as a player, or null. The harness has nobody logged in, and without
-     * one every glyphid in a headless run is a record — which measures the tier at its best and never at all.
-     */
+    /** A place the benchmark says to treat as a player, or null. */
     public static double @org.jetbrains.annotations.Nullable [] watcher;
 
-    /**
-     * Whether anybody -- a real player, or the bench's stand-in -- is within {@code radius} of a spot. Public
-     * because the egg chambers ask the same question, and the fake watcher has to count for both.
-     */
+    /** Whether anybody (a real player, or the bench's stand-in) is within {@code radius} of a spot. */
     public static boolean watched(ServerLevel level, double x, double z, double radius) {
         return watched(level.players(), x, z, radius);
     }
@@ -253,7 +227,7 @@ public final class SimGlyphidManager {
 
     /**
      * @return mean blocks covered last tick by the records in this level, for checking that the two tiers
-     * walk at the same speed.
+     *      walk at the same speed.
      */
     public static double meanSpeed(ServerLevel level) {
         List<SimGlyphid> all = SimGlyphidRegistry.get(level).view();

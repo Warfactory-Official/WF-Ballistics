@@ -11,23 +11,11 @@ import java.util.UUID;
 /**
  * What one drone is currently doing for a {@link WorkJob}, as the AI is allowed to see it.
  *
- * <p>One record rather than five fields on {@code DroneSnapshot}, because that record is already long enough
- * that adding to it means editing seven copy constructors.
- *
- * <p>Everything here is <b>sampled on the world thread</b> and read off-thread, which is why the queue itself
- * never appears: a handler must not be able to claim, complete or even ask about an order. It flies to
- * {@link #order} and says it has arrived; the world thread does the rest. See {@code BuildPilot}.
- *
- * <p>Exactly one of {@link #order} and {@link #station} is normally set, and which one is the drone's whole
- * current intention: an order means "go and do this block", a station means "go and pick up materials" or
- * "go and drop off what you recovered". Both null means the drone is between assignments and should be
- * heading home.
- *
- * @param orderId  the claim's id within the job's queue. Meaningless outside it, and the reason completing is
- *                 a single integer rather than a position lookup
- * @param data     the order's payload: a palette index for a construction
+ * @param orderId the claim's id within the job's queue. Meaningless outside it, and the reason completing is
+ *      a single integer rather than a position lookup
+ * @param data the order's payload: a palette index for a construction
  * @param siteOpen false when the job has been suspended out from under this drone, so it stops rather than
- *                 pressing on. Sampled because a worker cannot ask WarForge anything
+ *      pressing on. Sampled because a worker cannot ask WarForge anything
  */
 public record WorkAssignment(UUID jobId, ResourceLocation kind, int orderId, @Nullable BlockPos order,
                              int data, @Nullable Vec3 station, boolean siteOpen) {
@@ -91,9 +79,6 @@ public record WorkAssignment(UUID jobId, ResourceLocation kind, int orderId, @Nu
 
     /**
      * @return the assignment in this tag, or null if there is not one.
-     *
-     * <p>{@code siteOpen} is deliberately not saved and comes back true: it is a sample of the world, and a
-     * stale one is worse than none. It is re-derived on the next tick.
      */
     @Nullable
     public static WorkAssignment load(@Nullable CompoundTag tag) {

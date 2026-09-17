@@ -15,40 +15,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The blocks a colony is, once somebody is close enough for it to need any: the
- * {@link ColonyManager.NestBuilder} that ships. Runs when a scout settles, when a chunk loads under a colony
- * founded out of sight, and when a colony buds where a player is standing — never otherwise (§8.1).
- *
- * <p>A mound is generated rather than stamped from a schematic, since {@link Colony#nestRadius()} runs 2 to 6
- * with distance: a dome of radius {@code r} on a skirt {@code r} deep, with chambers buried one layer under
- * the skin so clearing a nest means digging into it.
- *
- * <p>A budded colony is a cluster of those mounds on {@link NestCells}' lattice. Cells are stamped
- * incrementally — growing the fourth writes the fourth — and each finds its own ground, clamped to within a
- * radius of the colony's height so a cluster follows a slope without climbing a cliff.
- *
- * <p>Every block goes through {@link PendingChunkEdits#submit}, because a cluster spans dozens of blocks and
- * reaches into chunks that may not be loaded.
+ * The blocks a colony is, once somebody is close enough for it to need any: the {@link ColonyManager.NestBuilder}
+ * that ships.
  */
 public final class GlyphidNest implements ColonyManager.NestBuilder {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /**
-     * Layers left between a nest and the bottom of the world, so it can never replace bedrock. Unlike reading
-     * the block, this also works for the part of a nest owed to an unloaded chunk.
-     */
+    /** Layers left between a nest and the bottom of the world, so it can never replace bedrock. */
     private static final int FLOOR_MARGIN = 5;
 
     /** How far out the ring of chambers sits, as a share of the radius: spread out, but under the dome. */
     private static final double CHAMBER_RING = 0.55;
 
     /**
-     * What one call to {@link #place} did, for the debug command and the log line. Carries chamber positions
-     * rather than a count, since buried chambers are otherwise found only by digging the mound out.
+     * What one call to {@link #place} did, for the debug command and the log line.
      *
-     * @param blocks     positions the mound covers
-     * @param written    how many of them landed in a loaded chunk; the rest are owed to {@link PendingChunkEdits}
+     * @param blocks positions the mound covers
+     * @param written how many of them landed in a loaded chunk; the rest are owed to {@link PendingChunkEdits}
      * @param reinforced how many were laid as hardened flesh rather than soft
      */
     public record Result(int blocks, int written, int reinforced, List<BlockPos> chambers) {
@@ -83,10 +67,7 @@ public final class GlyphidNest implements ColonyManager.NestBuilder {
         return stamp(level, colony, true, 0, colony.buds);
     }
 
-    /**
-     * The same measurement without writing anything. Building twice is not free: the second pass would queue
-     * a second copy of every block owed to an unloaded chunk.
-     */
+    /** The same measurement without writing anything. */
     public static Result survey(ServerLevel level, Colony colony) {
         return stamp(level, colony, false, 0, colony.buds);
     }
@@ -103,7 +84,7 @@ public final class GlyphidNest implements ColonyManager.NestBuilder {
         int radius = colony.nestRadius();
         int height = Math.max(2, radius - 1);
         int floor = level.getMinBuildHeight() + FLOOR_MARGIN;
-        // Read once for the whole pass, and this is the moment a mound's hardness is fixed -- see crustDepth.
+        // Read once for the whole pass, and this is the moment a mound's hardness is fixed; see crustDepth.
         int crust = crustDepth(ColonyRegistry.get(level).evolution(), radius);
 
         List<BlockPos> placedChambers = new ArrayList<>();
@@ -150,8 +131,6 @@ public final class GlyphidNest implements ColonyManager.NestBuilder {
                             reinforced++;
                         }
                         if (!write) {
-                            // The same question submit asks, asked the same way -- `hasChunk` reads a
-                            // promoted snapshot and would report a different split from a real build.
                             written += resident(level, cursor) ? 1 : 0;
                         } else if (edits.submit(level, cursor, hard ? hardened : flesh)) {
                             written++;
@@ -162,8 +141,6 @@ public final class GlyphidNest implements ColonyManager.NestBuilder {
         }
 
         if (write) {
-            // From what was laid out rather than from the tier, since a mound clipped by the world floor
-            // owes fewer. Added to when only new cells were stamped -- the old cells' chambers still stand.
             colony.spawners = (from == 0 ? 0 : colony.spawners) + placedChambers.size();
             ColonyRegistry.get(level).setDirty();
         }
@@ -174,13 +151,7 @@ public final class GlyphidNest implements ColonyManager.NestBuilder {
         return level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4) != null;
     }
 
-    /**
-     * How deep into a mound the hardened flesh reaches, in blocks, or -1 for a mound that is all soft.
-     * Evolution decides it and nothing else, since distance already decides everything else about a nest.
-     *
-     * <p>Read when a mound is laid and never again, so a hive keeps the shell it was built with and the cells
-     * it buds later come up brown. Re-hardening would rewrite chunks nobody is looking at.
-     */
+    /** How deep into a mound the hardened flesh reaches, in blocks, or -1 for a mound that is all soft. */
     static int crustDepth(float evolution, int radius) {
         double start = ColonyConfig.reinforcedEvolution();
         if (evolution < start) {
@@ -190,16 +161,7 @@ public final class GlyphidNest implements ColonyManager.NestBuilder {
         return (int) Math.floor(share * (radius + 1));
     }
 
-    /**
-     * The height one cell sits at: remembered if it has one, sampled from the terrain if not.
-     *
-     * <p>Sampled once, on the pass that lays the cell, and recorded — not caching but correctness. Once a
-     * mound stands on a column, {@code MOTION_BLOCKING_NO_LEAVES} answers with its roof rather than the
-     * ground, so re-deriving reports chambers a nest radius above where they are.
-     *
-     * <p>Clamped to within a radius of the colony's height, and falls back to it for a cell whose chunk is not
-     * resident ({@code getChunkNow}, per {@link PendingChunkEdits#submit}).
-     */
+    /** The height one cell sits at: remembered if it has one, sampled from the terrain if not. */
     private static int cellY(ServerLevel level, Colony colony, NestCells.Cell cell, boolean write) {
         if (cell.index() == 0) {
             return colony.y;
@@ -224,9 +186,8 @@ public final class GlyphidNest implements ColonyManager.NestBuilder {
     }
 
     /**
-     * Where a colony's chambers are: one at the apex of every mound, plus a ring on the original, all buried
-     * one layer under the skin. Pure geometry, so {@code colony nest} can report a nest built ten sessions
-     * ago without rebuilding it. A bud is worth exactly one chamber, so lobes are countable from outside.
+     * Where a colony's chambers are: one at the apex of every mound, plus a ring on the original, all buried one
+     * layer under the skin.
      */
     public static List<BlockPos> chambers(ServerLevel level, Colony colony) {
         if (!colony.hasResolvedY()) {

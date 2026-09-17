@@ -3,17 +3,28 @@ package com.wf.wfballistics;
 import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.client.gui.DronePadScreen;
 import com.wf.wfballistics.client.gui.MissileDispenserScreen;
+import com.wf.wfballistics.block.ModBlockEntities;
 import com.wf.wfballistics.client.render.BombletRenderer;
+import com.wf.wfballistics.client.render.CameraMonitorRenderer;
+import com.wf.wfballistics.client.render.RadarScopeRenderer;
 import com.wf.wfballistics.client.render.CrateRenderer;
+import com.wf.wfballistics.client.render.DroneDebrisVisual;
 import com.wf.wfballistics.client.render.DroneVisual;
+import com.wf.wfballistics.client.model.GlyphidModel;
+import com.wf.wfballistics.client.model.MineRigs;
+import com.wf.wfballistics.client.render.MineItemRenderers;
+import com.wf.wfballistics.client.model.PartRigs;
 import com.wf.wfballistics.client.render.GlyphidVisual;
+import com.wf.wfballistics.client.render.MineVisual;
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.client.render.EntityTorexRender;
 import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
+import com.wf.wfballistics.mine.MineEntity;
 import com.wf.wfballistics.item.MissilePreset;
 import com.wf.wfballistics.item.MissilePresetRegistry;
 import com.wf.wfballistics.menu.ModMenus;
+import com.wf.wfballistics.kinetic.KineticShellEntity;
 import dev.engine_room.flywheel.api.visual.EntityVisual;
 import dev.engine_room.flywheel.api.visualization.EntityVisualizer;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
@@ -29,6 +40,7 @@ import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RegisterClientReloadListenersEvent;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import org.slf4j.Logger;
 
@@ -41,17 +53,18 @@ public class WFBallisticsClient {
 
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
-        // Tie your custom missile entity to a renderer
-        // For a bare minimum test, we will temporarily use vanilla's ThrownItemRenderer
-        // (This makes it look like a flying snowball/item so you can see it without writing a custom model file yet!)
         event.registerEntityRenderer(ModEntities.STEALTH_MISSILE.get(), MissileRenderer::new);
 
         // Bomblets are simple tumbling orange cubes (fragmentation payload).
         event.registerEntityRenderer(ModEntities.BOMBLET.get(),
                 BombletRenderer::new);
 
+        // Mines draw through flywheel (see MineVisual).
+        event.registerEntityRenderer(ModEntities.MINE.get(), NoopRenderer::new);
+
         // Drones draw through flywheel (see DroneVisual); crates use the standard block-ish renderer.
         event.registerEntityRenderer(ModEntities.DRONE.get(), NoopRenderer::new);
+        event.registerEntityRenderer(ModEntities.DRONE_DEBRIS.get(), NoopRenderer::new);
         event.registerEntityRenderer(ModEntities.CRATE.get(), CrateRenderer::new);
 
         // Mist clouds draw nothing themselves: they are pure particle effects (see MistClientFX).
@@ -61,10 +74,6 @@ public class WFBallisticsClient {
         event.registerEntityRenderer(ModEntities.FIRE_LINGERING.get(),
                 NoopRenderer::new);
 
-        // Glyphids draw through flywheel (see GlyphidVisual), which is what lets a swarm be a swarm.
-        // A renderer still has to be bound for every registered entity type or the client refuses to start.
-        // Driven off the caste table rather than listed by hand, so adding a caste cannot leave a type
-        // unbound -- which is a client crash on join, and one that server-side testing never sees.
         for (GlyphidCaste caste : GlyphidCaste.VALUES) {
             event.registerEntityRenderer(caste.type(), NoopRenderer::new);
         }
@@ -113,6 +122,14 @@ public class WFBallisticsClient {
         return ModelResourceLocation.inventory(ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "missile_" + presetId));
     }
 
+    /** Rebuild the mine rigs after a resource reload. */
+    @SubscribeEvent
+    public static void onRegisterReloadListeners(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener((barrier, manager, prepProfiler, reloadProfiler, background, game) ->
+                barrier.wait(net.minecraft.Util.NIL_UUID)
+                        .thenRunAsync(MineRigs::init, game));
+    }
+
     @SubscribeEvent
     public static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
         event.register(ModMenus.MISSILE_DISPENSER.get(), MissileDispenserScreen::new);
@@ -123,6 +140,11 @@ public class WFBallisticsClient {
     public static void onClientSetup(final FMLClientSetupEvent event) {
 
         event.enqueueWork(() -> {
+            PartRigs.init();
+            MineRigs.init();
+            MineItemRenderers.init();
+            GlyphidModel.init();
+
             EntityVisualizer<MissileEntity> visualizer = new EntityVisualizer<MissileEntity>() {
                 @Override
                 public EntityVisual<? super MissileEntity> createVisual(VisualizationContext ctx, MissileEntity entity, float partialTick) {
@@ -137,6 +159,34 @@ public class WFBallisticsClient {
 
             VisualizerRegistry.setVisualizer(ModEntities.STEALTH_MISSILE.get(), visualizer);
 
+            VisualizerRegistry.setVisualizer(ModEntities.KINETIC_SHELL.get(),
+                    new EntityVisualizer<KineticShellEntity>() {
+                        @Override
+                        public EntityVisual<? super KineticShellEntity> createVisual(VisualizationContext ctx,
+                                                                                     KineticShellEntity entity,
+                                                                                     float partialTick) {
+                            return new MissileVisual(ctx, entity);
+                        }
+
+                        @Override
+                        public boolean skipVanillaRender(KineticShellEntity entity) {
+                            return false;
+                        }
+                    });
+
+            VisualizerRegistry.setVisualizer(ModEntities.MINE.get(), new EntityVisualizer<MineEntity>() {
+                @Override
+                public EntityVisual<? super MineEntity> createVisual(VisualizationContext ctx, MineEntity entity,
+                                                                     float partialTick) {
+                    return new MineVisual(ctx, entity);
+                }
+
+                @Override
+                public boolean skipVanillaRender(MineEntity entity) {
+                    return true;
+                }
+            });
+
             VisualizerRegistry.setVisualizer(ModEntities.DRONE.get(), new EntityVisualizer<DroneEntity>() {
                 @Override
                 public EntityVisual<? super DroneEntity> createVisual(VisualizationContext ctx, DroneEntity entity,
@@ -150,12 +200,35 @@ public class WFBallisticsClient {
                 }
             });
 
-            // Same caste table the renderers were bound off, for the same reason: a caste that ships without
-            // a visual is an invisible bug, and nothing server-side ever notices.
+            VisualizerRegistry.setVisualizer(ModEntities.DRONE_DEBRIS.get(),
+                    new EntityVisualizer<com.wf.wfballistics.drone.DroneDebrisEntity>() {
+                        @Override
+                        public EntityVisual<? super com.wf.wfballistics.drone.DroneDebrisEntity> createVisual(
+                                VisualizationContext ctx, com.wf.wfballistics.drone.DroneDebrisEntity entity,
+                                float partialTick) {
+                            return new DroneDebrisVisual(ctx, entity);
+                        }
+
+                        @Override
+                        public boolean skipVanillaRender(com.wf.wfballistics.drone.DroneDebrisEntity entity) {
+                            return true;
+                        }
+                    });
+
             for (GlyphidCaste caste : GlyphidCaste.VALUES) {
                 bindGlyphid(caste.type(), caste);
             }
         });
+    }
+
+    /**
+     * The mod's first {@link net.minecraft.client.renderer.blockentity.BlockEntityRenderer}: the in-world scope
+     * display.
+     */
+    @SubscribeEvent
+    public static void registerBlockEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
+        event.registerBlockEntityRenderer(ModBlockEntities.RADAR_SCOPE.get(), RadarScopeRenderer::new);
+        event.registerBlockEntityRenderer(ModBlockEntities.CAMERA_MONITOR.get(), CameraMonitorRenderer::new);
     }
 
     /**

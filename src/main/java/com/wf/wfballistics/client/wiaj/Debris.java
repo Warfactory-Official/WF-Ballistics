@@ -19,7 +19,6 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
-
 public class Debris {
 
     private static final double MOTION_MULT = 3.0;
@@ -154,13 +153,10 @@ public class Debris {
         }
         this.buffer = new VertexBuffer(VertexBuffer.Usage.STATIC);
         this.buffer.bind();
-        // upload() consumes and closes the MeshData; the backing ByteBufferBuilder must stay open until then,
-        // then be closed afterwards (closing it earlier invalidates the MeshData -> "Buffer is no longer valid").
         this.buffer.upload(rendered);
         VertexBuffer.unbind();
         byteBuilder.close();
     }
-
 
     public void render(PoseStack poseStack, Matrix4f projectionMatrix, Vec3 cam, float partialTick) {
         if (this.buffer == null) {

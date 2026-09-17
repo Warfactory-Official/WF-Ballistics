@@ -6,16 +6,8 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Every decision a glyphid makes about where to go and what to bite, as a function of a
- * {@link GlyphidSnapshot} and the glyphid's own {@link GlyphidMind}. Touches no world — no {@code Level}, no
- * {@code Entity}, no {@code Path} — so a record without a body can run it; the reads that carry a decision
- * out stay with the applier.
- *
- * <p>Two rules that cost real time to learn. <b>Path in hops with the range named</b>: vanilla's
- * {@code createPath(pos, accuracy)} takes its range from follow range, 16 for a monster, so a distant
- * destination comes back as a stub. <b>Back off on not arriving, not on not pathing</b>: an unreachable
- * destination returns a partial route, so the expensive case reads as success, and only movement towards the
- * destination is an honest signal.
+ * Every decision a glyphid makes about where to go and what to bite, as a function of a {@link GlyphidSnapshot} and
+ * the glyphid's own {@link GlyphidMind}.
  */
 public final class GlyphidBrain {
 
@@ -35,10 +27,7 @@ public final class GlyphidBrain {
     public static final double PROGRESS = 1.0;
     /** How far ahead to look for the thing in the way. */
     public static final double CHEW_REACH = 3.0;
-    /**
-     * Inside this range, with the target in sight, a glyphid steers instead of pathfinding. Melee search was
-     * 28% of the tick, all of it A* to reach something already visible.
-     */
+    /** Inside this range, with the target in sight, a glyphid steers instead of pathfinding. */
     public static final double CHARGE_RANGE = 12.0;
     /** Ticks between bites. */
     public static final int ATTACK_INTERVAL = 20;
@@ -69,14 +58,7 @@ public final class GlyphidBrain {
         return ERRAND_NONE;
     }
 
-    /**
-     * Whether this is a tick a glyphid would get as far as choosing somewhere to path to. Public so the body
-     * can skip the world reads only a repath needs, from one copy of the rule rather than two.
-     *
-     * <p>The stagger is the load-bearing condition: one search slot per glyphid per {@link #REPATH_MIN}
-     * ticks, so a cohort that re-synchronises — arriving together, or all re-aiming at one target — cannot
-     * land its searches on the same tick. The worst 5% of ticks ran ~8x the searches of the rest.
-     */
+    /** Whether this is a tick a glyphid would get as far as choosing somewhere to path to. */
     public static boolean repathDue(GlyphidMind mind, int tickCount, int id, boolean navigationDone,
                                     boolean stagger) {
         int next = mind.sinceRepath + 1;
@@ -92,8 +74,6 @@ public final class GlyphidBrain {
     public static GlyphidPlan plan(GlyphidSnapshot self, GlyphidMind mind) {
         int errand = errand(self.airborne(), self.hasTarget(), self.task(), self.atDestination());
         if (errand != mind.errand) {
-            // Switching errands restarts the walk, as one goal handing over to another used to. Otherwise a
-            // glyphid that lost its target marches off carrying the backoff it earned chasing it.
             mind.errand = errand;
             mind.reset(self.id(), self.position().x, self.position().z);
             if (errand == ERRAND_NONE) {
@@ -143,23 +123,15 @@ public final class GlyphidBrain {
         return advance(self, mind, destination, null, false);
     }
 
-    /**
-     * Decide whether this is a tick to repath on, and if so where to. Driven by the walk finishing rather
-     * than by a timer, which would throw away a live path and pay for a fresh A* to replace it.
-     */
+    /** Decide whether this is a tick to repath on, and if so where to. */
     private static GlyphidPlan advance(GlyphidSnapshot self, GlyphidMind mind, Vec3 destination,
                                        @Nullable Vec3 lookAt, boolean bite) {
         if (mind.chewing) {
-            // Committed to the wall: a glyphid that alternates between chewing and searching finishes
-            // neither.
             return new GlyphidPlan(GlyphidPlan.Move.CHEW, mind.chewX, mind.chewY, mind.chewZ, false,
                     destination, lookAt, bite, GlyphidPlan.KEEP_TASK, 0, 0.0);
         }
         Vec3 flow = self.flowStep();
         if (flow != null) {
-            // The field knows the way, so the plan is simply the next column. Progress accounting still runs
-            // on the repath schedule -- a glyphid on a field gets stuck the same way, and the same timer
-            // turns it into a digger.
             mind.sinceRepath++;
             boolean due = repathDue(mind, self.tickCount(), self.id(), true, self.stagger());
             int elapsed = 0;
@@ -202,8 +174,6 @@ public final class GlyphidBrain {
         int hopY;
         boolean sampleY;
         if (distance <= HOP) {
-            // Close enough to aim at the thing itself; a heightmap sample would put the waypoint on the roof
-            // of whatever the target is standing under.
             hopY = Mth.floor(destination.y);
             sampleY = false;
         } else {
@@ -215,9 +185,7 @@ public final class GlyphidBrain {
     }
 
     /**
-     * Fold the outcome of a search back into the mind. Split from {@link #plan} because whether a path was
-     * accepted is a world answer, while the backoff and the stuck counter it feeds are arithmetic — so a body
-     * that cannot pathfind at all still ages its patience the same way.
+     * Fold the outcome of a search back into the mind.
      *
      * @return where to chew, or null to keep walking
      */
@@ -230,11 +198,7 @@ public final class GlyphidBrain {
         return plan.destination();
     }
 
-    /**
-     * Ground covered <em>towards the destination</em>, not ground covered. A glyphid wedged in a crowd is
-     * shoved a block a second, and every shove would otherwise read as a route that is working; projecting
-     * onto the bearing scores a sideways shove at nothing and a backwards one below it.
-     */
+    /** Ground covered <em>towards the destination</em>, not ground covered. */
     private static double closed(Vec3 pos, Vec3 destination, GlyphidMind mind) {
         double dx = destination.x - pos.x;
         double dz = destination.z - pos.z;

@@ -5,34 +5,10 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Per-tick cost accounting for a swarm, broken down by what the entities were doing.
- *
- * <p>Exists because "entities are slow" is not an actionable statement. A swarm's tick cost splits between
- * pathfinding, entity-vs-entity collision, movement physics and the goal layer, and which of those dominates
- * decides which optimisation is worth writing. This measures them separately so the answer comes from a
- * number rather than from an assumption.
- *
- * <p>Phases nest: {@link Phase#PATH} happens inside {@link Phase#AI}, which happens inside
- * {@link Phase#TICK}, and {@link Phase#COLLIDE} inside {@link Phase#MOVE}. The movement phases exist because
- * once collision push was fixed, movement became the largest single line in the report, and "movement" is not
- * an actionable answer either: vanilla's {@code move} is a collision sweep, a block-volume walk and a handful
- * of block-state lookups, and only measuring says which of them the swarm is actually paying for.
- * The tree is declared in {@link #PARENT} and the report subtracts children from their
- * parent, so every line is exclusive of the lines indented under it and the residual on each parent is
- * labelled rather than silently dropped. A large residual means the cost is somewhere no call site has been
- * placed yet, which is itself worth knowing.
- *
- * <p>Written from the server thread only, and deliberately unsynchronised: a lock here would perturb the very
- * cost being measured. {@link #enabled} is checked before every timestamp, so the cost when profiling is off
- * is one predictable branch per call site.
- */
+/** Per-tick cost accounting for a swarm, broken down by what the entities were doing. */
 public final class SwarmProfiler {
 
-    /**
-     * Ticks kept for the windowed report: ten seconds at 20 tps. Long enough to ride out a GC pause without
-     * the mean hiding it, since the p95 and max are reported alongside.
-     */
+    /** Ticks kept for the windowed report: ten seconds at 20 tps. */
     public static final int WINDOW = 200;
 
     /**
@@ -60,13 +36,7 @@ public final class SwarmProfiler {
         SIM("sim tier"),
         SIM_WAIT("- waiting for the pass"),
         SQUAD("squad split"),
-        // Wall time of the sim pass itself, which is not the world thread's time once it runs on a worker.
-        // Outside the tree and outside SWARM on purpose: adding it to the total would report a cost nothing
-        // pays, and subtracting it silently would report a swarm that got faster with no line saying where.
         SIM_ASYNC("sim tier pass"),
-        // The two below are a second cut of PATH -- by what it is doing rather than by who asked. They sit
-        // outside the tree, because a phase can only be subtracted from its parent once and the by-caller
-        // split already accounts for all of PATH.
         PATH_ASTAR("the A* itself"),
         PATH_NEIGHBORS("node expansion");
 
@@ -81,13 +51,7 @@ public final class SwarmProfiler {
         }
     }
 
-    /**
-     * Things worth counting rather than timing.
-     *
-     * <p>Milliseconds say a phase is expensive; they never say <em>why</em>. A tick that spends twice as long
-     * pathfinding either ran twice as many searches or ran searches that were twice as deep, and those are
-     * different bugs with different fixes.
-     */
+    /** Things worth counting rather than timing. */
     public enum Counter {
         SEARCHES("path searches"),
         NODES("nodes expanded"),
@@ -112,10 +76,7 @@ public final class SwarmProfiler {
     private static final Phase[] PHASES = Phase.values();
     private static final int PHASE_COUNT = PHASES.length;
 
-    /**
-     * Parent of each phase by ordinal, {@code -1} for the root. Declared here rather than in the enum
-     * because a constant may not reference a sibling from its own constructor.
-     */
+    /** Parent of each phase by ordinal, {@code -1} for the root. */
     private static final int[] PARENT = {
             -1,                     // TICK
             Phase.TICK.ordinal(),   // AI
@@ -123,7 +84,7 @@ public final class SwarmProfiler {
             Phase.AI.ordinal(),     // NAV
             Phase.TICK.ordinal(),   // PUSH
             Phase.TICK.ordinal(),   // MOVE
-            Phase.AI.ordinal(),     // DIG -- reached from customServerAiStep and from a goal, both inside
+            Phase.AI.ordinal(),     // DIG: reached from customServerAiStep and from a goal, both inside
                                     // serverAiStep, so it is a sibling of the navigation phases, not of them.
             Phase.MOVE.ordinal(),   // COLLIDE
             Phase.COLLIDE.ordinal(),// ENTCOL
@@ -133,13 +94,13 @@ public final class SwarmProfiler {
             Phase.PATH.ordinal(),   // PATH_MARCH
             Phase.TICK.ordinal(),   // BASE
             Phase.BASE.ordinal(),   // FLUID
-            -1,                     // SEPARATE -- a level pass, reported beside the tree rather than in it
-            -1,                     // FLOW -- likewise
-            -1,                     // SIM -- likewise
-            Phase.SIM.ordinal(),    // SIM_WAIT -- the part of SIM that is the world thread standing still
-            -1,                     // SQUAD -- likewise
-            -1,                     // SIM_ASYNC -- not the world thread's at all, see the enum
-            -1,                     // PATH_ASTAR -- reported in its own section, see searchReport()
+            -1,                     // SEPARATE (a level pass, reported beside the tree rather than in it
+            -1,                     // FLOW), likewise
+            -1,                     // SIM (likewise
+            Phase.SIM.ordinal(),    // SIM_WAIT) the part of SIM that is the world thread standing still
+            -1,                     // SQUAD (likewise
+            -1,                     // SIM_ASYNC), not the world thread's at all, see the enum
+            -1,                     // PATH_ASTAR: reported in its own section, see searchReport()
             -1,                     // PATH_NEIGHBORS
     };
 
@@ -174,10 +135,7 @@ public final class SwarmProfiler {
         return enabled;
     }
 
-    /**
-     * Turn profiling on or off. Always clears the window: a report that straddled the switch would average
-     * ticks that were measured against ticks that were not.
-     */
+    /** Turn profiling on or off. */
     public static void setEnabled(boolean value) {
         enabled = value;
         reset();
@@ -214,23 +172,14 @@ public final class SwarmProfiler {
         return enabled ? System.nanoTime() : 0L;
     }
 
-    /**
-     * Charge the time since {@code start} to a phase. Ignores a zero start so that toggling profiling on
-     * midway through a tick cannot book the epoch as a phase cost.
-     */
+    /** Charge the time since {@code start} to a phase. */
     public static void end(Phase phase, long start) {
         if (enabled && start != 0L) {
             current[phase.ordinal()] += System.nanoTime() - start;
         }
     }
 
-    /**
-     * Charge nanos measured somewhere else to a phase.
-     *
-     * <p>For work that did not happen between a {@link #begin} and an {@link #end} on this thread: the sim
-     * pass times itself on a worker and hands the figure back at the join, because a worker may not touch the
-     * unsynchronised arrays this class keeps. Called on the world thread like everything else here.
-     */
+    /** Charge nanos measured somewhere else to a phase. */
     public static void charge(Phase phase, long nanos) {
         if (enabled && nanos > 0L) {
             current[phase.ordinal()] += nanos;
@@ -244,19 +193,10 @@ public final class SwarmProfiler {
         return current[phase.ordinal()];
     }
 
-    /**
-     * Which goal, if any, is currently on the stack and should be blamed for any path search underneath it.
-     *
-     * <p>A static because the search happens several frames down, inside the navigator, on an object that has
-     * no idea which goal asked. Same thread-safety story as the rest of this class: server thread only, and
-     * only ever set while profiling is on.
-     */
+    /** Which goal, if any, is currently on the stack and should be blamed for any path search underneath it. */
     private static Phase caller;
 
-    /**
-     * Claim responsibility for whatever searching happens until {@link #exitCaller}. Returns the previous
-     * claimant, which the caller must hand back — goals nest.
-     */
+    /** Claim responsibility for whatever searching happens until {@link #exitCaller}. */
     public static Phase enterCaller(Phase phase) {
         Phase previous = caller;
         caller = phase;
@@ -267,12 +207,7 @@ public final class SwarmProfiler {
         caller = previous;
     }
 
-    /**
-     * True while a search a glyphid asked for is on the stack.
-     *
-     * <p>The pathfinder's internals are shared by every mob on the server and have no idea whose search they
-     * are running, so the gate has to be opened from the one place that does know.
-     */
+    /** True while a search a glyphid asked for is on the stack. */
     private static boolean searching;
 
     public static void setSearching(boolean value) {
@@ -283,12 +218,7 @@ public final class SwarmProfiler {
         return enabled && searching;
     }
 
-    /**
-     * Charge a path search, to {@link Phase#PATH} and to whichever goal claimed it.
-     *
-     * <p>Separate from {@link #end} because "pathfinding is a third of the tick" stopped being useful the
-     * moment it was true: what decides whether that is a bug or a cost is <em>who keeps asking</em>.
-     */
+    /** Charge a path search, to {@link Phase#PATH} and to whichever goal claimed it. */
     public static void endPath(long start) {
         if (enabled && start != 0L) {
             long elapsed = System.nanoTime() - start;
@@ -299,14 +229,7 @@ public final class SwarmProfiler {
         }
     }
 
-    /**
-     * Charge the time since {@code start} to a phase, minus whatever {@code nested} accrued in the meantime.
-     *
-     * <p>For phases that contain a sibling. Path searching happens both inside path following, when the
-     * navigator recomputes, and outside it, when a goal asks for a route directly — so the two cannot simply
-     * be parent and child. Netting the overlap out here keeps every reported line exclusive, which is the
-     * difference between "following a path costs this much" and a number that silently includes the search.
-     */
+    /** Charge the time since {@code start} to a phase, minus whatever {@code nested} accrued in the meantime. */
     public static void endExcluding(Phase phase, long start, Phase nested, long nestedBefore) {
         if (enabled && start != 0L) {
             long overlap = current[nested.ordinal()] - nestedBefore;
@@ -387,7 +310,7 @@ public final class SwarmProfiler {
 
     /**
      * @return the 95th-percentile millisecond cost of a phase over the window. Reported alongside the mean
-     * because a swarm that is fine on average and spikes past the 50 ms tick budget is not fine.
+     *      because a swarm that is fine on average and spikes past the 50 ms tick budget is not fine.
      */
     public static double p95Millis(Phase phase) {
         if (filled == 0) {
@@ -402,8 +325,8 @@ public final class SwarmProfiler {
     }
 
     /**
-     * The phases that make up a tick of swarm, whichever tier paid for them: the entity tick plus the level
-     * passes that are not inside anybody's tick.
+     * The phases that make up a tick of swarm, whichever tier paid for them: the entity tick plus the level passes
+     * that are not inside anybody's tick.
      */
     private static final Phase[] SWARM =
             {Phase.TICK, Phase.SEPARATE, Phase.FLOW, Phase.SIM, Phase.SQUAD};
@@ -460,7 +383,7 @@ public final class SwarmProfiler {
 
     /**
      * @return the window as a tree of lines, each phase's children indented beneath it and the heaviest
-     * child first.
+     *      child first.
      */
     public static List<String> report() {
         List<String> lines = new ArrayList<>();
@@ -468,10 +391,6 @@ public final class SwarmProfiler {
             lines.add("No samples. Profiling " + (enabled ? "is on, but nothing has ticked yet." : "is off."));
             return lines;
         }
-        // The whole swarm, not just the entity half of it. Once glyphids can be records the entity tick
-        // stops being the cost of a swarm and becomes the cost of the part of it that still has bodies --
-        // which falls to nothing as the tier does its job, and would read as a swarm that got faster by
-        // vanishing. Everything the swarm spends, in one number, whichever tier spends it.
         double total = swarmMillis();
         double mean = meanPopulation();
         lines.add(String.format(Locale.ROOT,
@@ -479,8 +398,6 @@ public final class SwarmProfiler {
                 filled, mean, total, swarmPercentile(0.95), swarmMax(),
                 mean > 0.0 ? String.format(Locale.ROOT, " (%.1f us/glyphid)", total * 1000.0 / mean) : ""));
         append(lines, Phase.TICK, 0, total);
-        // Beside the tree, not in it: these are passes over the level, so they are not part of any entity's
-        // tick and adding them as children of one would make the shares add up to more than the whole.
         for (Phase pass : new Phase[]{Phase.SEPARATE, Phase.FLOW, Phase.SIM, Phase.SQUAD}) {
             double millis = meanMillis(pass);
             if (millis > 0.0) {
@@ -498,14 +415,8 @@ public final class SwarmProfiler {
     }
 
     /**
-     * What the swarm costs somewhere other than the world thread, and how much of that the world thread ended
-     * up paying for anyway.
-     *
-     * <p>Reported apart from the total above, and that separation is the whole point of the section. Once the
-     * sim pass runs on a worker its cost stops being tick time, so folding it into the headline would report
-     * a budget nothing spends — and dropping it silently would report a swarm that got cheaper with no line
-     * saying where the work went. The number that decides whether the move was worth making is the last one:
-     * a stall the size of the pass means the work moved threads and the waiting did not.
+     * What the swarm costs somewhere other than the world thread, and how much of that the world thread ended up
+     * paying for anyway.
      */
     private static void offThreadReport(List<String> lines) {
         double async = meanMillis(Phase.SIM_ASYNC);
@@ -521,14 +432,7 @@ public final class SwarmProfiler {
                 "world thread waited", waited, 100.0 * (1.0 - Math.min(1.0, waited / async))));
     }
 
-    /**
-     * What a path search actually spends itself on, as opposed to who asked for it.
-     *
-     * <p>Split three ways because they fail differently. Node expansion is block-state reads through a chunk
-     * snapshot — memory-bound, and the only part that scales with how much terrain the search has to look at.
-     * The rest of the A* is heap operations and node bookkeeping. Setup is per-search overhead paid whether
-     * the search visits one node or five hundred, which is what makes cheap failed searches expensive.
-     */
+    /** What a path search actually spends itself on, as opposed to who asked for it. */
     private static void searchReport(List<String> lines) {
         double path = meanMillis(Phase.PATH);
         if (path <= 0.0) {
@@ -568,13 +472,7 @@ public final class SwarmProfiler {
         }
     }
 
-    /**
-     * What is different about the ticks that hurt.
-     *
-     * <p>A mean hides the thing players actually feel. Comparing the worst 5% of ticks against the rest says
-     * whether a spike is <em>more work</em> — searches clumping onto one tick, which staggering fixes — or
-     * <em>harder work</em>, searches that each visit far more nodes, which staggering cannot fix.
-     */
+    /** What is different about the ticks that hurt. */
     private static void spikeReport(List<String> lines) {
         int spikes = Math.max(1, filled / 20);
         Integer[] order = new Integer[filled];
@@ -638,8 +536,6 @@ public final class SwarmProfiler {
         for (Phase child : children) {
             append(lines, child, depth + 1, total);
         }
-        // Whatever the parent spent outside any child. Named rather than dropped: a large residual means
-        // the dominant cost has no call site yet, not that the phase is cheap.
         lines.add(line("(unattributed)", depth + 1, exclusiveMillis(phase), Double.NaN, total));
     }
 

@@ -34,10 +34,12 @@ public class SubChunkSnapshot {
     /**
      * Creates a SubChunkSnapshot.
      *
-     * @param level           The ServerLevel instance from which to retrieve the chunk.
-     * @param key             The SubChunkKey identifying the section.
-     * @param allowGeneration Whether to generate chunks. If false, attempting to retrieve a snapshot of a chunk that doesn't exist would return {@link SubChunkSnapshot#EMPTY}.
-     * @return A SubChunkSnapshot containing the palette and block data for the section, or {@link SubChunkSnapshot#EMPTY} if the region contains only air.
+     * @param level The ServerLevel instance from which to retrieve the chunk.
+     * @param key The SubChunkKey identifying the section.
+     * @param allowGeneration Whether to generate chunks. If false, attempting to retrieve a snapshot of a chunk
+     *      that doesn't exist would return {@link SubChunkSnapshot#EMPTY}.
+     * @return A SubChunkSnapshot containing the palette and block data for the section, or {@link
+     *      SubChunkSnapshot#EMPTY} if the region contains only air.
      */
     public static SubChunkSnapshot getSnapshot(ServerLevel level, SubChunkKey key, boolean allowGeneration) {
         LevelChunk chunk = allowGeneration

@@ -10,22 +10,14 @@ import org.slf4j.Logger;
 
 import java.util.List;
 
-/**
- * Builds a wall-respecting gas cloud out of many static {@link MistEntity} box cells. The reachable air from
- * the detonation point is flood-filled and decomposed into a small set of maximal boxes by
- * {@link VolumetricFill}; one box-mode gas entity is spawned per box, so a big volume becomes a handful of
- * static cells that never move or path.
- */
+/** Builds a wall-respecting gas cloud out of many static {@link MistEntity} box cells. */
 public final class GasCloud {
 
     /**
      * Flood-fill reach (blocks) from the origin along each axis; the cloud is at most a (2r+1) cube.
      */
     public static final int DEFAULT_RADIUS = 6;
-    /**
-     * Safety cap only. The fill is normally bounded by the radius cube; this is kept well above
-     * {@code (2*radius+1)^3} so an open-air burst fills its whole cube.
-     */
+    /** Safety cap only. */
     public static final int DEFAULT_MAX_CELLS = 8192;
     /**
      * Cloud lifetime in ticks (~15s).

@@ -2,11 +2,7 @@ package com.wf.wfballistics.entity.glyphid;
 
 import net.minecraft.world.damagesource.DamageSource;
 
-/**
- * The per-caste numbers: health, speed, damage, and how much of a hit the chitin turns away. Swappable
- * because upstream ships two balance tables; only the one it selects is ported, and the abstract shape lets a
- * second be added without touching the entities.
- */
+/** The per-caste numbers: health, speed, damage, and how much of a hit the chitin turns away. */
 public abstract class GlyphidStats {
 
     /** Scales the caste speed numbers into vanilla {@code MOVEMENT_SPEED} attribute units. */
@@ -14,7 +10,7 @@ public abstract class GlyphidStats {
 
     /**
      * Applied on top of {@link #MOVEMENT_SPEED_SCALE}, so the table keeps upstream's numbers and the swarm's
-     * absolute pace is tuned separately. Not folded into the caste speeds, which are relative to each other.
+     * absolute pace is tuned separately.
      */
     private static double pace = 1.25D;
 
@@ -45,10 +41,7 @@ public abstract class GlyphidStats {
         return DEFAULT;
     }
 
-    /**
-     * Runs a caste's damage rules. Implementations wanting the normal outcome finish by calling
-     * {@link EntityGlyphid#attackSuperclass}.
-     */
+    /** Runs a caste's damage rules. */
     public abstract boolean handleAttack(EntityGlyphid glyphid, DamageSource source, float amount);
 
     public StatBundle getGrunt() {
@@ -90,17 +83,17 @@ public abstract class GlyphidStats {
     /**
      * One caste's numbers.
      *
-     * @param health                 max health
-     * @param speed                  caste speed, before {@link #MOVEMENT_SPEED_SCALE}
-     * @param damage                 melee damage
-     * @param thresholdMultForArmor  damage threshold contributed by each surviving armour plate, so a bug
-     *                               that has been shelled turns away less
-     * @param resistanceMult         fraction of a hit shrugged off after the threshold applies
-     * @param power                  what this caste is worth to an equal-strength squad split. Explicit rather
-     *                               than derived: a nuclear is worth far more than its statline says
-     * @param digStrength            block hardness chewed through per second, or 0 for a caste that cannot dig
-     * @param digCeiling             hardness this caste cannot chew at any speed. Obsidian is 50 and stone
-     *                               1.5, so this decides whether a wall is an obstacle or a stop
+     * @param health max health
+     * @param speed caste speed, before {@link #MOVEMENT_SPEED_SCALE}
+     * @param damage melee damage
+     * @param thresholdMultForArmor damage threshold contributed by each surviving armour plate, so a bug
+     *      that has been shelled turns away less
+     * @param resistanceMult fraction of a hit shrugged off after the threshold applies
+     * @param power what this caste is worth to an equal-strength squad split. Explicit rather
+     *      than derived: a nuclear is worth far more than its statline says
+     * @param digStrength block hardness chewed through per second, or 0 for a caste that cannot dig
+     * @param digCeiling hardness this caste cannot chew at any speed. Obsidian is 50 and stone
+     *      1.5, so this decides whether a wall is an obstacle or a stop
      */
     public record StatBundle(double health, double speed, double damage, float thresholdMultForArmor,
                              float resistanceMult, double power, double digStrength, double digCeiling) {

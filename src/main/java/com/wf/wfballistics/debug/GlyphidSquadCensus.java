@@ -14,7 +14,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
-
 public final class GlyphidSquadCensus {
 
     private GlyphidSquadCensus() {
@@ -27,10 +26,10 @@ public final class GlyphidSquadCensus {
     /**
      * One group of warbands that came from the same place, and the squads it divided into.
      *
-     * @param cell     the home cell, as a readable {@code x,z} in cell units
-     * @param members  how many glyphids are in it
-     * @param split    whether it is big enough for the splitter to divide at all
-     * @param squads   the squads found, lowest index first
+     * @param cell the home cell, as a readable {@code x,z} in cell units
+     * @param members how many glyphids are in it
+     * @param split whether it is big enough for the splitter to divide at all
+     * @param squads the squads found, lowest index first
      */
     public record Host(String cell, int members, boolean split, List<Squad> squads) {
 
@@ -50,8 +49,8 @@ public final class GlyphidSquadCensus {
     }
 
     /**
-     * @param hosts     the groups found, largest first
-     * @param unsplit   glyphids the splitter never considers: scouts, and anything yet to take a first tick
+     * @param hosts the groups found, largest first
+     * @param unsplit glyphids the splitter never considers: scouts, and anything yet to take a first tick
      * @param orderless glyphids in a splittable host that still carry no objective
      */
     public record Tally(List<Host> hosts, int unsplit, int orderless) {
@@ -74,8 +73,6 @@ public final class GlyphidSquadCensus {
             List<EntityGlyphid> members = entry.getValue();
             boolean split = GlyphidSquads.splittable(members.size());
 
-            // Sorted by squad index so the report reads in a stable order, and so two runs of the same
-            // scenario can be compared line against line.
             Map<Integer, List<EntityGlyphid>> bySquad = new TreeMap<>();
             for (EntityGlyphid bug : members) {
                 if (bug.objective == null) {
@@ -102,10 +99,7 @@ public final class GlyphidSquadCensus {
         return new Tally(out, unsplit, orderless);
     }
 
-    /**
-     * The objective as the report wants it: kind and position. Taken off the first member rather than
-     * averaged, since every member of a squad was handed the same record.
-     */
+    /** The objective as the report wants it: kind and position. */
     private static String describe(GlyphidObjective objective) {
         return objective == null ? "none" : objective.toString();
     }
@@ -139,7 +133,6 @@ public final class GlyphidSquadCensus {
         }
         return lines;
     }
-
 
     public static String line(ServerLevel level) {
         Tally tally = take(level);

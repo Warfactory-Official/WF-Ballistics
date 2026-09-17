@@ -47,11 +47,8 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The pad's state: the cargo waiting to be flown out, the mission it will be flown on, and the recharging of
- * drones parked on top.
- *
- * <p>Both dispatch paths build the same {@link DroneMission}: the command fills one in directly, and this
- * fills one in from its stored settings.
+ * The pad's state: the cargo waiting to be flown out, the mission it will be flown on, and the recharging of drones
+ * parked on top.
  */
 public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
 
@@ -72,10 +69,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
     private final NonNullList<ItemStack> cargo = NonNullList.withSize(CARGO_SLOTS, ItemStack.EMPTY);
     private DroneMission mission = new DroneMission();
     private boolean wasPowered;
-    /**
-     * This pad's own station code. Cached so it can be shown on its own config screen without a registry
-     * lookup, and so it survives in the pad's NBT even if the directory is somehow rebuilt.
-     */
+    /** This pad's own station code. */
     @Nullable
     private String stationCode;
 
@@ -103,8 +97,8 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     /**
-     * Top up any drone sitting idle on the pad, which is what closes the delivery loop: a drone that comes
-     * home flat can fly again without being rebuilt.
+     * Top up any drone sitting idle on the pad, which is what closes the delivery loop: a drone that comes home
+     * flat can fly again without being rebuilt.
      */
     private void rechargeParked(ServerLevel level, BlockPos pos) {
         Vec3 centre = Vec3.atCenterOf(pos.above());
@@ -146,7 +140,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     /**
-     * Send the stored mission. Cargo in the pad is moved into a fresh crate slung under the leader.
+     * Send the stored mission.
      *
      * @return null on success, or why the dispatch was refused
      */
@@ -162,20 +156,14 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         this.mission.exchangeId = null;
 
         if (this.mission.mode.resolvesDestination()) {
-            // A handshake's destination is decided here, on the server, from the recipient's code. The
-            // client that set this mission up never sees it and never will.
             String refusal = this.arrangeHandshake(serverLevel);
             if (refusal != null) {
                 return refusal;
             }
         } else if (this.mission.program.isEmpty() && this.mission.destination.equals(Vec3.ZERO)) {
-            // A program supplies its own destination, its first step, so only a pad with neither is
-            // genuinely unconfigured.
             return "no destination set";
         }
 
-        // Loaded straight into the drone's grippers. Nothing is spawned to be picked up, so a refused
-        // mission needs no cleanup either.
         CompoundTag cargo = null;
         if (!this.cargoEmpty()) {
             cargo = new CompoundTag();
@@ -213,7 +201,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
 
     /**
      * @return the code as the client knows it. Its own code is the one thing about the exchange system a
-     * client is meant to see: you have to be able to read it off the screen to give it to a trading partner.
+     *      client is meant to see: you have to be able to read it off the screen to give it to a trading partner.
      */
     @Nullable
     public String knownStationCode() {
@@ -222,10 +210,6 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
 
     /**
      * Arrange the meeting and point the mission at it.
-     *
-     * <p>Everything secret happens inside this method: the recipient's code is resolved, the rendezvous is
-     * drawn, and {@code mission.destination} is set to a place the client that pressed Dispatch will never be
-     * told. The only thing that leaves is a yes or a redacted no.
      *
      * @return null on success, or a reason that reveals nothing
      */
@@ -242,8 +226,6 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         if (own == null) {
             return "this pad could not be registered";
         }
-        // Whether the far side is also sending decides whether this is a delivery or a trade; it is their
-        // pad's business, and it is answered by whether they have anything loaded when their drone flies.
         ExchangeManager.Result result = ExchangeManager.arrange(level.getServer(), own, recipient, true, false);
         if (!result.ok()) {
             return result.error();
@@ -257,8 +239,6 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
 
     /**
      * Send a drone out to collect what the far side left at the rendezvous.
-     *
-     * <p>Called by {@link ExchangeManager}, never by anything a player can reach directly.
      *
      * @return null on success, or why no drone went
      */
@@ -287,8 +267,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
     }
 
     /**
-     * Order every drone this pad can see home. The testing escape hatch: a flight halfway across the world
-     * turns around instead of having to be hunted down.
+     * Order every drone this pad can see home.
      *
      * @return how many drones were recalled
      */
@@ -352,13 +331,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
                 Component.translatable("block.wfballistics.drone_pad")));
     }
 
-    /**
-     * The pad's own store, for a drone to draw building materials from or hand a demolition's recovery into.
-     *
-     * <p>Handed out directly rather than as a {@code Container} view because the caller mutates stacks in
-     * place and then calls {@link #setChanged}; wrapping it would only add a copy. The same slots the player
-     * sees in the pad's cargo screen: a station's store is not a separate hidden inventory.
-     */
+    /** The pad's own store, for a drone to draw building materials from or hand a demolition's recovery into. */
     public NonNullList<ItemStack> cargoItems() {
         return this.cargo;
     }

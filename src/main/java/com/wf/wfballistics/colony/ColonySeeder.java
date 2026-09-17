@@ -7,16 +7,7 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Heightmap;
 
 /**
- * Puts the first nests in the world, so a colony is something a player finds rather than commands into
- * existence. Everything else in this package grows a colony from a colony.
- *
- * <p>A grid of {@link ColonyConfig#naturalSpacing()} cells holding at most one nest each, positioned from the
- * world seed — the shape vanilla uses for villages. A per-chunk roll would instead tie density to how the
- * world was explored, and would clump hard enough to trip {@link ColonyConfig#crowdingLimit()}.
- *
- * <p>A cell is consumed the first time it is examined, even when the answer is "nothing here", and that is
- * recorded in {@link ColonyRegistry} rather than inferred from the colony list. Otherwise razing a nest would
- * be temporary: walking away and back would rebuild what the player just cleared.
+ * Puts the first nests in the world, so a colony is something a player finds rather than commands into existence.
  */
 public final class ColonySeeder {
 
@@ -26,10 +17,7 @@ public final class ColonySeeder {
     private ColonySeeder() {
     }
 
-    /**
-     * Found whatever natural colony belongs in this chunk, if any. Called from
-     * {@link ColonyManager#onChunkLoaded} ahead of its build pass, so a nest seeded here is built by it.
-     */
+    /** Found whatever natural colony belongs in this chunk, if any. */
     public static void seed(ServerLevel level, ColonyRegistry registry, ChunkAccess chunk) {
         int spacing = ColonyConfig.naturalSpacing();
         if (spacing <= 0) {
@@ -39,8 +27,6 @@ public final class ColonySeeder {
         int minX = pos.getMinBlockX();
         int minZ = pos.getMinBlockZ();
 
-        // A chunk can straddle a boundary, so up to four cells reach into it. Iterating the corners covers
-        // them all without assuming the ratio.
         for (int cx = Math.floorDiv(minX, spacing); cx <= Math.floorDiv(minX + 15, spacing); cx++) {
             for (int cz = Math.floorDiv(minZ, spacing); cz <= Math.floorDiv(minZ + 15, spacing); cz++) {
                 candidate(level, registry, chunk, cx, cz, spacing);
@@ -80,11 +66,9 @@ public final class ColonySeeder {
 
     /**
      * @return whether the surface can hold a mound rather than being open water. Read off the chunk being
-     * loaded, so nothing else has to be.
+     *      loaded, so nothing else has to be.
      */
     private static boolean standable(ChunkAccess chunk, int x, int z) {
-        // getHeight answers with the first free cell, so the ground is below it -- and over an ocean that
-        // ground is water, since MOTION_BLOCKING counts fluids.
         int surface = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15);
         return chunk.getBlockState(new BlockPos(x, surface - 1, z)).getFluidState().isEmpty();
     }

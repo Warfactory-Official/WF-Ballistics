@@ -16,13 +16,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * A marker a glyphid colony leaves in the world: "go here, and when you arrive, do this".
- *
- * <p>An entity rather than a record because it has to be found by whichever bugs walk past it, none of which
- * hold a reference first. It ticks rarely, never moves and takes no damage. One entity per waypoint is
- * affordable at colony scale and will not be at swarm scale.
- */
+/** A marker a glyphid colony leaves in the world: "go here, and when you arrive, do this". */
 public class GlyphidWaypoint extends Entity {
 
     private static final EntityDataAccessor<Integer> WAYPOINT_TYPE =
@@ -64,8 +58,8 @@ public class GlyphidWaypoint extends Entity {
     }
 
     /**
-     * Chain a second waypoint to be dropped once this one is reached, which is how a retreat lays a trail
-     * home and back.
+     * Chain a second waypoint to be dropped once this one is reached, which is how a retreat lays a trail home and
+     * back.
      */
     public void setAdditionalWaypoint(@Nullable GlyphidWaypoint waypoint) {
         additional = waypoint;
@@ -102,11 +96,7 @@ public class GlyphidWaypoint extends Entity {
         }
     }
 
-    /**
-     * Hand this waypoint's order to any glyphid standing in it, then retire. A hive-building waypoint is
-     * the exception: it stays until a scout claims it, so the workers it also passes orders to do not
-     * consume it first.
-     */
+    /** Hand this waypoint's order to any glyphid standing in it, then retire. */
     private void claim(AABB bb) {
         List<Entity> targets = level().getEntities(this, bb);
 

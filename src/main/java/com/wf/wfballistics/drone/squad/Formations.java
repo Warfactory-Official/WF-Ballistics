@@ -10,15 +10,12 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Registry of squad {@link Formation}s, keyed by id in the same shape as {@code FlightStageRegistry}: add a
- * shape by implementing {@link Formation} and calling {@link #register}.
+ * Registry of squad {@link Formation}s, keyed by id in the same shape as {@code FlightStageRegistry}: add a shape
+ * by implementing {@link Formation} and calling {@link #register}.
  */
 public final class Formations {
 
-    /**
-     * Wedge: alternating left/right of the leader, stepping back one rank every two slots. Four drones make
-     * the classic V.
-     */
+    /** Wedge: alternating left/right of the leader, stepping back one rank every two slots. */
     public static final Formation VEE = new Formation() {
         @Override
         public Vec3 slot(int index, Vec3 leaderPos, Vec3 forward, double spacing) {
@@ -73,19 +70,7 @@ public final class Formations {
         }
     };
 
-    /**
-     * A square grid with the leader in the middle of it.
-     *
-     * <p>The shape has to be built outward from the centre rather than laid out as a block, because a
-     * {@link Formation} is only ever asked where one slot goes and never told how many there are. So slots
-     * fill by Chebyshev ring: ring {@code r} being the {@code 8r} cells at {@code max(|x|,|z|) == r}, and
-     * every ring that closes completes a filled {@code (2r+1)x(2r+1)} square around the leader. Nine drones
-     * make the 3x3, twenty-five the 5x5, and the counts in between are that square part-built.
-     *
-     * <p>Within a ring the slots alternate either side of dead astern rather than walking round from one
-     * corner, for the reason {@link #VEE} and {@link #LINE} alternate: a squad that does not fill its outer
-     * ring should still sit balanced about the leader's track instead of hanging off one flank.
-     */
+    /** A square grid with the leader in the middle of it. */
     public static final Formation GRID = new Formation() {
         @Override
         public Vec3 slot(int index, Vec3 leaderPos, Vec3 forward, double spacing) {

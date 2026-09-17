@@ -7,23 +7,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.EnumSet;
 
-/**
- * Keeps a glyphid pointed at something to bite.
- *
- * <p>Acquires immediately while the bug has no target, then re-checks only occasionally, staggered by entity
- * id so a swarm does not run every bug's search on the same tick. Claims no {@link Goal.Flag}s, so it never
- * competes with the movement goals: a glyphid's target and what it is walking towards are separate questions.
- */
+/** Keeps a glyphid pointed at something to bite. */
 public class GlyphidTargetGoal extends Goal {
 
     /** Ticks between re-checks once a target is already held. */
     private static final int RECHECK_INTERVAL = 100;
 
-    /**
-     * Ticks between searches while the glyphid has nothing to attack. The search is a box query now rather
-     * than a walk of the player list, and at three hundred glyphids per tick it would cost more than the rest
-     * of the swarm. Staggered by entity id, at the price of up to a second before a bug notices a cow.
-     */
+    /** Ticks between searches while the glyphid has nothing to attack. */
     private static final int ACQUIRE_INTERVAL = 20;
 
     private final EntityGlyphid glyphid;

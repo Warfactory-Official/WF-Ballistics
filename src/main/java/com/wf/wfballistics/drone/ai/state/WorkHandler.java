@@ -14,18 +14,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * On station over one block of a work job: place it, or take it down.
- *
- * <p>The same handler for both directions, because from the air they are the same manoeuvre: get over the
- * spot, stop moving, and tell the world thread you are there. What actually happens to the block is
- * {@code BuildPilot}'s, on the world thread, for the reason every world change in this AI is: a handler runs
- * off a snapshot on a worker and cannot touch a {@code Level}.
- *
- * <p>Settles before it works, like {@link DeliverHandler}, and for a related reason. A drone still sliding
- * sideways is a drone whose next order is claimed from the wrong place, and, for a demolition, one whose
- * dropped items land somewhere it is no longer hovering.
- */
+/** On station over one block of a work job: place it, or take it down. */
 public final class WorkHandler implements DroneStateHandler {
 
     public static final WorkHandler INSTANCE = new WorkHandler();
@@ -84,13 +73,7 @@ public final class WorkHandler implements DroneStateHandler {
         }
     }
 
-    /**
-     * Hold above the block, at working height.
-     *
-     * <p>Measured from the <em>block</em> and not from the ground under the drone, unlike almost everything
-     * else that descends. The two are the same thing on flat ground and very different halfway up a tower,
-     * and the height that matters is the one over the thing being worked on.
-     */
+    /** Hold above the block, at working height. */
     @Override
     public Vec3 guide(DroneSnapshot self, SquadView squad) {
         WorkAssignment work = self.assignment();

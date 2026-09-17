@@ -14,11 +14,8 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 import java.util.List;
 
 /**
- * Server/common config for the tunables most worth adjusting without recompiling: the WarForge integration
- * toggles, the interceptor combat numbers, and default fuel. Register {@link #SPEC} in the mod constructor
- * ({@code context.registerConfig(ModConfig.Type.COMMON, WFConfig.SPEC)}). On (re)load the values are copied
- * into the plain static fields the gameplay code reads (see {@link MissileSimConfig}), so nothing else has to
- * know about the config.
+ * Server/common config for the tunables most worth adjusting without recompiling: the WarForge integration toggles,
+ * the interceptor combat numbers, and default fuel.
  */
 public final class WFConfig {
 
@@ -27,6 +24,8 @@ public final class WFConfig {
     // --- WarForge integration ---
     public static final ModConfigSpec.BooleanValue WARFORGE_FACTION_FOF;
     public static final ModConfigSpec.BooleanValue WARFORGE_CLAIM_PROTECTION;
+    // --- Orbital ---
+    public static final ModConfigSpec.BooleanValue REQUIRE_WAR_FOR_ORBITAL_KILLS;
     // --- Interception ---
     public static final ModConfigSpec.DoubleValue INTERCEPT_CHANCE;
     public static final ModConfigSpec.DoubleValue INTERCEPT_CROSSING_FACTOR;
@@ -38,8 +37,7 @@ public final class WFConfig {
     public static final ModConfigSpec.DoubleValue INTERCEPTOR_GRAZE_DAMAGE;
     public static final ModConfigSpec.DoubleValue MIN_PROJECTILE_DAMAGE;
     // --- Stealth ---
-    public static final ModConfigSpec.DoubleValue STEALTH_DETECT_RANGE;
-    public static final ModConfigSpec.DoubleValue STEALTH_DETECT_CHANCE;
+    public static final ModConfigSpec.DoubleValue STEALTH_RCS;
     // --- Evasion ---
     public static final ModConfigSpec.DoubleValue DIVE_EVASION_MULTIPLIER;
     // --- Batteries ---
@@ -55,6 +53,10 @@ public final class WFConfig {
     public static final ModConfigSpec.DoubleValue SIM_SPAWN_MARGIN;
     public static final ModConfigSpec.IntValue SIM_CRUISE_DELAY_TICKS;
     // --- Industry tracking (glyphid aggression input) ---
+    public static final ModConfigSpec.IntValue CAMERA_STREAM_RADIUS;
+    public static final ModConfigSpec.IntValue CAMERA_STREAM_BUDGET;
+    public static final ModConfigSpec.IntValue CAMERA_MAX_CHANNELS;
+
     public static final ModConfigSpec.ConfigValue<List<? extends String>> INDUSTRY_MACHINES;
     public static final ModConfigSpec.IntValue INDUSTRY_CELL_CHUNKS;
     public static final ModConfigSpec.IntValue INDUSTRY_CLUSTER_GAP;
@@ -126,6 +128,15 @@ public final class WFConfig {
                 .define("explosionsRespectClaims", true);
         b.pop();
 
+        b.comment("Orbital systems.").push("orbital");
+        REQUIRE_WAR_FOR_ORBITAL_KILLS = b
+                .comment("Whether destroying another faction's satellite needs a declared war.",
+                        "Off by default: anything overhead is fair game, which is the harsher setting and what",
+                        "gives parking over somebody's base its edge. Deliberately narrow - it gates the kill",
+                        "and never the tracking or the jamming, so turning it on makes nobody invisible.")
+                .define("requireWarForOrbitalKills", false);
+        b.pop();
+
         b.comment("Interceptor combat tuning.").push("interception");
         INTERCEPT_CHANCE = b
                 .comment("Default per-interceptor kill probability on a proper (timed) intercept.")
@@ -165,12 +176,12 @@ public final class WFConfig {
         b.pop();
 
         b.comment("Stealth missiles: reduced-observability, not invisible.").push("stealth");
-        STEALTH_DETECT_RANGE = b
-                .comment("Range (blocks) within which automatic detection can see a stealth missile at all.")
-                .defineInRange("detectRange", 32.0, 0.0, 512.0);
-        STEALTH_DETECT_CHANCE = b
-                .comment("Per-scan probability a stealth missile within that range is detected.")
-                .defineInRange("detectChance", 0.25, 0.0, 1.0);
+        STEALTH_RCS = b
+                .comment("Radar cross-section of a stealth missile, against a reference of 1.0.",
+                        "Detection range scales with the fourth root of this, so halving the range a missile",
+                        "is seen at costs a sixteenfold reduction. The default gives about 32 blocks against",
+                        "a 200-block interceptor battery, matching the fixed window this replaced.")
+                .defineInRange("rcs", 0.00067, 0.0, 1.0);
         b.pop();
 
         b.comment("Evasion: higher-tier missiles shrug off interception more often.").push("evasion");
@@ -222,6 +233,41 @@ public final class WFConfig {
         SIM_CRUISE_DELAY_TICKS = b
                 .comment("Ticks a missile must cruise before it may offload to the sim at all (20 ticks = 1s).")
                 .defineInRange("cruiseDelayTicks", 100, 0, 1_000_000);
+        b.pop();
+
+        b.comment("Terrain streaming for drone camera feeds. A client can only draw chunks the server has sent",
+                        "it, and the server only sends the ones around the player's own body, so without this a",
+                        "feed goes black the moment the drone outruns its operator's view distance, however far",
+                        "the datalink reaches. These chunks are loaded but never ticked, and are sent only to the",
+                        "people actually watching a feed.")
+                .push("droneCameraStreaming");
+        CAMERA_STREAM_RADIUS = b
+                .comment("Chunks either side of a watched drone to keep loaded and stream to its audience. This is",
+                        "how far a feed can see, and it is a bubble around the drone rather than a distance from",
+                        "the player, so it costs the same whether the drone is fifty blocks away or a thousand.",
+                        "Eight is 128 blocks of terrain in every direction, which reads as a horizon on a camera",
+                        "that small. Raising it is quadratic in both bandwidth and the chunks the server must",
+                        "keep resident. Zero disables streaming entirely and puts the old render-distance ceiling",
+                        "back.")
+                .defineInRange("radius", 8, 0, 16);
+        CAMERA_STREAM_BUDGET = b
+                .comment("Chunk packets built per publish (five publishes a second), shared out between however",
+                        "many feeds have an audience. This is a fill-rate limit, not a cap: what does not fit is",
+                        "sent on the next publish, nearest ring first, so a feed sharpens from the middle",
+                        "outwards. Lower it if opening a feed briefly stutters other players on a busy server.")
+                .defineInRange("chunksPerPublish", 24, 1, 256);
+        b.pop();
+
+        b.comment("Camera panels: the monitor block and the handheld receiver. Both hold a bounded list of",
+                        "bound cameras (fixed ones and camera-equipped drones alike), and switch between them.")
+                .push("cameraChannels");
+        CAMERA_MAX_CHANNELS = b
+                .comment("How many cameras one monitor or one receiver can have bound at once. The limit is what",
+                        "makes covering a base a matter of choosing angles rather than papering the walls: every",
+                        "bound camera is one you did not bind somewhere else. Lowering this below what is already",
+                        "bound does not delete anything: an over-full panel keeps working and simply refuses the",
+                        "next binding.")
+                .defineInRange("maxBound", 8, 1, 32);
         b.pop();
 
         b.comment("Industry tracking: what provokes the glyphids, and how bases are detected.",
@@ -321,7 +367,7 @@ public final class WFConfig {
                         "and a tier-4 one at six, so how sprawling a hive is says how far from spawn it is.")
                 .defineInRange("budCapPerTier", 1, 0, 1_000);
         COLONY_REINFORCED_EVOLUTION = b
-                .comment("Evolution at which colonies start laying reinforced flesh -- the same nest block with",
+                .comment("Evolution at which colonies start laying reinforced flesh: the same nest block with",
                         "a brown cast, 60x the blast resistance and a hardness that wants a pickaxe. Above this",
                         "the hardened crust deepens with evolution until a fully evolved world builds mounds",
                         "reinforced all the way through. Baked in at the moment each mound is laid, so an old",
@@ -335,8 +381,8 @@ public final class WFConfig {
                 .comment("Blocks per tick a travelling warband covers while off-world.")
                 .defineInRange("warbandSpeed", 0.35, 0.01, 64.0);
         COLONY_MAX_COLONIES = b
-                .comment("Hard ceiling on colonies per dimension. Expansion is exponential -- every colony",
-                        "founded can found more -- so it needs a stop, not just a cooldown.")
+                .comment("Hard ceiling on colonies per dimension. Expansion is exponential (every colony",
+                        "founded can found more), so it needs a stop, not just a cooldown.")
                 .defineInRange("maxColonies", 250, 0, 100_000);
         COLONY_FRONTIER_DISTANCE = b
                 .comment("No colony may be founded beyond this distance from spawn.")
@@ -398,8 +444,8 @@ public final class WFConfig {
 
         b.comment("Glyphid swarm behaviour.").push("glyphids");
         GLYPHID_PACE = b
-                .comment("Multiplier on every caste's movement speed. The caste table is relative -- a behemoth",
-                        "is 0.8 of a grunt, a scout 1.5 -- and this sets the swarm's absolute pace without",
+                .comment("Multiplier on every caste's movement speed. The caste table is relative (a behemoth",
+                        "is 0.8 of a grunt, a scout 1.5), and this sets the swarm's absolute pace without",
                         "disturbing those ratios. A glyphid that cannot keep up with what it is chasing is",
                         "scenery, so this is the lever for how far a player can outrun one.")
                 .defineInRange("pace", 1.25, 0.05, 8.0);
@@ -460,10 +506,7 @@ public final class WFConfig {
     private WFConfig() {
     }
 
-    /**
-     * Copies the loaded config values into the plain static fields the gameplay code reads. Subscribed on the
-     * mod event bus for both initial load and reload.
-     */
+    /** Copies the loaded config values into the plain static fields the gameplay code reads. */
     @SubscribeEvent
     public static void onLoad(ModConfigEvent event) {
         if (event.getConfig().getSpec() != SPEC) {
@@ -471,6 +514,8 @@ public final class WFConfig {
         }
         WarforgeCompat.setFactionFoFEnabled(WARFORGE_FACTION_FOF.get());
         WarforgeCompat.setClaimProtectionEnabled(WARFORGE_CLAIM_PROTECTION.get());
+        com.wf.wfballistics.orbital.OrbitalConfig.requireWarForOrbitalKills =
+                REQUIRE_WAR_FOR_ORBITAL_KILLS.get();
         MissileSimConfig.DEFAULT_INTERCEPT_CHANCE = INTERCEPT_CHANCE.get().floatValue();
         MissileSimConfig.INTERCEPTOR_CROSSING_HIT_FACTOR = INTERCEPT_CROSSING_FACTOR.get().floatValue();
         MissileSimConfig.INTERCEPTOR_KILL_RADIUS = INTERCEPTOR_KILL_RADIUS.get();
@@ -480,8 +525,7 @@ public final class WFConfig {
         MissileSimConfig.INTERCEPTOR_HIT_DAMAGE = INTERCEPTOR_HIT_DAMAGE.get().floatValue();
         MissileSimConfig.INTERCEPTOR_GRAZE_DAMAGE = INTERCEPTOR_GRAZE_DAMAGE.get().floatValue();
         MissileSimConfig.MIN_PROJECTILE_DAMAGE = MIN_PROJECTILE_DAMAGE.get().floatValue();
-        MissileSimConfig.STEALTH_DETECT_RANGE = STEALTH_DETECT_RANGE.get();
-        MissileSimConfig.STEALTH_DETECT_CHANCE = STEALTH_DETECT_CHANCE.get().floatValue();
+        MissileSimConfig.STEALTH_RCS = STEALTH_RCS.get().floatValue();
         MissileSimConfig.DIVE_EVASION_MULTIPLIER = DIVE_EVASION_MULTIPLIER.get();
         MissileSimConfig.BATTERY_MAGAZINE = BATTERY_MAGAZINE.get();
         MissileSimConfig.BATTERY_RELOAD_TICKS = BATTERY_RELOAD_TICKS.get();

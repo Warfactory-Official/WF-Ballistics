@@ -4,16 +4,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
 
-/**
- * What a glyphid can chew, priced on block hardness.
- *
- * <p>Hardness, not explosion resistance: obsidian is 50 hardness against 1,200 resistance, and a glyphid is
- * biting rather than detonating. It is also the number a player's pickaxe answers to.
- *
- * <p>Two different ways to be un-chewable. Above the caste's <em>ceiling</em> means a bigger caste could open
- * it, which is what makes the material worth building out of; <em>negative</em> hardness — bedrock, barriers,
- * portal frames — is unbreakable to everything.
- */
+/** What a glyphid can chew, priced on block hardness. */
 public final class GlyphidDigging {
 
     private GlyphidDigging() {

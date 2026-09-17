@@ -40,6 +40,15 @@ versionRange = "${flywheel_version_range}"
 ordering = "AFTER"
 side = "CLIENT"
 
+# --- Required: GemRender (rigged models on Flywheel) ---
+# Every animated entity is drawn through it. Client only: the server never builds a rig.
+[[dependencies.wfballistics]]
+modId = "gemrender"
+type = "required"
+versionRange = "*"
+ordering = "AFTER"
+side = "CLIENT"
+
 # Optional integration: when Superb Warfare is present, WF missiles are folded into its
 # superbwarfare:destroyable_projectile tag so its missiles, anti-air and radar can lock onto them.
 [[dependencies.wfballistics]]

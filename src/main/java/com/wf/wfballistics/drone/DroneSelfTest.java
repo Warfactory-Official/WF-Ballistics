@@ -26,6 +26,8 @@ import com.wf.wfballistics.drone.ai.state.TakeoffHandler;
 import com.wf.wfballistics.drone.ai.state.Cruising;
 import com.wf.wfballistics.drone.ai.state.PayloadRunHandler;
 import com.wf.wfballistics.drone.ai.state.Tuning;
+import com.wf.wfballistics.anim.Rotor;
+import com.wf.wfballistics.anim.Rotors;
 import com.wf.wfballistics.drone.flight.Airframe;
 import com.wf.wfballistics.drone.flight.Contacts;
 import com.wf.wfballistics.drone.flight.FlightAttitude;
@@ -36,6 +38,8 @@ import com.wf.wfballistics.drone.nav.PathPlanner;
 import com.wf.wfballistics.drone.nav.TerrainCache;
 import com.wf.wfballistics.drone.nav.TerrainField;
 import com.wf.wfballistics.drone.nav.TerrainGuard;
+import com.wf.wfballistics.drone.cam.CameraSpec;
+import com.wf.wfballistics.drone.sim.SimDrone;
 import com.wf.wfballistics.exchange.ExchangeMode;
 import com.wf.wfballistics.exchange.Obfuscation;
 import com.wf.wfballistics.exchange.StationCode;
@@ -44,30 +48,32 @@ import com.wf.wfballistics.drone.squad.Formations;
 import com.wf.wfballistics.fire.FireType;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.nbt.CompoundTag;
+import com.wf.wfballistics.drone.ai.state.MineLayHandler;
+import com.wf.wfballistics.drone.ai.state.TransitHandler;
+import com.wf.wfballistics.item.MinePresetRegistry;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.phys.AABB;
+import com.wf.wfballistics.util.GltfBounds;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3f;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
- * In-game checks for the parts of the drone system that are pure functions: the battery policy, the
- * ballistics, the formations, the state machine, and NBT round-trips.
- *
- * <p>All of it is exercised without a world, which is the point: the AI's decision half deliberately holds no
- * world references, so it can be driven from synthetic snapshots and asserted on directly. Run it with
- * {@code /wfballistics drone selftest} after changing tuning values or handlers.
+ * In-game checks for the parts of the drone system that are pure functions: the battery policy, the ballistics, the
+ * formations, the state machine, and NBT round-trips.
  */
 public final class DroneSelfTest {
 
-    /**
-     * The spacing these checks are written against. Named rather than defaulted so the geometry
-     * assertions keep meaning what they say if the shipped default is retuned.
-     */
+    /** The spacing these checks are written against. */
     private static final double SPACING = Formation.DEFAULT_SPACING;
 
     private DroneSelfTest() {
@@ -94,18 +100,17 @@ public final class DroneSelfTest {
         programs(results);
         succession(results);
         warheads(results);
+        minelay(results);
         fire(results);
+        airframes(results);
+        results.addAll(com.wf.wfballistics.mine.MineSelfTest.runAll());
         results.addAll(com.wf.wfballistics.build.BuildSelfTest.runAll());
         return results;
     }
 
-    /**
-     * The multirotor physics. These assert the <em>behaviour</em> the model is supposed to produce (that it
-     * leans to accelerate, cannot snap its attitude, tops out, and costs more to fly loaded) rather than
-     * pinning down numbers that would have to be edited every time the airframe is tuned.
-     */
+    /** The multirotor physics. */
     private static void kinematics(List<Result> out) {
-        Airframe frame = Airframe.QUADCOPTER;
+        Airframe frame = Airframe.AMAZOG;
 
         Multirotor.Step hover = Multirotor.step(Vec3.ZERO, FlightAttitude.LEVEL, Vec3.ZERO, frame, 1.0);
         out.add(check("flight/hover-is-level", hover.attitude().tilt() < 1.0E-6,
@@ -199,11 +204,54 @@ public final class DroneSelfTest {
                 String.format("began the approach at the handover radius doing cruise speed and ended %.2f "
                         + "blocks off, still drifting %.3f b/t", offset, velocity.horizontalDistance())));
 
+        double handover = Math.max(Tuning.DELIVER_ENTRY_RADIUS,
+                frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED));
         out.add(check("flight/approach-starts-far-enough-out",
-                Tuning.DELIVER_ENTRY_RADIUS >= frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED),
+                handover >= frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED),
                 String.format("delivery begins %.0f blocks out but stopping from cruise takes %.0f",
-                        Tuning.DELIVER_ENTRY_RADIUS,
-                        frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED))));
+                        handover, frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED))));
+
+        double textbook = Math.pow(DroneEntity.DEFAULT_CRUISE_SPEED, 2.0) / (2.0 * frame.brakingAccel());
+        out.add(check("flight/stopping-distance-counts-the-turn",
+                frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED) > textbook * 1.2,
+                String.format("stopping from cruise is %.1f blocks against a textbook %.1f; the time spent "
+                                + "swinging the thrust axis round is missing",
+                        frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED), textbook)));
+
+        boolean inverts = true;
+        for (double v = 0.05; v <= 1.4; v += 0.05) {
+            double back = frame.approachSpeed(frame.stoppingDistance(v));
+            if (Math.abs(back - v) > 1.0E-6) {
+                inverts = false;
+            }
+        }
+        out.add(check("flight/approach-cap-inverts-stopping-distance", inverts,
+                "approachSpeed and stoppingDistance disagree, so the cap does not mean what it says"));
+
+        Vec3 fast = new Vec3(100.0 - handover, 100.0, 100.0);
+        Vec3 fastVelocity = new Vec3(DroneEntity.DEFAULT_CRUISE_SPEED, 0.0, 0.0);
+        FlightAttitude fastHeld = FlightAttitude.LEVEL;
+        double worstLate = 0.0;
+        int crossings = 0;
+        double previous = fast.x - spot.x;
+        for (int i = 0; i < 900; i++) {
+            Vec3 want = Steering.hold(fast, spot, 100.0, DroneEntity.DEFAULT_CRUISE_SPEED, 0.35, frame);
+            Multirotor.Step s2 = Multirotor.step(fastVelocity, fastHeld, want, frame, 1.0);
+            fastVelocity = s2.velocity();
+            fastHeld = s2.attitude();
+            fast = fast.add(fastVelocity);
+            double fromPoint = fast.x - spot.x;
+            if (i > 450) {
+                worstLate = Math.max(worstLate, Math.abs(fromPoint));
+                if (fromPoint * previous < 0.0) {
+                    crossings++;
+                }
+            }
+            previous = fromPoint;
+        }
+        out.add(check("flight/settles-from-full-cruise", worstLate < 0.5 && crossings <= 1,
+                String.format("approaching at full cruise, the drone was still %.2f blocks off the point "
+                        + "and had crossed it %d times in the second half of the run", worstLate, crossings)));
         out.add(check("flight/settled-drone-may-release", velocity.horizontalDistance() <= Tuning.RELEASE_DRIFT,
                 "a settled drone still drifts faster than RELEASE_DRIFT allows, so it would never let go"));
 
@@ -322,10 +370,10 @@ public final class DroneSelfTest {
     }
 
     /**
-     * A synthetic height field: flat at {@code groundTop}, optionally with a wall running across it at one
-     * cell row, broken by a gap.
+     * A synthetic height field: flat at {@code groundTop}, optionally with a wall running across it at one cell
+     * row, broken by a gap.
      *
-     * @param wallZ    cell row the wall sits on, or -1 for none
+     * @param wallZ cell row the wall sits on, or -1 for none
      * @param gapCells how many cells wide the opening is
      */
     private static TerrainField field(int width, int depth, int groundTop, int wallZ, int wallTop,
@@ -375,7 +423,7 @@ public final class DroneSelfTest {
                 PowerPolicy.override(snapshot(DroneState.DOWNED, 0.0, at(0, 0), at(50, 0), true)) == null,
                 "a shot-down drone should never be overruled by the battery policy"));
 
-        Airframe frame = Airframe.QUADCOPTER;
+        Airframe frame = Airframe.AMAZOG;
         double loaded = PowerProfile.DEFAULT.costToTravel(frame, 100.0, 0.75, true);
         double empty = PowerProfile.DEFAULT.costToTravel(frame, 100.0, 0.75, false);
         out.add(check("battery/cargo-costs-more", loaded > empty,
@@ -489,14 +537,7 @@ public final class DroneSelfTest {
                 "nine drones should hold every cell of the 3x3 around the leader"));
     }
 
-    /**
-     * That the expensive half really does run off the server thread.
-     *
-     * <p>This test is worth more than it looks. The off-thread split is the property the whole design rests
-     * on, and it is the kind that quietly stops being true: someone moves a call, and everything still works
-     * until the server is under load. Because this runs from a command, it runs <em>on the world thread</em>,
-     * so it can prove the guards are armed by tripping them deliberately.
-     */
+    /** That the expensive half really does run off the server thread. */
     private static void threading(List<Result> out) {
         out.add(check("threading/guards-are-armed", WorldThread.armed(),
                 "the world thread was never recorded, so nothing is being enforced"));
@@ -546,14 +587,7 @@ public final class DroneSelfTest {
         return allowed[0];
     }
 
-    /**
-     * The obfuscation and the secrecy.
-     *
-     * <p>Most of what this system promises is <em>statistical</em>, "rarely approaches from the direction of
-     * home" cannot be confirmed by watching one flight, or <em>negative</em>: "the client is never told
-     * where the package is going" is a claim about what is absent, which is exactly the kind of thing that
-     * silently stops being true. Both are checked here rather than asserted in a comment.
-     */
+    /** The obfuscation and the secrecy. */
     private static void exchange(List<Result> out) {
         java.util.Random rng = new java.util.Random(20260820L);
 
@@ -670,12 +704,7 @@ public final class DroneSelfTest {
         leakage(out);
     }
 
-    /**
-     * The negative claims: that a handshake's destination never reaches a client.
-     *
-     * <p>Checked by serialising a mission and searching the actual bytes for the coordinate. A comment
-     * saying the field is not written is worth nothing; the bytes are the contract.
-     */
+    /** The negative claims: that a handshake's destination never reaches a client. */
     private static void leakage(List<Result> out) {
         Vec3 secret = new Vec3(1234567.5, 89.25, -7654321.5);
 
@@ -754,14 +783,7 @@ public final class DroneSelfTest {
         return Math.abs((point.x - a.x) * dz - (point.z - a.z) * dx) / length;
     }
 
-    /**
-     * Station-keeping, flown rather than measured. The geometry checks above say where a slot is; these say
-     * a follower can actually reach one and stay in it while the leader moves, which is a different question
-     * and the one that decides whether a squad arrives as a squad.
-     *
-     * <p>Flown through the real flight model, so what is being asserted is the guidance and the airframe
-     * together: a command the drone cannot produce fails here exactly as it would in the air.
-     */
+    /** Station-keeping, flown rather than measured. */
     private static void formationFlight(List<Result> out) {
         double cruise = DroneEntity.DEFAULT_CRUISE_SPEED;
         double climb = DroneEntity.DEFAULT_CLIMB_RATE;
@@ -839,13 +861,8 @@ public final class DroneSelfTest {
     }
 
     /**
-     * Fly a follower from the leader's own position out to its slot and hold it there, and report the worst
-     * it did over the second half of the run.
-     *
-     * <p>The <em>worst</em>, deliberately, rather than where it happened to be at the end. The failure this
-     * is here to catch is a limit cycle (a follower that overruns its slot, turns round, overruns it the
-     * other way and repeats for the whole flight) and a single sample at the end of the run passes or
-     * fails that on nothing but which phase of the swing it landed in.
+     * Fly a follower from the leader's own position out to its slot and hold it there, and report the worst it did
+     * over the second half of the run.
      */
     private static Result stationKeeping(String name, Vec3 leaderVelocity) {
         int ticks = 600;
@@ -860,7 +877,7 @@ public final class DroneSelfTest {
             DroneSnapshot leader = escort(0, leaderPos, leaderVelocity);
             DroneSnapshot follower = escort(1, followerPos, followerVelocity);
             Vec3 desired = slotCommand(follower, pair(leader, follower), leaderVelocity, settledYaw(leaderVelocity));
-            Multirotor.Step step = Multirotor.step(followerVelocity, attitude, desired, Airframe.QUADCOPTER,
+            Multirotor.Step step = Multirotor.step(followerVelocity, attitude, desired, Airframe.AMAZOG,
                     1.0);
             followerVelocity = step.velocity();
             attitude = step.attitude();
@@ -876,11 +893,8 @@ public final class DroneSelfTest {
     }
 
     /**
-     * Ask {@link LeaderFollower} where a drone should be flying, through the same two-step the brain uses:
-     * seed the frame from the leader's snapshot, then rebuild it around the plan the leader just made.
-     *
-     * <p>Goes through the real model rather than reimplementing the geometry, so a check here cannot quietly
-     * keep passing against a copy of the arithmetic after the shipped path has changed underneath it.
+     * Ask {@link LeaderFollower} where a drone should be flying, through the same two-step the brain uses: seed the
+     * frame from the leader's snapshot, then rebuild it around the plan the leader just made.
      */
     private static Vec3 slotCommand(DroneSnapshot self, SquadView squad, Vec3 leaderVelocity, float leaderYaw) {
         DroneSnapshot leader = squad.leader();
@@ -897,8 +911,8 @@ public final class DroneSelfTest {
 
     /**
      * @return the formation frame a drone flying {@code velocity} would be holding: its heading, since that
-     * is what the frame is built on. Mirrors {@link #settledYaw}, so a check can place a slot by hand and
-     * get the same answer the code will.
+     *      is what the frame is built on. Mirrors {@link #settledYaw}, so a check can place a slot by hand and
+     *      get the same answer the code will.
      */
     private static Vec3 headingOf(Vec3 velocity) {
         float yaw = settledYaw(velocity);
@@ -907,11 +921,6 @@ public final class DroneSelfTest {
 
     /**
      * @return the heading a drone flying {@code velocity} would have settled on.
-     *
-     * <p>Held at zero below {@link Steering#HEADING_MIN_SPEED} of cruise, exactly as
-     * {@link Steering#faceTravel} holds it: a drone that is climbing, hovering or drifting is not turning to
-     * face a direction it is not really going in, and a check that pretended otherwise would be testing a
-     * drone that cannot exist.
      */
     private static float settledYaw(Vec3 velocity) {
         double horiz = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
@@ -924,7 +933,7 @@ public final class DroneSelfTest {
      */
     private static DroneSnapshot escort(int index, Vec3 pos, Vec3 velocity) {
         return new DroneSnapshot(UUID.nameUUIDFromBytes(new byte[]{(byte) (0x40 + index)}), false, pos,
-                velocity, settledYaw(velocity), FlightAttitude.LEVEL, Airframe.QUADCOPTER, DroneNav.NONE,
+                velocity, settledYaw(velocity), FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE,
                 DroneState.TRANSIT, 20, at(4000, 0), null, DroneProgram.EMPTY, at(0, 0),
                 true, false, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
@@ -933,15 +942,7 @@ public final class DroneSelfTest {
                 pos.y - DroneEntity.DEFAULT_CRUISE_ALTITUDE, 100.0, 9L, index == 0, 1, null, 0L, index);
     }
 
-
-    /**
-     * The four architectures a squad can hold its shape with.
-     *
-     * <p>Written as assertions about what makes each one <em>different</em> rather than as numeric tolerances
-     * on how well each flies. The flying is measured off-line against the real flight model, where a long run
-     * can be flown and the answer is a distribution; what belongs here is the structural claim each model
-     * makes, because that is what a later change is liable to break silently.
-     */
+    /** The four architectures a squad can hold its shape with. */
     private static void coordination(List<Result> out) {
         for (ResourceLocation id : CoordinationModels.ids()) {
             out.add(check("coord/resolves-" + id.getPath(),
@@ -1070,9 +1071,9 @@ public final class DroneSelfTest {
 
         Vec3 held = new Vec3(0.5, 0.0, 0.0);
         Multirotor.Step blind = Multirotor.step(held, FlightAttitude.LEVEL, held,
-                Airframe.QUADCOPTER, 1.0);
+                Airframe.AMAZOG, 1.0);
         Multirotor.Step told = Multirotor.step(held, FlightAttitude.LEVEL, held,
-                new Vec3(0.0, 0.0, 0.01), Airframe.QUADCOPTER, 1.0);
+                new Vec3(0.0, 0.0, 0.01), Airframe.AMAZOG, 1.0);
         out.add(check("slots/feed-forward-leans-with-no-error",
                 Math.abs(told.attitude().tiltZ()) > Math.abs(blind.attitude().tiltZ()) + 1.0E-6,
                 "a drone perfectly on a station that is beginning to turn has no error to lean on, so "
@@ -1083,7 +1084,7 @@ public final class DroneSelfTest {
                 told.velocity().z > blind.velocity().z + 1.0E-6,
                 "the lean has to produce motion in the direction the reference is accelerating"));
         out.add(check("slots/no-feed-forward-changes-nothing",
-                Multirotor.step(held, FlightAttitude.LEVEL, held, Vec3.ZERO, Airframe.QUADCOPTER, 1.0)
+                Multirotor.step(held, FlightAttitude.LEVEL, held, Vec3.ZERO, Airframe.AMAZOG, 1.0)
                         .velocity().distanceTo(blind.velocity()) < 1.0E-12,
                 "the two-argument form must be exactly the zero-feed-forward case, or every drone flying its "
                         + "own route has quietly changed behaviour"));
@@ -1093,11 +1094,7 @@ public final class DroneSelfTest {
         return Double.isFinite(v.x) && Double.isFinite(v.y) && Double.isFinite(v.z);
     }
 
-
-    /**
-     * Form-up. A flight goes up one drone at a time, so the question that decides whether it is a formation
-     * or a straggle is when the first one is allowed to leave.
-     */
+    /** Form-up. */
     private static void muster(List<Result> out) {
         Vec3 up = at(0, 0);
         double alt = DroneEntity.DEFAULT_CRUISE_ALTITUDE;
@@ -1164,7 +1161,7 @@ public final class DroneSelfTest {
                 "one drone that never arrives must not hold the whole flight until its battery is flat"));
 
         DroneSnapshot climbed = new DroneSnapshot(lead.id(), false, up, Vec3.ZERO, 0.0f,
-                FlightAttitude.LEVEL, Airframe.QUADCOPTER, DroneNav.NONE, DroneState.TAKEOFF, 40,
+                FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE, DroneState.TAKEOFF, 40,
                 at(4000, 0), null, DroneProgram.EMPTY, at(0, 0), false, false, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
                 DroneEntity.DEFAULT_CRUISE_SPEED, alt, DroneEntity.DEFAULT_CLIMB_RATE,
@@ -1177,7 +1174,7 @@ public final class DroneSelfTest {
         out.add(check("muster/climb-out-still-goes-straight-through",
                 TakeoffHandler.INSTANCE.next(
                         new DroneSnapshot(aloneUp.id(), false, up, Vec3.ZERO, 0.0f, FlightAttitude.LEVEL,
-                                Airframe.QUADCOPTER, DroneNav.NONE, DroneState.TAKEOFF, 40, at(4000, 0), null,
+                                Airframe.AMAZOG, DroneNav.NONE, DroneState.TAKEOFF, 40, at(4000, 0), null,
                                 DroneProgram.EMPTY, at(0, 0), false, false, false, true, List.of(),
                                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY,
                                 PowerProfile.DEFAULT, DroneEntity.DEFAULT_CRUISE_SPEED, alt,
@@ -1223,9 +1220,9 @@ public final class DroneSelfTest {
 
     /**
      * @return where slot {@code index} sits for a flight formed up over the pad facing north: the frame a
-     * {@link #musterer} is built in, since they are all given a yaw of zero. Taken from the real
-     * {@link Formation} rather than written out, so these checks cannot drift away from the shape the code
-     * actually flies.
+     *      {@link #musterer} is built in, since they are all given a yaw of zero. Taken from the real
+     *      {@link Formation} rather than written out, so these checks cannot drift away from the shape the code
+     *      actually flies.
      */
     private static Vec3 museSlot(int index) {
         return Formations.get(Formations.DEFAULT)
@@ -1233,9 +1230,9 @@ public final class DroneSelfTest {
     }
 
     /**
-     * A squad carrying the frame its first tick would have settled, because form-up is judged against the
-     * frame now rather than against the leader standing in for it: a view with no anchor is a squad that has
-     * not been planned yet, and the honest answer for one of those is "not formed up".
+     * A squad carrying the frame its first tick would have settled, because form-up is judged against the frame now
+     * rather than against the leader standing in for it: a view with no anchor is a squad that has not been planned
+     * yet, and the honest answer for one of those is "not formed up".
      */
     private static SquadView squadOf(DroneSnapshot... members) {
         return new SquadView(9L, Formations.DEFAULT, SPACING, CoordinationModels.DEFAULT,
@@ -1243,8 +1240,8 @@ public final class DroneSelfTest {
     }
 
     /**
-     * A drone holding over the pad: airborne, at {@code altitude} above the ground, part of a flight of
-     * {@code ordered}.
+     * A drone holding over the pad: airborne, at {@code altitude} above the ground, part of a flight of {@code
+     * ordered}.
      */
     private static DroneSnapshot musterer(int index, Vec3 pos, Vec3 velocity, double altitude, int ordered) {
         return musterer(index, pos, velocity, altitude, ordered, 20);
@@ -1253,7 +1250,7 @@ public final class DroneSelfTest {
     private static DroneSnapshot musterer(int index, Vec3 pos, Vec3 velocity, double altitude, int ordered,
                                           int stateTicks) {
         return new DroneSnapshot(UUID.nameUUIDFromBytes(new byte[]{(byte) (0x70 + index)}), false, pos,
-                velocity, 0.0f, FlightAttitude.LEVEL, Airframe.QUADCOPTER, DroneNav.NONE,
+                velocity, 0.0f, FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE,
                 DroneState.MUSTER, stateTicks, at(4000, 0), null, DroneProgram.EMPTY, at(0, 0),
                 false, false, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
@@ -1272,10 +1269,7 @@ public final class DroneSelfTest {
                 alive.squadId(), false, ordered, null, alive.gameTime(), alive.seed());
     }
 
-    /**
-     * The two ways a flight can destroy itself: piling into one another, and dropping ordnance on one
-     * another. Both come down to geometry, so both can be asserted directly.
-     */
+    /** The two ways a flight can destroy itself: piling into one another, and dropping ordnance on one another. */
     private static void squadSafety(List<Result> out) {
         List<DroneSnapshot> members = new ArrayList<>();
         for (int i = 0; i < 4; i++) {
@@ -1336,10 +1330,6 @@ public final class DroneSelfTest {
                 scatterA.length() > 0.0 && scatterB.length() > 0.0 && scatterA.distanceTo(scatterB) > 1.0E-6,
                 "drones in exactly the same place must still be given different ways out"));
 
-        // The climb-out case, and the reason separation is the glyphid rule now. A squad leaves one pad, so
-        // the drones nearest each other are the ones stacked one above another, and a three-dimensional push
-        // answers a climb with a shove back down at up to SEPARATION_MAX -- nearly three times the airframe's
-        // climb rate, which holds a drone under the flight for as long as the flight waits for it.
         DroneSnapshot below = member(1, new Vec3(0.0, 98.0, 0.0), at(300, 0));
         SquadView column = new SquadView(7L, Formations.DEFAULT, SPACING, CoordinationModels.LEGACY, null,
                 members.get(0), List.of(members.get(0), below));
@@ -1359,8 +1349,6 @@ public final class DroneSelfTest {
                 "a rule insisting on more room than the tightest orderable formation allots does not keep "
                         + "the squad safe, it keeps it from ever being in formation"));
 
-        // A flock has no slots, so the inherited slot test can never pass for one: it was being asked how far
-        // it was from a wedge it is never going to fly, and every flocking launch waited out the timeout.
         DroneSnapshot flockLead = member(0, new Vec3(0.0, 100.0, 0.0), at(300, 0));
         DroneSnapshot flockWing = member(1, new Vec3(6.0, 103.0, 6.0), at(300, 0));
         SquadAnchor flockFrame = SquadAnchor.on(flockLead);
@@ -1378,7 +1366,7 @@ public final class DroneSelfTest {
         out.add(check("squad/an-escort-does-not-inherit-a-climb-out",
                 DroneBrain.inherited(DroneState.TAKEOFF, DroneState.MUSTER) == null,
                 "a follower handed its leader's TAKEOFF leaves MUSTER, is sent straight back, and resets "
-                        + "stateTicks on every hop -- which is the one thing MUSTER_TIMEOUT is counted in"));
+                        + "stateTicks on every hop, which is the one thing MUSTER_TIMEOUT is counted in"));
         out.add(check("squad/an-escort-still-inherits-everything-else",
                 DroneBrain.inherited(DroneState.TRANSIT, DroneState.MUSTER) == DroneState.TRANSIT,
                 "declining the climb-out must not stop a follower following its leader out of form-up"));
@@ -1386,7 +1374,7 @@ public final class DroneSelfTest {
 
     private static DroneSnapshot member(int index, Vec3 pos, Vec3 destination) {
         return new DroneSnapshot(UUID.nameUUIDFromBytes(new byte[]{(byte) index}), false, pos, Vec3.ZERO, 0.0f,
-                FlightAttitude.LEVEL, Airframe.QUADCOPTER, DroneNav.NONE,
+                FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE,
                 DroneState.PAYLOAD_RUN, 5, destination, null, DroneProgram.EMPTY, at(0, 0),
                 false, true, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
@@ -1396,10 +1384,7 @@ public final class DroneSelfTest {
                 destination.y - DroneEntity.DEFAULT_CRUISE_ALTITUDE, 7L, index == 0, 1, null, 0L, index);
     }
 
-    /**
-     * Hull-to-hull collision. Pure box arithmetic, so what it does can be stated exactly rather than flown
-     * for and eyeballed.
-     */
+    /** Hull-to-hull collision. */
     private static void contacts(List<Result> out) {
         AABB self = hull(0.0, 100.0, 0.0);
 
@@ -1505,19 +1490,223 @@ public final class DroneSelfTest {
     }
 
     /**
-     * A strike drone mid-run, with the ground height stated outright so the break-off's altitude test can be
-     * driven either side of its threshold.
+     * A strike drone mid-run, with the ground height stated outright so the break-off's altitude test can be driven
+     * either side of its threshold.
      */
     private static DroneSnapshot striker(Vec3 pos, double groundY, boolean armed, Vec3 velocity,
                                          Vec3 destination) {
         return new DroneSnapshot(UUID.nameUUIDFromBytes(new byte[]{(byte) 0x7f}), false, pos, velocity, 0.0f,
-                FlightAttitude.LEVEL, Airframe.QUADCOPTER, DroneNav.NONE,
+                FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE,
                 DroneState.PAYLOAD_RUN, 40, destination, null, DroneProgram.EMPTY, at(0, 0),
                 false, armed, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
                 DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
                 DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
                 groundY, groundY, 0L, true, 1, null, 0L, 0L);
+    }
+
+    /** The mine-laying run. */
+    private static void minelay(List<Result> out) {
+        MinePresetRegistry.bootstrap();
+        ResourceLocation mine = MinePresetRegistry.defaultSownId();
+        MineLoad rack = MineLoad.of(mine, 8, 6.0);
+
+        //: the lane, as arithmetic -------------------------------------------------------------
+        out.add(check("minelay/lane-is-centred",
+                Math.abs(rack.alongTrack(0) + rack.alongTrack(rack.capacity() - 1)) < 1.0E-9,
+                "the strip must straddle the ordered point, not start at it: " + rack.alongTrack(0)
+                        + " to " + rack.alongTrack(rack.capacity() - 1)));
+        out.add(check("minelay/lane-length-is-the-span",
+                Math.abs((rack.alongTrack(rack.capacity() - 1) - rack.alongTrack(0)) - rack.laneLength())
+                        < 1.0E-9,
+                "laneLength should be the distance between the first mine and the last, got "
+                        + rack.laneLength()));
+        out.add(check("minelay/nothing-is-due-before-the-lane",
+                rack.dueBy(rack.alongTrack(0) - 0.001) == 0,
+                "a drone short of its own lane owes the ground nothing yet"));
+        out.add(check("minelay/the-first-is-due-at-the-lane",
+                rack.dueBy(rack.alongTrack(0)) == 1,
+                "the first mine is due exactly when the release solution reaches the near end"));
+        out.add(check("minelay/the-rack-is-due-by-the-end",
+                rack.dueBy(rack.alongTrack(rack.capacity() - 1)) == rack.capacity(),
+                "the whole rack should be owed by the far end of the lane"));
+        out.add(check("minelay/nothing-beyond-the-rack",
+                rack.dueBy(rack.alongTrack(rack.capacity() - 1) + 10_000.0) == rack.capacity(),
+                "flying on past the lane must not owe more mines than the rack holds"));
+
+        //; the run -----------------------------------------------------------------------------
+        double cruise = DroneEntity.DEFAULT_CRUISE_ALTITUDE;
+        Vec3 target = at(600, 0);
+        Vec3 run = new Vec3(DroneEntity.DEFAULT_RELEASE_SPEED, 0.0, 0.0);
+
+        DroneSnapshot probe = layer(new Vec3(0.0, 100.0, 0.0), 100.0 - cruise, rack, run, target);
+        double lead = MineLayHandler.alongTrack(probe, SquadView.solo(probe)) - (0.0 - target.x);
+        double firstX = target.x + rack.alongTrack(0) - lead;
+
+        DroneSnapshot early = layer(new Vec3(firstX - 20.0, 100.0, 0.0), 100.0 - cruise, rack, run, target);
+        List<DroneAction> nothing = new ArrayList<>();
+        MineLayHandler.INSTANCE.act(early, SquadView.solo(early), nothing);
+        out.add(check("minelay/holds-until-the-lane",
+                nothing.stream().noneMatch(a -> a instanceof DroneAction.LayMine),
+                "a drone short of its lane dispensed anyway, which puts the field in the wrong place"));
+
+        DroneSnapshot onLane = layer(new Vec3(firstX + 0.5, 100.0, 0.0), 100.0 - cruise, rack, run, target);
+        List<DroneAction> one = new ArrayList<>();
+        MineLayHandler.INSTANCE.act(onLane, SquadView.solo(onLane), one);
+        out.add(check("minelay/lays-on-the-lane",
+                one.stream().anyMatch(a -> a instanceof DroneAction.LayMine),
+                "a drone on its lane with a full rack should be putting one down"));
+
+        DroneSnapshot behind = layer(new Vec3(firstX + 4 * rack.spacing(), 100.0, 0.0), 100.0 - cruise,
+                rack, run, target);
+        List<DroneAction> caught = new ArrayList<>();
+        MineLayHandler.INSTANCE.act(behind, SquadView.solo(behind), caught);
+        out.add(check("minelay/one-per-tick",
+                caught.stream().filter(a -> a instanceof DroneAction.LayMine).count() == 1,
+                "a minelayer that had fallen behind emptied "
+                        + caught.stream().filter(a -> a instanceof DroneAction.LayMine).count()
+                        + " mines in one tick, which lands them all in one place"));
+
+        out.add(check("minelay/run-holds-while-the-rack-does",
+                MineLayHandler.INSTANCE.next(onLane, SquadView.solo(onLane)) == null,
+                "the run ended with mines still on the rack and lane still to fly"));
+
+        Vec3 guide = MineLayHandler.INSTANCE.guide(onLane, SquadView.solo(onLane));
+        out.add(check("minelay/steers-past-the-lay-point", guide.x > 0.0,
+                "a laying drone must keep flying through its own lane, got " + guide));
+        out.add(check("minelay/holds-release-speed",
+                guide.horizontalDistance() >= DroneEntity.DEFAULT_RELEASE_SPEED - 1.0E-6,
+                "slowing down mid-lane bunches the rest of the strip: " + guide));
+
+        // Empty rack: behaves exactly as a strike break-off does.
+        DroneSnapshot spent = layer(new Vec3(firstX + rack.laneLength(), 100.0, 0.0), 100.0 - cruise,
+                new MineLoad(mine, 0, 8, 6.0), run, target);
+        Vec3 egress = MineLayHandler.INSTANCE.guide(spent, SquadView.solo(spent));
+        out.add(check("minelay/break-off-climbs", egress.y > 0.0,
+                "a drone that has finished laying should be climbing away from its own field, got " + egress));
+        out.add(check("minelay/break-off-ends",
+                MineLayHandler.INSTANCE.next(layer(new Vec3(firstX + rack.laneLength(),
+                                100.0 + Tuning.BREAK_OFF_CLIMB, 0.0), 100.0 - cruise,
+                        new MineLoad(mine, 0, 8, 6.0), run, target), SquadView.solo(spent)) != null,
+                "once it has the height the drone should rejoin the mission instead of climbing forever"));
+
+        DroneSnapshot overshot = layer(new Vec3(target.x + 4000.0, 100.0, 0.0), 100.0 - cruise, rack, run,
+                target);
+        List<DroneAction> abandoned = new ArrayList<>();
+        MineLayHandler.INSTANCE.act(overshot, SquadView.solo(overshot), abandoned);
+        out.add(check("minelay/overrun-stops-laying",
+                abandoned.stream().noneMatch(a -> a instanceof DroneAction.LayMine),
+                "a drone miles past its lane was still dispensing"));
+
+        MineLoad longRack = MineLoad.of(mine, MineLoad.MAX_MINES, MineLoad.MAX_SPACING);
+        double between = (Tuning.PAYLOAD_RUN_IN + longRack.laneLength() * 0.5) * 0.5;
+        DroneSnapshot shortLane = cruising(MineLoad.of(mine, 4, 4.0), target, between);
+        DroneSnapshot longLane = cruising(longRack, target, between);
+        out.add(check("minelay/long-lane-breaks-off-earlier",
+                TransitHandler.INSTANCE.next(shortLane, SquadView.solo(shortLane)) == null
+                        && TransitHandler.INSTANCE.next(longLane, SquadView.solo(longLane)) == DroneState.MINELAY,
+                "at " + (int) between + "m out a short rack should still be cruising and a long one already "
+                        + "laying; got " + TransitHandler.INSTANCE.next(shortLane, SquadView.solo(shortLane))
+                        + " and " + TransitHandler.INSTANCE.next(longLane, SquadView.solo(longLane))));
+
+        DroneSnapshot shortClose = cruising(MineLoad.of(mine, 4, 4.0), target, Tuning.PAYLOAD_RUN_IN - 1.0);
+        out.add(check("minelay/short-lane-still-breaks-off",
+                TransitHandler.INSTANCE.next(shortClose, SquadView.solo(shortClose)) == DroneState.MINELAY,
+                "a short rack must still leave cruise at the ordinary run-in"));
+
+        flightLays(out, rack, target, run, cruise);
+    }
+
+    /** Every drone in a flight lays its own rack, not just the leader. */
+    private static void flightLays(List<Result> out, MineLoad rack, Vec3 target, Vec3 run, double cruise) {
+        DroneSnapshot lead = layer(new Vec3(0.0, 100.0, 0.0), 100.0 - cruise, rack, run, target, (byte) 0x71);
+        DroneSnapshot wing = layer(new Vec3(0.0, 100.0, 8.0), 100.0 - cruise, rack, run, target, (byte) 0x72);
+
+        out.add(check("minelay/a-wingman-is-not-an-escort",
+                !DroneBrain.escorts(wing, pair(lead, wing)),
+                "a follower on a laying run must fly its own release solution, or only the leader lays"));
+        DroneSnapshot cruisingWing = wing.withState(DroneState.TRANSIT);
+        out.add(check("minelay/a-wingman-in-cruise-still-escorts",
+                DroneBrain.escorts(cruisingWing, pair(lead, cruisingWing)),
+                "the exclusion must be the laying run's, not this squad's"));
+
+        DroneSnapshot onLane = onItsLane(lead, wing, true, rack, run, target, cruise);
+        DroneSnapshot wingOnLane = onItsLane(lead, wing, false, rack, run, target, cruise);
+        final SquadView flight = pair(onLane, wingOnLane);
+
+        SquadPlan planned;
+        try {
+            planned = CompletableFuture.supplyAsync(() -> DroneBrain.planSquad(flight))
+                    .get(10, TimeUnit.SECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread()
+                    .interrupt();
+            out.add(check("minelay/every-drone-in-the-flight-lays", false,
+                    "interrupted while planning the flight"));
+            return;
+        } catch (ExecutionException | TimeoutException failed) {
+            out.add(check("minelay/every-drone-in-the-flight-lays", false,
+                    "planning a two-drone laying flight threw: " + failed.getCause()));
+            return;
+        }
+        long laying = planned.plans()
+                .stream()
+                .filter(plan -> plan.actions()
+                        .stream()
+                        .anyMatch(a -> a instanceof DroneAction.LayMine))
+                .count();
+        out.add(check("minelay/every-drone-in-the-flight-lays", laying == 2,
+                "a flight of two on their lanes produced " + laying + " releases; a flight that lays one "
+                        + "drone's worth of mines is the leader laying alone"));
+    }
+
+    /**
+     * @return {@code which} member moved along the run-in until its own release solution sits just inside
+     *      its own first release point.
+     */
+    private static DroneSnapshot onItsLane(DroneSnapshot lead, DroneSnapshot wing, boolean leader,
+                                           MineLoad rack, Vec3 run, Vec3 target, double cruise) {
+        SquadView flight = pair(lead, wing);
+        DroneSnapshot self = leader ? lead : wing;
+        double shortfall = rack.alongTrack(0) - MineLayHandler.alongTrack(self, flight) + 0.5;
+        Vec3 moved = self.pos()
+                .add(run.normalize()
+                        .scale(shortfall));
+        return layer(moved, 100.0 - cruise, rack, run, target,
+                (byte) (leader ? 0x71 : 0x72));
+    }
+
+    /** A minelayer mid-run, with the ground height stated so the break-off can be driven either side of it. */
+    private static DroneSnapshot layer(Vec3 pos, double groundY, MineLoad rack, Vec3 velocity,
+                                       Vec3 destination) {
+        return layer(pos, groundY, rack, velocity, destination, (byte) 0x6d);
+    }
+
+    /** The same, with an identity of its own, for the checks that need more than one minelayer in the air. */
+    private static DroneSnapshot layer(Vec3 pos, double groundY, MineLoad rack, Vec3 velocity,
+                                       Vec3 destination, byte tag) {
+        return new DroneSnapshot(UUID.nameUUIDFromBytes(new byte[]{tag}), false, pos, velocity, 0.0f,
+                FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE,
+                DroneState.MINELAY, 40, destination, null, DroneProgram.EMPTY, at(0, 0),
+                false, false, rack, false, true, List.of(),
+                DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
+                DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
+                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
+                groundY, groundY, 0L, true, 1, null, RotorDamage.INTACT, 0L, 0L);
+    }
+
+    /** The same drone still in cruise, {@code range} blocks out, for the break-off-distance check. */
+    private static DroneSnapshot cruising(MineLoad rack, Vec3 destination, double range) {
+        Vec3 pos = new Vec3(destination.x - range, 100.0, 0.0);
+        return new DroneSnapshot(UUID.nameUUIDFromBytes(new byte[]{(byte) 0x6e}), false, pos,
+                new Vec3(DroneEntity.DEFAULT_CRUISE_SPEED, 0.0, 0.0), 0.0f,
+                FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE,
+                DroneState.TRANSIT, 40, destination, null, DroneProgram.EMPTY, at(0, 0),
+                false, false, rack, false, true, List.of(),
+                DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
+                DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
+                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
+                60.0, 60.0, 0L, true, 1, null, RotorDamage.INTACT, 0L, 0L);
     }
 
     private static void stateMachine(List<Result> out) {
@@ -1589,6 +1778,27 @@ public final class DroneSelfTest {
         restored.setCharge(100.0);
         out.add(check("persistence/set-charge-not-recharge", restored.charge() == 100.0,
                 "setCharge must replace the charge, not add to it"));
+
+        boolean fitsRoundTrip = true;
+        for (CameraSpec fit : new CameraSpec[]{null, CameraSpec.RECON, CameraSpec.STANDARD}) {
+            fitsRoundTrip &= DroneEntity.cameraFitOf(DroneEntity.cameraFitByte(fit)) == fit;
+        }
+        out.add(check("persistence/camera-fit-round-trip", fitsRoundTrip,
+                "a camera fit did not survive the byte encoding the save format uses"));
+
+        out.add(check("persistence/sim-drone-keeps-no-camera",
+                simDroneCameraAfterSaveLoad(null) == null,
+                "a drone with no camera came back from the simulation fitted with one"));
+        out.add(check("persistence/sim-drone-keeps-its-camera",
+                simDroneCameraAfterSaveLoad(CameraSpec.STANDARD) == CameraSpec.STANDARD,
+                "a drone's camera fit was replaced by the default on the way back from the simulation"));
+    }
+
+    private static CameraSpec simDroneCameraAfterSaveLoad(CameraSpec fit) {
+        SimDrone sd = new SimDrone();
+        sd.id = UUID.nameUUIDFromBytes(new byte[]{1, 2, 3});
+        sd.camera = fit;
+        return SimDrone.load(sd.save()).camera;
     }
 
     private static void warheads(List<Result> out) {
@@ -1607,11 +1817,7 @@ public final class DroneSelfTest {
                 "an unregistered warhead id was reported as existing"));
     }
 
-    /**
-     * Fire kinds. {@link com.wf.wfballistics.fire.FireType} ordinals are written to disk by
-     * {@code WFFireData} and synched as the variant of {@code FireLingeringEntity}, so reordering the
-     * constants silently turns saved phosphorus into diesel. These pin the wire values down.
-     */
+    /** Fire kinds. */
     private static void fire(List<Result> out) {
         out.add(check("fire/ordinals-are-stable",
                 FireType.NORMAL.id() == 0 && FireType.PHOSPHORUS.id() == 1,
@@ -1640,7 +1846,7 @@ public final class DroneSelfTest {
     private static DroneSnapshot snapshot(DroneState state, double charge, Vec3 pos, Vec3 destination,
                                           boolean cargo) {
         return new DroneSnapshot(UUID.nameUUIDFromBytes(new byte[]{1}), false, pos, Vec3.ZERO, 0.0f,
-                FlightAttitude.LEVEL, Airframe.QUADCOPTER, DroneNav.NONE,
+                FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE,
                 state, 5, destination, null, DroneProgram.EMPTY, pos, cargo, false, false, true, List.of(),
                 charge, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
                 DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
@@ -1650,9 +1856,8 @@ public final class DroneSelfTest {
     }
 
     /**
-     * The queue: that it advances, that it hands the state machine the right arrival state, that it survives
-     * being written down, and that a drone with no program still behaves exactly as it did before there were
-     * any. That last one is the load-bearing check: every existing mission depends on it.
+     * The queue: that it advances, that it hands the state machine the right arrival state, that it survives being
+     * written down, and that a drone with no program still behaves exactly as it did before there were any.
      */
     private static void programs(List<Result> out) {
         Vec3 drop = at(200, 0);
@@ -1745,11 +1950,7 @@ public final class DroneSelfTest {
                 "breaking station should send the drone home, not land it where it stands"));
     }
 
-    /**
-     * Losing the leader. The property under test is not "somebody takes over", the old ordering did that
-     * implicitly, but that <em>which</em> drone takes over is not predictable, and that having taken over it
-     * stays taken over.
-     */
+    /** Losing the leader. */
     private static void succession(List<Result> out) {
         RandomSource random = RandomSource.create(20250820L);
 
@@ -1820,11 +2021,7 @@ public final class DroneSelfTest {
         return members;
     }
 
-    /**
-     * The least a {@link DroneCarrier} can be and still have succession run against it. Only the squad
-     * bookkeeping is real; anything that would need a world throws, which is the point, if succession ever
-     * starts reaching for one, this stops compiling being enough and the test says so.
-     */
+    /** The least a {@link DroneCarrier} can be and still have succession run against it. */
     private static final class StubCarrier implements DroneCarrier {
         private final UUID id;
         private boolean leader;
@@ -1892,6 +2089,153 @@ public final class DroneSelfTest {
 
     private static Result check(String name, boolean passed, String detail) {
         return new Result(name, passed, detail);
+    }
+
+    /**
+     * The airframes as they are actually shipped: that the assets parse, that the nodes the code drives are the
+     * nodes the models have, and that each aircraft is pointing and sized the way the game assumes it is.
+     */
+    private static void airframes(List<Result> out) {
+        ResourceLocation amazog = DroneModels.rl("amazog");
+        ResourceLocation mavic = DroneModels.rl("mavic");
+
+        out.add(check("airframe/registered", DroneModels.exists(amazog) && DroneModels.exists(mavic),
+                "both shipped airframes should be registered, got " + DroneModels.ids()));
+        out.add(check("airframe/default-is-amazog", DroneModels.DEFAULT.equals(amazog),
+                "the delivery drone is the default airframe, got " + DroneModels.DEFAULT));
+
+        out.add(check("airframe/retired-id-migrates",
+                DroneModels.parse("quadcopter").equals(amazog),
+                "a drone saved as the old quadcopter should come back as the default airframe, got "
+                        + DroneModels.parse("quadcopter")));
+
+        for (ResourceLocation id : List.of(amazog, mavic)) {
+            Vec3 size = DroneModels.dimensions(id);
+            boolean read = Math.abs(size.x - 1.0) > 1.0E-6 || Math.abs(size.y - 1.0) > 1.0E-6;
+            out.add(check("airframe/" + id.getPath() + "/asset-read", read,
+                    id + " measured exactly 1x1x1, which is what an unreadable asset measures"));
+
+            List<Rotor> rotors = Rotors.of(id);
+            out.add(check("airframe/" + id.getPath() + "/rotors-registered", !rotors.isEmpty(),
+                    id + " registered no rotors"));
+            out.add(check("airframe/" + id.getPath() + "/rotors-fit-the-mask",
+                    rotors.size() <= RotorDamage.MAX_ROTORS,
+                    id + " has " + rotors.size() + " rotors but the dead-rotor mask holds "
+                            + RotorDamage.MAX_ROTORS));
+
+            float torque = 0.0f;
+            for (Rotor rotor : rotors) {
+                torque += Math.signum(rotor.degreesPerTick());
+            }
+            out.add(check("airframe/" + id.getPath() + "/torque-cancels",
+                    rotors.size() % 2 == 1 || Math.abs(torque) < 1.0E-6,
+                    id + " has " + rotors.size() + " rotors whose spins sum to " + torque
+                            + " rather than cancelling"));
+
+            // A pivot read off the asset; all-zero means the node name missed and nothing said so.
+            boolean placed = true;
+            for (Rotor rotor : rotors) {
+                Vector3f pivot = Rotors.pivot(rotor);
+                placed &= pivot.x * pivot.x + pivot.z * pivot.z > 1.0E-4;
+            }
+            out.add(check("airframe/" + id.getPath() + "/rotors-are-placed", placed,
+                    id + " has a rotor pivoting on its own centreline, which means a node name missed"));
+
+            // Wreckage has to be able to say which bit of the model it is.
+            boolean pieces = !DroneModels.pieces(id).isEmpty();
+            for (ResourceLocation piece : DroneModels.pieces(id)) {
+                pieces &= DroneModels.piece(piece) != null;
+            }
+            out.add(check("airframe/" + id.getPath() + "/pieces-resolve", pieces,
+                    id + " declares a piece that does not resolve back to a node"));
+
+            Vec3 hull = DroneModels.hullSize(id);
+            out.add(check("airframe/" + id.getPath() + "/hull-is-solid",
+                    hull.x > 0.1 && hull.y > 0.05 && hull.z > 0.1,
+                    id + " has no measurable hull, so its collision box fell back to the whole span: "
+                            + hull));
+            out.add(check("airframe/" + id.getPath() + "/hull-is-not-the-span",
+                    hull.x < size.x * 0.75,
+                    id + " measures " + hull.x + " across the body against " + size.x + " across the"
+                            + " discs; a collision box cut to the discs is a wall nobody can see"));
+
+            // Models are authored feet-at-origin, which is what lets a drone's position be its feet.
+            out.add(check("airframe/" + id.getPath() + "/sits-on-its-feet",
+                    Math.abs(DroneModels.center(id).y - size.y / 2.0) < 0.05,
+                    id + " is not centred half its height above its origin: centre "
+                            + DroneModels.center(id).y + ", height " + size.y));
+        }
+
+        GltfBounds amazogGraph = GltfBounds.of(DroneModels.asset(amazog));
+        Vec3 nose = amazogGraph.origin("ATTACH_FORWARD_CAMERA");
+        out.add(check("airframe/amazog/faces-positive-z", nose.z > 0.1 && Math.abs(nose.x) < 0.05,
+                "the Amazog's forward camera should sit ahead on +Z, got " + nose
+                        + ": the staging yaw that turns the export's -X nose into the game's +Z is missing"));
+
+        GltfBounds mavicGraph = GltfBounds.of(DroneModels.asset(mavic));
+        Vec3 gimbal = mavicGraph.origin("20_GIMBAL_yaw");
+        Vec3 battery = mavicGraph.origin("03_BATTERY_pack");
+        out.add(check("airframe/mavic/faces-positive-z", gimbal.z > 0.0 && battery.z < 0.0,
+                "the Mavic's camera should be forward of its battery, got gimbal " + gimbal
+                        + " battery " + battery));
+
+        Vec3 mavicSize = DroneModels.dimensions(mavic);
+        out.add(check("airframe/mavic/is-scaled-up", mavicSize.z > 0.9,
+                "the Mavic should span about a block front to back, got " + mavicSize.z
+                        + ": the root scale is missing from the staged asset"));
+        out.add(check("airframe/amazog-is-the-bigger-aircraft",
+                DroneModels.dimensions(amazog).x > mavicSize.x * 2.0,
+                "the eight-rotor lifter should be much wider than the recon quad"));
+
+        out.add(check("airframe/amazog/stows-its-own-bin", !DroneModels.stowed(amazog).isEmpty(),
+                "the Amazog's built-in parcel container should be stowed, not drawn"));
+        Vec3 carried = DroneModels.mount(amazog);
+        out.add(check("airframe/amazog/mount-came-off-the-model",
+                Math.abs(carried.x) < 0.05 && carried.y > 0.05 && carried.y < 1.0,
+                "a slung crate should hang from under the hull, got mount " + carried));
+        out.add(check("airframe/mavic/stows-nothing", DroneModels.stowed(mavic).isEmpty(),
+                "the recon quad's model carries no cargo container to hide"));
+        out.add(check("airframe/mavic/has-a-gimbal", DroneModels.gimbal(mavic) != null,
+                "the Mavic's camera head is modelled"));
+
+        List<Rotor> eight = Rotors.of(amazog);
+        int opposite = opposedRotor(eight, 0);
+        RotorDamage pair = RotorDamage.of(amazog, (byte) ((1 << 0) | (1 << opposite)));
+        out.add(check("airframe/amazog/opposite-pair-has-no-lean",
+                Math.hypot(pair.leanX(), pair.leanZ()) < 0.05,
+                "two dead rotors across the hull from each other should cancel, got lean "
+                        + pair.leanX() + "," + pair.leanZ()));
+        RotorDamage single = RotorDamage.of(amazog, (byte) 1);
+        out.add(check("airframe/amazog/one-dead-rotor-leans",
+                Math.hypot(single.leanX(), single.leanZ()) > 0.5,
+                "one dead rotor should drop its own corner, got lean "
+                        + single.leanX() + "," + single.leanZ()));
+
+        // Two aircraft, not two pictures of one.
+        Airframe lifter = DroneModels.airframe(amazog);
+        Airframe recon = DroneModels.airframe(mavic);
+        out.add(check("airframe/recon-is-the-nimbler-one",
+                recon.tiltRate() > lifter.tiltRate() && recon.maxTilt() > lifter.maxTilt(),
+                "the recon quad should out-turn the lifter"));
+        out.add(check("airframe/recon-climbs-better",
+                recon.maxClimbRate() > lifter.maxClimbRate(),
+                "a drone sent over a ridge to look should climb better than one carrying a crate"));
+    }
+
+    /** @return the index of the rotor most nearly across the hull from {@code from}. */
+    private static int opposedRotor(List<Rotor> rotors, int from) {
+        Vector3f origin = Rotors.pivot(rotors.get(from));
+        int best = from;
+        double furthest = -1.0;
+        for (int i = 0; i < rotors.size(); i++) {
+            Vector3f p = Rotors.pivot(rotors.get(i));
+            double d = Math.hypot(p.x - origin.x, p.z - origin.z);
+            if (d > furthest) {
+                furthest = d;
+                best = i;
+            }
+        }
+        return best;
     }
 
     public record Result(String name, boolean passed, String detail) {

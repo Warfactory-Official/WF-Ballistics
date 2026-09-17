@@ -4,7 +4,10 @@ import com.wf.wfballistics.block.entity.DronePadBlockEntity;
 import com.wf.wfballistics.drone.DroneBattery;
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.drone.DroneMission;
+import com.wf.wfballistics.drone.MineLoad;
+import com.wf.wfballistics.item.MinePresetRegistry;
 import com.wf.wfballistics.drone.DroneProgram;
+import com.wf.wfballistics.drone.DroneModels;
 import com.wf.wfballistics.drone.flight.Airframe;
 import com.wf.wfballistics.exchange.ExchangeMode;
 import com.wf.wfballistics.exchange.StationCode;
@@ -32,22 +35,25 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Configure, launch and debug a drone flight from the pad. The counterpart of
- * {@link MissileDispenserScreen}, with the same shape: cycle buttons, typed numbers, and a live readout that
- * tells you whether what you just typed will actually work.
- *
- * <p>The readout is honest because it runs the real code: {@link PowerPolicy} and {@link Steering} are pure
- * functions of a mission, with no world access, so the screen calls exactly what the drone's brain will call
- * a moment later. Range, battery cost, one-way vs round trip and the ballistic release lead are all the
- * flight's own arithmetic, not a GUI-side approximation of it.
- */
+/** Configure, launch and debug a drone flight from the pad. */
 public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
 
     private static final List<ResourceLocation> FORMATIONS = new ArrayList<>(Formations.ids());
     private static final List<ResourceLocation> COORDINATION = new ArrayList<>(CoordinationModels.ids());
     private static final List<ResourceLocation> WARHEADS = new ArrayList<>(WarheadRegistry.ids());
-    private static final String[] KIND_LABELS = {"Delivery (crate)", "Strike (warhead)"};
+    /** The mines a rack can be loaded with, air-delivered first. */
+    private static final List<ResourceLocation> MINES = mineChoices();
+    private static final String[] KIND_LABELS = {"Delivery (crate)", "Strike (warhead)", "Minelay (rack)"};
+
+    private static List<ResourceLocation> mineChoices() {
+        List<ResourceLocation> out = new ArrayList<>();
+        MinePresetRegistry.bootstrap();
+        MinePresetRegistry.sown().forEach(preset -> out.add(preset.id()));
+        MinePresetRegistry.all().stream()
+                .filter(preset -> !preset.sownOnly())
+                .forEach(preset -> out.add(preset.id()));
+        return out;
+    }
 
     private static final int PAD = 8;
     private static final int W_FULL = 204;
@@ -67,16 +73,14 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
     private int formationIndex;
     private int coordinationIndex;
     private int warheadIndex;
+    private int mineIndex;
     private boolean seeded;
 
     private Button kindButton;
     private Button modeButton;
     private EditBox recipientBox;
     private ExchangeMode mode = ExchangeMode.DIRECT;
-    /**
-     * The queued steps, edited on {@link DroneProgramScreen} and carried out with the mission. Empty is the
-     * one-stop mission this screen has always built, and it stays the default.
-     */
+    /** The queued steps, edited on {@link DroneProgramScreen} and carried out with the mission. */
     private DroneProgram program = DroneProgram.EMPTY;
     private Button programButton;
     private Button formationButton;
@@ -92,13 +96,12 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
     private EditBox releaseBox;
     private EditBox spacingBox;
     private EditBox intervalBox;
+    private EditBox minesBox;
+    private EditBox layGapBox;
 
     public DronePadScreen(DronePadMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
         this.imageWidth = 220;
-        // Two rows taller than it was: the coordination picker (a button row) and the launch gap (a labelled
-        // box row). The panel is drawn to this height rather than measured from the widgets, so it has to be
-        // grown by hand whenever a row is added or the bottom ones fall outside it.
         this.imageHeight = 280 + (BTN_H + ROW_GAP) + (LABEL_H + BOX_H + ROW_GAP);
         this.warheadIndex = Math.max(0, WARHEADS.indexOf(WarheadRegistry.defaultId()));
         this.formationIndex = Math.max(0, FORMATIONS.indexOf(Formations.DEFAULT));
@@ -132,12 +135,15 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         this.seeded = true;
         if (this.minecraft.level.getBlockEntity(menu.pos()) instanceof DronePadBlockEntity pad) {
             DroneMission m = pad.mission();
-            this.kindIndex = m.isStrike() ? 1 : 0;
+            this.kindIndex = m.isStrike() ? 1 : m.isMinelay() ? 2 : 0;
             this.mode = m.mode;
             this.formationIndex = Math.max(0, FORMATIONS.indexOf(m.formationId));
         this.coordinationIndex = Math.max(0, COORDINATION.indexOf(m.coordinationId));
             if (m.payloadId != null) {
                 this.warheadIndex = Math.max(0, WARHEADS.indexOf(m.payloadId));
+            }
+            if (m.mines != null) {
+                this.mineIndex = Math.max(0, MINES.indexOf(m.mines.preset()));
             }
             this.program = m.program;
         }
@@ -145,7 +151,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
 
     /**
      * @return where a freshly added program step should default to: whatever destination is currently typed
-     * in, falling back to the pad itself. Saves retyping a coordinate that is already on screen.
+     *      in, falling back to the pad itself. Saves retyping a coordinate that is already on screen.
      */
     private Vec3 destinationOrPad() {
         if (destX != null) {
@@ -186,7 +192,11 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
             refreshButtonLabels();
         }).bounds(x, y, HALF, BTN_H).build());
         warheadButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
-            warheadIndex = (warheadIndex + 1) % Math.max(1, WARHEADS.size());
+            if (isMinelay()) {
+                mineIndex = (mineIndex + 1) % Math.max(1, MINES.size());
+            } else {
+                warheadIndex = (warheadIndex + 1) % Math.max(1, WARHEADS.size());
+            }
             refreshButtonLabels();
         }).bounds(x + HALF + GAP, y, HALF, BTN_H).build());
         y += BTN_H + ROW_GAP;
@@ -216,8 +226,6 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         }
         y += LABEL_H;
         if (mode.resolvesDestination()) {
-            // A handshake has no destination to type. The recipient's station code goes in instead, and
-            // where it resolves to is decided on the server and never sent back here.
             destX = null;
             destY = null;
             destZ = null;
@@ -251,21 +259,22 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         releaseBox = makeBox(x + THIRD + GAP, y, THIRD,
                 prev(releaseBox, num(seedMission != null ? seedMission.releaseSpeed : DroneEntity.DEFAULT_RELEASE_SPEED)),
                 "Release");
-        // How loosely the flight holds its shape. Next to the formation picker in meaning if not in pixels:
-        // that one chooses the shape, this one chooses how big it is.
         spacingBox = makeBox(x + 2 * (THIRD + GAP), y, THIRD,
                 prev(spacingBox, num(seedMission != null ? seedMission.formationSpacing : Formation.DEFAULT_SPACING)),
                 "Spacing");
         y += BOX_H + ROW_GAP;
 
-        // Ticks between one drone leaving the pad and the next. 0 puts the whole flight up at once, which is
-        // what this did before there was a choice; anything else launches them in series and holds the flight
-        // over the pad until everyone is up.
         y += LABEL_H;
         intervalBox = makeBox(x, y, THIRD,
                 prev(intervalBox, Integer.toString(seedMission != null
                         ? seedMission.launchInterval : DroneMission.DEFAULT_LAUNCH_INTERVAL)),
                 "Launch gap");
+        minesBox = makeBox(x + THIRD + GAP, y, THIRD,
+                prev(minesBox, Integer.toString(seedMission != null && seedMission.mines != null
+                        ? seedMission.mines.capacity() : MineLoad.DEFAULT_MINES)), "Mines");
+        layGapBox = makeBox(x + 2 * (THIRD + GAP), y, THIRD,
+                prev(layGapBox, num(seedMission != null && seedMission.mines != null
+                        ? seedMission.mines.spacing() : MineLoad.DEFAULT_SPACING)), "Lay gap");
         y += BOX_H + ROW_GAP + 2;
 
         programButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
@@ -309,16 +318,22 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
                 + (mode.classified() ? " (no telemetry)" : "")));
         formationButton.setMessage(Component.literal("Form: "
                 + FORMATIONS.get(Math.floorMod(formationIndex, FORMATIONS.size())).getPath()));
-        // The shape says where the slots are; this says what they are measured against, which is what
-        // decides how well they are actually held. Only meaningful for a flight of more than one.
         coordinationButton.setMessage(Component.literal("Hold: "
                 + COORDINATION.get(Math.floorMod(coordinationIndex, COORDINATION.size())).getPath()
                         .replace('_', ' ')));
-        // The warhead only matters on a strike; grey the wording out on a delivery rather than hiding it, so
-        // the layout doesn't jump when the mission kind is toggled.
-        warheadButton.setMessage(Component.literal((isStrike() ? "Warhead: " : "(warhead) ")
-                + WARHEADS.get(Math.floorMod(warheadIndex, WARHEADS.size())).getPath()));
-        warheadButton.active = isStrike();
+        if (isMinelay()) {
+            warheadButton.setMessage(Component.literal("Mine: "
+                    + MINES.get(Math.floorMod(mineIndex, MINES.size())).getPath()));
+        } else {
+            // Greyed rather than hidden on a delivery, so the layout doesn't jump when the kind is toggled.
+            warheadButton.setMessage(Component.literal((isStrike() ? "Warhead: " : "(warhead) ")
+                    + WARHEADS.get(Math.floorMod(warheadIndex, WARHEADS.size())).getPath()));
+        }
+        warheadButton.active = isStrike() || isMinelay();
+        if (minesBox != null) {
+            minesBox.setEditable(isMinelay());
+            layGapBox.setEditable(isMinelay());
+        }
         if (programButton != null) {
             programButton.setMessage(Component.literal(program.isEmpty()
                     ? "Program: none (single destination)"
@@ -328,6 +343,10 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
 
     private boolean isStrike() {
         return kindIndex == 1;
+    }
+
+    private boolean isMinelay() {
+        return kindIndex == 2;
     }
 
     private DroneMission buildMission() {
@@ -351,6 +370,11 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         m.launchInterval = DroneMission.clampInterval((int) Math.round(
                 parseDouble(intervalBox.getValue(), DroneMission.DEFAULT_LAUNCH_INTERVAL)));
         m.payloadId = isStrike() ? WARHEADS.get(Math.floorMod(warheadIndex, WARHEADS.size())) : null;
+        m.mines = isMinelay()
+                ? MineLoad.of(MINES.get(Math.floorMod(mineIndex, MINES.size())),
+                        (int) Math.round(parseDouble(minesBox.getValue(), MineLoad.DEFAULT_MINES)),
+                        parseDouble(layGapBox.getValue(), MineLoad.DEFAULT_SPACING))
+                : null;
         m.program = program;
         return m;
     }
@@ -369,13 +393,12 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         if (m.mode.resolvesDestination()) {
             return handshakeReadout(m);
         }
-        // With a program the range is the whole route, not the first hop: the same figure the dispatcher
-        // will refuse or accept the mission on.
         boolean programmed = !m.program.isEmpty();
         double range = programmed ? m.outboundDistance(origin) : origin.distanceTo(m.destination);
-        boolean cargo = !isStrike();
+        boolean cargo = !isStrike() && !isMinelay();
 
-        double outbound = PowerProfile.DEFAULT.costToTravel(Airframe.QUADCOPTER, range, m.cruiseSpeed, cargo);
+        Airframe frame = DroneModels.airframe(m.modelId);
+        double outbound = PowerProfile.DEFAULT.costToTravel(frame, range, m.cruiseSpeed, cargo);
         int outPercent = (int) Math.round(100.0 * outbound / Math.max(1.0, m.batteryCapacity));
         double shortfall = m.shortfall(origin, cargo);
         boolean roundTrip = m.canRoundTrip(origin, cargo);
@@ -398,16 +421,21 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
             lines.add(Component.literal("Round trip OK").withStyle(s -> s.withColor(0x90E090)));
         }
 
-        // The speed box will take any number, but the airframe will not. Solving the top speed from the same
-        // model that flies the drone means this warns about exactly the speeds it will actually fail to hold.
-        double top = Airframe.QUADCOPTER.topSpeed(PowerProfile.DEFAULT.massFactor(cargo));
-        double commanded = isStrike() ? Math.max(m.cruiseSpeed, m.releaseSpeed) : m.cruiseSpeed;
+        double top = frame.topSpeed(PowerProfile.DEFAULT.massFactor(cargo));
+        double commanded = isStrike() || isMinelay()
+                ? Math.max(m.cruiseSpeed, m.releaseSpeed) : m.cruiseSpeed;
         if (commanded > top) {
             lines.add(Component.literal(String.format("%.2f b/t is past this airframe's %.2f b/t limit",
                     commanded, top)).withStyle(s -> s.withColor(0xFFC060)));
         }
 
-        if (isStrike()) {
+        if (isMinelay()) {
+            double lead = Steering.ballisticLead(m.cruiseAltitude, 0.0, m.releaseSpeed, Tuning.PAYLOAD_GRAVITY);
+            lines.add(Component.literal(String.format("%d x %s each, %dm strip, first release %dm short",
+                            m.mines.capacity(), m.mines.preset().getPath(), (int) m.mines.laneLength(),
+                            (int) (lead + m.mines.laneLength() * 0.5)))
+                    .withStyle(s -> s.withColor(0xC0A0E0)));
+        } else if (isStrike()) {
             // Show the actual release solution the attack run will use, from cruise altitude at release speed.
             double lead = Steering.ballisticLead(m.cruiseAltitude, 0.0, m.releaseSpeed, Tuning.PAYLOAD_GRAVITY);
             lines.add(Component.literal(String.format("Release %dm short of target, %d bomb(s) of %s",
@@ -424,14 +452,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         return lines;
     }
 
-    /**
-     * What a handshake can honestly say.
-     *
-     * <p>Deliberately says nothing about range, direction or battery, because this screen does not know any
-     * of it and must not: the destination is resolved on the server from the recipient's code, and the whole
-     * point of the mode is that the machine you are standing at cannot tell you where your package went.
-     * Even the refusal, if the battery is short, comes back without a distance attached.
-     */
+    /** What a handshake can honestly say. */
     private List<Component> handshakeReadout(DroneMission m) {
         List<Component> lines = new ArrayList<>(3);
         String own = ownStationCode();
@@ -469,7 +490,6 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
 
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(gg, mouseX, mouseY, partialTick);
         super.render(gg, mouseX, mouseY, partialTick);
 
         gg.drawString(this.font, this.title, leftPos + PAD, topPos + 4, 0xE0E0F0, false);

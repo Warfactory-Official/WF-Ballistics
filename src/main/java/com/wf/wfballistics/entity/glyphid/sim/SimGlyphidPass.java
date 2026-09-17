@@ -18,39 +18,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * Runs the sim tier's per-record work on a worker, across the world thread's own tick.
- *
- * <pre>
- *   tick N, world thread, Pre:   1. fill the columns last tick's pass asked for and could not answer
- *                                2. re-resolve the flow field for every destination it marched to
- *                                3. hand the record list to a worker and return
- *   tick N, vanilla level tick:  entities tick, blocks tick, chunks tick  -- the world thread's real work
- *   tick N, worker:              plan + apply, every record        (this class's {@link #advance})
- *   tick N, world thread, Post:  4. join
- *                                5. decide who changes tier, which is the only step that touches an entity
- * </pre>
- *
- * <p>Not worth it at three hundred records (0.05 ms), and that is why it was measured: the pass is linear, so
- * the same per-record cost is 1.7 ms at ten thousand — a third of a tick spent on glyphids nobody can see.
- *
- * <p>The threading contract:
- * <ul>
- *   <li>The worker cannot reach the world. It holds a {@link SimWorldPrefetch}, which has no {@code Level},
- *       and every world read was made on the world thread by {@link SimWorldPrefetch#refill} before
- *       dispatch. Both directions are asserted at runtime by {@link WorldThread}.</li>
- *   <li>Nothing else may touch a record in flight, enforced structurally: every other caller goes through
- *       {@link SimGlyphidRegistry#view()}, which joins first.</li>
- *   <li>The flow field is read but never written here; {@code GlyphidFlowFields.tick} floods it after the
- *       join.</li>
- *   <li>One worker per level. The window is the whole vanilla level tick, so a pass that fits in it does not
- *       need splitting — and {@link SimWorldPrefetch}'s miss list is unsynchronised because one worker
- *       writes it.</li>
- * </ul>
- *
- * <p>Not the drone pool: a route search may land whenever it lands, but a sim pass has to be done by the end
- * of the tick that started it, and queueing behind an A* would make the world thread wait out both.
- */
+/** Runs the sim tier's per-record work on a worker, across the world thread's own tick. */
 public final class SimGlyphidPass {
 
     private static final Map<ResourceKey<Level>, SimGlyphidPass> BY_LEVEL = new HashMap<>();
@@ -86,10 +54,7 @@ public final class SimGlyphidPass {
         });
     }
 
-    /**
-     * Stop the pool, once every level has joined what it had in flight. Interrupting instead would save a
-     * swarm with half its records moved.
-     */
+    /** Stop the pool, once every level has joined what it had in flight. */
     public static void shutdown(Iterable<ServerLevel> levels) {
         for (ServerLevel level : levels) {
             SimGlyphidRegistry.get(level).await();
@@ -111,10 +76,7 @@ public final class SimGlyphidPass {
         return poolSize;
     }
 
-    /**
-     * Do this level's world reads and set the pass going. Called from {@code LevelTickEvent.Pre}, with nothing
-     * in flight.
-     */
+    /** Do this level's world reads and set the pass going. */
     static void begin(ServerLevel level, SimGlyphidRegistry registry) {
         SimGlyphidPass pass = BY_LEVEL.computeIfAbsent(level.dimension(), key -> new SimGlyphidPass());
         List<SimGlyphid> records = registry.view();
@@ -128,8 +90,6 @@ public final class SimGlyphidPass {
 
         ExecutorService workers = pool;
         if (workers == null || !SwarmBench.simAsync) {
-            // The control arm, and the fallback for a level ticking during startup. Same view of the world
-            // and same point in the tick; only the thread differs.
             pass.ranOffThread = false;
             pass.advance(records);
             return;
@@ -141,18 +101,13 @@ public final class SimGlyphidPass {
         }));
     }
 
-    /**
-     * Wait for the pass and book what it cost. Called from {@code LevelTickEvent.Post}, before anything else
-     * looks at a record.
-     */
+    /** Wait for the pass and book what it cost. */
     static void join(ServerLevel level, SimGlyphidRegistry registry) {
         registry.await();
         SimGlyphidPass pass = BY_LEVEL.get(level.dimension());
         if (pass == null || pass.advanced == 0) {
             return;
         }
-        // From the registry, not measured here: anything reaching a record mid-tick joins first, and that
-        // stall is world-thread time too.
         long stall = registry.takeStall();
         pass.lastStallNanos = pass.ranOffThread ? stall : pass.passNanos;
         SwarmProfiler.charge(SwarmProfiler.Phase.SIM_ASYNC, pass.passNanos);
@@ -184,8 +139,8 @@ public final class SimGlyphidPass {
 
     /**
      * @return the lines of {@code swarmbench simthread}: where the pass ran, what it cost, and how much of
-     * that the world thread waited out. A stall the size of the pass means the work moved and the wait did
-     * not.
+     *      that the world thread waited out. A stall the size of the pass means the work moved and the wait did
+     *      not.
      */
     public static List<String> report(ServerLevel level) {
         SimGlyphidPass pass = BY_LEVEL.get(level.dimension());

@@ -8,12 +8,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.client.extensions.common.IClientBlockExtensions;
 
-/**
- * A block chip flung from an explosion. Unlike vanilla {@link net.minecraft.client.particle.TerrainParticle},
- * which normalises away any launch velocity in the base {@code Particle} constructor and spawns at half quad
- * size, this keeps the spray velocity it is given, renders at a readable size, and lives long enough to arc
- * out and land. Textured from the surface block's atlas sprite, so it renders on the block sheet.
- */
+/** A block chip flung from an explosion. */
 public class BlockShrapnelParticle extends TextureSheetParticle {
 
     public BlockShrapnelParticle(ClientLevel level, double x, double y, double z,

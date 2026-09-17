@@ -9,23 +9,7 @@ import java.util.EnumSet;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
-/**
- * The same goal arbitration vanilla does, over an array instead of a linked hash set. Vanilla walks
- * {@code availableGoals} three times per update through an {@code ObjectLinkedOpenHashSet}, allocating an
- * {@code EnumSet} iterator per goal per pass.
- *
- * <p>Measured at 2000 marching glyphids: the goal layer is 4.679 ms of tick, of which 3.558 ms is real work
- * inside {@link GlyphidBrainGoal} and 1.108 ms is the machinery around it — 0.394 ms in
- * {@code SetIterator.next} alone. Same rules, linear bookkeeping.
- *
- * <p>Every rule is transcribed in vanilla's order, including its edge cases: goals are visited in
- * <em>insertion</em> order rather than priority order, and a flag held by a goal stopped part-way through the
- * start pass stays claimed until the next cleanup.
- *
- * <p>One assumption is added, stated in {@link #readFlags}: a goal's flag set is fixed after construction.
- * Installed by swapping the selectors a glyphid's {@code Mob} constructor would have built (see
- * {@code MixinMob}); {@link #getAvailableGoals()} still answers from the superclass's set.
- */
+/** The same goal arbitration vanilla does, over an array instead of a linked hash set. */
 public final class GlyphidGoalSelector extends GoalSelector {
 
     /** Cached: {@code values()} clones its array, and this is read per goal per update. */
@@ -128,10 +112,7 @@ public final class GlyphidGoalSelector extends GoalSelector {
         }
     }
 
-    /**
-     * Vanilla's {@code goalCanBeReplacedForAllFlags}. An unheld flag stands in for its {@code NO_GOAL}, which
-     * is interruptible at {@code Integer.MAX_VALUE} priority and so always yields.
-     */
+    /** Vanilla's {@code goalCanBeReplacedForAllFlags}. */
     private boolean canTakeFlags(int mask, WrappedGoal candidate) {
         for (int f = 0; f < holders.length; f++) {
             if ((mask & (1 << f)) == 0) {
@@ -145,14 +126,7 @@ public final class GlyphidGoalSelector extends GoalSelector {
         return true;
     }
 
-    /**
-     * Read each goal's flags into a bitmask, once per change to the goal list. Re-reading every update cost
-     * 0.306 ms of the 1.147 ms this class removes, most of it cache miss on {@code WrappedGoal.getFlags} —
-     * touching five goal objects per glyphid per update is the pointer chasing being got rid of.
-     *
-     * <p>Cached on the assumption that a goal's flags are fixed after construction, which holds for every
-     * goal a glyphid runs. One that rewrote them would need {@link #addGoal} called to be noticed.
-     */
+    /** Read each goal's flags into a bitmask, once per change to the goal list. */
     private static void readFlags(WrappedGoal[] list, int[] masks) {
         for (int i = 0; i < list.length; i++) {
             EnumSet<Goal.Flag> flags = list[i].getFlags();

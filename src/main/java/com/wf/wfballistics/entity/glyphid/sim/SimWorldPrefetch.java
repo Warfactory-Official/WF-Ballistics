@@ -11,23 +11,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * As much of the world as the off-thread pass needs, read on the world thread a tick ahead. Holds no
- * {@code Level}, {@code ChunkAccess} or {@code Entity}, so a worker given one has nothing to reach through —
- * see {@link SimWorld}.
- *
- * <p>It is told what to fetch by being missed, rather than by a scan of the swarm that would be O(n) of the
- * work being moved off the thread: a miss returns {@link SimWorld#UNKNOWN} and notes the column, and the
- * record keeps its last height for that tick. The tier is already a tick behind the ground by design.
- *
- * <p>Columns are cleared every tick, since a record caches the floor of the column it stands in. Destinations
- * are not: a destination height is kept in {@code taskY} for twenty ticks and would miss every time, so they
- * are a working set re-resolved from whatever the last pass asked for.
- *
- * <p>Nothing is synchronised and nothing needs to be — the pass calls {@link #height} and
- * {@link #destination}, the world thread calls {@link #refill} with no pass in flight, and the
- * {@code Future} is the happens-before edge. Two workers would break that, which is why there is one.
- */
+/** As much of the world as the off-thread pass needs, read on the world thread a tick ahead. */
 public final class SimWorldPrefetch implements SimWorld {
 
     /** Surface height per column, valid for this tick only. */
@@ -39,10 +23,7 @@ public final class SimWorldPrefetch implements SimWorld {
     }
     /** Columns missed since the last refill. Written by the pass, read by the world thread. */
     private final LongOpenHashSet wanted = new LongOpenHashSet();
-    /**
-     * Destinations resolved at the last refill. A linear scan: a level holds at most
-     * {@code GlyphidFlowFields.MAX_FIELDS}, and hashing four entries costs more than comparing them.
-     */
+    /** Destinations resolved at the last refill. */
     private final List<Resolved> resolved = new ArrayList<>();
     /** Destinations asked for during the pass. A fresh list, so one nobody marches to drops out by itself. */
     private final List<Resolved> asked = new ArrayList<>();
@@ -83,8 +64,6 @@ public final class SimWorldPrefetch implements SimWorld {
                 return entry.what;
             }
         }
-        // Not resolved yet: hop along the bearing for one tick and have the field on the next, which is what
-        // the tier does anyway wherever a field has not flooded.
         remember(x, y, z, Destination.NONE);
         return Destination.NONE;
     }
@@ -99,10 +78,7 @@ public final class SimWorldPrefetch implements SimWorld {
         asked.add(new Resolved(x, y, z, what));
     }
 
-    /**
-     * Do this tick's world reads, on the world thread, before the pass is dispatched. The only place in the
-     * tier that touches a chunk, and the same reads the pass used to make inline.
-     */
+    /** Do this tick's world reads, on the world thread, before the pass is dispatched. */
     public void refill(ServerLevel level) {
         WorldThread.assertOn("the glyphid sim tier's terrain prefetch");
         heights.clear();
@@ -144,7 +120,7 @@ public final class SimWorldPrefetch implements SimWorld {
 
     /**
      * @return {@code {columns held, columns wanted, destinations resolved, columns in unloaded chunks}}, for
-     * {@code swarmbench simthread}.
+     *      {@code swarmbench simthread}.
      */
     public int[] stats() {
         return new int[]{heights.size(), wanted.size(), resolved.size(), unloaded};

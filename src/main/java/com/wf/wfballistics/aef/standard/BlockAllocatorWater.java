@@ -6,9 +6,8 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * {@link BlockAllocatorStandard} variant for underwater detonations: liquids neither absorb the blast nor
- * get added to the destruction set. Without this, a depth charge would either fizzle against the water
- * column or try to "destroy" flowing water and leave odd gaps.
+ * {@link BlockAllocatorStandard} variant for underwater detonations: liquids neither absorb the blast nor get added
+ * to the destruction set.
  */
 public class BlockAllocatorWater extends BlockAllocatorStandard {
 

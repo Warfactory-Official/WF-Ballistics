@@ -17,11 +17,8 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Tears the floor up and throws it: a ranged attack that also removes the ground the defender is standing on,
- * which is what turns a fortified position into an open one.
- *
- * <p>The rubble is a real {@link FallingBlockEntity} and lands as a block, so a digger leaves the ground it
- * worked over rearranged.
+ * Tears the floor up and throws it: a ranged attack that also removes the ground the defender is standing on, which
+ * is what turns a fortified position into an open one.
  */
 public class EntityGlyphidDigger extends EntityGlyphid {
 
@@ -66,11 +63,7 @@ public class EntityGlyphidDigger extends EntityGlyphid {
         return GlyphidStats.getStats().getDigger();
     }
 
-
-    /**
-     * The caste whose whole job is getting through terrain. Ignores the config switch that gates chewing for
-     * everything else.
-     */
+    /** The caste whose whole job is getting through terrain. */
     @Override
     public boolean canDig() {
         return true;

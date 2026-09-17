@@ -14,13 +14,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Map;
 
 /**
- * An immutable, launch-ready missile configuration: the full {@link MissileEntity.Builder} minus the target,
- * which is supplied at fire time. Registered in {@link MissilePresetRegistry}; each preset becomes a
- * {@link MissileItem} the player can carry and launch.
- *
- * <p>Build one with {@link Builder}; only {@code id} / {@code model} / {@code warhead} are required, the rest
- * default to a plain terrain-following cruise missile.
- * TODO: Add Lombok or something
+ * An immutable, launch-ready missile configuration: the full {@link MissileEntity.Builder} minus the target, which
+ * is supplied at fire time.
  */
 public final class MissilePreset {
 
@@ -29,6 +24,7 @@ public final class MissilePreset {
     private final ResourceLocation warheadId;
     private final boolean highAltitude;
     private final double altitudeParam; // cruiseAltitude (high) or terrainClearance (terrain follow)
+    private final double terrainClearance; // NaN = whatever the cruise mode implies; set to split the two
     private final double cruiseSpeed;
     private final double turnRate;       // <= 0 = model-size default
     private final double approachJoinCap; // directional-strike join ceiling (blocks)
@@ -43,12 +39,14 @@ public final class MissilePreset {
     private final int fuelTicks;
     private final double acceleration;
     private final double deceleration;
+    private final ResourceLocation ascentStageId;
     private final ResourceLocation cruiseStageId;
     private final ResourceLocation attackStageId;
+    private final MissileEntity.Medium medium;
     private final double attackAngle;
     private final double minDiveAngle;
     private final double maxDiveAngle;
-    private final boolean stealth;
+    private final float rcs;
     private final float evasion;
     private final boolean evasiveManeuver;
     private final double accuracy;
@@ -67,6 +65,7 @@ public final class MissilePreset {
         this.warheadId = b.warheadId;
         this.highAltitude = b.highAltitude;
         this.altitudeParam = b.altitudeParam;
+        this.terrainClearance = b.terrainClearance;
         this.cruiseSpeed = b.cruiseSpeed;
         this.turnRate = b.turnRate;
         this.approachJoinCap = b.approachJoinCap;
@@ -81,12 +80,14 @@ public final class MissilePreset {
         this.fuelTicks = b.fuelTicks;
         this.acceleration = b.acceleration;
         this.deceleration = b.deceleration;
+        this.ascentStageId = b.ascentStageId;
         this.cruiseStageId = b.cruiseStageId;
         this.attackStageId = b.attackStageId;
+        this.medium = b.medium;
         this.attackAngle = b.attackAngle;
         this.minDiveAngle = b.minDiveAngle;
         this.maxDiveAngle = b.maxDiveAngle;
-        this.stealth = b.stealth;
+        this.rcs = b.rcs;
         this.evasion = b.evasion;
         this.evasiveManeuver = b.evasiveManeuver;
         this.accuracy = b.accuracy;
@@ -200,8 +201,18 @@ public final class MissilePreset {
         return maxDiveAngle;
     }
 
+    /**
+     * @return this preset's radar cross-section, against a reference of 1.0.
+     */
+    public float rcs() {
+        return rcs;
+    }
+
+    /**
+     * @return true if this preset is low-observable. Display only; see {@link MissileEntity#isStealth}.
+     */
     public boolean isStealth() {
-        return stealth;
+        return rcs < MissileSimConfig.STEALTH_RCS_THRESHOLD;
     }
 
     public float evasion() {
@@ -237,8 +248,6 @@ public final class MissilePreset {
      * Builds (but does not spawn) a live missile aimed at {@code target}.
      */
     public MissileEntity build(Level level, Vec3 target) {
-        // CEP: scatter the aimpoint within an `accuracy`-block disk (uniform in area) at launch, so an
-        // inaccurate missile (e.g. a bunker buster) lands off-target. 0 = pinpoint (aim exactly at target).
         Vec3 aim = target;
         if (accuracy > 0.0) {
             double ang = level.random.nextDouble() * Math.PI * 2.0;
@@ -259,6 +268,9 @@ public final class MissilePreset {
         } else {
             b.terrainFollow(altitudeParam);
         }
+        if (!Double.isNaN(terrainClearance)) {
+            b.clearance(terrainClearance);
+        }
         if (turnRate > 0.0) {
             b.turnRate(turnRate);
         }
@@ -270,6 +282,10 @@ public final class MissilePreset {
             b.interceptor(true).interceptChance(interceptChance);
         }
         b.fuel(fuelType, fuelTicks).acceleration(acceleration).deceleration(deceleration);
+        b.medium(medium);
+        if (ascentStageId != null) {
+            b.ascentStage(ascentStageId);
+        }
         if (cruiseStageId != null) {
             b.cruiseStage(cruiseStageId);
         }
@@ -280,9 +296,7 @@ public final class MissilePreset {
             b.attackAngle(attackAngle);
         }
         b.diveAngleRange(minDiveAngle, maxDiveAngle);
-        if (stealth) {
-            b.stealth(true);
-        }
+        b.rcs(rcs);
         if (evasion > 0.0f) {
             b.evasion(evasion);
         }
@@ -304,26 +318,12 @@ public final class MissilePreset {
         return b.build();
     }
 
-    /**
-     * Picks a {@link MissileEntity.DownedAction} at launch time: call e.g. to roll a random / weighted shot-down
-     * behaviour per missile. Rolled once in {@link #build(Level, Vec3)} (so each launched missile decides its own
-     * fate); the chosen action is then a plain enum on the entity and persists normally.
-     *
-     * <pre>{@code
-     * // 20% power loss, 80% instant detonation, per missile:
-     * .downedAction(r -> r.nextFloat() < 0.2f ? DownedAction.POWER_LOSS : DownedAction.DETONATE)
-     * // or weighted by integer shares:
-     * .downedAction(DownedActionPicker.weighted(Map.of(DownedAction.POWER_LOSS, 20, DownedAction.DETONATE, 80)))
-     * }</pre>
-     */
+    /** Picks a {@link MissileEntity.DownedAction} at launch time: call e.g. */
     @FunctionalInterface
     public interface DownedActionPicker {
         MissileEntity.DownedAction pick(RandomSource random);
 
-        /**
-         * A picker that chooses among {@code weights} (action → integer share) in proportion to their weights.
-         * Non-positive weights are ignored; an all-zero/empty map falls back to {@link MissileEntity.DownedAction#CRASH}.
-         */
+        /** A picker that chooses among {@code weights} (action → integer share) in proportion to their weights. */
         static DownedActionPicker weighted(Map<MissileEntity.DownedAction, Integer> weights) {
             int total = 0;
             for (int w : weights.values()) {
@@ -353,6 +353,7 @@ public final class MissilePreset {
         private final ResourceLocation warheadId;
         private boolean highAltitude = false;
         private double altitudeParam = 24.0;
+        private double terrainClearance = Double.NaN;
         private double cruiseSpeed = MissileEntity.CRUISE_SPEED;
         private double turnRate = 0.0;
         private double approachJoinCap = MissileEntity.DEFAULT_APPROACH_JOIN_CAP;
@@ -367,12 +368,14 @@ public final class MissilePreset {
         private int fuelTicks = MissileEntity.DEFAULT_FUEL_TICKS;
         private double acceleration = MissileEntity.DEFAULT_ACCELERATION;
         private double deceleration = MissileEntity.DEFAULT_DECELERATION;
+        private ResourceLocation ascentStageId = null; // null = phase default
         private ResourceLocation cruiseStageId = null; // null = phase default
+        private MissileEntity.Medium medium = MissileEntity.Medium.AIR;
         private ResourceLocation attackStageId = null;
         private double attackAngle = Double.NaN;
         private double minDiveAngle = MissileEntity.DEFAULT_MIN_DIVE_ANGLE;
         private double maxDiveAngle = MissileEntity.DEFAULT_MAX_DIVE_ANGLE;
-        private boolean stealth = false;
+        private float rcs = 1.0f;
         private float evasion = 0.0f;
         private boolean evasiveManeuver = false;
         private double accuracy = 0.0;
@@ -389,6 +392,15 @@ public final class MissilePreset {
             this.id = id;
             this.modelId = MissileModels.exists(modelId) ? modelId : MissileModels.defaultId();
             this.warheadId = WarheadRegistry.exists(warheadId) ? warheadId : WarheadRegistry.defaultId();
+        }
+
+        /**
+         * Hold at least this much clearance over the terrain even in {@link #highAltitude} mode, where the altitude
+         * parameter is the cruise height and says nothing about the floor.
+         */
+        public Builder clearance(double blocks) {
+            this.terrainClearance = blocks;
+            return this;
         }
 
         /**
@@ -420,9 +432,8 @@ public final class MissilePreset {
         }
 
         /**
-         * Ceiling (blocks) on how far out a directional strike joins its attack line (see
-         * {@link com.wf.wfballistics.flight.ApproachStage}). The join scales with range up to this cap;
-         * default {@link MissileEntity#DEFAULT_APPROACH_JOIN_CAP}.
+         * Ceiling (blocks) on how far out a directional strike joins its attack line (see {@link
+         * com.wf.wfballistics.flight.ApproachStage}).
          */
         public Builder approachJoinCap(double blocks) {
             this.approachJoinCap = blocks;
@@ -441,8 +452,7 @@ public final class MissilePreset {
 
         /**
          * Chunk radius force-loaded around the aim point during the terminal run so the warhead detonates into
-         * loaded terrain (see {@link MissileEntity#DEFAULT_IMPACT_PRELOAD_RADIUS}). Default 4 (a 9x9 area);
-         * raise it for a very large warhead, or set 0 to disable and rely on the flight fan alone.
+         * loaded terrain (see {@link MissileEntity#DEFAULT_IMPACT_PRELOAD_RADIUS}).
          */
         public Builder impactPreloadRadius(int chunkRadius) {
             this.impactPreloadRadius = Math.max(0, chunkRadius);
@@ -466,8 +476,8 @@ public final class MissilePreset {
         }
 
         /**
-         * Make this preset an interceptor with the given kill chance (see {@link MissileEntity.Builder#interceptor}).
-         * Best paired with the {@code "interceptor"} warhead and a high {@code cruiseSpeed}/{@code turnRate}.
+         * Make this preset an interceptor with the given kill chance (see {@link
+         * MissileEntity.Builder#interceptor}).
          */
         public Builder interceptor(float chance) {
             this.interceptor = true;
@@ -476,8 +486,8 @@ public final class MissilePreset {
         }
 
         /**
-         * Load the tank: {@code type} of propellant and {@code ticks} of powered flight (see
-         * {@link MissileEntity.Builder#fuel}). Running dry mid-flight makes the missile fall ballistically.
+         * Load the tank: {@code type} of propellant and {@code ticks} of powered flight (see {@link
+         * MissileEntity.Builder#fuel}).
          */
         public Builder fuel(MissileEntity.FuelType type, int ticks) {
             this.fuelType = type;
@@ -486,8 +496,8 @@ public final class MissilePreset {
         }
 
         /**
-         * Acceleration / deceleration limits (blocks/tick^2) governing how fast actual speed reaches and sheds
-         * the cruise (target) speed.
+         * Acceleration / deceleration limits (blocks/tick^2) governing how fast actual speed reaches and sheds the
+         * cruise (target) speed.
          */
         public Builder accel(double acceleration, double deceleration) {
             this.acceleration = acceleration;
@@ -495,38 +505,53 @@ public final class MissilePreset {
             return this;
         }
 
+        /** Pick the ascent-phase flight stage by id. */
+        public Builder ascentStage(ResourceLocation id) {
+            this.ascentStageId = FlightStageRegistry.exists(MissileEntity.Phase.ASCEND, id)
+                    ? id : FlightStageRegistry.defaultId(MissileEntity.Phase.ASCEND);
+            return this;
+        }
+
+        /** Travel through the given medium (see {@link MissileEntity.Builder#medium}). */
+        public Builder medium(MissileEntity.Medium medium) {
+            this.medium = medium;
+            return this;
+        }
+
         /**
-         * Pick the cruise-phase flight stage by id (e.g. {@code FlightStageRegistry.rl("loiter")} for a
-         * loitering drone). An id not registered for the cruise phase falls back to the phase default.
+         * Make this a torpedo: {@link MissileEntity.Medium#WATER} plus the whole submerged stage set, which is the
+         * only combination of the two that flies.
          */
+        public Builder torpedo() {
+            return this.medium(MissileEntity.Medium.WATER)
+                    .ascentStage(FlightStageRegistry.rl("torpedo_entry"))
+                    .cruiseStage(FlightStageRegistry.rl("torpedo_run"))
+                    .attackStage(FlightStageRegistry.rl("torpedo_terminal"));
+        }
+
+        /** Pick the cruise-phase flight stage by id (e.g. */
         public Builder cruiseStage(ResourceLocation id) {
             this.cruiseStageId = FlightStageRegistry.exists(MissileEntity.Phase.CRUISE, id)
                     ? id : FlightStageRegistry.defaultId(MissileEntity.Phase.CRUISE);
             return this;
         }
 
-        /**
-         * Pick the attack-phase flight stage by id (e.g. {@code FlightStageRegistry.rl("dive")} for a
-         * near-vertical top-attack). An id not registered for the attack phase falls back to the phase default.
-         */
+        /** Pick the attack-phase flight stage by id (e.g. */
         public Builder attackStage(ResourceLocation id) {
             this.attackStageId = FlightStageRegistry.exists(MissileEntity.Phase.ATTACK, id)
                     ? id : FlightStageRegistry.defaultId(MissileEntity.Phase.ATTACK);
             return this;
         }
 
-        /**
-         * Explicit preferred dive angle in degrees below horizontal (90 = straight down), uncapped. Leave unset
-         * to auto-pick within {@link #diveAngleRange} (see {@link MissileEntity.Builder#attackAngle}).
-         */
+        /** Explicit preferred dive angle in degrees below horizontal (90 = straight down), uncapped. */
         public Builder attackAngle(double degrees) {
             this.attackAngle = degrees;
             return this;
         }
 
         /**
-         * Range (degrees below horizontal) the terminal dive auto-picks from when no explicit
-         * {@link #attackAngle} is set (see {@link MissileEntity.Builder#diveAngleRange}). Defaults to 80-90.
+         * Range (degrees below horizontal) the terminal dive auto-picks from when no explicit {@link #attackAngle}
+         * is set (see {@link MissileEntity.Builder#diveAngleRange}).
          */
         public Builder diveAngleRange(double minDegrees, double maxDegrees) {
             this.minDiveAngle = minDegrees;
@@ -535,11 +560,18 @@ public final class MissilePreset {
         }
 
         /**
-         * Make this missile stealth: invisible to automatic detection (see {@link MissileEntity#isStealth}).
+         * Radar cross-section against a reference of 1.0. Detection range goes as the fourth root of it.
+         */
+        public Builder rcs(float rcs) {
+            this.rcs = Math.max(0.0f, rcs);
+            return this;
+        }
+
+        /**
+         * Low-observable, as a switch: see {@link MissileSimConfig#STEALTH_RCS} for what it is worth in range.
          */
         public Builder stealth() {
-            this.stealth = true;
-            return this;
+            return rcs(MissileSimConfig.STEALTH_RCS);
         }
 
         /**
@@ -551,8 +583,8 @@ public final class MissilePreset {
         }
 
         /**
-         * Evasive maneuvering: makes evasion boosts jink off-course instead of sprinting straight (see
-         * {@link MissileEntity.Builder#evasiveManeuver}). Pair with a non-zero {@link #evasion}.
+         * Evasive maneuvering: makes evasion boosts jink off-course instead of sprinting straight (see {@link
+         * MissileEntity.Builder#evasiveManeuver}).
          */
         public Builder evasiveManeuver() {
             this.evasiveManeuver = true;
@@ -561,8 +593,7 @@ public final class MissilePreset {
 
         /**
          * Circular error probable (blocks): the aimpoint is randomly scattered within a disk of this radius at
-         * launch, so the missile lands off-target by up to {@code blocks}. 0 (default) = pinpoint. Used for
-         * deliberately inaccurate ordnance such as bunker busters.
+         * launch, so the missile lands off-target by up to {@code blocks}.
          */
         public Builder accuracy(double blocks) {
             this.accuracy = Math.max(0.0, blocks);
@@ -570,8 +601,8 @@ public final class MissilePreset {
         }
 
         /**
-         * Tint of the exhaust trail (hot RGB 0xRRGGBB) the client-side plume fades from (see
-         * {@link MissileEntity.Builder#exhaustColor}). Default {@link MissileEntity#DEFAULT_EXHAUST_COLOR}.
+         * Tint of the exhaust trail (hot RGB 0xRRGGBB) the client-side plume fades from (see {@link
+         * MissileEntity.Builder#exhaustColor}).
          */
         public Builder exhaustColor(int rgb) {
             this.exhaustColor = rgb;
@@ -579,8 +610,8 @@ public final class MissilePreset {
         }
 
         /**
-         * The looping flight sound this missile plays client-side, by registered {@link net.minecraft.sounds.SoundEvent}
-         * id (see {@link MissileEntity.Builder#flightSound}). Unset keeps WF-B's default {@code missile_flight} loop.
+         * The looping flight sound this missile plays client-side, by registered {@link
+         * net.minecraft.sounds.SoundEvent} id (see {@link MissileEntity.Builder#flightSound}).
          */
         public Builder flightSound(ResourceLocation soundId) {
             this.flightSoundId = soundId;
@@ -589,8 +620,7 @@ public final class MissilePreset {
 
         /**
          * Distance (blocks) at which this missile's flight loop fades to silence and the server broadcasts it:
-         * independent of view/render distance (see {@link MissileEntity.Builder#flightSoundRange}). Default
-         * {@link MissileEntity#DEFAULT_FLIGHT_SOUND_RANGE}.
+         * independent of view/render distance (see {@link MissileEntity.Builder#flightSoundRange}).
          */
         public Builder flightSoundRange(double blocks) {
             this.flightSoundRange = blocks;
@@ -604,38 +634,28 @@ public final class MissilePreset {
         }
 
         /**
-         * Engine "rev": added flight-loop pitch per block/tick of the missile's own speed (see
-         * {@link MissileEntity.Builder#flightSoundSpeedPitch}). Default 0 = constant pitch (the drone exception).
+         * Engine "rev": added flight-loop pitch per block/tick of the missile's own speed (see {@link
+         * MissileEntity.Builder#flightSoundSpeedPitch}).
          */
         public Builder flightSoundSpeedPitch(double perBlockPerTick) {
             this.flightSoundSpeedPitch = perBlockPerTick;
             return this;
         }
 
-        /**
-         * How this missile responds to incoming damage, by {@code MissileDamageRegistry} id: e.g.
-         * {@code explosion_only} to resist everything but blasts (see {@link MissileEntity.Builder#damageResponse}).
-         * Unset takes damage as dealt.
-         */
+        /** How this missile responds to incoming damage, by {@code MissileDamageRegistry} id: e.g. */
         public Builder damageResponse(ResourceLocation responseId) {
             this.damageResponseId = responseId;
             return this;
         }
 
-        /**
-         * What this missile does when shot out of the sky (see {@link MissileEntity.DownedAction}). Default
-         * {@link MissileEntity.DownedAction#CRASH}.
-         */
+        /** What this missile does when shot out of the sky (see {@link MissileEntity.DownedAction}). */
         public Builder downedAction(MissileEntity.DownedAction action) {
             this.downedAction = (action != null) ? action : MissileEntity.DownedAction.CRASH;
             this.downedActionPicker = null; // a fixed action clears any previously-set picker
             return this;
         }
 
-        /**
-         * Pick the shot-down behaviour per launch (see {@link DownedActionPicker}): e.g. a weighted random roll.
-         * Overrides any fixed {@link #downedAction(MissileEntity.DownedAction)}; {@code null} clears it.
-         */
+        /** Pick the shot-down behaviour per launch (see {@link DownedActionPicker}): e.g. */
         public Builder downedAction(DownedActionPicker picker) {
             this.downedActionPicker = picker;
             return this;

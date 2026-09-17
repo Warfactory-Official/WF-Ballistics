@@ -15,17 +15,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Every arranged exchange, live and recently finished. Server-wide, alongside {@link StationRegistry}, since
- * the two stations may be in different dimensions.
- */
+/** Every arranged exchange, live and recently finished. */
 public final class ExchangeRegistry extends SavedData {
 
     public static final String NAME = "wfballistics_exchanges";
-    /**
-     * How long a finished or cancelled exchange is kept before being forgotten. Kept at all so both sides can
-     * be told what happened rather than having their drone quietly turn around.
-     */
+    /** How long a finished or cancelled exchange is kept before being forgotten. */
     private static final long RETENTION_TICKS = 6000L;
 
     private final Map<UUID, Exchange> byId = new LinkedHashMap<>();
@@ -86,7 +80,7 @@ public final class ExchangeRegistry extends SavedData {
 
     /**
      * @return the live exchange this station is part of, or null. One at a time per station keeps the
-     * bookkeeping honest and stops a pad being made to fly a dozen collection runs at once.
+     *      bookkeeping honest and stops a pad being made to fly a dozen collection runs at once.
      */
     @Nullable
     public Exchange activeFor(String code) {

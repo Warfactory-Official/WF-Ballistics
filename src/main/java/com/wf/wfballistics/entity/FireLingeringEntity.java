@@ -89,8 +89,6 @@ public class FireLingeringEntity extends Entity {
     }
 
     public FireLingeringEntity setType(FireType type) {
-        // Synched as an ordinal rather than the enum itself: an INT accessor needs no serializer registration
-        // and keeps the network and save format identical to what the int variants used.
         this.entityData.set(TYPE, type.id());
         return this;
     }

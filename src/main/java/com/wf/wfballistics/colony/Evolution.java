@@ -4,14 +4,7 @@ import com.wf.wfballistics.industry.IndustryApi;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.Mth;
 
-/**
- * How far the glyphids have come, as one number per level between 0 and 1. Driven by time (a slow floor) and
- * by {@link IndustryApi#totalPressure} summed across the world.
- *
- * <p>Asymptotic rather than linear, so each step closes a share of the remaining gap and the last stretch
- * costs far more than the first. Decides which castes may be fielded ({@link GlyphidCaste}) plus a modest
- * growth bonus; tier still comes from distance. {@code /wfballistics colony evolution} sets it for testing.
- */
+/** How far the glyphids have come, as one number per level between 0 and 1. */
 public final class Evolution {
 
     /** Ticks between recalculations. {@code totalPressure} walks the industry index, so keep it coarse. */
@@ -44,10 +37,7 @@ public final class Evolution {
         registry.setEvolution((float) (current + (1.0 - current) * Math.min(1.0, factor)));
     }
 
-    /**
-     * Multiplier applied to colony growth and warband size. One at a fresh world, and
-     * {@code 1 + evolutionStrengthBonus} at full evolution.
-     */
+    /** Multiplier applied to colony growth and warband size. */
     public static double strength(float evolution) {
         return 1.0 + ColonyConfig.evolutionStrengthBonus() * Mth.clamp(evolution, 0.0F, 1.0F);
     }

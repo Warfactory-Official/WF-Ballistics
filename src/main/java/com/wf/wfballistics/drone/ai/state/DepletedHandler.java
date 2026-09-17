@@ -11,12 +11,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * Flat battery, still in the air. No guidance and no station-keeping: it sinks under its own weight with
- * the rotors windmilling, keeps whatever momentum it had, and comes to rest on the ground as an
- * {@link DroneState#IDLE} drone that can be recovered and recharged. Unlike a missile running dry, nothing
- * detonates.
- */
+/** Flat battery, still in the air. */
 public final class DepletedHandler implements DroneStateHandler {
 
     public static final DepletedHandler INSTANCE = new DepletedHandler();

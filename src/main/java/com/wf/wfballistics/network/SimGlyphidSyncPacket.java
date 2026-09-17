@@ -12,35 +12,21 @@ import java.util.List;
 /**
  * Every glyphid near one player that has no entity, in one packet.
  *
- * <p>Vanilla ships a swarm as one {@code ClientboundMoveEntityPacket} per mob per tick — around ten bytes
- * each, plus a packet's worth of framing each, plus the spawn and the synched-data table behind them. That is
- * what the sim tier is not paying for on the server, and shipping the same bytes anyway would move the cost
- * rather than remove it. This is one packet every {@link #INTERVAL} ticks holding the whole visible set, so
- * three hundred glyphids are one frame on the wire and the client interpolates between them.
- *
- * <p><b>Whole set, not a delta.</b> A delta needs a removal list, an acknowledgement, or a heartbeat to
- * notice a record that stopped being sent — three ways to leave a glyphid drawn where there is none. Sending
- * everything visible makes disappearance the default: what is not in the packet is not there.
- *
  * @param origin the block the offsets are measured from, so a position is three shorts rather than three
- *               doubles. Eighth-of-a-block precision, which is finer than the interpolation between two
- *               updates can resolve
+ *      doubles. Eighth-of-a-block precision, which is finer than the interpolation between two
+ *      updates can resolve
  */
 public record SimGlyphidSyncPacket(int originX, int originY, int originZ, List<Entry> glyphids)
         implements CustomPacketPayload {
 
-    /**
-     * Ticks between updates. Four is the whole trade: it is a quarter of the wire traffic of a per-tick
-     * update and 200 ms of interpolation, which on something walking at a fifth of a block a tick is under a
-     * block of lag on a body that is at least sixty-four blocks away.
-     */
+    /** Ticks between updates. */
     public static final int INTERVAL = 4;
 
     /**
-     * One glyphid. Position is in eighths of a block from the packet origin.
+     * One glyphid.
      *
-     * @param id    negative, and stable for as long as the record lives, so a client can match this update
-     *              against the last one and interpolate rather than teleport
+     * @param id negative, and stable for as long as the record lives, so a client can match this update
+     *      against the last one and interpolate rather than teleport
      * @param caste index into {@code GlyphidCaste.VALUES}, which is what picks the skin and the size
      */
     public record Entry(int id, short dx, short dy, short dz, byte yaw, byte caste) {

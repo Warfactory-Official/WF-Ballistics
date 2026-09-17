@@ -12,15 +12,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * The vanilla explosion ray-march, reproduced exactly: fire rays from the centre through every cell on the
- * surface of a {@code resolution³} cube and march each ray outward in 0.3-block steps, draining the ray's
- * (randomised) power by each block's explosion resistance until it runs out. Every non-air block a
- * surviving ray passes through is marked for destruction.
- *
- * <p>{@code resolution} is the classic vanilla 16; raising it produces a smoother, more spherical blast at
- * a roughly quadratic cost (only the cube's shell is iterated, so it scales with {@code resolution²}).
- *
- * <p>This allocator only collects positions: see {@link BlockProcessorStandard} for what happens to them.
+ * The vanilla explosion ray-march, reproduced exactly: fire rays from the centre through every cell on the surface
+ * of a {@code resolution³} cube and march each ray outward in 0.3-block steps, draining the ray's (randomised)
+ * power by each block's explosion resistance until it runs out.
  */
 public class BlockAllocatorStandard implements IBlockAllocator {
 
@@ -57,6 +51,7 @@ public class BlockAllocatorStandard implements IBlockAllocator {
 
                     float power = size * (0.7F + level.random.nextFloat() * 0.6F);
                     double cx = x, cy = y, cz = z;
+                    boolean broke = false;
 
                     for (float step = 0.3F; power > 0.0F; power -= step * 0.75F) {
                         cursor.set(Mth.floor(cx), Mth.floor(cy), Mth.floor(cz));
@@ -66,18 +61,17 @@ public class BlockAllocatorStandard implements IBlockAllocator {
                             power -= (blockResistance(explosion, level, cursor, state, power) + 0.3F) * step;
                         }
 
-                        // Only collect real blocks: skipping air means a blast in open space doesn't
-                        // allocate a throwaway BlockPos for every step of every ray (mid-air, that was
-                        // hundreds of thousands of short-lived objects per blast: a GC spike), and the
-                        // block processor no longer has to re-scan and discard air positions afterwards.
                         if (power > 0.0F && !state.isAir() && canDestroy(explosion, level, cursor, state, power)) {
                             affectedBlocks.add(cursor.immutable());
+                            broke = true;
                         }
 
                         cx += dx * step;
                         cy += dy * step;
                         cz += dz * step;
                     }
+
+                    com.wf.wfballistics.debug.ExplosionTrace.ray(x, y, z, cx, cy, cz, broke);
                 }
             }
         }
@@ -88,16 +82,7 @@ public class BlockAllocatorStandard implements IBlockAllocator {
     /**
      * Resistance the exploder sees for this block (lets a custom exploder override per-block resistance).
      */
-    /**
-     * How much this block resists being blown up.
-     *
-     * <p>The exploder hook is an <em>adjustment</em>, not a source: {@code Entity.getBlockExplosionResistance}
-     * returns its last argument unchanged by default, and vanilla feeds it the block's own resistance so an
-     * entity can raise or lower it. Feeding it the remaining blast power instead made it hand that power
-     * straight back, so any explosion with an exploder set never consulted the material at all and chewed
-     * bedrock exactly as fast as dirt. Every glyphid dig is such an explosion; the warheads are not, which is
-     * why it only ever showed up as bugs eating through the world.
-     */
+    /** How much this block resists being blown up. */
     protected float blockResistance(ExplosionAEF explosion, Level level, BlockPos pos, BlockState state, float power) {
         FluidState fluid = state.getFluidState();
         float resistance = Math.max(state.getExplosionResistance(level, pos, explosion.compat),

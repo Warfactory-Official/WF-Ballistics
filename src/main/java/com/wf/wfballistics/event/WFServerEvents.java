@@ -3,6 +3,9 @@ package com.wf.wfballistics.event;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.wf.wfballistics.fx.ExplosionCreator;
+import com.wf.wfballistics.entity.mist.GasCloud;
+import com.wf.wfballistics.fluid.WFFluids;
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.api.MissileData;
@@ -13,6 +16,9 @@ import com.wf.wfballistics.debug.BenchPlayer;
 import com.wf.wfballistics.debug.GlyphidArena;
 import com.wf.wfballistics.debug.GlyphidDeaths;
 import com.wf.wfballistics.debug.MissileDebug;
+import com.wf.wfballistics.debug.OrbitalDebug;
+import com.wf.wfballistics.debug.CameraDebug;
+import com.wf.wfballistics.debug.ReconDebug;
 import com.wf.wfballistics.debug.SwarmBench;
 import com.wf.wfballistics.colony.ColonyDebug;
 import com.wf.wfballistics.colony.ColonyManager;
@@ -22,6 +28,7 @@ import com.wf.wfballistics.industry.IndustryDebug;
 import java.util.Set;
 import java.util.ArrayList;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.commands.arguments.coordinates.BlockPosArgument;
 import net.minecraft.commands.arguments.coordinates.Vec3Argument;
 import net.minecraft.core.BlockPos;
@@ -36,12 +43,14 @@ import com.wf.wfballistics.drone.DroneDrafts;
 import com.wf.wfballistics.drone.DroneMission;
 import com.wf.wfballistics.drone.DroneProgram;
 import com.wf.wfballistics.drone.DroneTask;
+import com.wf.wfballistics.drone.MineLoad;
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.block.entity.DronePadBlockEntity;
 import com.wf.wfballistics.drone.CrateEntity;
 import com.wf.wfballistics.api.WFTelemetryService;
 import com.wf.wfballistics.api.WFTelemetry;
 import com.wf.wfballistics.drone.DroneSelfTest;
+import com.mojang.brigadier.arguments.FloatArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.wf.wfballistics.drone.ai.DroneAiScheduler;
 import com.wf.wfballistics.drone.ai.DroneSnapshot;
@@ -53,6 +62,13 @@ import com.wf.wfballistics.drone.ai.TerrainSampler;
 import com.wf.wfballistics.drone.WorldThread;
 import com.wf.wfballistics.drone.nav.DronePath;
 import com.wf.wfballistics.drone.nav.PlannerStats;
+import com.wf.wfballistics.item.GridKeyItem;
+import com.wf.wfballistics.recon.ReconBound;
+import com.wf.wfballistics.recon.ReconNet;
+import com.wf.wfballistics.recon.map.ReconMapCommand;
+import com.wf.wfballistics.recon.map.ReconMapService;
+import com.wf.wfballistics.recon.example.decoy.DecoyRegistry;
+import com.wf.wfballistics.recon.grid.HubIndex;
 import com.wf.wfballistics.exchange.Exchange;
 import com.wf.wfballistics.exchange.ExchangeManager;
 import com.wf.wfballistics.exchange.ExchangeMode;
@@ -79,6 +95,7 @@ import com.wf.wfballistics.drone.sim.SimDroneRegistry;
 import com.wf.wfballistics.item.MissilePreset;
 import com.wf.wfballistics.item.MissilePresetRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
+import com.wf.wfballistics.kinetic.KineticSimManager;
 import com.wf.wfballistics.sim.SimMissileManager;
 import com.wf.wfballistics.sim.SimMissileRegistry;
 import com.wf.wfballistics.swarm.SwarmManager;
@@ -111,7 +128,15 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.common.util.TriState;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.common.world.chunk.RegisterTicketControllersEvent;
+import com.wf.wfballistics.debug.ExplosionTrace;
+import com.wf.wfballistics.debug.MineDebug;
+import com.wf.wfballistics.item.MinePreset;
+import com.wf.wfballistics.item.MinePresetRegistry;
+import com.wf.wfballistics.mine.MineEntity;
+import net.minecraft.util.RandomSource;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.server.ServerStartingEvent;
 import net.neoforged.neoforge.event.server.ServerStoppingEvent;
@@ -132,11 +157,16 @@ public final class WFServerEvents {
     private WFServerEvents() {
     }
 
-    /**
-     * Sets the glyphid sim tier walking before the world thread starts its own tick, so the two run at once.
-     * The join is at the top of {@link #onLevelTick}; see {@code SimGlyphidPass} for what makes the window
-     * safe.
-     */
+    /** Let a grid key reach a recon block, which it otherwise cannot. */
+    @SubscribeEvent
+    public static void onGridKeyUse(PlayerInteractEvent.RightClickBlock event) {
+        if (event.getItemStack().getItem() instanceof GridKeyItem
+                && event.getLevel().getBlockEntity(event.getPos()) instanceof ReconBound) {
+            event.setUseBlock(TriState.FALSE);
+        }
+    }
+
+    /** Sets the glyphid sim tier walking before the world thread starts its own tick, so the two run at once. */
     @SubscribeEvent
     public static void onLevelTickPre(LevelTickEvent.Pre event) {
         if (event.getLevel() instanceof ServerLevel level) {
@@ -148,77 +178,79 @@ public final class WFServerEvents {
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
             SimMissileManager.tick(level);
-            // Decide offloads/onloads first, so a drone that changed form is planned in its new form
-            // during the same tick.
+            KineticSimManager.tick(level);
             DroneLaunchQueue.tick(level);
             SimDroneManager.tick(level);
             DroneAiScheduler.tick(level);
             // After the drones have moved, so a zone is judged on where everyone actually is this tick.
             ExchangeManager.tick(level);
-            // Expire lapsed work claims after the workers have had their tick, so a claim is only ever
-            // taken back from a drone that had this tick to make progress on it.
             WorkRegistry.get(level).tick(level);
-            // The build system's own housekeeping, kept out of the generic queue: whether the ground is
-            // still ours, and holding the blocks being worked on loaded.
             com.wf.wfballistics.build.BuildManager.tick(level);
-            // Event-driven and debounced: this only dispatches a scan when industry actually
-            // changed and the world has since gone quiet.
             IndustryClusters.tick(level);
             ColonyManager.tick(level);
             // After the colony tier, because it reassigns bugs the materialiser may have only just placed.
             GlyphidSquads.tick(level);
-            // Joins the pass dispatched by onLevelTickPre, then decides who changes tier. Here rather than at
-            // the top of this method because everything above is free to reach a record if it ever needs to —
-            // SimGlyphidRegistry.view() joins first — so leaving it late simply gives the worker more of the
-            // tick to hide in. Still before separation, so a glyphid demoted this tick is already in the
-            // registry the grid reads and the two tiers are separated against each other rather than a tick
-            // apart.
             SimGlyphidManager.tick(level);
             SimGlyphidTracking.tick(level);
-            // One grid for the whole swarm instead of an entity query per glyphid. Level-wide rather than
-            // per-entity precisely so the neighbourhood is built once, and over both tiers.
             GlyphidSeparation.tick(level);
-            // Before the fields, so a bridge dissolved this tick has already marked them stale and one is not
-            // rebuilt around a deck that went away half a tick later.
             GlyphidBridges.tick(level);
             // Last, so a field built this tick is flooded from terrain the diggers have already changed.
             GlyphidFlowFields.tick(level);
+            ReconNet.tick(level);
+            com.wf.wfballistics.orbital.OrbitalNet.tick(level);
+            ReconMapService.tick(level);
+            com.wf.wfballistics.drone.cam.CameraNet.tick(level);
             tickScenarios(level);
         }
     }
 
-    /**
-     * Closes the swarm profiler's tick. On the server tick rather than the level tick so one game tick is
-     * one sample however many dimensions are loaded.
-     */
+    /** Closes the swarm profiler's tick. */
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         SwarmBench.tick(event.getServer());
     }
 
+    /** Every explosion in the game, offered to the seismic band. */
+    @SubscribeEvent
+    public static void onExplosionDetonate(net.neoforged.neoforge.event.level.ExplosionEvent.Detonate event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            net.minecraft.world.level.Explosion blast = event.getExplosion();
+            Vec3 at = blast.center();
+            com.wf.wfballistics.recon.event.SeismicEvents.report(level, at.x, at.y, at.z, blast.radius());
+        }
+    }
+
+    /** Drops what a departing player was owed. */
+    @SubscribeEvent
+    public static void onPlayerLoggedOut(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        com.wf.wfballistics.drone.cam.CameraChunkStream.forget(event.getEntity().getUUID());
+        ReconMapService.forget(event.getEntity().getUUID());
+    }
+
     /**
-     * The drone AI worker pool lives exactly as long as the server, so its threads can't leak across a
-     * world reload.
+     * The drone AI worker pool lives exactly as long as the server, so its threads can't leak across a world
+     * reload.
      */
     @SubscribeEvent
     public static void onServerStarting(ServerStartingEvent event) {
         DroneAiScheduler.startup();
-        // After the drone pool, which is what marks the world thread that both sets of assertions test
-        // against.
         SimGlyphidPass.startup();
     }
 
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
-        // Before anything else: a pass killed halfway through would leave a swarm with half its records
-        // moved, and that is the state the world would then be saved in.
         SimGlyphidPass.shutdown(event.getServer().getAllLevels());
+        ReconNet.shutdown();
+        com.wf.wfballistics.orbital.OrbitalNet.shutdown();
+        ReconMapService.shutdown();
+        com.wf.wfballistics.drone.cam.CameraNet.shutdown();
+        com.wf.wfballistics.drone.DroneRecall.shutdown();
+        HubIndex.shutdown();
+        DecoyRegistry.shutdown();
         DroneAiScheduler.shutdown();
         IndustryClusters.clear();
         GlyphidBridges.clear();
         GlyphidFlowFields.clear();
-        // A bench player holds chunk tickets and sits in the level's player list; left behind, the next world
-        // to load inherits a defender nobody placed.
         BenchPlayer.clear();
     }
 
@@ -245,6 +277,18 @@ public final class WFServerEvents {
                                         .executes(ctx -> spawnFrag(ctx.getSource(),
                                                 IntegerArgumentType.getInteger(ctx, "count"),
                                                 DoubleArgumentType.getDouble(ctx, "speed"))))))
+                .then(Commands.literal("boom")
+                        .executes(ctx -> boom(ctx.getSource(), "standard"))
+                        .then(Commands.argument("preset", StringArgumentType.word())
+                                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
+                                        new String[]{"small", "standard", "large"}, b))
+                                .executes(ctx -> boom(ctx.getSource(),
+                                        StringArgumentType.getString(ctx, "preset")))))
+                .then(Commands.literal("gas")
+                        .executes(ctx -> spawnGas(ctx.getSource(), GasCloud.DEFAULT_RADIUS))
+                        .then(Commands.argument("radius", IntegerArgumentType.integer(1, 32))
+                                .executes(ctx -> spawnGas(ctx.getSource(),
+                                        IntegerArgumentType.getInteger(ctx, "radius")))))
                 .then(Commands.literal("intercept")
                         .then(Commands.literal("nearest")
                                 .executes(ctx -> interceptNearest(ctx.getSource())))
@@ -289,6 +333,8 @@ public final class WFServerEvents {
                                                 StringArgumentType.getString(ctx, "code")))))
                         .then(Commands.literal("list")
                                 .executes(ctx -> stationList(ctx.getSource()))))
+                .then(mineDebugCommand())
+                .then(demolitionCommand())
                 .then(blueprintCommand())
                 .then(buildCommand())
                 .then(salvageCommand())
@@ -357,6 +403,105 @@ public final class WFServerEvents {
                                 .then(Commands.argument("count", IntegerArgumentType.integer(1, 10_000))
                                         .executes(ctx -> ColonyDebug.materialise(ctx.getSource(),
                                                 IntegerArgumentType.getInteger(ctx, "count"))))))
+                .then(Commands.literal("recon")
+                        .executes(ctx -> ReconDebug.status(ctx.getSource()))
+                        .then(Commands.literal("tracks")
+                                .executes(ctx -> ReconDebug.tracks(ctx.getSource())))
+                        .then(Commands.literal("explain")
+                                .executes(ctx -> ReconDebug.explain(ctx.getSource())))
+                        .then(Commands.literal("collect")
+                                .executes(ctx -> ReconDebug.collect(ctx.getSource(), 256.0))
+                                .then(Commands.argument("radius", DoubleArgumentType.doubleArg(1.0, 2048.0))
+                                        .executes(ctx -> ReconDebug.collect(ctx.getSource(),
+                                                DoubleArgumentType.getDouble(ctx, "radius")))))
+                        .then(Commands.literal("selftest")
+                                .executes(ctx -> ReconDebug.selfTest(ctx.getSource())))
+                        .then(Commands.literal("events")
+                                .executes(ctx -> ReconDebug.events(ctx.getSource(), 20))
+                                .then(Commands.argument("count", IntegerArgumentType.integer(1,
+                                                com.wf.wfballistics.recon.event.SeismicLog.MAX_CAPACITY))
+                                        .executes(ctx -> ReconDebug.events(ctx.getSource(),
+                                                IntegerArgumentType.getInteger(ctx, "count")))))
+                        .then(Commands.literal("weather")
+                                .executes(ctx -> ReconDebug.weather(ctx.getSource()))
+                                .then(Commands.literal("demo")
+                                        .executes(ctx -> ReconDebug.weatherDemo(ctx.getSource()))))
+                        .then(Commands.literal("demo")
+                                .executes(ctx -> ReconDebug.demo(ctx.getSource())))
+                        .then(Commands.literal("bind")
+                                .executes(ctx -> ReconDebug.bindings(ctx.getSource(),
+                                        ReconDebug.BIND_RADIUS))
+                                .then(Commands.literal("list")
+                                        .then(Commands.argument("radius", DoubleArgumentType.doubleArg(
+                                                        0.0, ReconDebug.BIND_MAX_RADIUS))
+                                                .executes(ctx -> ReconDebug.bindings(ctx.getSource(),
+                                                        DoubleArgumentType.getDouble(ctx, "radius")))))
+                                .then(Commands.argument("net", StringArgumentType.string())
+                                        .suggests(ReconDebug::suggestNets)
+                                        .executes(ctx -> ReconDebug.bind(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "net"),
+                                                ReconDebug.BIND_RADIUS))
+                                        .then(Commands.argument("radius", DoubleArgumentType.doubleArg(
+                                                        0.0, ReconDebug.BIND_MAX_RADIUS))
+                                                .executes(ctx -> ReconDebug.bind(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "net"),
+                                                        DoubleArgumentType.getDouble(ctx, "radius"))))))
+                        .then(Commands.literal("grid")
+                                .executes(ctx -> ReconDebug.grid(ctx.getSource()))
+                                .then(Commands.literal("demo")
+                                        .executes(ctx -> ReconDebug.gridDemo(ctx.getSource())))
+                                .then(Commands.literal("remint")
+                                        .executes(ctx -> ReconDebug.remint(ctx.getSource())))
+                                .then(Commands.literal("adopt")
+                                        .then(Commands.argument("uuid", StringArgumentType.string())
+                                                .executes(ctx -> ReconDebug.adopt(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "uuid")))))))
+                .then(Commands.literal("orbital")
+                        .executes(ctx -> OrbitalDebug.status(ctx.getSource()))
+                        .then(Commands.literal("demo")
+                                .executes(ctx -> OrbitalDebug.demo(ctx.getSource())))
+                        .then(Commands.literal("selftest")
+                                .executes(ctx -> OrbitalDebug.selfTest(ctx.getSource())))
+                        .then(Commands.literal("catalogue")
+                                .executes(ctx -> OrbitalDebug.catalogue(ctx.getSource())))
+                        .then(Commands.literal("survey")
+                                .executes(ctx -> OrbitalDebug.survey(ctx.getSource())))
+                        .then(Commands.literal("launch")
+                                .then(Commands.argument("payload", StringArgumentType.word())
+                                        .suggests(OrbitalDebug::suggestPayloads)
+                                        .executes(ctx -> OrbitalDebug.launch(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "payload"), "leo"))
+                                        .then(Commands.argument("orbit", StringArgumentType.word())
+                                                .suggests((c, b) -> SharedSuggestionProvider.suggest(
+                                                        new String[]{"leo", "meo", "heo"}, b))
+                                                .executes(ctx -> OrbitalDebug.launch(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "payload"),
+                                                        StringArgumentType.getString(ctx, "orbit"))))))
+                        .then(Commands.literal("cmd")
+                                .then(Commands.argument("callsign", StringArgumentType.word())
+                                        .suggests(OrbitalDebug::suggestCallsigns)
+                                        .then(Commands.argument("verb", StringArgumentType.greedyString())
+                                                .executes(ctx -> OrbitalDebug.command(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "callsign"),
+                                                        StringArgumentType.getString(ctx, "verb"))))))
+                        .then(Commands.literal("verbs")
+                                .then(Commands.argument("callsign", StringArgumentType.word())
+                                        .suggests(OrbitalDebug::suggestCallsigns)
+                                        .executes(ctx -> OrbitalDebug.verbs(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "callsign")))))
+                        .then(Commands.literal("at")
+                                .then(Commands.argument("callsign", StringArgumentType.word())
+                                        .suggests(OrbitalDebug::suggestCallsigns)
+                                        .then(Commands.argument("ticks", IntegerArgumentType.integer(
+                                                        -1200000, 1200000))
+                                                .executes(ctx -> OrbitalDebug.at(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "callsign"),
+                                                        IntegerArgumentType.getInteger(ctx, "ticks"))))))
+                        .then(Commands.literal("deorbit")
+                                .then(Commands.argument("callsign", StringArgumentType.word())
+                                        .suggests(OrbitalDebug::suggestCallsigns)
+                                        .executes(ctx -> OrbitalDebug.deorbit(ctx.getSource(),
+                                                StringArgumentType.getString(ctx, "callsign"))))))
                 .then(Commands.literal("industry")
                         .executes(ctx -> IndustryDebug.status(ctx.getSource()))
                         .then(Commands.literal("bases")
@@ -635,6 +780,21 @@ public final class WFServerEvents {
                                 .executes(ctx -> droneTelemetry(ctx.getSource())))
                         .then(Commands.literal("threads")
                                 .executes(ctx -> droneThreads(ctx.getSource())))
+                        .then(Commands.literal("camera")
+                                .executes(ctx -> CameraDebug.list(ctx.getSource()))
+                                .then(Commands.literal("stats")
+                                        .executes(ctx -> CameraDebug.stats(ctx.getSource()))
+                                        .then(Commands.literal("reset")
+                                                .executes(ctx -> CameraDebug.reset(ctx.getSource()))))
+                                .then(Commands.literal("demo")
+                                        .executes(ctx -> CameraDebug.demo(ctx.getSource())))
+                                .then(Commands.literal("fit")
+                                        .then(Commands.literal("recon")
+                                                .executes(ctx -> CameraDebug.fit(ctx.getSource(), "recon")))
+                                        .then(Commands.literal("standard")
+                                                .executes(ctx -> CameraDebug.fit(ctx.getSource(), "standard")))
+                                        .then(Commands.literal("none")
+                                                .executes(ctx -> CameraDebug.fit(ctx.getSource(), "none")))))
                         .then(Commands.literal("muster")
                                 .executes(ctx -> droneMuster(ctx.getSource())))
                         .then(Commands.literal("sim")
@@ -672,6 +832,40 @@ public final class WFServerEvents {
                                                                 Vec3Argument.getVec3(ctx, "destination"),
                                                                 IntegerArgumentType.getInteger(ctx, "count"),
                                                                 StringArgumentType.getString(ctx, "warhead")))))))
+                        .then(Commands.literal("minelay")
+                                .then(Commands.argument("destination", Vec3Argument.vec3())
+                                        .executes(ctx -> minelayDrones(ctx.getSource(),
+                                                Vec3Argument.getVec3(ctx, "destination"), 1, "",
+                                                MineLoad.DEFAULT_MINES, MineLoad.DEFAULT_SPACING))
+                                        .then(Commands.argument("count", IntegerArgumentType.integer(1, 16))
+                                                .executes(ctx -> minelayDrones(ctx.getSource(),
+                                                        Vec3Argument.getVec3(ctx, "destination"),
+                                                        IntegerArgumentType.getInteger(ctx, "count"), "",
+                                                        MineLoad.DEFAULT_MINES, MineLoad.DEFAULT_SPACING))
+                                                .then(Commands.argument("mine", StringArgumentType.word())
+                                                        .suggests(SOWN_MINES)
+                                                        .executes(ctx -> minelayDrones(ctx.getSource(),
+                                                                Vec3Argument.getVec3(ctx, "destination"),
+                                                                IntegerArgumentType.getInteger(ctx, "count"),
+                                                                StringArgumentType.getString(ctx, "mine"),
+                                                                MineLoad.DEFAULT_MINES, MineLoad.DEFAULT_SPACING))
+                                                        .then(Commands.argument("mines",
+                                                                        IntegerArgumentType.integer(1, MineLoad.MAX_MINES))
+                                                                .executes(ctx -> minelayDrones(ctx.getSource(),
+                                                                        Vec3Argument.getVec3(ctx, "destination"),
+                                                                        IntegerArgumentType.getInteger(ctx, "count"),
+                                                                        StringArgumentType.getString(ctx, "mine"),
+                                                                        IntegerArgumentType.getInteger(ctx, "mines"),
+                                                                        MineLoad.DEFAULT_SPACING))
+                                                                .then(Commands.argument("spacing",
+                                                                                DoubleArgumentType.doubleArg(MineLoad.MIN_SPACING,
+                                                                                        MineLoad.MAX_SPACING))
+                                                                        .executes(ctx -> minelayDrones(ctx.getSource(),
+                                                                                Vec3Argument.getVec3(ctx, "destination"),
+                                                                                IntegerArgumentType.getInteger(ctx, "count"),
+                                                                                StringArgumentType.getString(ctx, "mine"),
+                                                                                IntegerArgumentType.getInteger(ctx, "mines"),
+                                                                                DoubleArgumentType.getDouble(ctx, "spacing")))))))))
                         .then(Commands.literal("pad")
                                 .then(Commands.argument("pos", BlockPosArgument.blockPos())
                                         .then(Commands.argument("destination", Vec3Argument.vec3())
@@ -765,11 +959,6 @@ public final class WFServerEvents {
                                                                                 DoubleArgumentType.getDouble(ctx, "spacing"),
                                                                                 StringArgumentType.getString(ctx, "coordination"),
                                                                                 DroneMission.DEFAULT_LAUNCH_INTERVAL, true))
-                                                                        // The launch gap, which the pad's own
-                                                                        // screen has always offered and this
-                                                                        // did not. 0 is "all at once", and it
-                                                                        // is the setting form-up was hardest
-                                                                        // to get right under.
                                                                         .then(Commands.argument("interval",
                                                                                         IntegerArgumentType.integer(0,
                                                                                                 DroneMission.MAX_LAUNCH_INTERVAL))
@@ -782,17 +971,13 @@ public final class WFServerEvents {
                                                                                         IntegerArgumentType.getInteger(ctx, "interval"),
                                                                                         true)))))))))
                         .then(programCommand())));
+
+        ReconMapCommand.register(event.getDispatcher());
     }
 
     // --- programs ---
 
-    /**
-     * The {@code program} subtree: build a queue of steps one command at a time, then fly it.
-     *
-     * <p>Each {@code add} appends to the invoking player's draft (see {@link DroneDrafts}) rather than
-     * launching anything, which is what makes a multi-stop mission writable at all from a command line: a
-     * single command taking an arbitrary number of waypoints is not a shape brigadier has.
-     */
+    /** The {@code program} subtree: build a queue of steps one command at a time, then fly it. */
     private static LiteralArgumentBuilder<CommandSourceStack> programCommand() {
         LiteralArgumentBuilder<CommandSourceStack> program = Commands.literal("program")
                 .executes(ctx -> listProgram(ctx.getSource()))
@@ -805,18 +990,14 @@ public final class WFServerEvents {
                 .then(Commands.literal("exfil")
                         .executes(ctx -> addStep(ctx.getSource(), new DroneTask.Exfil())));
 
-        // The steps that are nothing but a place to be. Same shape each, so they are built rather than typed
-        // out four times.
         for (DroneTask.Kind kind : new DroneTask.Kind[]{DroneTask.Kind.MOVE_TO, DroneTask.Kind.DELIVER,
-                DroneTask.Kind.COLLECT, DroneTask.Kind.STRIKE}) {
+                DroneTask.Kind.COLLECT, DroneTask.Kind.STRIKE, DroneTask.Kind.MINELAY}) {
             program = program.then(Commands.literal(kind.id())
                     .then(Commands.argument("at", Vec3Argument.vec3())
                             .executes(ctx -> addStep(ctx.getSource(),
                                     kind.at(Vec3Argument.getVec3(ctx, "at"))))));
         }
 
-        // Loiter carries two more numbers, and both have a default worth having: a wide circle, and "stay
-        // until the battery says to leave".
         program = program.then(Commands.literal("loiter")
                 .then(Commands.argument("at", Vec3Argument.vec3())
                         .executes(ctx -> addStep(ctx.getSource(), new DroneTask.Loiter(
@@ -832,8 +1013,6 @@ public final class WFServerEvents {
                                                 DoubleArgumentType.getDouble(ctx, "radius"),
                                                 IntegerArgumentType.getInteger(ctx, "seconds") * 20)))))));
 
-        // "Hold" is a loiter with no circle to it. Spelled separately because that is how anyone asking for
-        // it would say it, not because it is a different step.
         program = program.then(Commands.literal("hold")
                 .then(Commands.argument("at", Vec3Argument.vec3())
                         .executes(ctx -> addStep(ctx.getSource(),
@@ -947,10 +1126,7 @@ public final class WFServerEvents {
         return tasks.size();
     }
 
-    /**
-     * Fly the draft. The mission kind is read off the program rather than asked for: a program that delivers
-     * needs a crate, one that strikes needs a warhead, and one that only watches needs neither.
-     */
+    /** Fly the draft. */
     private static int launchProgram(CommandSourceStack src, int count, String formation, String warhead,
                                      double spacing, String coordination) {
         ServerLevel level = src.getLevel();
@@ -963,6 +1139,7 @@ public final class WFServerEvents {
 
         boolean delivers = program.tasks().stream().anyMatch(t -> t.kind() == DroneTask.Kind.DELIVER);
         boolean strikes = program.tasks().stream().anyMatch(t -> t.kind() == DroneTask.Kind.STRIKE);
+        boolean lays = program.tasks().stream().anyMatch(t -> t.kind() == DroneTask.Kind.MINELAY);
 
         DroneMission mission = new DroneMission();
         mission.program = program;
@@ -977,6 +1154,21 @@ public final class WFServerEvents {
                         + WarheadRegistry.ids().stream().map(ResourceLocation::getPath).sorted().toList()));
                 return 0;
             }
+        }
+        if (lays) {
+            if (strikes) {
+                src.sendFailure(Component.literal(
+                        "A program cannot both strike and lay mines: one load, one drone. Split it in two."));
+                return 0;
+            }
+            ResourceLocation mine = warhead.isEmpty()
+                    ? MinePresetRegistry.defaultSownId() : MinePresetRegistry.parse(warhead);
+            if (!MinePresetRegistry.exists(mine)) {
+                src.sendFailure(Component.literal("Unknown mine '" + warhead + "'. Known: "
+                        + MinePresetRegistry.all().stream().map(p -> p.id().getPath()).sorted().toList()));
+                return 0;
+            }
+            mission.mines = MineLoad.of(mine, MineLoad.DEFAULT_MINES);
         }
 
         DroneMission.Result result = mission.dispatch(level, origin, delivers ? new CompoundTag() : null);
@@ -994,8 +1186,8 @@ public final class WFServerEvents {
 
     /**
      * @return whose draft this command edits. Keyed on the player so two people writing programs at once do
-     * not write each other's; anything without a player behind it (a command block, the console) shares one
-     * draft, which is the only sensible reading of "the server's program".
+     *      not write each other's; anything without a player behind it (a command block, the console) shares one
+     *      draft, which is the only sensible reading of "the server's program".
      */
     private static UUID draftOwner(CommandSourceStack src) {
         return src.getEntity() != null ? src.getEntity().getUUID() : SERVER_DRAFT;
@@ -1003,10 +1195,7 @@ public final class WFServerEvents {
 
     private static final UUID SERVER_DRAFT = new UUID(0L, 0L);
 
-    /**
-     * Dispatches a delivery flight from the player's position. The crate is spawned pre-attached to the
-     * leader; the mission is refused outright if the battery can't cover the outbound leg.
-     */
+    /** Dispatches a delivery flight from the player's position. */
     private static int dispatchDrones(CommandSourceStack src, Vec3 destination, int count, String formation,
                                       double spacing, String coordination, int interval,
                                       boolean withCrate) {
@@ -1021,8 +1210,6 @@ public final class WFServerEvents {
         mission.coordinationId = CoordinationModels.parse(coordination);
         mission.launchInterval = DroneMission.clampInterval(interval);
 
-        // An empty tag still means "carrying a crate": the drone holds cargo, crates are only spawned
-        // when one is let go of.
         CompoundTag crate = withCrate ? new CompoundTag() : null;
 
         DroneMission.Result result = mission.dispatch(level, origin, crate);
@@ -1044,10 +1231,7 @@ public final class WFServerEvents {
     private static final String[] SCENARIOS =
             {"delivery", "strike", "squad", "lowbattery", "downed", "longrange", "terrain"};
 
-    /**
-     * Run the pure-logic checks and report them. Everything the drone AI decides is a function of a snapshot,
-     * so the whole decision layer can be asserted here without flying anything.
-     */
+    /** Run the pure-logic checks and report them. */
     private static int selfTest(CommandSourceStack src) {
         List<DroneSelfTest.Result> results = DroneSelfTest.runAll();
         long failed = results.stream().filter(r -> !r.passed()).count();
@@ -1092,9 +1276,6 @@ public final class WFServerEvents {
                 mission.batteryCapacity = 8000.0;
             }
             case "terrain" -> {
-                // The navigation test. At the default 40 blocks up a drone simply flies over most terrain and
-                // never has to think about it; down at 10 it has to follow the ground, climb ridges early and
-                // route around anything it cannot climb. Watch the agl and rte columns of `drone list`.
                 mission.destination = origin.add(400.0, 0.0, 400.0);
                 mission.cruiseAltitude = 10.0;
                 mission.batteryCapacity = 6000.0;
@@ -1242,10 +1423,7 @@ public final class WFServerEvents {
         return 1;
     }
 
-    /**
-     * Dispatch an armed flight. Each drone carries its own warhead and flies an attack run at the target,
-     * releasing early enough that the bomb's fall carries it onto the aim point.
-     */
+    /** Dispatch an armed flight. */
     private static int strikeDrones(CommandSourceStack src, Vec3 destination, int count, String warhead) {
         ServerLevel level = src.getLevel();
         Vec3 origin = src.getPosition();
@@ -1273,10 +1451,54 @@ public final class WFServerEvents {
         return result.ordered();
     }
 
-    /**
-     * Point a drone pad at a destination. The pad then flies that mission on every redstone rising edge,
-     * carrying whatever is in its cargo slots.
-     */
+    /** Suggests the mines built to be dispensed, first and by themselves. */
+    private static final com.mojang.brigadier.suggestion.SuggestionProvider<CommandSourceStack> SOWN_MINES =
+            (ctx, builder) -> SharedSuggestionProvider.suggest(
+                    MinePresetRegistry.sown().stream().map(preset -> preset.id().getPath()), builder);
+
+    /** Dispatch a mine-laying flight. */
+    private static int minelayDrones(CommandSourceStack src, Vec3 destination, int count, String mine,
+                                     int mines, double spacing) {
+        ServerLevel level = src.getLevel();
+        Vec3 origin = src.getPosition();
+
+        ResourceLocation presetId = mine.isEmpty()
+                ? MinePresetRegistry.defaultSownId() : MinePresetRegistry.parse(mine);
+        MinePreset preset = MinePresetRegistry.get(presetId);
+        if (preset == null) {
+            src.sendFailure(Component.literal("Unknown mine '" + mine + "'. Known: "
+                    + MinePresetRegistry.all().stream().map(p -> p.id().getPath()).sorted().toList()));
+            return 0;
+        }
+
+        DroneMission mission = new DroneMission();
+        mission.destination = destination;
+        mission.count = count;
+        mission.mines = MineLoad.of(presetId, mines, spacing);
+        mission.program = DroneProgram.of(List.of(new DroneTask.Minelay(destination), new DroneTask.Exfil()));
+
+        DroneMission.Result result = mission.dispatch(level, origin, null);
+        if (!result.ok()) {
+            src.sendFailure(Component.literal("Lay refused: " + result.error()));
+            return 0;
+        }
+
+        if (!preset.sownOnly()) {
+            src.sendSuccess(() -> Component.literal(presetId.getPath()
+                            + " is not built to be sown: it has no self-destruct and may not land the right way up")
+                    .withStyle(ChatFormatting.YELLOW), false);
+        }
+
+        MineLoad rack = mission.mines;
+        src.sendSuccess(() -> Component.literal(String.format(
+                "Launched %d minelayer(s): %d x %s each, %.0fm strip at %d, %d, %d (%dm out)",
+                result.ordered(), rack.capacity(), presetId.getPath(), rack.laneLength(),
+                (int) destination.x, (int) destination.y, (int) destination.z,
+                (int) origin.distanceTo(destination))), true);
+        return result.ordered();
+    }
+
+    /** Point a drone pad at a destination. */
     private static int configurePad(CommandSourceStack src, BlockPos pos, Vec3 destination, int count,
                                     String formation, double spacing, String coordination) {
         if (!(src.getLevel().getBlockEntity(pos) instanceof DronePadBlockEntity pad)) {
@@ -1302,17 +1524,21 @@ public final class WFServerEvents {
      * @return a short description of what a drone is carrying, for the listing.
      */
     private static String load(boolean hasCrate, @Nullable ResourceLocation payloadId) {
+        return load(hasCrate, payloadId, null);
+    }
+
+    private static String load(boolean hasCrate, @Nullable ResourceLocation payloadId,
+                               @Nullable com.wf.wfballistics.drone.MineLoad mines) {
         if (payloadId != null) {
             return "armed:" + payloadId.getPath();
+        }
+        if (mines != null && !mines.empty()) {
+            return "mines:" + mines.label();
         }
         return hasCrate ? "carrying" : "empty";
     }
 
-    /**
-     * Turn off-world simulation on or off. Off keeps drones in the world for a whole mission, which is the
-     * only way to watch the terrain following work when there is no player out on the route to hold them
-     * real.
-     */
+    /** Turn off-world simulation on or off. */
     private static int droneSim(CommandSourceStack src, Boolean enabled) {
         if (enabled != null) {
             SimDroneManager.offloadEnabled = enabled;
@@ -1323,23 +1549,8 @@ public final class WFServerEvents {
         return on ? 1 : 0;
     }
 
-    /**
-     * Report where the planning actually runs. The off-thread split is the load-bearing property of the drone
-     * AI, so it is worth being able to check rather than assume: this shows the thread the last terrain search
-     * ran on, what it cost, and whether the assertions guarding the boundary are armed.
-     */
-    /**
-     * Why every squad in this dimension is or is not ready to leave form-up.
-     *
-     * <p>Exists because nothing did. A flight holding over its pad reported only "holding for the flight
-     * (N of M up)", which is true of a squad that is one drone short and equally true of one that has been
-     * assembled for a minute and is being asked a question it cannot answer. Two configurations could never
-     * satisfy the old readiness test at all, and both of them looked from the outside exactly like a squad
-     * still waiting for a straggler.
-     *
-     * <p>So this prints the two gates separately, in the frame the squad is actually flying, and names the
-     * shut one.
-     */
+    /** Report where the planning actually runs. */
+    /** Why every squad in this dimension is or is not ready to leave form-up. */
     private static int droneMuster(CommandSourceStack src) {
         List<SquadView> squads = DroneAiScheduler.squadsFor(src.getLevel());
         if (squads.isEmpty()) {
@@ -1383,23 +1594,17 @@ public final class WFServerEvents {
                     "  climbed out: %s%s", climbing.isEmpty() ? "yes" : "NO - " + climbing,
                     climbing.isEmpty() ? "" : " still on the way up"))
                     .withStyle(climbing.isEmpty() ? ChatFormatting.GRAY : ChatFormatting.RED), false);
-            // The slot error is printed whichever model is flying, because it is the number that used to
-            // decide this for all of them: under a model with no slots it is the size of the mistake.
             src.sendSuccess(() -> Component.literal(String.format(
                     "  in formation: %s (worst slot error %.1f against a tolerance of %.1f%s)",
                     formed ? "yes" : "NO", worst, tolerance,
                     anchor == null ? ", no frame yet" : ""))
                     .withStyle(formed ? ChatFormatting.GRAY : ChatFormatting.RED), false);
             if (!formed && anchor != null) {
-                // One straggler and a squad that cannot hold its shape at all look identical from a single
-                // worst-case number, and they want opposite fixes.
                 Formation shape = Formations.get(squad.formationId());
                 Vec3 forward = Formation.forward(anchor.yaw());
                 for (DroneSnapshot member : squad.slots()) {
                     Vec3 slot = shape.slot(squad.indexOf(member), anchor.pos(), forward, squad.spacing());
                     double error = member.pos().distanceTo(slot);
-                    // Split by axis, because the flight model gives the two separate budgets and a squad
-                    // that is laterally perfect and vertically smeared is a different fault entirely.
                     Vec3 gap = member.pos().subtract(slot);
                     src.sendSuccess(() -> Component.literal(String.format(
                             "    slot %-2d %-8s off by %5.1f (flat %5.1f, vert %+6.1f)",
@@ -1503,6 +1708,275 @@ public final class WFServerEvents {
                                 .suggests(ROLES)
                                 .executes(ctx -> stationRole(ctx.getSource(),
                                         StringArgumentType.getString(ctx, "role"), false))));
+    }
+
+    /** {@code /wfballistics debug}: the two overlays plus a text dump. */
+    private static LiteralArgumentBuilder<CommandSourceStack> mineDebugCommand() {
+        return Commands.literal("debug")
+                .then(Commands.literal("mines")
+                        .executes(ctx -> setMineDebug(ctx.getSource(), !MineDebug.renderAreas()))
+                        .then(Commands.literal("on").executes(ctx -> setMineDebug(ctx.getSource(), true)))
+                        .then(Commands.literal("off").executes(ctx -> setMineDebug(ctx.getSource(), false))))
+                .then(Commands.literal("explosions")
+                        .executes(ctx -> setExplosionDebug(ctx.getSource(), !ExplosionTrace.enabled()))
+                        .then(Commands.literal("on").executes(ctx -> setExplosionDebug(ctx.getSource(), true)))
+                        .then(Commands.literal("off").executes(ctx -> setExplosionDebug(ctx.getSource(), false)))
+                        .then(Commands.literal("status").executes(ctx -> {
+                            var traces = ExplosionTrace.recent();
+                            long now = ctx.getSource().getLevel().getGameTime();
+                            ctx.getSource().sendSuccess(() -> Component.literal(String.format(
+                                    "recording=%s  traces=%d  server t=%d",
+                                    ExplosionTrace.enabled(), traces.size(), now)), false);
+                            for (var t : traces) {
+                                ctx.getSource().sendSuccess(() -> Component.literal(String.format(
+                                        "  t=%d (age %d)  size=%.1f  rays=%d/%d  cone=%s",
+                                        t.gameTime(), now - t.gameTime(), t.size(), t.rays().size(),
+                                        t.totalRays(), t.axis() == null ? "none"
+                                                : String.format("(%.2f, %.2f, %.2f) +/-%.0f deg",
+                                                        t.axis().x, t.axis().y, t.axis().z,
+                                                        t.halfAngleDeg()))), false);
+                                for (var v : t.victims()) {
+                                    ctx.getSource().sendSuccess(() -> Component.literal(String.format(
+                                            "    %-13s %-6s dmg=%.1f at %.1f %.1f %.1f", v.verdict(),
+                                            v.name(), v.damage(), v.pos().x, v.pos().y, v.pos().z)), false);
+                                }
+                            }
+                            return 1;
+                        }))
+                        .then(Commands.literal("clear").executes(ctx -> {
+                            ExplosionTrace.clear();
+                            ctx.getSource().sendSuccess(() -> Component.literal("Cleared recorded blasts."), false);
+                            return 1;
+                        })))
+                .then(Commands.literal("scatter")
+                        .executes(ctx -> scatterMines(ctx.getSource(), 8,
+                                MinePresetRegistry.defaultId().getPath()))
+                        .then(Commands.argument("count", IntegerArgumentType.integer(1, 200))
+                                .executes(ctx -> scatterMines(ctx.getSource(),
+                                        IntegerArgumentType.getInteger(ctx, "count"),
+                                        MinePresetRegistry.defaultId().getPath()))
+                                .then(Commands.argument("preset", StringArgumentType.string())
+                                        .suggests(MINE_PRESETS)
+                                        .executes(ctx -> scatterMines(ctx.getSource(),
+                                                IntegerArgumentType.getInteger(ctx, "count"),
+                                                StringArgumentType.getString(ctx, "preset"))))))
+                .then(Commands.literal("mine")
+                        .executes(ctx -> mineInfo(ctx.getSource()))
+                        .then(Commands.literal("lay")
+                                .then(Commands.argument("preset", StringArgumentType.string())
+                                        .suggests(MINE_PRESETS)
+                                        .then(Commands.argument("at", Vec3Argument.vec3())
+                                                .executes(ctx -> layMine(ctx.getSource(),
+                                                        StringArgumentType.getString(ctx, "preset"),
+                                                        Vec3Argument.getVec3(ctx, "at"), 0.0f,
+                                                        Laying.AS_BUILT))
+                                                .then(Commands.argument("yaw",
+                                                                FloatArgumentType.floatArg(-360.0f, 360.0f))
+                                                        .executes(ctx -> layMine(ctx.getSource(),
+                                                                StringArgumentType.getString(ctx, "preset"),
+                                                                Vec3Argument.getVec3(ctx, "at"),
+                                                                FloatArgumentType.getFloat(ctx, "yaw"),
+                                                                Laying.AS_BUILT))
+                                                        .then(Commands.literal("armed")
+                                                                .executes(ctx -> layMine(ctx.getSource(),
+                                                                        StringArgumentType.getString(ctx, "preset"),
+                                                                        Vec3Argument.getVec3(ctx, "at"),
+                                                                        FloatArgumentType.getFloat(ctx, "yaw"),
+                                                                        Laying.ARMED)))
+                                                        .then(Commands.literal("safe")
+                                                                .executes(ctx -> layMine(ctx.getSource(),
+                                                                        StringArgumentType.getString(ctx, "preset"),
+                                                                        Vec3Argument.getVec3(ctx, "at"),
+                                                                        FloatArgumentType.getFloat(ctx, "yaw"),
+                                                                        Laying.SAFE))))))));
+    }
+
+    /** How {@code /wfballistics debug mine lay} leaves the mine it laid. */
+    private enum Laying {
+        /** Whatever the preset says: counting down, or safe if it needs activating. */
+        AS_BUILT,
+        /** Past the arming delay, the way a rack that has been sitting there a minute already is. */
+        ARMED,
+        /** Inert, which is what laying one while crouching does; see {@code MineItem#useOn}. */
+        SAFE
+    }
+
+    /** Lays one mine from its preset, facing a given yaw, optionally already armed. */
+    private static int layMine(CommandSourceStack source, String presetName, Vec3 at, float yaw,
+                               Laying how) {
+        ServerLevel level = source.getLevel();
+        MinePreset preset = MinePresetRegistry.get(MinePresetRegistry.parse(presetName));
+        if (preset == null) {
+            source.sendFailure(Component.literal("No mine preset '" + presetName + "'."));
+            return 0;
+        }
+        MineEntity mine = preset.build(level, yaw);
+        mine.moveTo(at.x, at.y, at.z, yaw, 0.0f);
+        level.addFreshEntity(mine);
+        switch (how) {
+            case ARMED -> {
+                mine.activate();
+                mine.forceArmed();
+            }
+            case SAFE -> mine.layInert();
+            case AS_BUILT -> {
+            }
+        }
+        source.sendSuccess(() -> Component.literal(String.format("Laid %s at %.1f %.1f %.1f facing %.0f (%s)",
+                preset.id().getPath(), at.x, at.y, at.z, yaw, mine.getState())), false);
+        return 1;
+    }
+
+    /** {@code /wfballistics demolition ...}: the mining-charge side of the mod. */
+    private static LiteralArgumentBuilder<CommandSourceStack> demolitionCommand() {
+        return Commands.literal("demolition")
+                .then(Commands.literal("detonate")
+                        .then(Commands.argument("at", BlockPosArgument.blockPos())
+                                .executes(ctx -> detonateCharge(ctx.getSource(),
+                                        BlockPosArgument.getLoadedBlockPos(ctx, "at")))))
+                .then(Commands.literal("fire")
+                        .then(Commands.argument("targets", EntityArgument.entities())
+                                .executes(ctx -> fireOnCommand(ctx.getSource(),
+                                        EntityArgument.getEntities(ctx, "targets")))));
+    }
+
+    /**
+     * Fires detonatable entities (mines), without a detonator, the way {@code detonate} fires a charge without one.
+     */
+    private static int fireOnCommand(CommandSourceStack source,
+                                     java.util.Collection<? extends Entity> targets) {
+        ServerLevel level = source.getLevel();
+        int fired = 0;
+        for (Entity entity : targets) {
+            if (entity instanceof com.wf.wfballistics.demolition.IDetonatableEntity detonatable
+                    && detonatable.detonateOnCommand(level, null)) {
+                fired++;
+            }
+        }
+        int count = fired;
+        if (count == 0) {
+            source.sendFailure(Component.literal("Nothing detonatable in that selection."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Fired " + count + " on command"), true);
+        return count;
+    }
+
+    /** Fire the mining charge at a position without a detonator. */
+    private static int detonateCharge(CommandSourceStack source, BlockPos at) {
+        ServerLevel level = source.getLevel();
+        if (!com.wf.wfballistics.demolition.IDetonatable.isExplosive(level.getBlockState(at))) {
+            source.sendFailure(Component.literal("No detonatable charge at "
+                    + at.getX() + ", " + at.getY() + ", " + at.getZ()));
+            return 0;
+        }
+        com.wf.wfballistics.demolition.IDetonatable.tryDetonate(level, at, null);
+        source.sendSuccess(() -> Component.literal("Detonated charge at "
+                + at.getX() + ", " + at.getY() + ", " + at.getZ()), true);
+        return 1;
+    }
+
+    private static final com.mojang.brigadier.suggestion.SuggestionProvider<CommandSourceStack> MINE_PRESETS =
+            (ctx, builder) -> SharedSuggestionProvider.suggest(
+                    MinePresetRegistry.all().stream().map(preset -> preset.id().getPath()), builder);
+
+    /**
+     * Throws a handful of mines up and out from wherever the command was run, the way a deployer or a dispersing
+     * payload will: they turn over on the way down and lie at whatever angle they land at.
+     */
+    private static int scatterMines(CommandSourceStack source, int count, String presetName) {
+        ServerLevel level = source.getLevel();
+        MinePreset preset = MinePresetRegistry.get(MinePresetRegistry.parse(presetName));
+        if (preset == null) {
+            source.sendFailure(Component.literal("No mine preset '" + presetName + "'."));
+            return 0;
+        }
+        Vec3 from = source.getPosition()
+                .add(0.0, 1.0, 0.0);
+        RandomSource random = level.getRandom();
+        for (int i = 0; i < count; i++) {
+            MineEntity mine = preset.build(level, random.nextFloat() * 360.0f);
+            mine.moveTo(from.x, from.y, from.z, mine.getYRot(), 0.0f);
+            mine.scatter(new Vec3((random.nextDouble() - 0.5) * 0.7,
+                    0.32 + random.nextDouble() * 0.28,
+                    (random.nextDouble() - 0.5) * 0.7), random);
+            level.addFreshEntity(mine);
+        }
+        source.sendSuccess(() -> Component.literal(
+                "Scattered " + count + " x " + preset.id().getPath()), false);
+        return count;
+    }
+
+    private static int setMineDebug(CommandSourceStack source, boolean value) {
+        MineDebug.setRenderAreas(value);
+        source.sendSuccess(() -> Component.literal("Mine detection overlay " + (value ? "on" : "off")
+                + (value ? " (singleplayer only)" : "")), false);
+        return 1;
+    }
+
+    private static int setExplosionDebug(CommandSourceStack source, boolean value) {
+        ExplosionTrace.setEnabled(value);
+        source.sendSuccess(() -> Component.literal("Explosion raycast recording " + (value ? "on" : "off")
+                + (value ? " (singleplayer only to draw)" : "")), false);
+        return 1;
+    }
+
+    /** Prints the nearest mine's live state. */
+    private static int mineInfo(CommandSourceStack source) {
+        ServerLevel level = source.getLevel();
+        Vec3 at = source.getPosition();
+        MineEntity nearest = null;
+        double bestSq = Double.MAX_VALUE;
+        for (MineEntity mine : level.getEntitiesOfClass(MineEntity.class,
+                new AABB(at, at).inflate(64.0), MineEntity::isAlive)) {
+            double d = mine.distanceToSqr(at);
+            if (d < bestSq) {
+                bestSq = d;
+                nearest = mine;
+            }
+        }
+        if (nearest == null) {
+            source.sendFailure(Component.literal("No mine within 64 blocks."));
+            return 0;
+        }
+        MineEntity mine = nearest;
+        double distance = Math.sqrt(bestSq);
+        Vec3 facing = mine.facing();
+        source.sendSuccess(() -> Component.literal(String.format("Mine %s at %.1f %.1f %.1f",
+                mine.getStringUUID().substring(0, 8), mine.getX(), mine.getY(), mine.getZ())), false);
+        source.sendSuccess(() -> Component.literal(String.format(
+                "  state=%s  trigger=%s  warhead=%s  bounds=%s", mine.getState(),
+                mine.getTriggerId().getPath(), mine.getDetonationId().getPath(),
+                mine.bounds())), false);
+        source.sendSuccess(() -> Component.literal(String.format(
+                "  trigger=%.1f  crouching=%.1f  arc=%.0f  yaw=%.0f facing=(%.2f, %.2f)",
+                mine.getTriggerRange(), mine.getSneakTriggerRange(), mine.getArc(), mine.getYRot(),
+                facing.x, facing.z)), false);
+        source.sendSuccess(() -> Component.literal(String.format(
+                "  pitch=%.0f  roll=%.0f  tumble=%.0f deg/t  rest tilt=%.0f", mine.getXRot(),
+                mine.getRoll(), mine.getTumble(), mine.getRestTilt())), false);
+        source.sendSuccess(() -> Component.literal(String.format(
+                "  distance from here=%.2f  in arc=%s", distance,
+                inArc(mine, at) ? "yes" : "no")), false);
+        source.sendSuccess(() -> Component.literal(String.format(
+                "  wet=%s  arms only in water=%s  self-destruct=%s", mine.isWet(), mine.armsOnlyInWater(),
+                mine.selfDestructTicks() <= 0 ? "never"
+                        : mine.ticksToSelfDestruct() / 20 + "s of " + mine.selfDestructTicks() / 20 + "s")),
+                false);
+        return 1;
+    }
+
+    /** Whether {@code at} lies inside a directional mine's wedge, which is the usual reason for silence. */
+    private static boolean inArc(MineEntity mine, Vec3 at) {
+        Vec3 facing = mine.facing();
+        double dx = at.x - mine.getX();
+        double dz = at.z - mine.getZ();
+        double horizontal = Math.sqrt(dx * dx + dz * dz);
+        if (horizontal < 1.0E-4) {
+            return true;
+        }
+        double cos = (dx * facing.x + dz * facing.z) / horizontal;
+        return cos >= Math.cos(Math.toRadians(mine.getArc() * 0.5));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> blueprintCommand() {
@@ -1620,8 +2094,8 @@ public final class WFServerEvents {
 
     /**
      * @return the station record for the pad the caller is standing at, complaining to them if there is not
-     * one. Every station command is about <em>your</em> station, which is the only one whose position you are
-     * allowed to know.
+     *      one. Every station command is about <em>your</em> station, which is the only one whose position you are
+     *      allowed to know.
      */
     @Nullable
     private static StationRecord ownStation(CommandSourceStack src) {
@@ -1639,12 +2113,12 @@ public final class WFServerEvents {
 
     /**
      * @return the faction of whoever ran this command, or null for the console, which has none, and whose
-     * jobs are therefore judged as an outsider's on every claim.
+     *      jobs are therefore judged as an outsider's on every claim.
      */
     @Nullable
     private static UUID factionOf(CommandSourceStack src) {
         ServerPlayer player = src.getPlayer();
-        return player == null ? null : WarforgeCompat.factionOfPlayer(player.getUUID());
+        return player == null ? null : com.wf.wfballistics.recon.ReconOwners.owningEntity(player);
     }
 
     /**
@@ -1675,8 +2149,6 @@ public final class WFServerEvents {
         src.sendSuccess(() -> Component.literal(names.size() + " blueprint(s):")
                 .withStyle(ChatFormatting.GOLD), false);
         for (String name : names) {
-            // Names only. Reading every file to show its dimensions would mean parsing megabytes to answer
-            // "what have I got"; `blueprint <name>` is where the reading happens.
             src.sendSuccess(() -> Component.literal("• " + name), false);
         }
         return names.size();
@@ -1824,14 +2296,7 @@ public final class WFServerEvents {
         return 1;
     }
 
-    /**
-     * Put drones from the nearest pad onto a job.
-     *
-     * <p>The drones fly out as an ordinary squad, which is what gets them formation-keeping, staggered
-     * launch, terrain following and battery aborts for nothing. What makes them builders rather than
-     * couriers is the assignment they are given the moment they are airborne; from the flight model's point
-     * of view the destination simply changes every time one of them finishes a block.
-     */
+    /** Put drones from the nearest pad onto a job. */
     private static int jobWork(CommandSourceStack src, String prefix, int drones) {
         WorkJob job = findJob(src, prefix);
         if (job == null) {
@@ -1852,16 +2317,11 @@ public final class WFServerEvents {
         }
         DroneMission mission = pad.mission();
         mission.count = drones;
-        // Aimed at the site, not at a block: the pilot rewrites the destination on the first tick a drone is
-        // in the air, and the only thing this has to do is be somewhere the battery check can price.
         mission.destination = Vec3.atCenterOf(job.centre());
         mission.payloadId = null;
         mission.program = DroneProgram.EMPTY;
         mission.mode = ExchangeMode.DIRECT;
         mission.recipientCode = null;
-        // Carried on the mission rather than stamped onto the drones the dispatch hands back, because on a
-        // staggered launch most of them do not exist yet. DroneLaunchQueue replays the same mission for each
-        // one as it comes up, so every drone in the flight joins the same job.
         mission.jobId = job.id();
         DroneMission.Result result = mission.dispatch(src.getLevel(),
                 Vec3.atCenterOf(pad.getBlockPos()).add(0.0, 1.0, 0.0), null);
@@ -1889,7 +2349,7 @@ public final class WFServerEvents {
 
     /**
      * @return the one job whose id starts with {@code prefix}, or null having said why not. Prefixes rather
-     * than full UUIDs because the list prints prefixes and nobody is retyping thirty-six characters
+     *      than full UUIDs because the list prints prefixes and nobody is retyping thirty-six characters
      */
     @Nullable
     private static WorkJob findJob(CommandSourceStack src, String prefix) {
@@ -1937,8 +2397,6 @@ public final class WFServerEvents {
         }
         String own = pad.stationCode(src.getLevel());
         StationRegistry stations = StationRegistry.get(src.getLevel());
-        // Deliberately not checked against the directory: confirming whether a code exists would turn this
-        // command into a way to test guesses. An allow-list entry for a station that never existed is inert.
         boolean changed = allow ? stations.allow(own, peer) : stations.revoke(own, peer);
         src.sendSuccess(() -> Component.literal(changed
                 ? (allow ? "Now accepting from " + StationCode.pretty(peer)
@@ -1947,10 +2405,7 @@ public final class WFServerEvents {
         return changed ? 1 : 0;
     }
 
-    /**
-     * Send the nearest pad's cargo to another station by handshake. The command-line equivalent of setting
-     * the pad screen to Handshake, typing a code and pressing Dispatch.
-     */
+    /** Send the nearest pad's cargo to another station by handshake. */
     private static int stationSend(CommandSourceStack src, String rawCode) {
         DronePadBlockEntity pad = nearestPad(src);
         if (pad == null) {
@@ -2039,8 +2494,6 @@ public final class WFServerEvents {
     private static int listDrones(CommandSourceStack src) {
         Set<DroneEntity> drones = DroneTracker.drones(src.getLevel());
         List<SimDrone> simulated = SimDroneRegistry.get(src.getLevel()).view();
-        // A flight goes up one drone at a time, so a squad can legitimately be short-handed for a few
-        // seconds. Saying so is the difference between "still launching" and "lost three of them".
         int queued = DroneLaunchQueue.get(src.getLevel()).pending();
         if (drones.isEmpty() && simulated.isEmpty() && queued == 0) {
             src.sendSuccess(() -> Component.literal("No drones in this dimension."), false);
@@ -2057,7 +2510,7 @@ public final class WFServerEvents {
                     : (int) flat.distanceTo(sd.destination.multiply(1, 0, 1)) + "m";
             String line = String.format("• %-11s y=%-4.0f dst %-6s exf %-5dm  %3.0f%% battery  %-16s  [SIM]",
                     sd.state, sd.pos.y, dest, (int) flat.distanceTo(sd.exfil.multiply(1, 0, 1)),
-                    100.0 * sd.charge / sd.capacity, load(sd.cargo != null, sd.payloadId));
+                    100.0 * sd.charge / sd.capacity, load(sd.cargo != null, sd.payloadId, sd.mines));
             src.sendSuccess(() -> Component.literal(line).withStyle(ChatFormatting.AQUA), false);
         }
         if (drones.isEmpty()) {
@@ -2070,20 +2523,13 @@ public final class WFServerEvents {
             Vec3 flat = drone.position().multiply(1, 0, 1);
             String shownDest = drone.getDestination() == null ? "done"
                     : (int) flat.distanceTo(drone.getDestination().multiply(1, 0, 1)) + "m";
-            // The flight numbers on the end are the ones worth watching when something looks wrong: the
-            // throttle says how hard it is working, the lean says which way it is being pushed, the AGL says
-            // whether the terrain following is doing its job, and the route length says whether it has a plan
-            // at all or is flying blind at the destination.
             DronePath path = drone.getPath();
-            // A classified drone's destination stays out of the listing. An operator can read the world
-            // directly if they must, but a shared admin screen should not be the easiest way to break an
-            // exchange that the mechanic says has to be broken by following the drone.
             String dest = drone.isClassified() ? "[CLSFD]" : shownDest;
             String line = String.format(
                     "• %-11s y=%-4.0f dst %-6s exf %-5dm  %3.0f%% bat  %-8s spd%.2f thr%.2f tilt%2.0f° agl%-4.0f %s%s",
                     drone.getDroneState(), drone.getY(), dest,
                     (int) flat.distanceTo(drone.getExfil().multiply(1, 0, 1)),
-                    drone.battery().percent(), load(drone.hasCargo(), drone.getPayloadId()),
+                    drone.battery().percent(), load(drone.hasCargo(), drone.getPayloadId(), drone.getMines()),
                     drone.getDeltaMovement().horizontalDistance(),
                     drone.getAttitude().throttle(), Math.toDegrees(drone.getAttitude().tilt()),
                     drone.getY() - TerrainSampler.groundY(src.getLevel(), drone.getX(), drone.getZ(), drone.getY()),
@@ -2106,6 +2552,37 @@ public final class WFServerEvents {
         return count;
     }
 
+    /**
+     * Releases a mustard gas cloud at the command's position: the same {@link GasCloud#spawn} call the chemical
+     * warhead makes, without having to fly a missile at something.
+     */
+    private static int spawnGas(CommandSourceStack src, int radius) {
+        Vec3 pos = src.getPosition();
+        int cells = GasCloud.spawn(src.getLevel(), WFFluids.MUSTARD_GAS.get(), pos, radius,
+                GasCloud.DEFAULT_MAX_CELLS, GasCloud.DEFAULT_DURATION);
+        src.sendSuccess(() -> Component.literal("Released mustard gas at " + BlockPos.containing(pos)
+                + ": " + cells + " cells"), true);
+        return cells;
+    }
+
+    /**
+     * Draws a blast's effect at the command's position without a warhead behind it: the same {@link
+     * ExplosionCreator} call a missile makes, so the smoke, the debris and the water foam can be looked at without
+     * flying something into the sea first.
+     */
+    private static int boom(CommandSourceStack src, String preset) {
+        Vec3 pos = src.getPosition();
+        ServerLevel level = src.getLevel();
+        switch (preset) {
+            case "small" -> ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
+            case "large" -> ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
+            default -> ExplosionCreator.composeEffectStandard(level, pos.x, pos.y, pos.z);
+        }
+        src.sendSuccess(() -> Component.literal("Blast effect (" + preset + ") at "
+                + BlockPos.containing(pos)), true);
+        return 1;
+    }
+
     private static int setInterceptMode(CommandSourceStack src, MissileSimConfig.InterceptResolution mode) {
         MissileSimConfig.INTERCEPT_MODE = mode;
         src.sendSuccess(() -> Component.literal("Intercept mode set to " + mode), true);
@@ -2113,8 +2590,8 @@ public final class WFServerEvents {
     }
 
     /**
-     * Launches a real interceptor from the player's eye in NEAREST mode (targeting mode 1: it auto-acquires
-     * the closest non-friendly missile each tick).
+     * Launches a real interceptor from the player's eye in NEAREST mode (targeting mode 1: it auto-acquires the
+     * closest non-friendly missile each tick).
      */
     private static int interceptNearest(CommandSourceStack src) throws CommandSyntaxException {
         ServerPlayer player = src.getPlayerOrException();
@@ -2124,10 +2601,7 @@ public final class WFServerEvents {
         return 1;
     }
 
-    /**
-     * Launches an interceptor locked on a specific missile UUID (targeting mode 2). Resolves against real
-     * entities first, then the off-world simulation (a sim interceptor closes on the simulated track).
-     */
+    /** Launches an interceptor locked on a specific missile UUID (targeting mode 2). */
     private static int interceptUuid(CommandSourceStack src, UUID target) throws CommandSyntaxException {
         ServerPlayer player = src.getPlayerOrException();
         ServerLevel level = player.serverLevel();
@@ -2146,10 +2620,7 @@ public final class WFServerEvents {
         return 0;
     }
 
-    /**
-     * Lists nearby missiles with their UUID (used to lock one), type, phase, speed, fuel and stealth flag.
-     * Each line is click-to-target: clicking suggests {@code /wfballistics intercept <uuid>}.
-     */
+    /** Lists nearby missiles with their UUID (used to lock one), type, phase, speed, fuel and stealth flag. */
     private static int listMissiles(CommandSourceStack src) throws CommandSyntaxException {
         ServerPlayer player = src.getPlayerOrException();
         ServerLevel level = player.serverLevel();
@@ -2187,8 +2658,7 @@ public final class WFServerEvents {
 
     /**
      * Lists every missile currently in off-world simulation for the player's dimension, nearest-to-target first,
-     * with the honest fuel picture: powered range vs. distance and whether it will actually reach under power.
-     * Each line is click-to-track for the debug logger.
+     * with the honest fuel picture: powered range vs.
      */
     private static int simList(CommandSourceStack src) throws CommandSyntaxException {
         ServerPlayer player = src.getPlayerOrException();
@@ -2263,8 +2733,8 @@ public final class WFServerEvents {
     }
 
     /**
-     * Re-tasks the player's nearest owned missile/drone (same control id, or same WarForge faction) to strike
-     * the entity the player is looking at: e.g. redirecting a loitering munition mid-flight.
+     * Re-tasks the player's nearest owned missile/drone (same control id, or same WarForge faction) to strike the
+     * entity the player is looking at: e.g.
      */
     private static int retarget(CommandSourceStack src) throws CommandSyntaxException {
         ServerPlayer player = src.getPlayerOrException();
@@ -2293,16 +2763,15 @@ public final class WFServerEvents {
     }
 
     /**
-     * Launches a swarm of {@code count} missiles toward the player's aim: one commander flying the mission and
-     * the rest holding a wedge formation on it (see {@link SwarmManager}). If the commander is intercepted, the
-     * nearest survivor takes over and the rest re-form on it.
+     * Launches a swarm of {@code count} missiles toward the player's aim: one commander flying the mission and the
+     * rest holding a wedge formation on it (see {@link SwarmManager}).
      */
     private static int spawnSwarm(CommandSourceStack src, int count) throws CommandSyntaxException {
         ServerPlayer player = src.getPlayerOrException();
         ServerLevel level = player.serverLevel();
         Vec3 target = swarmTarget(level, player);
         long swarmId = SwarmManager.newId(level);
-        UUID team = WarforgeCompat.factionOfPlayer(player.getUUID());
+        UUID team = com.wf.wfballistics.recon.ReconOwners.owningEntity(player);
         MissilePreset preset = MissilePresetRegistry.get(MissilePresetRegistry.rl("cruise"));
         Vec3 base = player.getEyePosition().add(player.getLookAngle().scale(3.0));
         for (int i = 0; i < count; i++) {
@@ -2355,7 +2824,7 @@ public final class WFServerEvents {
         MissilePreset preset = MissilePresetRegistry.get(MissilePresetRegistry.rl("interceptor"));
         MissileEntity m = preset.build(level, spawn);
         m.setControlId(player.getUUID());
-        m.setTeamId(com.wf.wfballistics.compat.WarforgeCompat.factionOfPlayer(player.getUUID()));
+        m.setTeamId(com.wf.wfballistics.recon.ReconOwners.owningEntity(player));
         if (lock != null) {
             m.setInterceptLock(lock);
         }
@@ -2365,10 +2834,7 @@ public final class WFServerEvents {
 
     // --- MOD bus subscribers ---
 
-    /**
-     * Inner class on the MOD bus for events that must be registered there.
-     * RegisterTicketControllersEvent fires on the MOD bus.
-     */
+    /** Inner class on the MOD bus for events that must be registered there. */
     @EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.MOD)
     public static final class ModBusEvents {
         private ModBusEvents() {

@@ -7,25 +7,14 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Cruise-phase stage for a directional strike: get the missile onto the commanded attack bearing well before it
- * reaches the target, then run straight down that bearing into the terminal dive. The attack line is the ray
- * from the target outward along the approach side; the missile curves onto that line at a {@link #joinDistance}
- * that is a fraction of the way in (so the reorientation happens far from the target's defended vicinity, not
- * circling on top of it), using a {@link DubinsPath} at its minimum turn radius to pick the shortest
- * turn-feasible way there. Once aligned and on the line it flies straight to the target and hands off to the
- * terminal dive at the normal cruise range. With no attack bearing set the stage is transparent - it defers
- * wholly to {@link CruiseStage}. The curved run is longer than a straight one; {@link #approachHorizontalDistance}
- * is the shared geometry the fuel/ETA estimator uses to charge for it.
+ * reaches the target, then run straight down that bearing into the terminal dive.
  */
 public final class ApproachStage implements FlightStage {
 
     public static final ApproachStage INSTANCE = new ApproachStage();
 
-    // Where on the attack line to aim the join: this fraction of the straight-line distance to the target,
-    // floored so the pivot never collapses onto the target and capped per-missile (missile.getApproachJoinCap).
     private static final double JOIN_FRACTION = 0.45;
     private static final double MIN_JOIN = 64.0;
-    // Turn radius safety: fly the Dubins arcs a touch wider than the theoretical minimum so the per-tick
-    // heading limiter can actually track them.
     private static final double RADIUS_SAFETY = 1.15;
     // Carrot along the fresh path each tick: far enough to steer smoothly, floored so it never collapses.
     private static final double LOOKAHEAD_FACTOR = 2.0;
@@ -128,9 +117,9 @@ public final class ApproachStage implements FlightStage {
     }
 
     /**
-     * Distance from the target, along the attack line, at which the missile aims to be established on the
-     * commanded bearing: a fraction of the straight-line range (so it scales with distance), floored clear of the
-     * target and capped at {@code cap} (per-missile ceiling, see {@link MissileEntity#getApproachJoinCap()}).
+     * Distance from the target, along the attack line, at which the missile aims to be established on the commanded
+     * bearing: a fraction of the straight-line range (so it scales with distance), floored clear of the target and
+     * capped at {@code cap} (per-missile ceiling, see {@link MissileEntity#getApproachJoinCap()}).
      */
     public static double joinDistance(double horizDistToTarget, double cap) {
         return Mth.clamp(horizDistToTarget * JOIN_FRACTION, MIN_JOIN, Math.max(MIN_JOIN, cap));
@@ -139,8 +128,7 @@ public final class ApproachStage implements FlightStage {
     /**
      * Horizontal ground distance the missile actually covers to strike {@code target} from the {@code approachDir}
      * side (via the join point on the attack line), versus the straight-line distance when {@code approachDir} is
-     * null. Shared with {@link ArrivalEstimator} so the fuel/ETA charge matches the curved run this stage flies;
-     * {@code cap} is the per-missile join ceiling.
+     * null.
      */
     public static double approachHorizontalDistance(Vec3 from, Vec3 target, @Nullable Vec3 approachDir, double cap) {
         double dx = target.x - from.x;

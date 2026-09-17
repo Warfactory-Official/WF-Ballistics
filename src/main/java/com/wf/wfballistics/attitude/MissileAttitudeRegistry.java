@@ -3,13 +3,7 @@ package com.wf.wfballistics.attitude;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Registry of {@link MissileAttitude}s keyed by a short stable id. A missile model declares its attitude id in
- * {@code MissileModels}; both the render ({@code MissileVisual}) and the hitbox ({@code
- * MissileEntity.refreshObb()}) resolve it here so the model and its OBB share one pose. Mirrors the
- * flight-stage/warhead registries: add a new way to fly by implementing {@link MissileAttitude} and calling
- * {@link #register}.
- */
+/** Registry of {@link MissileAttitude}s keyed by a short stable id. */
 public final class MissileAttitudeRegistry {
 
     public static final String DEFAULT_ID = "missile";

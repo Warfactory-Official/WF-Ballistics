@@ -3,18 +3,12 @@ package com.wf.wfballistics.entity.glyphid.sim;
 import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowField;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Everything a {@link SimGlyphid} is allowed to know about the world, and the only way it may ask.
- *
- * <p>The interface exists so the pass can run off the world thread: an off-thread worker gets a
- * {@link SimWorldPrefetch}, which holds no level reference and so cannot touch a chunk. {@link SimWorldLive}
- * asks the level directly, for the synchronous pass. Both answer identically.
- */
+/** Everything a {@link SimGlyphid} is allowed to know about the world, and the only way it may ask. */
 public interface SimWorld {
 
     /**
-     * Returned wherever the answer is not available: no chunk, or a column the prefetch has not been asked to
-     * fill yet. Callers keep whatever they had, which is what the tier already does over unloaded terrain.
+     * Returned wherever the answer is not available: no chunk, or a column the prefetch has not been asked to fill
+     * yet.
      */
     int UNKNOWN = Integer.MIN_VALUE;
 
@@ -28,10 +22,7 @@ public interface SimWorld {
      */
     Destination destination(int x, int y, int z);
 
-    /**
-     * The field that leads to a destination and how high its ground is. One lookup rather than two because
-     * they expire together.
-     */
+    /** The field that leads to a destination and how high its ground is. */
     record Destination(@Nullable GlyphidFlowField field, int height) {
 
         public static final Destination NONE = new Destination(null, UNKNOWN);

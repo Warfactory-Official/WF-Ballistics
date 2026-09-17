@@ -7,10 +7,8 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Loitering-munition cruise: fly to the target area, then orbit it at cruise altitude for a per-variant number
- * of ticks before handing off to the terminal attack. Register tuned variants with {@link #of} rather than
- * subclassing; each is a distinct registry id (see {@link FlightStageRegistry}), so persistence stays id-only.
- * The orbit timer is per-missile state kept on the entity so it persists.
+ * Loitering-munition cruise: fly to the target area, then orbit it at cruise altitude for a per-variant number of
+ * ticks before handing off to the terminal attack.
  */
 public final class LoiterStage implements FlightStage {
 

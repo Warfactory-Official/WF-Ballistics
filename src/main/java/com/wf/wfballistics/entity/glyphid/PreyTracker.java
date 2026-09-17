@@ -13,22 +13,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * A per-level index of everything that is not a monster, which is everything a glyphid might want to bite.
- *
- * <p>Exists because the swarm was searching for its dinner among itself: {@link EntityGlyphid#nearestPrey}
- * fetched every {@link LivingEntity} in range and rejected its own neighbours, every tick. Measured with JFR
- * at 3.9% of the swarm's tick spent establishing that a glyphid is not food.
- *
- * <p>The membership rule is the <em>static</em> half of {@link EntityGlyphid#isPrey} — a class does not
- * change, so class tests belong in the index and liveness tests do not. Mirrors {@link GlyphidTracker}.
- */
+/** A per-level index of everything that is not a monster, which is everything a glyphid might want to bite. */
 @EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.GAME)
 public final class PreyTracker {
 
     /**
-     * Above this many candidates the level-wide scan stops being cheaper and the caller goes back to the box
-     * query. Both return the same answer, so this is never a behavioural fallback.
+     * Above this many candidates the level-wide scan stops being cheaper and the caller goes back to the box query.
      */
     public static final int SCAN_LIMIT = 512;
 

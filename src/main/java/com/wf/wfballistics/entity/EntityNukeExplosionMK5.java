@@ -60,6 +60,8 @@ public class EntityNukeExplosionMK5 extends EntityExplosionChunkLoading {
             }
 
             if (explosion == null) {
+                com.wf.wfballistics.recon.event.SeismicEvents.report((ServerLevel) level(),
+                        getX(), getY(), getZ(), getStrength());
                 if (NukeConfig.explosionAlgorithm == 0) {
                     explosion = new ExplosionNukeRayBatched(level(), blockPosition(),
                             getStrength(), getSpeed(), getRadius());

@@ -1,8 +1,8 @@
 package com.wf.wfballistics.industry;
 
 /**
- * Live industry-tracking tunables, copied out of {@code WFConfig} on load in the same way
- * {@code MissileSimConfig} is, so the hot paths read plain statics rather than config objects.
+ * Live industry-tracking tunables, copied out of {@code WFConfig} on load in the same way {@code MissileSimConfig}
+ * is, so the hot paths read plain statics rather than config objects.
  */
 public final class IndustryConfig {
 
@@ -15,10 +15,7 @@ public final class IndustryConfig {
     private IndustryConfig() {
     }
 
-    /**
-     * Region cell size in chunks. 32 chunks (512 blocks) by default: large enough that a single base
-     * lands in one or two cells rather than being smeared across dozens.
-     */
+    /** Region cell size in chunks. */
     public static int cellChunks() {
         return cellChunks;
     }
@@ -30,20 +27,12 @@ public final class IndustryConfig {
         return clusterGapCells;
     }
 
-    /**
-     * Combined value a group of cells needs before it is a base rather than noise. The equivalent of
-     * DBSCAN's {@code minPts}, in value rather than point count, so one dirty machine cluster counts for
-     * more than a scattering of furnaces.
-     */
+    /** Combined value a group of cells needs before it is a base rather than noise. */
     public static int clusterMinValue() {
         return clusterMinValue;
     }
 
-    /**
-     * Ticks of quiet after the last change before clusters are recomputed. Debouncing is the whole reason
-     * this can be event-driven: laying down a base is hundreds of placements in a few seconds, and each
-     * one must not queue its own scan.
-     */
+    /** Ticks of quiet after the last change before clusters are recomputed. */
     public static int recomputeDelayTicks() {
         return recomputeDelayTicks;
     }

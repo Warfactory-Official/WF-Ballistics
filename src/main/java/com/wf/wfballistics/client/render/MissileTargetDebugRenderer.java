@@ -21,16 +21,9 @@ import org.joml.Matrix3f;
 import org.joml.Matrix4f;
 
 /**
- * Debug overlay: a green wire block at every missile's current aim point, plus a faint line from the missile
- * to it, so it's obvious where each missile (a recursive missilelet especially) is actually aiming, and
- * whether that point is on solid ground or floating in empty air over a crater.
- *
- * <p>The aim point isn't synced to the client (it's server-only state on {@link MissileEntity}); rather than
- * add a sync, this reads the real value straight off the integrated singleplayer server's copy of the entity,
- * looked up by UUID. It therefore only draws in singleplayer, which is exactly where this is used.
- *
- * <p>Off by default; toggle with the {@code debug.showMissileTargets} client config
- * ({@link WFClientConfig#SHOW_MISSILE_TARGETS}).
+ * Debug overlay: a green wire block at every missile's current aim point, plus a faint line from the missile to it,
+ * so it's obvious where each missile (a recursive missilelet especially) is actually aiming, and whether that point
+ * is on solid ground or floating in empty air over a crater.
  */
 @EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class MissileTargetDebugRenderer {
@@ -50,8 +43,6 @@ public final class MissileTargetDebugRenderer {
         if (mc.level == null) {
             return;
         }
-        // Singleplayer only: pull the true aim point off the integrated server's entity (same process), so
-        // nothing has to be synced. No server here (real multiplayer) -> nothing to draw.
         MinecraftServer server = mc.getSingleplayerServer();
         if (server == null) {
             return;

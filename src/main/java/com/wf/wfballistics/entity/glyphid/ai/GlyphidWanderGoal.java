@@ -8,12 +8,8 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Idle wandering, suppressed whenever the bug is under colony orders: a glyphid on its way to a waypoint
- * should not be strolling off to look at something else.
- *
- * <p>A garrison is leashed to its mound on top of that: a defender is retained and its colony's growth held
- * back for as long as it lives, so one that strolled off would leave the nest undefended and still paid for.
- * Measured before the leash: one of six defenders past 32 blocks inside 70 seconds.
+ * Idle wandering, suppressed whenever the bug is under colony orders: a glyphid on its way to a waypoint should not
+ * be strolling off to look at something else.
  */
 public class GlyphidWanderGoal extends RandomStrollGoal {
 
@@ -32,11 +28,7 @@ public class GlyphidWanderGoal extends RandomStrollGoal {
         return glyphid.getCurrentTask() == GlyphidTasks.TASK_IDLE && super.canUse();
     }
 
-    /**
-     * Where to stroll. Unchanged except for a garrison bug off its nest, which is pointed back toward it.
-     * A leash rather than a tether: it still wanders and still chases, it just stops picking somewhere
-     * further out once it is already too far.
-     */
+    /** Where to stroll. */
     @Override
     protected @Nullable Vec3 getPosition() {
         if (!glyphid.garrison || !glyphid.hasHome) {

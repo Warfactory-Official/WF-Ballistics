@@ -17,33 +17,18 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Runs the arranged exchanges: watches the rendezvous, sends the collection drones, and calls the whole thing
- * off when somebody wanders past.
- *
- * <p>Everything here is server-side and stays that way. No method returns a position to anything that talks
- * to a client, and the only identifier that crosses that line is a station code.
+ * Runs the arranged exchanges: watches the rendezvous, sends the collection drones, and calls the whole thing off
+ * when somebody wanders past.
  */
 public final class ExchangeManager {
 
-    /**
-     * How close a player has to be to a rendezvous to burn it.
-     *
-     * <p>Generously large on purpose. The point of the mechanic is that being <em>seen</em> ends the
-     * exchange, and a radius tight enough to stand just outside would make the whole thing decorative.
-     */
+    /** How close a player has to be to a rendezvous to burn it. */
     public static final double WATCH_RADIUS = 64.0;
-    /**
-     * How often the zones are swept. Every tick would be wasteful and pointless: a player cannot cross the
-     * watch radius in half a second.
-     */
+    /** How often the zones are swept. */
     public static final int SWEEP_INTERVAL = 10;
 
     private static final Logger LOGGER = LogUtils.getLogger();
-    /**
-     * Rendezvous points are drawn from here rather than the level's shared, seeded random. A predictable
-     * meeting point is not a secret meeting point: anyone who could reproduce the world seed and tick count
-     * could be standing there when the drone arrives.
-     */
+    /** Rendezvous points are drawn from here rather than the level's shared, seeded random. */
     private static final SecureRandom SECURE = new SecureRandom();
 
     private ExchangeManager() {
@@ -52,7 +37,7 @@ public final class ExchangeManager {
     /**
      * Arrange a meeting between two stations.
      *
-     * @param senderSending    true if the arranging station has cargo to bring
+     * @param senderSending true if the arranging station has cargo to bring
      * @param recipientSending true if the far station has cargo to bring, which is what makes it a trade
      * @return the new exchange, or null with a reason if it could not be arranged
      */
@@ -64,8 +49,6 @@ public final class ExchangeManager {
         if (sender == null) {
             return Result.refused("this pad is not registered");
         }
-        // Deliberately the same message for "no such station" and "not authorised". Distinguishing them
-        // would turn the recipient's allow-list into an oracle for which codes exist.
         if (recipient == null || !recipient.allows(senderCode)) {
             return Result.refused("that station is not accepting from this one");
         }
@@ -85,8 +68,6 @@ public final class ExchangeManager {
         if (level == null) {
             return Result.refused("this pad's dimension is not loaded");
         }
-        // Cross-dimension meetings would need a portal, so the rendezvous is placed in the sender's world and
-        // the far station must be in it too.
         if (!recipient.dimension().equals(sender.dimension())) {
             return Result.refused("that station is in another dimension");
         }
@@ -225,14 +206,7 @@ public final class ExchangeManager {
         return id == null ? null : ExchangeRegistry.get(level).byId(id);
     }
 
-    /**
-     * Call an exchange off. Drones still flying turn for home with whatever they are holding; cargo already
-     * on the ground stays exactly where it is.
-     *
-     * <p>That last part is not an oversight. A crate that has been delivered is a physical object in the
-     * world, and making it vanish because somebody walked past would be both unexplainable to look at and a
-     * free undo. Being caught costs you the goods, which is what makes following a drone worth doing.
-     */
+    /** Call an exchange off. */
     public static void cancel(MinecraftServer server, Exchange exchange, String reason) {
         exchange.cancel(reason);
         ExchangeRegistry.get(server).touch();
@@ -246,10 +220,7 @@ public final class ExchangeManager {
         LOGGER.debug("[wfballistics] exchange {} cancelled: {}", exchange.id(), reason);
     }
 
-    /**
-     * The outcome of trying to arrange an exchange. Carries no coordinates, on purpose: the caller is one
-     * step from a packet handler.
-     */
+    /** The outcome of trying to arrange an exchange. */
     public record Result(@Nullable Exchange exchange, @Nullable String error) {
 
         public static Result arranged(Exchange exchange) {

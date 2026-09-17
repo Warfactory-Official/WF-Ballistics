@@ -5,14 +5,7 @@ import net.minecraft.world.level.ChunkPos;
 
 import java.util.UUID;
 
-/**
- * An attack in transit: one record standing in for however many glyphids are marching. Five hundred glyphids
- * crossing two thousand blocks is this object moving in a straight line, at one position update per tick
- * regardless of {@link #count}.
- *
- * <p>It becomes real only where somebody can see it, so until then there is no terrain to walk around and
- * nobody to notice it went through a hill.
- */
+/** An attack in transit: one record standing in for however many glyphids are marching. */
 public final class Warband {
 
     public final UUID id;
@@ -23,7 +16,7 @@ public final class Warband {
     public final int targetZ;
     public int count;
     public final int tier;
-    /** Whether this warband is on the wing -- the tier's straight-line assumption made honest. */
+    /** Whether this warband is on the wing: the tier's straight-line assumption made honest. */
     public boolean flying;
     /** Ticks since dispatch, so a warband that can never reach its target can be retired. */
     public int age;
@@ -48,7 +41,7 @@ public final class Warband {
     }
 
     /**
-     * Advance toward the target. Straight-line: see the class note.
+     * Advance toward the target.
      *
      * @return true once the target is reached
      */

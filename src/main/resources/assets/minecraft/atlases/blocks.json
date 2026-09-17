@@ -9,6 +9,11 @@
       "resource": "wfballistics:particle/skeleton"
     },
     {
+      "__comment": "The bomblet a drone carries is a baked model instanced into the drone's own draw, so its sprite has to be on the block atlas. Nothing else puts it there (entity/ is not an atlas directory), and without this line the carried bomblet is a magenta cube while the dropped one, which BombletRenderer binds the png for directly, looks right.",
+      "type": "minecraft:single",
+      "resource": "wfballistics:entity/bomblet"
+    },
+    {
       "type": "minecraft:single",
       "resource": "wfballistics:particle/particle_base"
     },

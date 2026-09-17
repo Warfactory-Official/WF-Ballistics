@@ -1,19 +1,8 @@
 package com.wf.wfballistics.drone.nav;
 
 /**
- * An immutable, coarse height map of a patch of world: the surface height of every {@link #cell}-block square
- * in a rectangle, captured on the world thread and then read freely by the path planner on a worker.
- *
- * <p>This is the terrain half of the same bargain {@code DroneSnapshot} makes for the drone itself. A worker
- * cannot ask a {@code Level} how tall the ground is, it would be reaching into chunk storage from the wrong
- * thread, so the answer is copied out in advance into a plain array, and after that the planner can look at
- * as much of it as it likes for free. Being a flat {@code short[]} rather than a map of block positions is
- * what keeps an A* over thousands of cells cheap.
- *
- * <p>Columns that were not loaded when the snapshot was taken are recorded as {@link #UNKNOWN} and read back
- * as {@link #fallbackTop()}. Unknown ground is treated as flat and passable on purpose: refusing to plan
- * through it would strand every drone at the edge of the loaded area, which is exactly where they spend most
- * of their time.
+ * An immutable, coarse height map of a patch of world: the surface height of every {@link #cell}-block square in a
+ * rectangle, captured on the world thread and then read freely by the path planner on a worker.
  */
 public final class TerrainField {
 
@@ -88,7 +77,7 @@ public final class TerrainField {
 
     /**
      * @return the surface height of a cell, or {@link #fallbackTop()} outside the field or where the column
-     * was never loaded.
+     *      was never loaded.
      */
     public int top(int cellX, int cellZ) {
         if (!inBounds(cellX, cellZ)) {
@@ -107,7 +96,7 @@ public final class TerrainField {
 
     /**
      * @return the highest ground within {@code radius} blocks of a world position. What the planner actually
-     * cares about: a drone is three blocks wide and should not thread a gap its own body will not fit down.
+     *      cares about: a drone is three blocks wide and should not thread a gap its own body will not fit down.
      */
     public int topAround(double worldX, double worldZ, double radius) {
         int steps = Math.max(0, (int) Math.ceil(radius / cell));
@@ -124,7 +113,7 @@ public final class TerrainField {
 
     /**
      * @return the highest ground under the straight line between two world points, sampled at cell
-     * resolution. Used both to test whether a path segment can be flown and to pick the height to fly it at.
+     *      resolution. Used both to test whether a path segment can be flown and to pick the height to fly it at.
      */
     public int topAlong(double fromX, double fromZ, double toX, double toZ, double radius) {
         double dx = toX - fromX;

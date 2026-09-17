@@ -8,13 +8,7 @@ import net.neoforged.fml.ModList;
 import java.util.Collection;
 import java.util.UUID;
 
-/**
- * Optional WarForge Factions integration entry point.
- *
- * <p>Every WarForge-facing type lives behind {@link WarforgeApi}, which is only class-loaded once
- * {@link #LOADED} has confirmed the mod is present, so this class is safe to call without WarForge
- * installed, in which case every query degrades to "no factions".
- */
+/** Optional WarForge Factions integration entry point. */
 public final class WarforgeCompat {
 
     public static final String MODID = "warforge";
@@ -23,12 +17,6 @@ public final class WarforgeCompat {
 
     /**
      * @return whether WarForge is present.
-     *
-     * <p>Written as a method rather than inline because {@code ModList.get()} is null until mod loading has
-     * got far enough, and an unguarded call in a static initialiser turns that into an
-     * {@code ExceptionInInitializerError}, which poisons this class for the rest of the process and takes
-     * out every caller, none of which asked for anything more than "are there factions". No mod list means
-     * no factions, which is the answer this whole class already degrades to.
      */
     private static boolean detect() {
         ModList list = ModList.get();
@@ -49,11 +37,7 @@ public final class WarforgeCompat {
         claimProtectionEnabled = enabled;
     }
 
-    /**
-     * Turn the construction territory gate off entirely, letting drones build anywhere. Separate from
-     * {@link #setClaimProtectionEnabled} because they answer different questions: that one is about
-     * explosions, this one is about a drone deliberately placing a block.
-     */
+    /** Turn the construction territory gate off entirely, letting drones build anywhere. */
     public static void setTerritoryProtectionEnabled(boolean enabled) {
         territoryProtectionEnabled = enabled;
     }
@@ -82,10 +66,6 @@ public final class WarforgeCompat {
 
     /**
      * @return whether {@code faction} may have drones change blocks at {@code pos}.
-     *
-     * <p>Chunk-granular, because WarForge's claims are. With WarForge absent, or the gate turned off, this
-     * is {@link TerritoryVerdict#ALLOWED} everywhere, which is the right degradation: a server with no
-     * factions has no territory to trespass on.
      */
     public static TerritoryVerdict buildVerdict(Level level, UUID faction, BlockPos pos) {
         if (!LOADED || !territoryProtectionEnabled || level == null || pos == null) {
