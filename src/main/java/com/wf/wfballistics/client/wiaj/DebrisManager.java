@@ -7,19 +7,18 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.RenderLevelStageEvent;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.level.LevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import org.joml.Matrix4f;
 
 import java.util.ArrayList;
 import java.util.List;
 
-
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME)
 public final class DebrisManager {
 
     /**
@@ -28,7 +27,7 @@ public final class DebrisManager {
     private static final int MAX_ACTIVE = 256;
 
     /**
-     * Max chunks to tessellate per frame — spreads a burst of debris over a few frames instead of one hitch.
+     * Max chunks to tessellate per frame: spreads a burst of debris over a few frames instead of one hitch.
      */
     private static final int BAKE_BUDGET_PER_FRAME = 4;
 
@@ -45,8 +44,8 @@ public final class DebrisManager {
     }
 
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || ACTIVE.isEmpty()) {
+    public static void onClientTick(ClientTickEvent.Post event) {
+        if (ACTIVE.isEmpty()) {
             return;
         }
         Minecraft mc = Minecraft.getInstance();
@@ -86,10 +85,12 @@ public final class DebrisManager {
         PoseStack poseStack = event.getPoseStack();
         Matrix4f projection = event.getProjectionMatrix();
         Vec3 cam = event.getCamera().getPosition();
-        float partialTick = event.getPartialTick();
+        float partialTick = event.getPartialTick().getGameTimeDeltaPartialTick(false);
 
         RenderType renderType = RenderType.cutoutMipped();
         renderType.setupRenderState();
+        poseStack.pushPose();
+        poseStack.mulPose(event.getModelViewMatrix());
         int bakeBudget = BAKE_BUDGET_PER_FRAME;
         for (Debris debris : ACTIVE) {
             if (!debris.isBaked()) {
@@ -101,6 +102,7 @@ public final class DebrisManager {
             }
             debris.render(poseStack, projection, cam, partialTick);
         }
+        poseStack.popPose();
         VertexBuffer.unbind();
         renderType.clearRenderState();
     }

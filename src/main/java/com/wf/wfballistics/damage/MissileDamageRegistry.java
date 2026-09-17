@@ -9,18 +9,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Registry of named {@link MissileDamageResponse}s, keyed by {@link ResourceLocation}. Mirrors
- * {@link com.wf.wfballistics.warhead.WarheadRegistry}: a missile stores the id (so the choice round-trips through
- * NBT) and resolves the lambda here at load / hit time. Addons register their own during mod construction with
- * {@link #register}; the built-ins below are always available.
- */
+/** Registry of named {@link MissileDamageResponse}s, keyed by {@link ResourceLocation}. */
 public final class MissileDamageRegistry {
 
     /** Pass-through: the missile takes damage exactly as dealt (vanilla behaviour, the default). */
     public static final MissileDamageResponse STANDARD = (missile, source, amount) -> amount;
 
-    /** Immune to everything except explosion damage — the canonical "hardened, blast-only" airframe. */
+    /** Immune to everything except explosion damage: the canonical "hardened, blast-only" airframe. */
     public static final MissileDamageResponse EXPLOSION_ONLY = (missile, source, amount) ->
             source.is(DamageTypeTags.IS_EXPLOSION) ? amount : 0.0f;
 
@@ -40,7 +35,7 @@ public final class MissileDamageRegistry {
     }
 
     public static ResourceLocation rl(String path) {
-        return new ResourceLocation(WFBallistics.MODID, path);
+        return ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, path);
     }
 
     public static ResourceLocation parse(String id) {

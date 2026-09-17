@@ -1,13 +1,13 @@
 package com.wf.wfballistics.client.particle;
 
 import com.wf.wfballistics.WFBallistics;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.client.event.RegisterParticleProvidersEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RegisterParticleProvidersEvent;
 
 
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
+@EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class WFParticleProviders {
 
     private WFParticleProviders() {
@@ -20,5 +20,8 @@ public final class WFParticleProviders {
         event.registerSpriteSet(WFParticles.FLAME.get(), FlameParticle.Provider::new);
         event.registerSpriteSet(WFParticles.ASH.get(), AshParticle.Provider::new);
         event.registerSpriteSet(WFParticles.MIST.get(), MistParticle.Provider::new);
+        event.registerSpriteSet(WFParticles.SMOKE_PLUME.get(), SmokePlumeParticle.Provider::new);
+        // No sprite set: a debris chunk is built from the block's own baked model, not from a particle sheet.
+        event.registerSpecial(WFParticles.BLOCK_DEBRIS.get(), new BlockDebrisParticle.Provider());
     }
 }

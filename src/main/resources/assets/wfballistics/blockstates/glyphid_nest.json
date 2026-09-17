@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "": [
+      { "model": "wfballistics:block/glyphid_nest" },
+      { "model": "wfballistics:block/glyphid_nest_alt" }
+    ]
+  }
+}

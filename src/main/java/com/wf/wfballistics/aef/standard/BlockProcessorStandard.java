@@ -17,19 +17,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * The standard destructive block processor: for every allocated position it optionally rolls item drops,
- * removes the block, and optionally hands the (now-cleared) position to an {@link IBlockMutator} so the
- * blast can leave fire, rubble, etc. in its wake.
- *
- * <p>Configured fluently:
- * <pre>{@code
- * new BlockProcessorStandard().setNoDrop().withBlockEffect(new BlockMutatorFire())
- * }</pre>
- *
- * <p><b>Drop chance</b> defaults to the vanilla {@code 1 / size} and can be overridden per block via an
- * {@link IDropChanceMutator}. <b>Fortune</b> is exposed through {@link IFortuneMutator} for API parity, but
- * 1.20's loot-table drops are tool-driven; wiring fortune into the loot context is left as an extension
- * point (the mutator is queried but the value is not yet threaded into {@link Block#dropResources}).
+ * The standard destructive block processor: for every allocated position it optionally rolls item drops, removes
+ * the block, and optionally hands the (now-cleared) position to an {@link IBlockMutator} so the blast can leave
+ * fire, rubble, etc.
  */
 public class BlockProcessorStandard implements IBlockProcessor {
 
@@ -65,8 +55,6 @@ public class BlockProcessorStandard implements IBlockProcessor {
             BlockState state = level.getBlockState(pos);
 
             if (state.isAir()) {
-                // The allocator may have included air pockets along a ray; drop them so the post pass and
-                // the SFX debris only consider blocks that were actually there.
                 empties.add(pos);
                 continue;
             }

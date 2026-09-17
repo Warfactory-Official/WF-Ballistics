@@ -11,7 +11,7 @@ import net.minecraft.world.phys.Vec3;
 
 public final class EMPWarhead {
 
-    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "emp");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "emp");
 
     private static final int RADIUS = 48;
     private static final int CHARGE_LOCK_SECONDS = 10;

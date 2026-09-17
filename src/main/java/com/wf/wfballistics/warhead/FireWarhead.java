@@ -3,6 +3,7 @@ package com.wf.wfballistics.warhead;
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.aef.standard.*;
+import com.wf.wfballistics.fire.FireType;
 import com.wf.wfballistics.fire.FireUtil;
 import com.wf.wfballistics.fx.ExplosionCreator;
 import net.minecraft.resources.ResourceLocation;
@@ -11,7 +12,7 @@ import net.minecraft.world.phys.Vec3;
 
 public final class FireWarhead {
 
-    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "fire");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "fire");
 
     private static final float BLAST_RADIUS = 8F;
     private static final int BLAST_RESOLUTION = 24;
@@ -35,6 +36,6 @@ public final class FireWarhead {
         xnt.igniterFaction(source.igniterFactionId());
         xnt.explode();
         ExplosionCreator.composeEffectStandard(level, pos.x, pos.y, pos.z);
-        FireUtil.spawn(level, pos, 10, 1.2f, 15 * 20 * 20, 0);
+        FireUtil.spawn(level, pos, 10, 1.2f, 15 * 20 * 20, FireType.NORMAL);
     }
 }

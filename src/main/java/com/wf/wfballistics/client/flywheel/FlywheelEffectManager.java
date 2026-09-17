@@ -7,28 +7,20 @@ import dev.engine_room.flywheel.lib.visualization.VisualizationHelper;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.event.level.LevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.event.level.LevelEvent;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Owns the lifecycle of every {@link WFFlywheelEffect} (instanced smoke clouds, skeleton bone piles, ...).
- * Flywheel doesn't tick effects, so this adds them to the visualization manager, advances their simulation
- * each client tick, and removes them when spent.
- *
- * <p>{@link #isAvailable} lets callers fall back to vanilla rendering when the Flywheel backend is off
- * (e.g. the user selected the off/batched backend), since instanced effects only draw under it.
- */
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
+/** Owns the lifecycle of every {@link WFFlywheelEffect} (instanced smoke clouds, skeleton bone piles, ...). */
+@EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class FlywheelEffectManager {
 
     private static final List<WFFlywheelEffect> ACTIVE = new ArrayList<>();
-
 
     private static boolean reregisterPending = false;
 
@@ -51,8 +43,7 @@ public final class FlywheelEffectManager {
     }
 
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END) return;
+    public static void onClientTick(ClientTickEvent.Post event) {
 
         Minecraft mc = Minecraft.getInstance();
         if (mc.isPaused() || mc.level == null) return;
@@ -74,10 +65,10 @@ public final class FlywheelEffectManager {
             if (effect.isExpired()) {
                 VisualizationHelper.queueRemove(effect);
                 ACTIVE.remove(i);
+                effect.disposeEffect();
             }
         }
     }
-
 
     @SubscribeEvent
     public static void onRendererReload(ReloadLevelRendererEvent event) {
@@ -90,6 +81,10 @@ public final class FlywheelEffectManager {
     public static void onLevelUnload(LevelEvent.Unload event) {
         LevelAccessor unloaded = event.getLevel();
         if (!unloaded.isClientSide()) return;
-        ACTIVE.removeIf(effect -> effect.level() == unloaded);
+        ACTIVE.removeIf(effect -> {
+            if (effect.level() != unloaded) return false;
+            effect.disposeEffect();
+            return true;
+        });
     }
 }

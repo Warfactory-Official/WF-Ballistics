@@ -4,19 +4,19 @@ import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.WFSounds;
 import com.wf.wfballistics.network.MissileFlightAudioPacket;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.sounds.SoundEvent;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.TickEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
 
 import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 
 
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
+@EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class MissileAudioClient {
 
     private static final Map<UUID, RemoteMissileFlightSound> ACTIVE = new java.util.HashMap<>();
@@ -31,7 +31,7 @@ public final class MissileAudioClient {
             existing.update(pkt);
             return;
         }
-        SoundEvent sound = ForgeRegistries.SOUND_EVENTS.getValue(pkt.sound());
+        SoundEvent sound = BuiltInRegistries.SOUND_EVENT.getOptional(pkt.sound()).orElse(null);
         if (sound == null) {
             sound = WFSounds.MISSILE_FLIGHT.get();
         }
@@ -41,8 +41,8 @@ public final class MissileAudioClient {
     }
 
     @SubscribeEvent
-    public static void onClientTick(TickEvent.ClientTickEvent event) {
-        if (event.phase != TickEvent.Phase.END || ACTIVE.isEmpty()) {
+    public static void onClientTick(ClientTickEvent.Post event) {
+        if (ACTIVE.isEmpty()) {
             return;
         }
         if (Minecraft.getInstance().level == null) {

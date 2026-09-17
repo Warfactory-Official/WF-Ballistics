@@ -4,9 +4,7 @@ import com.wf.wfballistics.ModEntities;
 import com.wf.wfballistics.WFSounds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
@@ -18,18 +16,13 @@ import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.entity.IEntityAdditionalSpawnData;
-import net.minecraftforge.network.NetworkHooks;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
+import net.neoforged.neoforge.entity.IEntityWithComplexSpawn;
 
 import java.util.ArrayList;
 
-/*
- * Toroidial Convection Simulation Explosion Effect
- * Tor                             Ex
- */
-public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnData {
+public class EntityNukeTorex extends Entity implements IEntityWithComplexSpawn {
 
     public static final EntityDataAccessor<Float> DATA_SCALE = SynchedEntityData.defineId(EntityNukeTorex.class, EntityDataSerializers.FLOAT);
     public static final EntityDataAccessor<Byte> DATA_TYPE = SynchedEntityData.defineId(EntityNukeTorex.class, EntityDataSerializers.BYTE);
@@ -51,8 +44,6 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
     public static final double BR2 = 0.1D;
     public static final double BG2 = 0.1D;
     public static final double BB2 = 0.1D;
-    // Effective simulation age (client), decoupled from the client-local tickCount so a player who starts
-    // tracking this entity late resumes at the correct point rather than replaying the effect from t=0.
     private static final int CATCHUP_TARGET_TICKS = 20; // spread a late-join catch-up over ~this many ticks
     private static final int CATCHUP_MAX_BUDGET = 200;  // ...but never simulate more than this per tick
     public final ArrayList<Cloudlet> cloudlets = new ArrayList<>();
@@ -114,9 +105,6 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
         super.tick();
 
         if (level().isClientSide) {
-            // Advance the client simulation, catching a late-joining player up to the true age (synced in
-            // the spawn packet) rather than replaying the whole effect from t=0. Catch-up is amortized over
-            // a short window and its steps don't fire the one-shot boom / sky-flash (those are in the past).
             this.localAge++;
             long target = (long) this.spawnAge + this.localAge;
             int budget;
@@ -137,11 +125,7 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
         }
     }
 
-    /**
-     * Runs one tick of the client-side convection simulation at the given effective {@code age}. When
-     * {@code live} is false the step is part of a late-join catch-up (the elapsed-before-join portion), so
-     * one-shot effects (the boom, the sky flash) are suppressed.
-     */
+    /** Runs one tick of the client-side convection simulation at the given effective {@code age}. */
     private void simulateStep(int age, boolean live) {
         this.effectiveAge = age;
 
@@ -348,25 +332,19 @@ public class EntityNukeTorex extends Entity implements IEntityAdditionalSpawnDat
     }
 
     @Override
-    protected void defineSynchedData() {
-        this.entityData.define(DATA_SCALE, 1F);
-        this.entityData.define(DATA_TYPE, (byte) 0);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(DATA_SCALE, 1F);
+        builder.define(DATA_TYPE, (byte) 0);
     }
 
     @Override
-    public Packet<ClientGamePacketListener> getAddEntityPacket() {
-        // Forge spawn packet so writeSpawnData/readSpawnData carry the elapsed age to each new tracker.
-        return NetworkHooks.getEntitySpawningPacket(this);
-    }
-
-    @Override
-    public void writeSpawnData(FriendlyByteBuf buffer) {
+    public void writeSpawnData(RegistryFriendlyByteBuf buffer) {
         // The server's current age at the moment this client begins tracking (0 for present-from-start).
         buffer.writeVarInt(this.tickCount);
     }
 
     @Override
-    public void readSpawnData(FriendlyByteBuf additionalData) {
+    public void readSpawnData(RegistryFriendlyByteBuf additionalData) {
         this.spawnAge = additionalData.readVarInt();
     }
 

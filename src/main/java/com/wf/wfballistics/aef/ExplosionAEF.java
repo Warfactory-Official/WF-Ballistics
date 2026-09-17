@@ -15,31 +15,8 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * A composable replacement for {@link net.minecraft.world.level.Explosion} — the core of the
- * Advanced Explosion Framework (AEF), ported from HBM's "Vanilla New Technology" (VNT) explosion.
- *
- * <p>Instead of one monolithic explosion class with a pile of boolean flags, a blast is assembled from
- * five interchangeable strategy objects, each owning one stage of the {@link #explode()} pipeline:
- *
- * <ol>
- *   <li>{@link IBlockAllocator}  — ray-marches outward to collect the block positions the blast reaches.</li>
- *   <li>{@link IEntityProcessor} — damages and knocks back entities, returning the player knockback map.</li>
- *   <li>{@link IBlockProcessor}  — drops / removes / converts the allocated blocks.</li>
- *   <li>{@link IPlayerProcessor} — forwards the knockback map to the affected players' clients.</li>
- *   <li>{@link IExplosionSFX}[]  — emits sound and particles (one entry per discrete effect).</li>
- * </ol>
- *
- * <p>Block and entity handling are independent: an explosion with no allocator simply does no terrain
- * damage, one with no entity processor harms nothing. {@link #explode()} skips any stage whose
- * strategies are absent, so partial configurations are valid.
- *
- * <p><b>Threading / side:</b> call {@link #explode()} on the server thread. The gameplay stages mutate the
- * world; the SFX stage is responsible for broadcasting to clients.
- *
- * <p>Typical use:
- * <pre>{@code
- * new ExplosionVNT(level, x, y, z, 6f, source).makeStandard().explode();
- * }</pre>
+ * A composable replacement for {@link net.minecraft.world.level.Explosion}: the core of the Advanced Explosion
+ * Framework (AEF), ported from HBM's "Vanilla New Technology" (VNT) explosion.
  */
 public class ExplosionAEF {
 
@@ -52,12 +29,7 @@ public class ExplosionAEF {
      * The entity that caused the blast, or {@code null} for an unattributed/world explosion.
      */
     public final Entity exploder;
-    /**
-     * A throwaway vanilla {@link Explosion} carrying this blast's parameters. It exists purely so the
-     * framework can reuse vanilla / Forge hooks that require an {@code Explosion} argument — block
-     * explosion resistance, {@code Entity#shouldBlockExplode}, the {@code ExplosionEvent.Detonate} Forge
-     * event, and explosion {@link net.minecraft.world.damagesource.DamageSource}s.
-     */
+    /** A throwaway vanilla {@link Explosion} carrying this blast's parameters. */
     public final Explosion compat;
     // One of each gameplay strategy is enough; chain-load via a wrapper if you ever need to combine them.
     private IBlockAllocator blockAllocator;
@@ -66,14 +38,7 @@ public class ExplosionAEF {
     private IPlayerProcessor playerProcessor;
     // SFX are deliberately plural and granular (bang, smoke, flash, ...) so they can be mixed per blast.
     private IExplosionSFX[] sfx;
-    // When false (default), the blast respects WarForge land claims (protected blocks survive, unless the
-    // chunk's actual rules permit destruction — e.g. an active siege zone). Set true for a blast that should
-    // flatten claimed land regardless.
     private boolean bypassClaims = false;
-    // The faction this blast is attributed to (a missile's owning faction / teamId), or null when
-    // unattributed. Claim filtering is evaluated from this faction's perspective so the blast respects the
-    // real chunk rules (it may breach a claim it is besieging, is stopped by claims it may not) instead of
-    // blindly stopping at any claim.
     private UUID igniterFaction = null;
 
     public ExplosionAEF(Level level, double x, double y, double z, float size) {
@@ -97,11 +62,15 @@ public class ExplosionAEF {
         this.compat = new Explosion(level, exploder, x, y, z, size, false, Explosion.BlockInteraction.DESTROY);
     }
 
-    /**
-     * Runs the configured pipeline. Stages whose strategies are missing are skipped, so this is safe to
-     * call on a partially configured blast.
-     */
+    /** Runs the configured pipeline. */
     public void explode() {
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+            com.wf.wfballistics.recon.event.SeismicEvents.report(serverLevel, posX, posY, posZ, size);
+        }
+
+        com.wf.wfballistics.debug.ExplosionTrace.begin(new Vec3(posX, posY, posZ), size,
+                level.getGameTime());
+
         boolean processBlocks = blockAllocator != null && blockProcessor != null;
         boolean processEntities = entityProcessor != null && playerProcessor != null;
 
@@ -112,11 +81,6 @@ public class ExplosionAEF {
         if (processBlocks) affectedBlocks = blockAllocator.allocate(this, level, posX, posY, posZ, size);
         if (processEntities) affectedPlayers = entityProcessor.process(this, level, posX, posY, posZ, size);
 
-        // Respect WarForge land claims unless this blast bypasses them: drop the positions this blast's
-        // owning faction may not destroy before the block processor destroys anything. Evaluated from that
-        // faction's perspective (see igniterFaction), so a besieged base can still be hit while unrelated
-        // claims survive — the real chunk rules, not a blanket "any claim stops the blast". No-op when
-        // WarForge isn't installed.
         if (processBlocks && !this.bypassClaims) {
             WarforgeCompat.filterClaimProtected(level, this.igniterFaction, affectedBlocks);
         }
@@ -125,9 +89,9 @@ public class ExplosionAEF {
         if (processBlocks) blockProcessor.process(this, level, posX, posY, posZ, affectedBlocks);
         if (processEntities) playerProcessor.process(this, level, posX, posY, posZ, affectedPlayers);
 
-        // Mirror the surviving block set onto the compat explosion so SFX (and other mods reading the
-        // Forge event) see the same positions vanilla would have populated.
         if (processBlocks) compat.getToBlow().addAll(affectedBlocks);
+
+        com.wf.wfballistics.debug.ExplosionTrace.end();
 
         // 5: sound and particles.
         if (sfx != null) {
@@ -172,15 +136,13 @@ public class ExplosionAEF {
 
     /**
      * Attribute this blast to a WarForge faction (typically a missile's {@code teamId}) so claim filtering is
-     * evaluated from that faction's perspective — it may breach a claim it is actively besieging and is
-     * stopped by claims it may not touch. Pass {@code null} (the default) for an unattributed blast, which is
-     * treated as a foe to every claim.
+     * evaluated from that faction's perspective: it may breach a claim it is actively besieging and is stopped by
+     * claims it may not touch.
      */
     public ExplosionAEF igniterFaction(UUID igniterFaction) {
         this.igniterFaction = igniterFaction;
         return this;
     }
-
 
     public ExplosionAEF makeStandard() {
         this.setBlockAllocator(new BlockAllocatorStandard());
@@ -191,18 +153,14 @@ public class ExplosionAEF {
         return this;
     }
 
-
     /**
-     * A directional shaped charge (Munroe / HEAT): a narrow forward cone about {@code direction} whose on-axis
-     * jet drills deep while the cone mouth blows a shallow crater. Both terrain ({@link BlockAllocatorShapedCharge})
-     * and entities ({@link EntityProcessorCone}) are gated to the cone, so anything beside or behind the charge is
-     * spared. Pass the round's travel/impact direction as {@code direction} — e.g. straight down for a top-attack
-     * warhead; a zero-length vector defaults to straight down.
+     * A directional shaped charge (Munroe / HEAT): a narrow forward cone about {@code direction} whose on-axis jet
+     * drills deep while the cone mouth blows a shallow crater.
      *
-     * @param direction    the jet axis
+     * @param direction the jet axis
      * @param halfAngleDeg cone half-angle in degrees (tighter = deeper, narrower)
-     * @param jetPower     on-axis power multiplier applied to {@link #size} — the penetration knob (&gt; 1 punches
-     *                     through blocks a same-size sphere couldn't)
+     * @param jetPower on-axis power multiplier applied to {@link #size}: the penetration knob (&gt; 1 punches
+     *      through blocks a same-size sphere couldn't)
      */
     public ExplosionAEF makeShapedCharge(Vec3 direction, float halfAngleDeg, float jetPower) {
         this.setBlockAllocator(new BlockAllocatorShapedCharge(direction, halfAngleDeg, jetPower));
@@ -218,7 +176,6 @@ public class ExplosionAEF {
         return makeShapedCharge(direction, BlockAllocatorShapedCharge.DEFAULT_HALF_ANGLE_DEG,
                 BlockAllocatorShapedCharge.DEFAULT_JET_POWER);
     }
-
 
     public ExplosionAEF makeAmat() {
         this.setBlockAllocator(new BlockAllocatorStandard(this.size < 15 ? 16 : 32));

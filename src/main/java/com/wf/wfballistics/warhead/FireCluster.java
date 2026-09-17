@@ -12,7 +12,7 @@ import net.minecraft.world.phys.Vec3;
 
 public final class FireCluster {
 
-    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "fire_cluster");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "fire_cluster");
     private static final double HALF_ANGLE = Math.toRadians(60.0);
     private static final double SPEED = 1.2;
     private static final double SPEED_JITTER = 0.4;
@@ -41,7 +41,7 @@ public final class FireCluster {
         Vec3 axis = new Vec3(0.0, -1.0, 0.0);
         for (int i = 0; i < count; i++) {
             Vec3 dir = FragmentationUtil.randomConeVector(rng, axis, HALF_ANGLE);
-            SmallFireball fireball = new SmallFireball(level, pos.x, pos.y, pos.z, dir.x, dir.y, dir.z);
+            SmallFireball fireball = new SmallFireball(level, pos.x, pos.y, pos.z, new Vec3(dir.x, dir.y, dir.z));
             fireball.setPos(pos.x, pos.y, pos.z);
             level.addFreshEntity(fireball);
         }

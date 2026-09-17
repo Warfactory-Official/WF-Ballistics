@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "alerting=false": {
+      "model": "wfballistics:block/radar_surveillance"
+    },
+    "alerting=true": {
+      "model": "wfballistics:block/radar_surveillance_alerting"
+    }
+  }
+}

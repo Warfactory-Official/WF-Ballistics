@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "wfballistics:block/security_camera" },
+    "facing=east":  { "model": "wfballistics:block/security_camera", "y":  90 },
+    "facing=south": { "model": "wfballistics:block/security_camera", "y": 180 },
+    "facing=west":  { "model": "wfballistics:block/security_camera", "y": 270 }
+  }
+}

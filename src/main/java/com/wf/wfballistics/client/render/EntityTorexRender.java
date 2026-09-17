@@ -32,8 +32,8 @@ import static com.wf.wfballistics.unsafe.UnsafeHolder.U;
 
 public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
 
-    public static final ResourceLocation TEXTURE_PARTICLE = new ResourceLocation(WFBallistics.MODID, "textures/particle/particle_base.png");
-    public static final ResourceLocation TEXTURE_FLARE = new ResourceLocation(WFBallistics.MODID, "textures/particle/flare.png");
+    public static final ResourceLocation TEXTURE_PARTICLE = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "textures/particle/particle_base.png");
+    public static final ResourceLocation TEXTURE_FLARE = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "textures/particle/flare.png");
 
     public static final int FLASH_BASE_DURATION = 30;
     public static final int FLARE_BASE_DURATION = 100;
@@ -135,6 +135,14 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         U.putInt(a + 32, normal);
     }
 
+    /**
+     * Packs a float normal component into a signed byte, matching the format written by {@link BufferBuilder}
+     * internally (previously exposed as {@code BufferVertexConsumer.normalIntValue}).
+     */
+    private static byte normalIntValue(float value) {
+        return (byte) ((int) (Mth.clamp(value, -1.0F, 1.0F) * 127.0F) & 0xFF);
+    }
+
     // --- Cloudlet rendering ---
 
     @Override
@@ -182,16 +190,17 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         }
 
         VertexConsumer consumer = pBuffer.getBuffer(RenderType.entityTranslucent(TEXTURE_PARTICLE));
-        Matrix4f pose = pPoseStack.last().pose();
-        Matrix3f normal = pPoseStack.last().normal();
+        PoseStack.Pose poseEntry = pPoseStack.last();
+        Matrix4f pose = poseEntry.pose();
+        Matrix3f normal = poseEntry.normal();
 
-        if (consumer instanceof BufferBuilder bb
+        if (consumer instanceof BufferBuilder bb && consumer instanceof DirectBufferAccess
                 && DefaultVertexFormat.NEW_ENTITY.getVertexSize() == VERTEX_STRIDE) {
             tessellateAllUnsafe(bb, cloud, pose, normal, partialTick);
         } else {
             float cloudAlphaBase = getCloudAlphaBase(cloud);
             for (int i = 0, count = cloud.cloudlets.size(); i < count; i++) {
-                tessellateCloudlet(consumer, pose, normal, cloud, cloud.cloudlets.get(i), partialTick, cloudAlphaBase);
+                tessellateCloudlet(consumer, poseEntry, cloud, cloud.cloudlets.get(i), partialTick, cloudAlphaBase);
             }
         }
     }
@@ -248,9 +257,9 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         float trUz = pose.m02() * cux + pose.m12() * cuy + pose.m22() * cuz;
 
         int overlay = OverlayTexture.NO_OVERLAY;
-        int packedNormal = (BufferVertexConsumer.normalIntValue(normal.m10()) & 0xFF)
-                | ((BufferVertexConsumer.normalIntValue(normal.m11()) & 0xFF) << 8)
-                | ((BufferVertexConsumer.normalIntValue(normal.m12()) & 0xFF) << 16);
+        int packedNormal = (normalIntValue(normal.m10()) & 0xFF)
+                | ((normalIntValue(normal.m11()) & 0xFF) << 8)
+                | ((normalIntValue(normal.m12()) & 0xFF) << 16);
 
         float p00 = pose.m00(), p01 = pose.m01(), p02 = pose.m02();
         float p10 = pose.m10(), p11 = pose.m11(), p12 = pose.m12();
@@ -329,7 +338,7 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         dba.hbm$setVertices(dba.hbm$vertices() + written * 4);
     }
 
-    private void tessellateCloudlet(VertexConsumer buffer, Matrix4f pose, Matrix3f normal,
+    private void tessellateCloudlet(VertexConsumer buffer, PoseStack.Pose poseEntry,
                                     EntityNukeTorex cloud, Cloudlet cloudlet, float partialTick, float cloudAlphaBase) {
         float lifeFrac = getCloudletLifeFrac(cloudlet);
         float alpha = getCloudletAlpha(cloudlet, lifeFrac, cloudAlphaBase);
@@ -361,21 +370,20 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         float y = getCloudletRenderPos(cloudlet.prevPosY, cloudlet.posY, cloudOriginY, partialTick);
         float z = getCloudletRenderPos(cloudlet.prevPosZ, cloudlet.posZ, cloudOriginZ, partialTick);
 
-        putVertex(buffer, pose, normal, x - rightX - upX, y - rightY - upY, z - rightZ - upZ, 1f, 1f, r, g, b, alpha, lightmap);
-        putVertex(buffer, pose, normal, x - rightX + upX, y - rightY + upY, z - rightZ + upZ, 1f, 0f, r, g, b, alpha, lightmap);
-        putVertex(buffer, pose, normal, x + rightX + upX, y + rightY + upY, z + rightZ + upZ, 0f, 0f, r, g, b, alpha, lightmap);
-        putVertex(buffer, pose, normal, x + rightX - upX, y + rightY - upY, z + rightZ - upZ, 0f, 1f, r, g, b, alpha, lightmap);
+        putVertex(buffer, poseEntry, x - rightX - upX, y - rightY - upY, z - rightZ - upZ, 1f, 1f, r, g, b, alpha, lightmap);
+        putVertex(buffer, poseEntry, x - rightX + upX, y - rightY + upY, z - rightZ + upZ, 1f, 0f, r, g, b, alpha, lightmap);
+        putVertex(buffer, poseEntry, x + rightX + upX, y + rightY + upY, z + rightZ + upZ, 0f, 0f, r, g, b, alpha, lightmap);
+        putVertex(buffer, poseEntry, x + rightX - upX, y + rightY - upY, z + rightZ - upZ, 0f, 1f, r, g, b, alpha, lightmap);
     }
 
-    private void putVertex(VertexConsumer buffer, Matrix4f pose, Matrix3f normal, float x, float y, float z,
+    private void putVertex(VertexConsumer buffer, PoseStack.Pose pose, float x, float y, float z,
                            float u, float v, float red, float green, float blue, float alpha, int light) {
-        buffer.vertex(pose, x, y, z)
-                .color(red, green, blue, alpha)
-                .uv(u, v)
-                .overlayCoords(OverlayTexture.NO_OVERLAY)
-                .uv2(light)
-                .normal(normal, 0.0F, 1.0F, 0.0F)
-                .endVertex();
+        buffer.addVertex(pose, x, y, z)
+                .setColor(red, green, blue, alpha)
+                .setUv(u, v)
+                .setOverlay(OverlayTexture.NO_OVERLAY)
+                .setLight(light)
+                .setNormal(pose, 0.0F, 1.0F, 0.0F);
     }
 
     // --- Flare rendering ---
@@ -399,11 +407,9 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         RenderSystem.setShaderTexture(0, TEXTURE_FLARE);
 
         Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder buf = tesselator.getBuilder();
-        buf.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.NEW_ENTITY);
+        BufferBuilder buf = tesselator.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.NEW_ENTITY);
 
-        Matrix4f pose = pPoseStack.last().pose();
-        Matrix3f normalMat = pPoseStack.last().normal();
+        PoseStack.Pose poseEntry = pPoseStack.last();
 
         for (int i = 0; i < 3; i++) {
             float x = (float) (rand.nextGaussian() * 0.5F * cloud.rollerSize);
@@ -418,13 +424,13 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
             float srx = right.x() * scale, sry = right.y() * scale, srz = right.z() * scale;
             float sux = up.x() * scale, suy = up.y() * scale, suz = up.z() * scale;
 
-            putVertex(buf, pose, normalMat, x - srx - sux, posY - sry - suy, z - srz - suz, 1f, 1f, 1f, 1f, 1f, alpha, lightmap);
-            putVertex(buf, pose, normalMat, x - srx + sux, posY - sry + suy, z - srz + suz, 1f, 0f, 1f, 1f, 1f, alpha, lightmap);
-            putVertex(buf, pose, normalMat, x + srx + sux, posY + sry + suy, z + srz + suz, 0f, 0f, 1f, 1f, 1f, alpha, lightmap);
-            putVertex(buf, pose, normalMat, x + srx - sux, posY + sry - suy, z + srz - suz, 0f, 1f, 1f, 1f, 1f, alpha, lightmap);
+            putVertex(buf, poseEntry, x - srx - sux, posY - sry - suy, z - srz - suz, 1f, 1f, 1f, 1f, 1f, alpha, lightmap);
+            putVertex(buf, poseEntry, x - srx + sux, posY - sry + suy, z - srz + suz, 1f, 0f, 1f, 1f, 1f, alpha, lightmap);
+            putVertex(buf, poseEntry, x + srx + sux, posY + sry + suy, z + srz + suz, 0f, 0f, 1f, 1f, 1f, alpha, lightmap);
+            putVertex(buf, poseEntry, x + srx - sux, posY + sry - suy, z + srz - suz, 0f, 1f, 1f, 1f, 1f, alpha, lightmap);
         }
 
-        tesselator.end();
+        BufferUploader.drawWithShader(buf.buildOrThrow());
 
         RenderSystem.depthMask(true);
         RenderSystem.disableBlend();
@@ -453,7 +459,6 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
         Tesselator tesselator = Tesselator.getInstance();
-        BufferBuilder buf = tesselator.getBuilder();
 
         Random random = new Random(432L);
 
@@ -474,13 +479,13 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
 
             Matrix4f mat = pPoseStack.last().pose();
 
-            buf.begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
-            buf.vertex(mat, 0, 0, 0).color(1.0F, 1.0F, 1.0F, (float) inverse).endVertex();
-            buf.vertex(mat, (float) (-0.866D * vert2), vert1, (float) (-0.5D * vert2)).color(1.0F, 1.0F, 1.0F, 0.0F).endVertex();
-            buf.vertex(mat, (float) (0.866D * vert2), vert1, (float) (-0.5D * vert2)).color(1.0F, 1.0F, 1.0F, 0.0F).endVertex();
-            buf.vertex(mat, 0.0F, vert1, vert2).color(1.0F, 1.0F, 1.0F, 0.0F).endVertex();
-            buf.vertex(mat, (float) (-0.866D * vert2), vert1, (float) (-0.5D * vert2)).color(1.0F, 1.0F, 1.0F, 0.0F).endVertex();
-            tesselator.end();
+            BufferBuilder buf = tesselator.begin(VertexFormat.Mode.TRIANGLE_FAN, DefaultVertexFormat.POSITION_COLOR);
+            buf.addVertex(mat, 0, 0, 0).setColor(1.0F, 1.0F, 1.0F, (float) inverse);
+            buf.addVertex(mat, (float) (-0.866D * vert2), vert1, (float) (-0.5D * vert2)).setColor(1.0F, 1.0F, 1.0F, 0.0F);
+            buf.addVertex(mat, (float) (0.866D * vert2), vert1, (float) (-0.5D * vert2)).setColor(1.0F, 1.0F, 1.0F, 0.0F);
+            buf.addVertex(mat, 0.0F, vert1, vert2).setColor(1.0F, 1.0F, 1.0F, 0.0F);
+            buf.addVertex(mat, (float) (-0.866D * vert2), vert1, (float) (-0.5D * vert2)).setColor(1.0F, 1.0F, 1.0F, 0.0F);
+            BufferUploader.drawWithShader(buf.buildOrThrow());
 
             pPoseStack.popPose();
         }

@@ -1,14 +1,11 @@
 package com.wf.wfballistics.aef.nuke;
 
-/**
- * Tunables for the multi-tick nuclear explosion (ported from HBM's {@code ConfigBomb}). Plain static fields
- * for now — wire them to a real Forge config if you want them user-editable.
- */
+/** Tunables for the multi-tick nuclear explosion (ported from HBM's {@code ConfigBomb}). */
 public final class NukeConfig {
 
     /**
-     * Which ray algorithm {@link com.wf.wfballistics.entity.EntityNukeExplosionMK5} uses:
-     * {@code 0} = legacy batched, {@code 1} = threaded DDA, {@code 2} = threaded DDA + damage accumulation.
+     * Which ray algorithm {@link com.wf.wfballistics.entity.EntityNukeExplosionMK5} uses: {@code 0} = legacy
+     * batched, {@code 1} = threaded DDA, {@code 2} = threaded DDA + damage accumulation.
      */
     public static int explosionAlgorithm = 2;
 

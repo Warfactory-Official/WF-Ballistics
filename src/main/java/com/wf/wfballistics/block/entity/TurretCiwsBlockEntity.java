@@ -2,23 +2,35 @@ package com.wf.wfballistics.block.entity;
 
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.block.ModBlockEntities;
+import com.wf.wfballistics.compat.WarforgeCompat;
+import com.wf.wfballistics.drone.DroneEntity;
+import com.wf.wfballistics.entity.InterceptTarget;
+import com.wf.wfballistics.recon.ContactClass;
+import com.wf.wfballistics.recon.ReconBound;
+import com.wf.wfballistics.recon.ReconNet;
+import com.wf.wfballistics.recon.ReconOwners;
+import com.wf.wfballistics.recon.SensorSpec;
+import com.wf.wfballistics.recon.fc.FireControl;
+import com.wf.wfballistics.recon.track.Track;
 import com.wf.wfballistics.sim.IMissileListener;
 import com.wf.wfballistics.sim.MissileListenerRegistry;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
+import java.util.UUID;
 
-
-public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListener {
+public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListener, ReconBound {
 
     //tuning
     /**
@@ -26,7 +38,7 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
      */
     public static final double RANGE = 64.0;
     /**
-     * Detection radius as a listener — larger than RANGE so sim missiles materialize before entering it.
+     * Detection radius as a listener: larger than RANGE so sim missiles materialize before entering it.
      */
     public static final double LISTENER_RANGE = 96.0;
     /**
@@ -47,10 +59,17 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
      */
     public static final double TURN_RATE = Math.toRadians(15.0);
     public static final double AIM_TOLERANCE = Math.toRadians(10.0);
+    /** Widest track error this mount will try to shoot from. */
+    public static final double MAX_TRACK_ERROR = 8.0;
 
     // Server-side aim direction (unit vector); gates firing so fast/crossing targets are harder to track.
     private Vec3 aimDir = new Vec3(0.0, 1.0, 0.0);
     private int cooldown = 0;
+    private UUID cachedTeamId = null;
+    private int teamRefresh = 0;
+    // Which net this mount feeds, when the claim is not the answer. See ReconBound.
+    @Nullable
+    private UUID bound = null;
 
     public TurretCiwsBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.TURRET_CIWS.get(), pos, state);
@@ -58,7 +77,8 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
 
     private static boolean hasLineOfSight(ServerLevel sl, Vec3 from, Vec3 to) {
         BlockHitResult res = sl.clip(new ClipContext(from, to,
-                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, null));
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
+                net.minecraft.world.phys.shapes.CollisionContext.empty()));
         return res.getType() == HitResult.Type.MISS;
     }
 
@@ -105,27 +125,44 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
         }
         // Pull simulated missiles back into the real world as they approach, so we can actually shoot them.
         MissileListenerRegistry.get(sl).register(this.worldPosition, this);
+        if (--this.teamRefresh <= 0) {
+            this.resolve(sl);
+            this.teamRefresh = 100;
+        }
+        ReconNet.registerSensor(sl, this.worldPosition,
+                SensorSpec.fireControlRadar(ReconNet.netId(this.cachedTeamId), RANGE).withMast(0.5));
 
         if (this.cooldown > 0) {
             this.cooldown--;
         }
 
         Vec3 muzzle = Vec3.atCenterOf(this.worldPosition).add(0.0, 0.5, 0.0);
-        MissileEntity target = this.acquireTarget(sl, muzzle);
-        if (target == null) {
+        Track track = this.acquireTrack(sl, muzzle);
+        if (track == null) {
             return;
         }
 
-        Vec3 targetCenter = target.getBoundingBox().getCenter();
-        Vec3 toTarget = targetCenter.subtract(muzzle);
-        double dist = toTarget.length();
+        long now = sl.getGameTime();
+        Vec3 aimPoint = new Vec3(track.predictedX(now), track.predictedY(now), track.predictedZ(now));
+        Vec3 toTrack = aimPoint.subtract(muzzle);
+        double dist = toTrack.length();
         if (dist < 1.0E-4) {
             return;
         }
-        Vec3 targetDir = toTarget.scale(1.0 / dist);
+        this.aimDir = slew(this.aimDir, toTrack.scale(1.0 / dist), TURN_RATE);
 
-        // Slew toward the target, capped at TURN_RATE per tick, then fire only once roughly on-aim.
-        this.aimDir = slew(this.aimDir, targetDir, TURN_RATE);
+        Class<? extends Entity> type = track.guess() == ContactClass.DRONE ? DroneEntity.class : MissileEntity.class;
+        Entity resolved = FireControl.resolve(sl, type, track, MAX_TRACK_ERROR,
+                e -> e instanceof InterceptTarget t && t.interceptEngageable());
+        if (resolved == null) {
+            return;
+        }
+        InterceptTarget target = (InterceptTarget) resolved;
+        Vec3 targetCenter = resolved.getBoundingBox().getCenter();
+        if (!hasLineOfSight(sl, muzzle, targetCenter)) {
+            return;
+        }
+        Vec3 targetDir = targetCenter.subtract(muzzle).normalize();
         double aimError = Math.acos(Mth_clamp(this.aimDir.dot(targetDir)));
         if (aimError <= AIM_TOLERANCE && this.cooldown <= 0) {
             this.cooldown = FIRE_INTERVAL;
@@ -133,32 +170,17 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
         }
     }
 
-    /**
-     * Nearest live missile within RANGE that has clear line-of-sight, or null.
-     */
-    private MissileEntity acquireTarget(ServerLevel sl, Vec3 muzzle) {
-        AABB box = new AABB(this.worldPosition).inflate(RANGE);
-        // Ignore already-downed missiles: they've been neutralised and are falling/spinning out, so re-shooting
-        // them would only force-detonate them (see MissileEntity.shootDown) and cut the downed animation short.
-        List<MissileEntity> candidates = sl.getEntitiesOfClass(MissileEntity.class, box,
-                e -> !e.isRemoved() && !e.isDowned());
-        MissileEntity best = null;
-        double bestSq = RANGE * RANGE;
-        for (MissileEntity m : candidates) {
-            Vec3 c = m.getBoundingBox().getCenter();
-            double dsq = c.distanceToSqr(muzzle);
-            if (dsq <= bestSq && m.detectableAt(dsq, sl.random) && hasLineOfSight(sl, muzzle, c)) {
-                bestSq = dsq;
-                best = m;
-            }
-        }
-        return best;
+    /** The nearest missile contact on this mount's network, or null. */
+    private Track acquireTrack(ServerLevel sl, Vec3 muzzle) {
+        return ReconNet.picture(sl, ReconNet.netId(this.cachedTeamId))
+                .nearest(muzzle.x, muzzle.y, muzzle.z, RANGE,
+                        t -> t.guess() == ContactClass.MISSILE || t.guess() == ContactClass.DRONE);
     }
 
-    private void fire(ServerLevel sl, Vec3 muzzle, Vec3 targetCenter, MissileEntity target) {
+    private void fire(ServerLevel sl, Vec3 muzzle, Vec3 targetCenter, InterceptTarget target) {
         if (sl.random.nextFloat() < HIT_CHANCE) {
             float dmg = DAMAGE_MIN + sl.random.nextFloat() * DAMAGE_VAR;
-            target.damageMissile(dmg);
+            target.interceptDamage(dmg);
         }
         spawnTracer(sl, muzzle, targetCenter);
     }
@@ -182,7 +204,54 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
     public void setRemoved() {
         if (this.level instanceof ServerLevel sl) {
             MissileListenerRegistry.get(sl).deregister(this.worldPosition);
+            ReconNet.unregisterSensor(sl, this.worldPosition, ReconNet.netId(this.cachedTeamId));
         }
         super.setRemoved();
+    }
+
+    /**
+     * Work out whose mount this is: the binding if it has one, and otherwise whoever claims the ground under it.
+     */
+    private void resolve(ServerLevel sl) {
+        this.cachedTeamId = this.bound != null ? this.bound
+                : ReconOwners.owningAt(sl, this.worldPosition);
+    }
+
+    @Override
+    public long netId() {
+        return ReconNet.netId(this.cachedTeamId);
+    }
+
+    @Nullable
+    @Override
+    public UUID boundNet() {
+        return this.bound;
+    }
+
+    @Override
+    public void bindNet(@Nullable UUID id) {
+        ServerLevel sl = this.level instanceof ServerLevel s ? s : null;
+        if (sl != null) {
+            ReconNet.unregisterSensor(sl, this.worldPosition, this.netId());
+        }
+        this.bound = id;
+        this.setChanged();
+        if (sl != null) {
+            this.resolve(sl);
+        }
+    }
+
+    @Override
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
+        if (this.bound != null) {
+            tag.putUUID("BoundNet", this.bound);
+        }
+    }
+
+    @Override
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
+        this.bound = tag.hasUUID("BoundNet") ? tag.getUUID("BoundNet") : null;
     }
 }

@@ -2,7 +2,7 @@ package com.wf.wfballistics.debug;
 
 import com.mojang.logging.LogUtils;
 import com.wf.wfballistics.api.MissileData;
-import com.wf.wfballistics.api.MissileEventType;
+import com.wf.wfballistics.api.WFEventType;
 import com.wf.wfballistics.api.WFBallisticsAPI;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
@@ -50,7 +50,7 @@ public final class MissileDebug {
         positionCounter = 0;
     }
 
-    public static void onEvent(UUID id, MissileEventType type, long gameTime, Vec3 pos, boolean simulated, String detail) {
+    public static void onEvent(UUID id, WFEventType type, long gameTime, Vec3 pos, boolean simulated, String detail) {
         if (!enabled) {
             return;
         }

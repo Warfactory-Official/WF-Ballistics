@@ -4,9 +4,8 @@ import com.wf.wfballistics.MissileEntity;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Near-vertical top-attack dive: the same resolved-angle pure-pursuit approach as {@link AttackStage} but with
- * a faster terminal speed - a drone / loitering-munition strike that keeps its speed through the pivot. Pair
- * with a steep dive-angle range (or an explicit angle) for a straight-down plunge.
+ * Near-vertical top-attack dive: the same resolved-angle pure-pursuit approach as {@link AttackStage} but with a
+ * faster terminal speed - a drone / loitering-munition strike that keeps its speed through the pivot.
  */
 public final class VerticalDiveStage implements FlightStage {
 

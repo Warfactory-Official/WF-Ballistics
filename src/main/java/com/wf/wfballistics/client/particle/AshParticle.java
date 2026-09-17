@@ -9,11 +9,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * The settling cinders left when something is cremated. Dark, near-weightless flakes that drift down,
- * tumble until they land, and then linger for a long time before fading out — so a kill leaves a visible
- * scattering of ash on the ground rather than a single puff.
- */
+/** The settling cinders left when something is cremated. */
 public class AshParticle extends TextureSheetParticle {
 
     public AshParticle(ClientLevel level, double x, double y, double z, float scale) {
@@ -75,11 +71,10 @@ public class AshParticle extends TextureSheetParticle {
             float bz = corner[i][1];
             float rx = bx * cos - bz * sin;
             float rz = bx * sin + bz * cos;
-            buffer.vertex(x + rx, y, z + rz)
-                    .uv(uv[i][0], uv[i][1])
-                    .color(this.rCol, this.gCol, this.bCol, this.alpha)
-                    .uv2(light)
-                    .endVertex();
+            buffer.addVertex(x + rx, y, z + rz)
+                    .setUv(uv[i][0], uv[i][1])
+                    .setColor(this.rCol, this.gCol, this.bCol, this.alpha)
+                    .setLight(light);
         }
     }
 

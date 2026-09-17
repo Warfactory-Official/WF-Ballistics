@@ -3,6 +3,7 @@ package com.wf.wfballistics.block.entity;
 import com.wf.wfballistics.block.ModBlockEntities;
 import com.wf.wfballistics.menu.MissileDispenserMenu;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -21,11 +22,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-
 public class MissileDispenserBlockEntity extends BlockEntity implements MenuProvider {
 
-    // Stable per-launcher identity, stamped onto every missile this dispenser fires as its "control id" so
-    // its own missiles never collide with each other (friendly fire), while still hitting other launchers'.
     private UUID controlId;
     private LaunchConfig config;
     private boolean wasPowered;
@@ -80,8 +78,8 @@ public class MissileDispenserBlockEntity extends BlockEntity implements MenuProv
     }
 
     @Override
-    protected void saveAdditional(CompoundTag tag) {
-        super.saveAdditional(tag);
+    protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.saveAdditional(tag, registries);
         if (this.controlId != null) {
             tag.putUUID("ControlId", this.controlId);
         }
@@ -94,8 +92,8 @@ public class MissileDispenserBlockEntity extends BlockEntity implements MenuProv
     }
 
     @Override
-    public void load(CompoundTag tag) {
-        super.load(tag);
+    protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
+        super.loadAdditional(tag, registries);
         if (tag.hasUUID("ControlId")) {
             this.controlId = tag.getUUID("ControlId");
         }
@@ -104,9 +102,9 @@ public class MissileDispenserBlockEntity extends BlockEntity implements MenuProv
     }
 
     @Override
-    public CompoundTag getUpdateTag() {
+    public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
-        this.saveAdditional(tag);
+        this.saveAdditional(tag, registries);
         return tag;
     }
 

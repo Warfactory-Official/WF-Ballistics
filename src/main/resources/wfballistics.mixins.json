@@ -2,17 +2,31 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.wf.wfballistics.mixin",
-  "compatibilityLevel": "JAVA_17",
+  "compatibilityLevel": "JAVA_21",
   "plugin": "com.wf.wfballistics.mixin.WFMixinPlugin",
-  "refmap": "wfballistics.refmap.json",
   "mixins": [
+    "MixinEntity",
+    "MixinLevelChunk",
+    "MixinLivingEntity",
+    "MixinMob",
+    "MixinPathNavigation",
+    "MixinPathTypeCache",
+    "MixinPathNavigationRegion",
+    "MixinWalkNodeEvaluator",
     "MixinProjectileUtil",
+    "AccessorChunkMap",
+    "AccessorLivingEntity",
+    "MixinChunkMapTrackedEntity",
     "gt.MixinNotifiableEnergyContainer"
   ],
   "client": [
-    "MixinBufferBuilder",
     "MixinEntityRenderDispatcher",
-    "MixinLevelRenderer"
+    "MixinLevelRenderer",
+    "MixinLevelRendererFeed",
+    "MixinViewArea",
+    "MixinClientChunkCache",
+    "MixinParticleEngine",
+    "MixinRenderSectionSort"
   ],
   "injectors": {
     "defaultRequire": 1

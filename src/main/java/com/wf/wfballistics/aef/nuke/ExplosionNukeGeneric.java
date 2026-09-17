@@ -18,16 +18,16 @@ public class ExplosionNukeGeneric {
     }
 
     public static void dealDamage(Level level, Vec3 pos, double radius, float maxDamage) {
-        List<Entity> entities = level.getEntities((Entity) null, new AABB(pos, pos).expandTowards(radius, radius, radius), Entity::isAlive);
+        List<Entity> entities = level.getEntities((Entity) null, new AABB(pos, pos).inflate(radius), Entity::isAlive);
         for (Entity entity : entities) {
-            double dist = entity.distanceToSqr(pos);
+            double dist = Math.sqrt(entity.distanceToSqr(pos));
             if (dist <= radius) {
                 Vec3 eyePosition = entity.getEyePosition();
                 if (!isExplosionExempt(entity) && isObstructed(level, pos, eyePosition)) {
                     double damage = maxDamage * (radius - dist) / radius;
                     // The source mod used a dedicated radiation damage source here; we fall back to generic for now.
                     entity.hurt(level.damageSources().generic(), (float) damage);
-                    entity.setSecondsOnFire(5);
+                    entity.igniteForSeconds(5);
                     Vec3 knock = eyePosition.subtract(pos).normalize().scale(0.2D);
                     entity.addDeltaMovement(knock);
                 }
@@ -36,10 +36,12 @@ public class ExplosionNukeGeneric {
     }
 
     private static boolean isExplosionExempt(Entity entity) {
-        return entity.ignoreExplosion();
+        // 1.21: ignoreExplosion(Explosion) requires an Explosion argument; pass null for no context.
+        return entity.ignoreExplosion(null);
     }
 
     public static boolean isObstructed(Level level, Vec3 start, Vec3 end) {
-        return level.clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, null)).getType() == HitResult.Type.MISS;
+        return level.clip(new ClipContext(start, end, ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE,
+                net.minecraft.world.phys.shapes.CollisionContext.empty())).getType() == HitResult.Type.MISS;
     }
 }

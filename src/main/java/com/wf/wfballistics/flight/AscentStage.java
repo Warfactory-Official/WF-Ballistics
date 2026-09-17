@@ -5,13 +5,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Vertical boost that rotates toward the target as it nears cruise altitude: a constant-speed gravity turn.
- * The climb runs at the missile's own {@link MissileEntity#getAscentSpeed() ascent speed} (which scales with
- * cruise speed unless overridden), so a fast missile climbs fast, and the pitch-over is spread across the top
- * fraction of the <em>actual</em> climb height, so a low terrain-follow hop and a tall high-altitude climb both
- * pitch over proportionally rather than on a fixed absolute band.
- */
+/** Vertical boost that rotates toward the target as it nears cruise altitude: a constant-speed gravity turn. */
 public final class AscentStage implements FlightStage {
 
     public static final AscentStage INSTANCE = new AscentStage();

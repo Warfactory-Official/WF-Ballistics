@@ -9,34 +9,16 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
 /**
- * HBM's two-number armour model: every defence is a <b>damage threshold</b> (DT, a flat amount subtracted
- * before anything else) plus a <b>damage resistance</b> (DR, a percentage taken off what's left), tracked
- * <em>per damage category</em>. A plate might stop 8 flat physical damage and 50% of what gets through,
- * while barely resisting fire. Weapons fight back with <b>piercing</b>: {@code pierceDT} eats into the
- * threshold, {@code pierceDR} into the resistance.
- *
- * <p>Final damage for one hit:
- * <pre>
- *   dt = max(0, totalDT - pierceDT)
- *   if (dt &gt;= amount) -&gt; 0                       // threshold fully absorbs the hit
- *   dr = totalDR * clamp(1 - pierceDR, 0, 2)       // &gt;1 is allowed: over-piercing amplifies damage
- *   final = (amount - dt) * (1 - dr)
- * </pre>
- *
- * <p><b>How it's applied:</b> {@link com.wf.wfballistics.damage.DamageEventHandler} runs this on every
- * {@code LivingHurtEvent}, so registered armour resists matching damage from any source — not just this
- * mod's weapons. With nothing registered the maths is a no-op, so it is safe to leave enabled. Piercing for
- * a specific hit is supplied through {@link EntityDamageUtil#dealDamage}, which stashes it in a thread-local
- * for the duration of that one {@code hurt} call.
- *
- * <p>This is intentionally a thin, in-memory registry (no JSON config) — register armour profiles from your
- * mod's setup; extend with set bonuses or a config loader as needed.
+ * HBM's two-number armour model: every defence is a <b>damage threshold</b> (DT, a flat amount subtracted before
+ * anything else) plus a <b>damage resistance</b> (DR, a percentage taken off what's left), tracked <em>per damage
+ * category</em>.
  */
 public final class DamageResistanceHandler {
 
@@ -46,8 +28,6 @@ public final class DamageResistanceHandler {
     public static final String CATEGORY_ENERGY = "energy";
     public static final String CATEGORY_OTHER = "other";
 
-    // Piercing for the hit currently being resolved. Thread-local because damage is applied synchronously
-    // on the server thread, and so the whole hurt()->LivingHurtEvent chain sees the value set by dealDamage.
     private static final ThreadLocal<float[]> PIERCE = ThreadLocal.withInitial(() -> new float[]{0F, 0F});
 
     private static final Map<Item, ResistanceProfile> ARMOR = new HashMap<>();
@@ -100,8 +80,24 @@ public final class DamageResistanceHandler {
      * @return {@code [totalDT, totalDR]} for {@code entity} against {@code category}; DR clamped to ≤ 1.
      */
     public static float[] getDTDR(LivingEntity entity, String category) {
+        return getDTDR(entity, category, null);
+    }
+
+    /**
+     * As {@link #getDTDR(LivingEntity, String)}, but also consults {@link DynamicResistance} when the source of the
+     * hit is known.
+     *
+     * @param source the hit being resolved, or null if only the category is known
+     */
+    public static float[] getDTDR(LivingEntity entity, String category, @Nullable DamageSource source) {
         float dt = 0F;
         float dr = 0F;
+
+        if (source != null && entity instanceof DynamicResistance dynamic) {
+            float[] live = dynamic.currentDTDR(source);
+            dt += live[0];
+            dr += live[1];
+        }
 
         ResistanceProfile innate = INNATE.get(entity.getType());
         if (innate != null) {
@@ -126,7 +122,12 @@ public final class DamageResistanceHandler {
      * Applies the DT/DR formula. {@code pierceDT}/{@code pierceDR} default to 0 for un-pierced hits.
      */
     public static float calculateDamage(LivingEntity entity, String category, float amount, float pierceDT, float pierceDR) {
-        float[] vals = getDTDR(entity, category);
+        return calculateDamage(entity, category, amount, pierceDT, pierceDR, null);
+    }
+
+    public static float calculateDamage(LivingEntity entity, String category, float amount, float pierceDT,
+                                        float pierceDR, @Nullable DamageSource source) {
+        float[] vals = getDTDR(entity, category, source);
         float dt = vals[0];
         float dr = vals[1];
 
@@ -143,7 +144,7 @@ public final class DamageResistanceHandler {
     }
 
     /**
-     * Picks a resistance category for a damage source — by this mod's classes first, then vanilla tags.
+     * Picks a resistance category for a damage source: by this mod's classes first, then vanilla tags.
      */
     public static String categoryFor(DamageSource source) {
         Optional<ResourceKey<DamageType>> key = source.typeHolder().unwrapKey();
@@ -156,7 +157,6 @@ public final class DamageResistanceHandler {
         if (source.is(DamageTypeTags.IS_PROJECTILE)) return CATEGORY_PHYSICAL;
         return CATEGORY_OTHER;
     }
-
 
     /**
      * A flat threshold (DT) and a fractional resistance (DR, 0..1) for one category.

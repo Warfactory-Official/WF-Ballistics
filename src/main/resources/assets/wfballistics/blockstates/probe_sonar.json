@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "online=false,waterlogged=false": {
+      "model": "wfballistics:block/probe_sonar"
+    },
+    "online=false,waterlogged=true": {
+      "model": "wfballistics:block/probe_sonar"
+    },
+    "online=true,waterlogged=false": {
+      "model": "wfballistics:block/probe_sonar_online"
+    },
+    "online=true,waterlogged=true": {
+      "model": "wfballistics:block/probe_sonar_online"
+    }
+  }
+}

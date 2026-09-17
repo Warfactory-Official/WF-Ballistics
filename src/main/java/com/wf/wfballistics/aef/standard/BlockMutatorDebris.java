@@ -9,12 +9,11 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
 
 /**
- * Fills cleared positions that border surviving solid terrain with a "debris" block (rubble/scorched
- * stone), giving craters a ragged lining instead of a clean spherical cut. A position only becomes debris
- * if at least one of its six neighbours is a solid block that isn't already the debris block.
+ * Fills cleared positions that border surviving solid terrain with a "debris" block (rubble/scorched stone), giving
+ * craters a ragged lining instead of a clean spherical cut.
  */
 public class BlockMutatorDebris implements IBlockMutator {
 
@@ -32,7 +31,7 @@ public class BlockMutatorDebris implements IBlockMutator {
      * Resolves a block by registry id, falling back to stone if the id is unknown.
      */
     public BlockMutatorDebris(ResourceLocation id) {
-        Block block = ForgeRegistries.BLOCKS.getValue(id);
+        Block block = BuiltInRegistries.BLOCK.get(id);
         this.debris = (block != null ? block : Blocks.STONE).defaultBlockState();
     }
 

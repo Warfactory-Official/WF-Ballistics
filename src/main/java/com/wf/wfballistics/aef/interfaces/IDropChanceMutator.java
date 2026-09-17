@@ -4,10 +4,8 @@ import com.wf.wfballistics.aef.ExplosionAEF;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Overrides the per-block item drop probability used by {@link com.wf.wfballistics.aef.standard.BlockProcessorStandard}.
- * <p>
- * The default vanilla-style chance is {@code 1 / size}; a mutator can raise it (loot-friendly mining charge)
- * or drop it to zero (clean vaporising blast). Called once per destroyed block.
+ * Overrides the per-block item drop probability used by {@link
+ * com.wf.wfballistics.aef.standard.BlockProcessorStandard}.
  *
  * @see com.wf.wfballistics.aef.standard.DropChanceMutatorStandard a constant-chance implementation
  */

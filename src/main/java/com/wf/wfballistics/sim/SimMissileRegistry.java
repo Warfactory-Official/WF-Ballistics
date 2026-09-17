@@ -1,5 +1,6 @@
 package com.wf.wfballistics.sim;
 
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -10,17 +11,17 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Per-dimension persistent store of {@link SimMissile}s. Data only — advancement/spawn logic lives
- * in {@link SimMissileManager}.
- */
+/** Per-dimension persistent store of {@link SimMissile}s. */
 public final class SimMissileRegistry extends SavedData {
     public static final String NAME = "wfballistics_sim_missiles";
 
     private final List<SimMissile> missiles = new ArrayList<>();
 
     public static SimMissileRegistry get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(SimMissileRegistry::load, SimMissileRegistry::new, NAME);
+        return level.getDataStorage().computeIfAbsent(
+                new SavedData.Factory<>(SimMissileRegistry::new,
+                        (tag, reg) -> SimMissileRegistry.load(tag)),
+                NAME);
     }
 
     public static SimMissileRegistry load(CompoundTag tag) {
@@ -33,7 +34,7 @@ public final class SimMissileRegistry extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
+    public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         ListTag list = new ListTag();
         for (SimMissile sm : missiles) {
             list.add(sm.save());

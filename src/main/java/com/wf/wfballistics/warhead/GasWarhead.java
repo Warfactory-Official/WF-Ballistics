@@ -10,18 +10,15 @@ import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Chemical warhead: instead of a blast, it disperses a wall-respecting cloud of gas over the target area
- * (see {@link GasCloud}). A small burst FX marks the point of release; the lethality is the lingering cloud.
- *
- * <p>Best paired with an airburst fuze (a positive {@code explosionOffset}) so the agent is released above
- * the target and floods down and outward through the reachable space.
+ * Chemical warhead: instead of a blast, it disperses a wall-respecting cloud of gas over the target area (see
+ * {@link GasCloud}).
  */
 public final class GasWarhead {
 
     /**
      * Registered warhead id (also selectable from the dispenser GUI).
      */
-    public static final ResourceLocation ID = new ResourceLocation(WFBallistics.MODID, "gas");
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "gas");
 
     private GasWarhead() {
     }

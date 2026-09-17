@@ -2,37 +2,24 @@ package com.wf.wfballistics.client.gui;
 
 import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
-import com.mojang.math.Axis;
-import com.wf.wfballistics.MissileModels;
-import com.wf.wfballistics.client.render.MissileItemRenderer;
-import com.wf.wfballistics.client.render.WFRenderTypes;
-import net.minecraft.ChatFormatting;
-import net.minecraft.client.Minecraft;
+import com.wf.gemrender.direct.DirectPass;
+import com.wf.gemrender.direct.DirectRenderer;
+import com.wf.wfballistics.client.gui.gallery.GalleryEntry;
+import com.wf.wfballistics.client.gui.gallery.ModelGallery;
+import net.minecraft.Util;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
-import net.minecraft.client.renderer.block.model.BakedQuad;
-import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.client.resources.model.BakedModel;
-import net.minecraft.core.Direction;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
-import net.minecraft.world.inventory.InventoryMenu;
-import net.minecraft.world.item.ItemDisplayContext;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4f;
+import org.jetbrains.annotations.Nullable;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
 
+/** Looks at every model in the mod, out of every registry that holds one. */
 public class ModelGalleryScreen extends Screen {
 
     private enum Mode {TEXTURED, NORMALS}
@@ -40,21 +27,59 @@ public class ModelGalleryScreen extends Screen {
     private static final int CELL = 64;
     private static final int LABEL_H = 10;
     private static final int PAD = 10;
-    private static final int TOP = 30;
+    /** Below the button row, where the tabs start. */
+    private static final int BAR = 24;
+    private static final int CHIP_H = 12;
     private static final int BOTTOM = 8;
 
-    private final List<ResourceLocation> models = new ArrayList<>(MissileModels.ids());
+    /** How far a grid model is tipped towards the camera, so a flat one is not drawn edge-on. */
+    private static final float GRID_PITCH = 12.0f;
+    /** One turn of a model on the turntable. The rate the missile item renderer has always spun at. */
+    private static final long SPIN_MS = 9000L;
+    /** One pass of whichever clip is selected. */
+    private static final long CLIP_MS = 2000L;
+
+    private final List<ModelGallery.Category> categories = ModelGallery.build();
+    /** Clickable rectangles, collected as they are drawn and consulted on the next click. */
+    private final List<Hit> hits = new ArrayList<>();
+
+    private int category;
     private int scrollRow;
+    /** Where the arrow keys are in the grid, or -1 until they have been used. */
+    private int cursor = -1;
+    private int gridTop = BAR + CHIP_H + 12;
+
     private boolean cull = true;
     private Mode mode = Mode.TEXTURED;
 
-    private ResourceLocation focused;
+    /** Whether the turntable runs. */
+    private boolean turning = true;
+    /** Whether the selected clip runs. Stopped, the arrow keys scrub it by hand. */
+    private boolean playing = true;
+    private float scrub;
+    private int clip;
+    private int variant;
+
+    @Nullable
+    private GalleryEntry focused;
     private float yaw;
     private float pitch;
     private float zoom = 1.0f;
 
+    private record Hit(int x, int y, int width, int height, Runnable action) {
+
+        private boolean covers(double mouseX, double mouseY) {
+            return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+        }
+    }
+
     public ModelGalleryScreen() {
         super(Component.literal("WF Model Gallery"));
+    }
+
+    private List<GalleryEntry> entries() {
+        return this.categories.isEmpty() ? List.of() : this.categories.get(this.category)
+                .entries();
     }
 
     private int columns() {
@@ -66,11 +91,11 @@ public class ModelGalleryScreen extends Screen {
     }
 
     private int visibleRows() {
-        return Math.max(1, (this.height - TOP - BOTTOM) / rowStride());
+        return Math.max(1, (this.height - this.gridTop - BOTTOM) / rowStride());
     }
 
     private int totalRows() {
-        return (models.size() + columns() - 1) / columns();
+        return (entries().size() + columns() - 1) / columns();
     }
 
     private int maxScrollRow() {
@@ -86,204 +111,349 @@ public class ModelGalleryScreen extends Screen {
         int h = 16;
         int right = this.width - PAD;
         addRenderableWidget(Button.builder(modeLabel(), b -> {
-            mode = mode == Mode.TEXTURED ? Mode.NORMALS : Mode.TEXTURED;
+            this.mode = this.mode == Mode.TEXTURED ? Mode.NORMALS : Mode.TEXTURED;
             b.setMessage(modeLabel());
         }).bounds(right - 110, 6, 110, h).build());
         addRenderableWidget(Button.builder(cullLabel(), b -> {
-            cull = !cull;
+            this.cull = !this.cull;
             b.setMessage(cullLabel());
         }).bounds(right - 110 - 6 - 74, 6, 74, h).build());
-        if (focused != null) {
-            addRenderableWidget(Button.builder(Component.literal("< Back"), b -> {
-                focused = null;
-                rebuildWidgets();
-            }).bounds(PAD, 6, 60, h).build());
+        if (this.focused != null) {
+            addRenderableWidget(Button.builder(Component.literal("< Back"), b -> back()).bounds(PAD, 6, 60, h)
+                    .build());
         }
+        this.gridTop = tabBottom() + 12;
         this.scrollRow = Math.min(this.scrollRow, maxScrollRow());
     }
 
     private Component modeLabel() {
-        return Component.literal("Mode: " + (mode == Mode.NORMALS ? "normals" : "textured"));
+        return Component.literal("Mode: " + (this.mode == Mode.NORMALS ? "normals" : "textured"));
     }
 
     private Component cullLabel() {
-        return Component.literal("Cull: " + (cull ? "on" : "off"));
+        return Component.literal("Cull: " + (this.cull ? "on" : "off"));
     }
+
+    // --- layout ------------------------------------------------------------------------------------
+
+    /** Lays the tab chips out left to right, wrapping, and returns the y just below the last row. */
+    private int tabBottom() {
+        int x = PAD;
+        int y = BAR;
+        for (ModelGallery.Category tab : this.categories) {
+            int w = chipWidth(tabText(tab));
+            if (x > PAD && x + w > this.width - PAD) {
+                x = PAD;
+                y += CHIP_H + 2;
+            }
+            x += w + 4;
+        }
+        return y + CHIP_H;
+    }
+
+    private String tabText(ModelGallery.Category tab) {
+        return tab.name() + " " + tab.entries()
+                .size();
+    }
+
+    private int chipWidth(String text) {
+        return this.font.width(text) + 10;
+    }
+
+    /** @return the text, shortened with an ellipsis until it fits in {@code width} pixels. */
+    private String clip(String text, int width) {
+        if (this.font.width(text) <= width) {
+            return text;
+        }
+        return this.font.plainSubstrByWidth(text, width - this.font.width("...")) + "...";
+    }
+
+    // --- render ------------------------------------------------------------------------------------
 
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(gg);
+        super.render(gg, mouseX, mouseY, partialTick);
+
+        this.hits.clear();
+        int titleFrom = this.focused == null ? PAD : PAD + 66;
+        int titleTo = this.width - PAD - 110 - 6 - 74 - 6;
+        gg.drawCenteredString(this.font, this.title, (titleFrom + titleTo) / 2, 8, 0xFFFFFFFF);
+
+        if (this.categories.isEmpty()) {
+            gg.drawCenteredString(this.font, "no model registry has anything in it", this.width / 2,
+                    this.height / 2, 0xFFFF6060);
+            return;
+        }
 
         RenderSystem.enableDepthTest();
         Lighting.setupFor3DItems();
-        MultiBufferSource.BufferSource buf = gg.bufferSource();
+        MultiBufferSource.BufferSource buffers = gg.bufferSource();
 
-        ResourceLocation hovered = focused == null ? renderGrid(gg, buf, mouseX, mouseY) : null;
-        if (focused != null) {
-            renderInspect(gg, buf);
+        GalleryEntry hovered = this.focused == null ? drawGrid(gg, buffers, mouseX, mouseY) : null;
+        if (this.focused != null) {
+            drawInspect(gg, buffers);
         }
 
-        buf.endBatch();
+        DirectRenderer.flush(DirectPass.GUI);
+        buffers.endBatch();
         Lighting.setupForFlatItems();
 
-        gg.drawCenteredString(this.font, this.title, this.width / 2, 8, 0xFFFFFFFF);
-        if (focused == null) {
-            renderGridLabels(gg);
-            gg.drawString(this.font, models.size() + " models  |  rows " + (scrollRow + 1) + "-"
-                    + Math.min(totalRows(), scrollRow + visibleRows()) + "/" + totalRows()
-                    + "  |  click to inspect, scroll to page, N normals, C cull", PAD, 22, 0xFF9090A8, false);
+        if (this.focused == null) {
+            drawTabs(gg, mouseX, mouseY);
+            drawGridLabels(gg);
+            gg.drawString(this.font, entries().size() + " models  |  rows " + (this.scrollRow + 1) + "-"
+                    + Math.min(totalRows(), this.scrollRow + visibleRows()) + "/" + totalRows()
+                    + "  |  click or arrows + enter to inspect, scroll to page", PAD, this.gridTop - 11,
+                    0xFF9090A8, false);
+            gg.drawString(this.font, footer(), PAD, this.height - 10, 0xFF707088, false);
         } else {
-            int ty = 24;
-            for (Component line : infoFor(focused)) {
-                gg.drawString(this.font, line, PAD, ty, 0xFFFFFFFF, false);
-                ty += 10;
-            }
-            gg.drawString(this.font, "drag to rotate  |  scroll to zoom  |  ESC/Back to return  |  N normals, C cull",
-                    PAD, this.height - 14, 0xFF9090A8, false);
+            drawInspectChrome(gg, mouseX, mouseY);
         }
 
-        super.render(gg, mouseX, mouseY, partialTick);
-
         if (hovered != null) {
-            gg.renderComponentTooltip(this.font, infoFor(hovered), mouseX, mouseY);
+            gg.renderComponentTooltip(this.font, hovered.info(), mouseX, mouseY);
+        } else if (this.focused == null && this.cursor >= 0 && this.cursor < entries().size()) {
+            int[] cell = cellPos(this.cursor);
+            if (cell != null) {
+                gg.renderComponentTooltip(this.font, entries().get(this.cursor)
+                        .info(), cell[0] + CELL, cell[1] + CELL);
+            }
         }
     }
 
-    private ResourceLocation renderGrid(GuiGraphics gg, MultiBufferSource.BufferSource buf, int mouseX, int mouseY) {
+    /** @return where a grid index is drawn, or null if it is on a page that is not showing. */
+    @Nullable
+    private int[] cellPos(int index) {
+        int cols = columns();
+        int row = index / cols - this.scrollRow;
+        if (row < 0 || row >= visibleRows()) {
+            return null;
+        }
+        return new int[]{gridX() + index % cols * CELL, this.gridTop + row * rowStride()};
+    }
+
+    private String footer() {
+        return "tab changes registry  |  N normals, C cull, A clip, V variant, P "
+                + (this.playing ? "hold clip" : "run clip");
+    }
+
+    @Nullable
+    private GalleryEntry drawGrid(GuiGraphics gg, MultiBufferSource.BufferSource buffers, int mouseX,
+                                  int mouseY) {
+        List<GalleryEntry> entries = entries();
         int cols = columns();
         int gridX = gridX();
         int rows = visibleRows();
-        ResourceLocation hovered = null;
+        GalleryEntry hovered = null;
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                int index = (scrollRow + r) * cols + c;
-                if (index >= models.size()) {
+                int index = (this.scrollRow + r) * cols + c;
+                if (index >= entries.size()) {
                     continue;
                 }
+                GalleryEntry entry = entries.get(index);
                 int x = gridX + c * CELL;
-                int y = TOP + r * rowStride();
+                int y = this.gridTop + r * rowStride();
                 boolean hover = mouseX >= x && mouseX < x + CELL && mouseY >= y && mouseY < y + CELL;
-                gg.fill(x, y, x + CELL, y + CELL, hover ? 0x40FFFFFF : 0x30000000);
-                gg.renderOutline(x, y, CELL, CELL, hover ? 0xFF6688FF : 0xFF404050);
-                drawModel(gg, buf, models.get(index), x + CELL / 2.0f, y + CELL / 2.0f, CELL * 0.85f,
-                        ItemDisplayContext.GUI, 15.0f, 0.0f);
+                boolean picked = hover || index == this.cursor;
+                gg.fill(x, y, x + CELL, y + CELL, picked ? 0x40FFFFFF : 0x30000000);
+                gg.renderOutline(x, y, CELL, CELL, picked ? 0xFF6688FF : 0xFF404050);
+                if (entry.ready()) {
+                    entry.draw(new GalleryEntry.Request(gg, buffers, x + CELL / 2.0f, y + CELL / 2.0f,
+                            CELL * 0.8f, GRID_PITCH, spin(), this.clip, phase(), this.variant,
+                            this.mode == Mode.NORMALS, this.cull));
+                }
                 if (hover) {
-                    hovered = models.get(index);
+                    hovered = entry;
                 }
             }
         }
         return hovered;
     }
 
-    private void renderGridLabels(GuiGraphics gg) {
+    private void drawGridLabels(GuiGraphics gg) {
+        List<GalleryEntry> entries = entries();
         int cols = columns();
         int gridX = gridX();
         int rows = visibleRows();
         for (int r = 0; r < rows; r++) {
             for (int c = 0; c < cols; c++) {
-                int index = (scrollRow + r) * cols + c;
-                if (index >= models.size()) {
+                int index = (this.scrollRow + r) * cols + c;
+                if (index >= entries.size()) {
                     continue;
                 }
+                GalleryEntry entry = entries.get(index);
                 int x = gridX + c * CELL;
-                int y = TOP + r * rowStride();
-                String label = models.get(index).getPath();
-                gg.drawString(this.font, label, x + (CELL - this.font.width(label)) / 2, y + CELL + 1, 0xFFC0C0D0, false);
+                int y = this.gridTop + r * rowStride();
+                String label = clip(entry.label(), CELL - 2);
+                int colour = entry.ready() ? 0xFFC0C0D0 : 0xFFB05050;
+                gg.drawString(this.font, label, x + (CELL - this.font.width(label)) / 2, y + CELL + 1,
+                        colour, false);
             }
         }
     }
 
-    private void renderInspect(GuiGraphics gg, MultiBufferSource.BufferSource buf) {
-        float size = Math.min(this.width, this.height) * 0.32f * zoom;
-        drawModel(gg, buf, focused, this.width / 2.0f, this.height / 2.0f, size,
-                ItemDisplayContext.FIXED, pitch, yaw);
-    }
-
-    private void drawModel(GuiGraphics gg, MultiBufferSource.BufferSource buf, ResourceLocation id,
-                           float cx, float cy, float scalePx, ItemDisplayContext ctx, float pitch, float yaw) {
-        PoseStack pose = gg.pose();
-        pose.pushPose();
-        pose.translate(cx, cy, 200.0f);
-        pose.scale(scalePx, -scalePx, scalePx);
-        pose.mulPose(Axis.XP.rotationDegrees(pitch));
-        pose.mulPose(Axis.YP.rotationDegrees(yaw));
-        pose.translate(-0.5, -0.5, -0.5);
-        BakedModel baked = MissileItemRenderer.instance().applyTransform(id, ctx, pose);
-        if (baked != null) {
-            if (mode == Mode.NORMALS) {
-                drawNormals(baked, pose, buf);
-            } else {
-                RenderType type = cull ? RenderType.cutout() : RenderType.entityCutoutNoCull(InventoryMenu.BLOCK_ATLAS);
-                Minecraft.getInstance().getItemRenderer().renderModelLists(baked, ItemStack.EMPTY,
-                        LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY, pose, buf.getBuffer(type));
+    private void drawTabs(GuiGraphics gg, int mouseX, int mouseY) {
+        int x = PAD;
+        int y = BAR;
+        for (int i = 0; i < this.categories.size(); i++) {
+            int index = i;
+            String text = tabText(this.categories.get(i));
+            int w = chipWidth(text);
+            if (x > PAD && x + w > this.width - PAD) {
+                x = PAD;
+                y += CHIP_H + 2;
             }
-        }
-        pose.popPose();
-    }
-
-    private void drawNormals(BakedModel baked, PoseStack pose, MultiBufferSource.BufferSource buf) {
-        VertexConsumer vc = buf.getBuffer(cull ? WFRenderTypes.NORMALS : WFRenderTypes.NORMALS_NOCULL);
-        Matrix4f mat = pose.last().pose();
-        RandomSource rand = RandomSource.create();
-        emitQuads(vc, mat, rand, baked, null);
-        for (Direction dir : Direction.values()) {
-            emitQuads(vc, mat, rand, baked, dir);
+            chip(gg, text, x, y, w, i == this.category, mouseX, mouseY, () -> select(index));
+            x += w + 4;
         }
     }
 
-    private static void emitQuads(VertexConsumer vc, Matrix4f mat, RandomSource rand, BakedModel baked, Direction dir) {
-        rand.setSeed(42L);
-        for (BakedQuad quad : baked.getQuads(null, dir, rand)) {
-            int[] v = quad.getVertices();
-            int stride = v.length / 4;
-            for (int i = 0; i < 4; i++) {
-                int b = i * stride;
-                float x = Float.intBitsToFloat(v[b]);
-                float y = Float.intBitsToFloat(v[b + 1]);
-                float z = Float.intBitsToFloat(v[b + 2]);
-                int n = v[b + 7];
-                float nx = (byte) (n & 0xFF) / 127.0f;
-                float ny = (byte) ((n >> 8) & 0xFF) / 127.0f;
-                float nz = (byte) ((n >> 16) & 0xFF) / 127.0f;
-                vc.vertex(mat, x, y, z)
-                        .color(nx * 0.5f + 0.5f, ny * 0.5f + 0.5f, nz * 0.5f + 0.5f, 1.0f)
-                        .endVertex();
+    private void drawInspect(GuiGraphics gg, MultiBufferSource.BufferSource buffers) {
+        GalleryEntry entry = this.focused;
+        if (entry == null || !entry.ready()) {
+            return;
+        }
+        float size = Math.min(this.width, this.height) * 0.55f * this.zoom;
+        entry.draw(new GalleryEntry.Request(gg, buffers, this.width / 2.0f, this.height / 2.0f, size,
+                this.pitch, spin(), this.clip, phase(), this.variant, this.mode == Mode.NORMALS,
+                this.cull));
+    }
+
+    private void drawInspectChrome(GuiGraphics gg, int mouseX, int mouseY) {
+        GalleryEntry entry = this.focused;
+        if (entry == null) {
+            return;
+        }
+        int y = BAR;
+        for (Component line : entry.info()) {
+            gg.drawString(this.font, line, PAD, y, 0xFFFFFFFF, false);
+            y += 10;
+        }
+        if (!entry.ready()) {
+            gg.drawString(this.font, "still loading, or it failed to", PAD, y, 0xFFFF6060, false);
+        }
+
+        int row = this.height - 24 - CHIP_H;
+        row = chips(gg, entry.clips()
+                .stream()
+                .map(GalleryEntry.Clip::name)
+                .toList(), row, this.clip, index -> this.clip = index, mouseX, mouseY);
+        chips(gg, entry.variants()
+                .stream()
+                .map(GalleryEntry.Variant::name)
+                .toList(), row, this.variant, index -> this.variant = index, mouseX, mouseY);
+
+        gg.drawString(this.font, "drag or shift+arrows to turn  |  R " + (this.turning ? "hold" : "spin")
+                        + "  |  scroll to zoom  |  arrows scrub  |  ESC to return",
+                PAD, this.height - 20, 0xFF707088, false);
+        gg.drawString(this.font, footer(), PAD, this.height - 10, 0xFF707088, false);
+    }
+
+    /** Draws one row of chips and returns the y of the row above it, so rows stack upwards. */
+    private int chips(GuiGraphics gg, List<String> names, int y, int selected,
+                      java.util.function.IntConsumer pick, int mouseX, int mouseY) {
+        if (names.isEmpty()) {
+            return y;
+        }
+        int x = PAD;
+        for (int i = 0; i < names.size(); i++) {
+            int index = i;
+            int w = chipWidth(names.get(i));
+            if (x > PAD && x + w > this.width - PAD) {
+                break;
             }
+            chip(gg, names.get(i), x, y, w, Math.floorMod(selected, names.size()) == i, mouseX, mouseY,
+                    () -> pick.accept(index));
+            x += w + 4;
         }
+        return y - CHIP_H - 2;
     }
 
-    private List<Component> infoFor(ResourceLocation id) {
-        double len = MissileModels.length(id);
-        Vec3 dim = MissileModels.dimensions(id);
-        Vec3 center = MissileModels.center(id);
-        double baseY = center.y - dim.y / 2.0;
-        List<Component> t = new ArrayList<>();
-        t.add(Component.literal(id.toString()).withStyle(ChatFormatting.WHITE));
-        t.add(Component.literal(String.format("length %.3f", len)).withStyle(ChatFormatting.GRAY));
-        t.add(Component.literal(String.format("dim  %.3f x %.3f x %.3f", dim.x, dim.y, dim.z)).withStyle(ChatFormatting.GRAY));
-        t.add(Component.literal(String.format("center %.3f, %.3f, %.3f", center.x, center.y, center.z)).withStyle(ChatFormatting.GRAY));
-        t.add(Component.literal(String.format("baseY %.3f", baseY))
-                .append(Component.literal("  (0 = base on origin)").withStyle(ChatFormatting.DARK_GRAY))
-                .withStyle(Math.abs(baseY) < 1.0e-3 ? ChatFormatting.GREEN : ChatFormatting.RED));
-        return t;
+    private void chip(GuiGraphics gg, String text, int x, int y, int width, boolean active, int mouseX,
+                      int mouseY, Runnable action) {
+        boolean hover = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + CHIP_H;
+        gg.fill(x, y, x + width, y + CHIP_H, active ? 0xFF2A3A66 : hover ? 0x40FFFFFF : 0x40000000);
+        gg.renderOutline(x, y, width, CHIP_H, active ? 0xFF6688FF : 0xFF404050);
+        gg.drawString(this.font, text, x + 5, y + 2, active ? 0xFFFFFFFF : 0xFFA0A0B8, false);
+        this.hits.add(new Hit(x, y, width, CHIP_H, action));
     }
 
-    private ResourceLocation cellAt(double mouseX, double mouseY) {
+    // --- animation ---------------------------------------------------------------------------------
+
+    private float spin() {
+        return this.turning ? (float) (Util.getMillis() % SPIN_MS) / SPIN_MS * 360.0f : this.yaw;
+    }
+
+    private float phase() {
+        return this.playing ? (float) (Util.getMillis() % CLIP_MS) / CLIP_MS : this.scrub;
+    }
+
+    // --- input -------------------------------------------------------------------------------------
+
+    private void select(int index) {
+        if (this.categories.isEmpty()) {
+            return;
+        }
+        this.category = Math.floorMod(index, this.categories.size());
+        this.scrollRow = 0;
+        this.cursor = -1;
+        this.clip = 0;
+        this.variant = 0;
+        this.focused = null;
+        rebuildWidgets();
+    }
+
+    private void focus(GalleryEntry entry) {
+        this.focused = entry;
+        this.turning = true;
+        this.yaw = 25.0f;
+        this.pitch = -10.0f;
+        this.zoom = 1.0f;
+        rebuildWidgets();
+    }
+
+    /** Walks the grid, paging it so the cell stays on screen. */
+    private void moveCursor(int dx, int dy) {
+        List<GalleryEntry> entries = entries();
+        if (entries.isEmpty()) {
+            return;
+        }
+        int cols = columns();
+        int next = this.cursor < 0 ? this.scrollRow * cols : this.cursor + dx + dy * cols;
+        this.cursor = Mth.clamp(next, 0, entries.size() - 1);
+        int row = this.cursor / cols;
+        if (row < this.scrollRow) {
+            this.scrollRow = row;
+        } else if (row >= this.scrollRow + visibleRows()) {
+            this.scrollRow = row - visibleRows() + 1;
+        }
+        this.scrollRow = Mth.clamp(this.scrollRow, 0, maxScrollRow());
+    }
+
+    private void back() {
+        this.focused = null;
+        rebuildWidgets();
+    }
+
+    @Nullable
+    private GalleryEntry cellAt(double mouseX, double mouseY) {
+        List<GalleryEntry> entries = entries();
         int cols = columns();
         int gridX = gridX();
-        if (mouseX < gridX || mouseY < TOP) {
+        if (mouseX < gridX || mouseY < this.gridTop) {
             return null;
         }
         int c = (int) ((mouseX - gridX) / CELL);
-        int r = (int) ((mouseY - TOP) / rowStride());
+        int r = (int) ((mouseY - this.gridTop) / rowStride());
         if (c < 0 || c >= cols || r < 0 || r >= visibleRows()) {
             return null;
         }
-        if ((mouseY - TOP) % rowStride() >= CELL) {
+        if ((mouseY - this.gridTop) % rowStride() >= CELL) {
             return null;
         }
-        int index = (scrollRow + r) * cols + c;
-        return index >= 0 && index < models.size() ? models.get(index) : null;
+        int index = (this.scrollRow + r) * cols + c;
+        return index >= 0 && index < entries.size() ? entries.get(index) : null;
     }
 
     @Override
@@ -291,14 +461,21 @@ public class ModelGalleryScreen extends Screen {
         if (super.mouseClicked(mouseX, mouseY, button)) {
             return true;
         }
-        if (focused == null && button == 0) {
-            ResourceLocation id = cellAt(mouseX, mouseY);
-            if (id != null) {
-                focused = id;
-                yaw = 25.0f;
-                pitch = -10.0f;
-                zoom = 1.0f;
-                rebuildWidgets();
+        if (button == 0) {
+            // Walked backwards so the chip drawn last (the one on top, if two ever overlap) wins.
+            for (int i = this.hits.size() - 1; i >= 0; i--) {
+                Hit hit = this.hits.get(i);
+                if (hit.covers(mouseX, mouseY)) {
+                    hit.action()
+                            .run();
+                    return true;
+                }
+            }
+        }
+        if (this.focused == null && button == 0) {
+            GalleryEntry entry = cellAt(mouseX, mouseY);
+            if (entry != null) {
+                focus(entry);
                 return true;
             }
         }
@@ -307,41 +484,125 @@ public class ModelGalleryScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (focused != null && button == 0) {
-            yaw += (float) dragX;
-            pitch = Mth.clamp(pitch + (float) dragY, -90.0f, 90.0f);
+        if (this.focused != null && button == 0) {
+            if (this.turning) {
+                this.yaw = spin();
+                this.turning = false;
+            }
+            this.yaw += (float) dragX;
+            this.pitch = Mth.clamp(this.pitch + (float) dragY, -90.0f, 90.0f);
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (focused != null) {
-            zoom = Mth.clamp(zoom * (delta > 0 ? 1.1f : 0.9f), 0.2f, 6.0f);
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (this.focused != null) {
+            this.zoom = Mth.clamp(this.zoom * (scrollY > 0 ? 1.1f : 0.9f), 0.2f, 6.0f);
             return true;
         }
-        this.scrollRow = Math.max(0, Math.min(maxScrollRow(), this.scrollRow - (int) Math.signum(delta)));
+        this.scrollRow = Math.max(0, Math.min(maxScrollRow(),
+                this.scrollRow - (int) Math.signum(scrollY)));
         return true;
     }
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == 256 && focused != null) {
-            focused = null;
-            rebuildWidgets();
-            return true;
-        }
-        if (keyCode == 67) {
-            cull = !cull;
-            rebuildWidgets();
-            return true;
-        }
-        if (keyCode == 78) {
-            mode = mode == Mode.TEXTURED ? Mode.NORMALS : Mode.TEXTURED;
-            rebuildWidgets();
-            return true;
+        switch (keyCode) {
+            case GLFW.GLFW_KEY_ESCAPE -> {
+                if (this.focused != null) {
+                    back();
+                    return true;
+                }
+            }
+            case GLFW.GLFW_KEY_TAB -> {
+                select(this.category + (hasShiftDown() ? -1 : 1));
+                return true;
+            }
+            case GLFW.GLFW_KEY_C -> {
+                this.cull = !this.cull;
+                rebuildWidgets();
+                return true;
+            }
+            case GLFW.GLFW_KEY_N -> {
+                this.mode = this.mode == Mode.TEXTURED ? Mode.NORMALS : Mode.TEXTURED;
+                rebuildWidgets();
+                return true;
+            }
+            case GLFW.GLFW_KEY_A -> {
+                this.clip++;
+                return true;
+            }
+            case GLFW.GLFW_KEY_V -> {
+                this.variant++;
+                return true;
+            }
+            case GLFW.GLFW_KEY_P -> {
+                // Stopping the clock keeps whatever it was showing, so pausing never jumps the pose.
+                if (this.playing) {
+                    this.scrub = phase();
+                }
+                this.playing = !this.playing;
+                return true;
+            }
+            case GLFW.GLFW_KEY_R -> {
+                if (this.turning) {
+                    this.yaw = spin();
+                    this.turning = false;
+                } else {
+                    this.turning = true;
+                }
+                return true;
+            }
+            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER -> {
+                List<GalleryEntry> entries = entries();
+                if (this.focused == null && this.cursor >= 0 && this.cursor < entries.size()) {
+                    focus(entries.get(this.cursor));
+                    return true;
+                }
+            }
+            case GLFW.GLFW_KEY_LEFT -> {
+                return this.focused == null ? move(-1, 0)
+                        : hasShiftDown() ? turn(-15.0f, 0.0f) : scrubBy(-0.02f);
+            }
+            case GLFW.GLFW_KEY_RIGHT -> {
+                return this.focused == null ? move(1, 0)
+                        : hasShiftDown() ? turn(15.0f, 0.0f) : scrubBy(0.02f);
+            }
+            case GLFW.GLFW_KEY_UP -> {
+                return this.focused == null ? move(0, -1)
+                        : hasShiftDown() ? turn(0.0f, -15.0f) : scrubBy(0.1f);
+            }
+            case GLFW.GLFW_KEY_DOWN -> {
+                return this.focused == null ? move(0, 1)
+                        : hasShiftDown() ? turn(0.0f, 15.0f) : scrubBy(-0.1f);
+            }
+            default -> {
+            }
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    private boolean turn(float yawBy, float pitchBy) {
+        if (this.turning) {
+            // Take over from wherever the turntable had got to rather than snapping back to the start.
+            this.yaw = spin();
+            this.turning = false;
+        }
+        this.yaw += yawBy;
+        this.pitch = Mth.clamp(this.pitch + pitchBy, -90.0f, 90.0f);
+        return true;
+    }
+
+    private boolean move(int dx, int dy) {
+        moveCursor(dx, dy);
+        return true;
+    }
+
+    private boolean scrubBy(float delta) {
+        this.playing = false;
+        this.scrub = Mth.clamp(this.scrub + delta, 0.0f, 1.0f);
+        return true;
     }
 }

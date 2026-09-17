@@ -12,7 +12,7 @@ public class MissileRenderer extends EntityRenderer<MissileEntity> {
 
     @Override
     public ResourceLocation getTextureLocation(MissileEntity entity) {
-        return new ResourceLocation(WFBallistics.MODID, "textures/entity/missile.png");
+        return ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "textures/entity/missile.png");
     }
 
     @Override

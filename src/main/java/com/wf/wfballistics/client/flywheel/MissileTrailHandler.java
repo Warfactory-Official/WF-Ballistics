@@ -2,18 +2,26 @@ package com.wf.wfballistics.client.flywheel;
 
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.event.entity.EntityJoinLevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 
-/**
- * Gives every missile a Flywheel-instanced exhaust trail as it appears on the client. The example for "rocket
- * particles and similar repeating particles" — any flying entity can get a trail by spawning an
- * {@link InstancedTrailEffect} for it here (or wherever the entity is created client-side).
- */
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
+import java.util.Iterator;
+import java.util.Set;
+import java.util.Collections;
+import java.util.WeakHashMap;
+
+/** Gives every missile a Flywheel-instanced exhaust trail as it appears on the client. */
+@EventBusSubscriber(modid = WFBallistics.MODID, value = Dist.CLIENT)
 public final class MissileTrailHandler {
+
+    /**
+     * Weak so a level unload drops anything still queued without this handler tracking the level.
+     */
+    private static final Set<MissileEntity> PENDING =
+            Collections.newSetFromMap(new WeakHashMap<>());
 
     private MissileTrailHandler() {
     }
@@ -24,6 +32,21 @@ public final class MissileTrailHandler {
         if (!(event.getEntity() instanceof MissileEntity missile)) return;
         if (!FlywheelEffectManager.isAvailable(event.getLevel())) return;
 
-        FlywheelEffectManager.spawn(new InstancedTrailEffect(missile));
+        PENDING.add(missile);
+    }
+
+    @SubscribeEvent
+    public static void onClientTick(ClientTickEvent.Post event) {
+        if (PENDING.isEmpty()) return;
+
+        Iterator<MissileEntity> waiting = PENDING.iterator();
+        while (waiting.hasNext()) {
+            MissileEntity missile = waiting.next();
+            waiting.remove();
+
+            if (missile.isRemoved() || !missile.isAlive()) continue;
+
+            FlywheelEffectManager.spawn(new InstancedTrailEffect(missile));
+        }
     }
 }

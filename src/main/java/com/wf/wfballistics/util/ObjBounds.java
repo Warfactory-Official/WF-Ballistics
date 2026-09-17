@@ -13,9 +13,8 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Reads the bounding-box size of a Wavefront {@code .obj} bundled in the mod jar by scanning its vertex
- * lines for the min/max X/Y/Z. Mc makes normal clientside data pipeline fail on serverside hence you need
- * to load it directly from the jar
+ * Reads the bounding-box size of a Wavefront {@code .obj} bundled in the mod jar by scanning its vertex lines for
+ * the min/max X/Y/Z.
  */
 public final class ObjBounds {
 
@@ -88,7 +87,7 @@ public final class ObjBounds {
             JsonObject json = JsonParser.parseReader(new InputStreamReader(in, StandardCharsets.UTF_8)).getAsJsonObject();
             JsonElement modelEl = json.get("model");
             if (modelEl == null) return null;
-            ResourceLocation objId = new ResourceLocation(modelEl.getAsString());
+            ResourceLocation objId = ResourceLocation.parse(modelEl.getAsString());
             return "/assets/" + objId.getNamespace() + "/" + objId.getPath();
         } catch (Exception e) {
             return null;

@@ -47,5 +47,173 @@
         "stream": false
       }
     ]
+  },
+  "drone.rotor_loop": {
+    "subtitle": "subtitles.wfballistics.drone.rotor_loop",
+    "sounds": [
+      {
+        "name": "wfballistics:drone/rotor_loop",
+        "stream": false,
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "door.transition_seal_open": {
+    "sounds": [
+      "wfballistics:door/transition_seal_open"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.alarm6": {
+    "sounds": [
+      "wfballistics:door/alarm6"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.garage_move": {
+    "sounds": [
+      "wfballistics:door/garage_move"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.garage_stop": {
+    "sounds": [
+      "wfballistics:door/garage_stop"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.lever1": {
+    "sounds": [
+      "wfballistics:door/lever1"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.doorslide_opened1": {
+    "sounds": [
+      "wfballistics:door/doorslide_opened1"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.doorslide_opening1": {
+    "sounds": [
+      "wfballistics:door/doorslide_opening1"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.doorshut_1": {
+    "sounds": [
+      "wfballistics:door/doorshut_1"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.sliding_door_opened": {
+    "sounds": [
+      "wfballistics:door/sliding_door_opened"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.sliding_door_opening": {
+    "sounds": [
+      "wfballistics:door/sliding_door_opening"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.sliding_door_shut": {
+    "sounds": [
+      "wfballistics:door/sliding_door_shut"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.doormove2": {
+    "sounds": [
+      "wfballistics:door/doormove2"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.metal_stop1": {
+    "sounds": [
+      "wfballistics:door/metal_stop1"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.wgh_start": {
+    "sounds": [
+      "wfballistics:door/wgh_start"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.wgh_stop": {
+    "sounds": [
+      "wfballistics:door/wgh_stop"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.door_wgh_big_start": {
+    "sounds": [
+      "wfballistics:door/door_wgh_big_start"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.door_wgh_big_stop": {
+    "sounds": [
+      "wfballistics:door/door_wgh_big_stop"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.motor_start": {
+    "sounds": [
+      "wfballistics:door/motor_start"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.motor_stop": {
+    "sounds": [
+      "wfballistics:door/motor_stop"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.vault_scrape": {
+    "sounds": [
+      "wfballistics:door/vault_scrape"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "door.vault_thud": {
+    "sounds": [
+      "wfballistics:door/vault_thud"
+    ],
+    "subtitle": "subtitles.wfballistics.door"
+  },
+  "mining_charge_blast": {
+    "category": "blocks",
+    "subtitle": "subtitles.wfballistics.mining_charge_blast",
+    "sounds": [
+      "wfballistics:mining_charge/blast_1",
+      "wfballistics:mining_charge/blast_2",
+      "wfballistics:mining_charge/blast_3",
+      "wfballistics:mining_charge/blast_4"
+    ]
+  },
+  "mining_charge_blast_distant": {
+    "category": "blocks",
+    "subtitle": "subtitles.wfballistics.mining_charge_blast",
+    "sounds": [
+      "wfballistics:mining_charge/blast_distant_1",
+      "wfballistics:mining_charge/blast_distant_2"
+    ]
+  },
+  "detonator_arm": {
+    "category": "blocks",
+    "subtitle": "subtitles.wfballistics.detonator_arm",
+    "sounds": [
+      "wfballistics:detonator/arm"
+    ]
+  },
+  "detonator_detonate": {
+    "category": "players",
+    "subtitle": "subtitles.wfballistics.detonator_detonate",
+    "sounds": [
+      "wfballistics:detonator/detonate"
+    ]
   }
 }

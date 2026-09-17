@@ -2,7 +2,7 @@ package com.wf.wfballistics.menu;
 
 import com.wf.wfballistics.block.ModBlocks;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -15,7 +15,7 @@ public class MissileDispenserMenu extends AbstractContainerMenu {
     private final BlockPos pos;
 
 
-    public MissileDispenserMenu(int id, Inventory inv, FriendlyByteBuf buf) {
+    public MissileDispenserMenu(int id, Inventory inv, RegistryFriendlyByteBuf buf) {
         this(id, inv, ContainerLevelAccess.NULL, buf.readBlockPos());
     }
 

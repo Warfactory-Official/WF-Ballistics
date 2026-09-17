@@ -1,67 +1,167 @@
 package com.wf.wfballistics.client.flywheel;
 
+import com.wf.gemrender.particle.GemRenderParticleTypes;
+import com.wf.gemrender.particle.ParticleEmitter;
+import com.wf.gemrender.particle.ParticleInstance;
 import com.wf.wfballistics.MissileEntity;
+import dev.engine_room.flywheel.api.instance.InstanceType;
 import dev.engine_room.flywheel.api.visual.EffectVisual;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
-import net.minecraft.client.Minecraft;
 import net.minecraft.util.Mth;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.phys.Vec3;
 
+/** A missile's exhaust trail, rendered through GemRender's particle instancer. */
 public class InstancedTrailEffect implements WFFlywheelEffect {
 
-    private static final double PUFF_SPACING = 0.5;   // target spacing between trail puffs (blocks)
-    private static final int MAX_SEGMENT_PUFFS = 32;  // cap on puffs used to bridge one tick's travel (near)
-    final Flame[] pool;
+    /** Target spacing between trail puffs, in blocks, and the number the plume's density is really set by. */
+    private static final double PUFF_SPACING = 0.25;
+
+    /** Cap on puffs used to bridge one tick's travel. */
+    private static final int MAX_SEGMENT_PUFFS = 96;
+
+    /** Ring capacity. */
+    private static final int POOL = 4096;
+
+    /** How long a puff of smoke hangs in the air. */
+    private static final float LIFE_SECONDS = 7.4F;
+
+    /** Per-puff lifetime spread, as a fraction. */
+    private static final float LIFE_JITTER = 0.06F;
+
+    /** Per-puff size spread, for the same reason and kept just as tight. */
+    private static final float SCALE_JITTER = 0.09F;
+
+    /** What fraction of the missile's own speed the gas leaves the nozzle with, backwards. */
+    private static final double JET_FRACTION = 0.4;
+
+    /** And the ceiling on it, in blocks per tick: the fix for everything that was wrong at speed. */
+    private static final double JET_MAX_PER_TICK = 0.6;
+
+    /** Blocks per tick of random scatter on the jet, which gives the plume its ragged edge. */
+    private static final double JET_SCATTER = 0.09;
+    /** And the wake's, which is larger relative to everything else about it. */
+    private static final double WAKE_SCATTER = 0.12;
+
+    /** What the missile leaves behind, which is decided by what it is travelling through. */
+    public enum Kind {
+        EXHAUST(WFParticleTextures.EXHAUST_VERTEX, WFParticleTextures.EXHAUST_CULL,
+                PUFF_SPACING, LIFE_SECONDS, JET_FRACTION, JET_MAX_PER_TICK, JET_SCATTER) {
+            @Override
+            int style(int tint) {
+                return WFParticleStyles.trail(tint);
+            }
+        },
+        WAKE(WFParticleTextures.WAKE_VERTEX, WFParticleTextures.BILLBOARD_CULL,
+                0.18, 3.0F, 0.3, 0.2, WAKE_SCATTER) {
+            @Override
+            int style(int tint) {
+                return WFParticleStyles.wake(); // the sea is the same colour for everything in it
+            }
+
+            @Override
+            boolean lays(Entity source) {
+                return source instanceof MissileEntity missile && missile.isSubmerged();
+            }
+        };
+
+        /** One instance type per kind, built once and shared by every missile of that kind. */
+        private final InstanceType<ParticleInstance> instanceType;
+        private final double spacing;
+        private final float lifeSeconds;
+        private final double jetFraction;
+        private final double jetMaxPerTick;
+        private final double scatter;
+
+        Kind(net.minecraft.resources.ResourceLocation vertexShader,
+             net.minecraft.resources.ResourceLocation cullShader,
+             double spacing, float lifeSeconds, double jetFraction, double jetMaxPerTick, double scatter) {
+            this.instanceType = GemRenderParticleTypes.custom(vertexShader, cullShader);
+            this.spacing = spacing;
+            this.lifeSeconds = lifeSeconds;
+            this.jetFraction = jetFraction;
+            this.jetMaxPerTick = jetMaxPerTick;
+            this.scatter = scatter;
+        }
+
+        abstract int style(int tint);
+
+        /**
+         * @return whether this kind has anything to leave behind where the source currently is. An exhaust
+         *      plume always does: a motor carries its own oxidiser and a rocket underwater still burns.
+         */
+        boolean lays(Entity source) {
+            return true;
+        }
+
+        InstanceType<ParticleInstance> instanceType() {
+            return this.instanceType;
+        }
+
+        /**
+         * @return what a missile of this description leaves behind. Asked of the synced medium rather than of
+         *      where the missile is standing: a torpedo still falling toward the sea after an air launch is in air
+         *      by any block test, and giving it a rocket plume for those few ticks and a wake afterwards would mean
+         *      two emitters, two pools and a seam between them.
+         */
+        static Kind of(Entity source) {
+            return source instanceof MissileEntity missile && missile.isSubmergedMedium() ? WAKE : EXHAUST;
+        }
+    }
+
     private final Level level;
     private final Entity source;
-    // Emitter/effect centre (missile position), refreshed each tick; used for the distance LOD.
+    private final ParticleEmitter emitter;
+
+    /** Emitter centre (missile position), refreshed each tick. */
     double cx, cy, cz;
-    private int cursor = 0;
+
     private boolean sourceGone = false;
+
     // Previous emission point, so a fast mover's per-tick jump can be bridged into a continuous trail section.
     private double prevX, prevY, prevZ;
-    // The emission point before that: gives a third sample so the bridge can follow a Catmull-Rom curve through
-    // the last few points instead of a straight chord, rounding the sharp corners a hard turn would otherwise
-    // leave as a kink in the trail (see tickEffect).
-    private double prev2X, prev2Y, prev2Z;
+    private double headX, headY, headZ;
     private boolean hasPrevEmit = false;
-    private boolean hasPrev2 = false;
+    private boolean hasHeading = false;
+
+    private final Kind kind;
 
     public InstancedTrailEffect(Entity source) {
         this.level = source.level();
         this.source = source;
-        this.pool = new Flame[320];
-        for (int i = 0; i < pool.length; i++) {
-            pool[i] = new Flame();
-        }
+
         Vec3 emit = emitPoint();
-        this.cx = this.prevX = this.prev2X = emit.x;
-        this.cy = this.prevY = this.prev2Y = emit.y;
-        this.cz = this.prevZ = this.prev2Z = emit.z;
+        this.cx = this.prevX = emit.x;
+        this.cy = this.prevY = emit.y;
+        this.cz = this.prevZ = emit.z;
+
+        this.kind = Kind.of(source);
+        this.emitter = ParticleEmitter.create(kind.style(exhaustTint()), POOL, emit.x, emit.y, emit.z);
     }
 
-    /**
-     * Where the exhaust streams from. For a missile the mesh base sits at the entity origin and the model's
-     * +Y nose points along the heading, so the rear-face centre (the nozzle) is the entity position itself —
-     * not the AABB centre, which drifts to a corner of the oriented box as the missile pitches. Generic
-     * entities fall back to the vertical centre of their bounding box.
-     */
+    /** @return which of the two trails this is. Read by {@link InstancedTrailVisual} to pick the shader. */
+    Kind kind() {
+        return this.kind;
+    }
+
+    /** Where the exhaust streams from. */
     private Vec3 emitPoint() {
         if (source instanceof MissileEntity missile) {
-            return new Vec3(missile.getX(), missile.getY(), missile.getZ());
+            return new Vec3(missile.xOld, missile.yOld, missile.zOld);
         }
-        Vec3 p = source.position();
-        return new Vec3(p.x, p.y + source.getBbHeight() * 0.5, p.z);
+        return new Vec3(source.xOld, source.yOld + source.getBbHeight() * 0.5, source.zOld);
     }
 
     private int exhaustTint() {
         return source instanceof MissileEntity missile
                 ? missile.getExhaustColor()
                 : MissileEntity.DEFAULT_EXHAUST_COLOR;
+    }
+
+    ParticleEmitter emitter() {
+        return emitter;
     }
 
     @Override
@@ -78,188 +178,113 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
     public void tickEffect() {
         if (source.isRemoved() || !source.isAlive()) {
             sourceGone = true;
+            return;
         }
 
-        if (!sourceGone) {
-            Vec3 emit = emitPoint();
-            double ex = emit.x;
-            double ey = emit.y;
-            double ez = emit.z;
-            cx = ex;
-            cy = ey;
-            cz = ez;
-            Vec3 motion = source.getDeltaMovement();
-            int tint = exhaustTint();
+        Vec3 emit = emitPoint();
+        double ex = emit.x;
+        double ey = emit.y;
+        double ez = emit.z;
+        cx = ex;
+        cy = ey;
+        cz = ez;
+        double segX = ex - prevX;
+        double segY = ey - prevY;
+        double segZ = ez - prevZ;
+        double segLen = hasPrevEmit ? Math.sqrt(segX * segX + segY * segY + segZ * segZ) : 0.0;
 
-            // Bridge the distance travelled since the last emission with a run of puffs, so even a fast
-            // (supersonic) missile that jumps many blocks per tick leaves a continuous trail section rather
-            // than spaced-out dots. The whole section shares one scale and lifetime, so it reads as a cohesive
-            // tube and its instances differ only by position (letting the visual reuse the billboard matrix).
-            double segX = ex - prevX;
-            double segY = ey - prevY;
-            double segZ = ez - prevZ;
-            double segLen = hasPrevEmit ? Math.sqrt(segX * segX + segY * segY + segZ * segZ) : 0.0;
+        int count = Mth.clamp((int) Math.ceil(segLen / kind.spacing), 1, MAX_SEGMENT_PUFFS);
 
-            int count = Mth.clamp((int) Math.ceil(segLen / PUFF_SPACING), 1, segmentBudget());
-            float sectionScale = 0.6F + level.random.nextFloat() * 0.4F;
-            int sectionLife = 34 + level.random.nextInt(22);
+        double stretch = Math.max(1.0, (segLen / count) / kind.spacing);
 
-            // Lay the puffs along a Catmull-Rom curve through the last three emit points (prev2 -> prev ->
-            // current) instead of the straight prev->current chord, so a sharp heading change rounds into a
-            // visible arc rather than a hard kink in the trail. The fourth control point is extrapolated
-            // straight ahead since the missile's next position isn't known yet. Falls back to the chord until
-            // enough history exists. "Not extremely accurate" by design — it just reads the flight's curvature.
-            boolean curve = hasPrev2;
-            double p3x = ex + (ex - prevX);
-            double p3y = ey + (ey - prevY);
-            double p3z = ez + (ez - prevZ);
-            for (int k = 0; k < count; k++) {
-                double t = hasPrevEmit ? (double) (k + 1) / count : 1.0;
-                double sx;
-                double sy;
-                double sz;
-                if (curve) {
-                    sx = catmullRom(prev2X, prevX, ex, p3x, t);
-                    sy = catmullRom(prev2Y, prevY, ey, p3y, t);
-                    sz = catmullRom(prev2Z, prevZ, ez, p3z, t);
-                } else {
-                    sx = prevX + segX * t;
-                    sy = prevY + segY * t;
-                    sz = prevZ + segZ * t;
-                }
-                pool[cursor].spawn(level.random, sx, sy, sz, motion, sectionScale, sectionLife, tint);
-                cursor = (cursor + 1) % pool.length;
+        double jetSpeed = Math.min(segLen * kind.jetFraction, kind.jetMaxPerTick);
+
+        double nextHeadX = headX;
+        double nextHeadY = headY;
+        double nextHeadZ = headZ;
+        if (segLen > 1.0e-6) {
+            nextHeadX = segX / segLen;
+            nextHeadY = segY / segLen;
+            nextHeadZ = segZ / segLen;
+        }
+
+        double startTanX = (hasHeading ? headX : nextHeadX) * segLen;
+        double startTanY = (hasHeading ? headY : nextHeadY) * segLen;
+        double startTanZ = (hasHeading ? headZ : nextHeadZ) * segLen;
+        double endTanX = nextHeadX * segLen;
+        double endTanY = nextHeadY * segLen;
+        double endTanZ = nextHeadZ * segLen;
+
+        double lastX = prevX;
+        double lastY = prevY;
+        double lastZ = prevZ;
+
+        boolean laying = kind.lays(source);
+
+        for (int k = 0; k < count && laying; k++) {
+            double t = hasPrevEmit ? (double) (k + 1) / count : 1.0;
+            double sx = hermite(prevX, startTanX, ex, endTanX, t);
+            double sy = hermite(prevY, startTanY, ey, endTanY, t);
+            double sz = hermite(prevZ, startTanZ, ez, endTanZ, t);
+
+            double stepX = sx - lastX;
+            double stepY = sy - lastY;
+            double stepZ = sz - lastZ;
+            double stepLen = Math.sqrt(stepX * stepX + stepY * stepY + stepZ * stepZ);
+            double jetX = 0.0;
+            double jetY = 0.0;
+            double jetZ = 0.0;
+            if (stepLen > 1.0e-9) {
+                double scale = jetSpeed / stepLen;
+                jetX = -stepX * scale;
+                jetY = -stepY * scale;
+                jetZ = -stepZ * scale;
             }
+            lastX = sx;
+            lastY = sy;
+            lastZ = sz;
 
-            prev2X = prevX;
-            prev2Y = prevY;
-            prev2Z = prevZ;
-            prevX = ex;
-            prevY = ey;
-            prevZ = ez;
-            hasPrev2 = hasPrevEmit;
-            hasPrevEmit = true;
+            float life = kind.lifeSeconds * (1F - LIFE_JITTER + level.random.nextFloat() * 2F * LIFE_JITTER);
+            float scale = (float) (stretch * (1F - SCALE_JITTER + level.random.nextFloat() * 2F * SCALE_JITTER));
+
+            emitter.spawn(sx, sy, sz,
+                    (jetX + level.random.nextGaussian() * kind.scatter) * 20.0,
+                    (jetY + level.random.nextGaussian() * kind.scatter) * 20.0,
+                    (jetZ + level.random.nextGaussian() * kind.scatter) * 20.0,
+                    life, scale,
+                    level.random.nextFloat() * Mth.TWO_PI, 1.0F);
         }
 
-        for (Flame flame : pool) {
-            if (flame.active) flame.tick();
-        }
-    }
-
-    // Per-tick cap on how many puffs may bridge one movement segment, scaled down with distance from the
-    // camera: nearby trails get a dense, gap-free section; distant ones progressively fewer, since the gaps
-    // are sub-pixel out there. Keeps a fixed cost ceiling regardless of missile speed.
-    private int segmentBudget() {
-        // Fabulous: keep the trail at full density (see BillboardLod for the rationale).
-        if (Minecraft.useShaderTransparency()) {
-            return MAX_SEGMENT_PUFFS;
-        }
-        var player = Minecraft.getInstance().player;
-        if (player == null) {
-            return MAX_SEGMENT_PUFFS;
-        }
-        double dx = cx - player.getX();
-        double dy = cy - player.getY();
-        double dz = cz - player.getZ();
-        double d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < 64.0 * 64.0) {
-            return MAX_SEGMENT_PUFFS;
-        }
-        if (d2 < 160.0 * 160.0) {
-            return 18;
-        }
-        if (d2 < 320.0 * 320.0) {
-            return 10;
-        }
-        return 4;
+        prevX = ex;
+        prevY = ey;
+        prevZ = ez;
+        headX = nextHeadX;
+        headY = nextHeadY;
+        headZ = nextHeadZ;
+        hasHeading = hasHeading || segLen > 1.0e-6;
+        hasPrevEmit = true;
     }
 
     /**
-     * One axis of a uniform Catmull-Rom spline (tension 0.5) through {@code p1}->{@code p2}, shaped by the
-     * neighbours {@code p0} and {@code p3}. Passes through p1 at t=0 and p2 at t=1, bending toward the incoming
-     * and outgoing directions so a cornered path reads as a smooth curve.
+     * One axis of a cubic Hermite from {@code p0} to {@code p1}, leaving along {@code m0} and arriving along {@code
+     * m1}.
      */
-    private static double catmullRom(double p0, double p1, double p2, double p3, double t) {
+    private static double hermite(double p0, double m0, double p1, double m1, double t) {
         double t2 = t * t;
         double t3 = t2 * t;
-        return 0.5 * ((2.0 * p1)
-                + (-p0 + p2) * t
-                + (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2
-                + (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3);
+        return (2.0 * t3 - 3.0 * t2 + 1.0) * p0
+                + (t3 - 2.0 * t2 + t) * m0
+                + (-2.0 * t3 + 3.0 * t2) * p1
+                + (t3 - t2) * m1;
     }
 
     @Override
     public boolean isExpired() {
-        if (!sourceGone) return false;
-        for (Flame flame : pool) {
-            if (flame.active) return false;
-        }
-        return true;
+        return sourceGone && emitter.isIdle();
     }
 
-    static final class Flame {
-        boolean active;
-        double x, y, z, px, py, pz, vx, vy, vz;
-        int age, life;
-        float baseScale;
-        // Hot RGB (0xRRGGBB) this puff fades from; captured at spawn so a missile can change tint mid-flight.
-        int tint;
-
-        void spawn(RandomSource r, double x, double y, double z, Vec3 motion, float baseScale, int life, int tint) {
-            this.active = true;
-            this.age = 0;
-            this.life = life;
-            this.x = this.px = x;
-            this.y = this.py = y;
-            this.z = this.pz = z;
-            // Push backwards relative to the source so the trail streams out behind it.
-            this.vx = -motion.x * 0.4 + r.nextGaussian() * 0.02;
-            this.vy = -motion.y * 0.4 + r.nextGaussian() * 0.02;
-            this.vz = -motion.z * 0.4 + r.nextGaussian() * 0.02;
-            this.baseScale = baseScale;
-            this.tint = tint;
-        }
-
-        void tick() {
-            px = x;
-            py = y;
-            pz = z;
-            vx *= 0.9;
-            vy *= 0.9;
-            vz *= 0.9;
-            x += vx;
-            y += vy;
-            z += vz;
-            if (++age >= life) active = false;
-        }
-
-        double ix(float pt) {
-            return px + (x - px) * pt;
-        }
-
-        double iy(float pt) {
-            return py + (y - py) * pt;
-        }
-
-        double iz(float pt) {
-            return pz + (z - pz) * pt;
-        }
-
-        float scale(float pt) {
-            // Grow the puff strongly as it ages (0.5x -> ~3.3x of its base): a tight nozzle puff that billows
-            // into broad smoke, so consecutive puffs overlap and close the gaps a fast mover leaves between them.
-            return baseScale * (0.5F + (age + pt) / life * 2.8F);
-        }
-
-        int argb(float pt) {
-            float a = (age + pt) / life;
-            // Fade the configured hot tint toward a dim ember (10% brightness) as the puff cools, then out.
-            float f = 0.1F + 0.9F * (1F - Math.min(a / 0.6F, 1F));
-            int rr = (int) (Mth.clamp(((tint >> 16) & 0xFF) / 255F * f, 0F, 1F) * 255F);
-            int gg = (int) (Mth.clamp(((tint >> 8) & 0xFF) / 255F * f, 0F, 1F) * 255F);
-            int bb = (int) (Mth.clamp((tint & 0xFF) / 255F * f, 0F, 1F) * 255F);
-            int alpha = (int) (Mth.clamp((float) Math.pow(1 - Math.min(a, 1F), 0.4), 0F, 1F) * 0.75F * 255F);
-            return (alpha << 24) | (rr << 16) | (gg << 8) | bb;
-        }
+    @Override
+    public void disposeEffect() {
+        emitter.close();
     }
 }

@@ -3,24 +3,29 @@ package com.wf.wfballistics.chunk;
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.world.ForgeChunkManager;
+import net.neoforged.neoforge.common.world.chunk.TicketController;
 
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
 /**
- * Keeps the chunks around a detonation force-loaded for a short grace window after the missile that caused it
- * is gone, so a multi-tick effect the blast spawned (fire boxes, gas cloud, ...) isn't frozen by a chunk unload
- * the instant the missile is discarded. Tickets are BlockPos-owned (like the listener registry) and are swept
- * clean on world load by {@link WFChunkValidation}, so a restart inside the grace window can't leak them.
+ * Keeps the chunks around a detonation force-loaded for a short grace window after the missile that caused it is
+ * gone, so a multi-tick effect the blast spawned (fire boxes, gas cloud, ...) isn't frozen by a chunk unload the
+ * instant the missile is discarded.
  */
 public final class DetonationChunkGuard {
 
     public static final int DEFAULT_GRACE_TICKS = 60;
+
+    public static final TicketController CONTROLLER = new TicketController(
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "chunk_guard"),
+            WFChunkValidation::validateTickets
+    );
 
     private static final List<Hold> HOLDS = new ArrayList<>();
 
@@ -44,7 +49,7 @@ public final class DetonationChunkGuard {
                 int x = cx + ox;
                 int z = cz + oz;
                 chunks[i++] = ChunkPos.asLong(x, z);
-                ForgeChunkManager.forceChunk(level, WFBallistics.MODID, owner, x, z, true, true);
+                CONTROLLER.forceChunk(level, owner, x, z, true, true);
             }
         }
         HOLDS.add(new Hold(level, owner, chunks, level.getGameTime() + ticks));
@@ -61,7 +66,7 @@ public final class DetonationChunkGuard {
                 continue;
             }
             for (long key : h.chunks) {
-                ForgeChunkManager.forceChunk(level, WFBallistics.MODID, h.owner,
+                CONTROLLER.forceChunk(level, h.owner,
                         ChunkPos.getX(key), ChunkPos.getZ(key), false, true);
             }
             it.remove();
