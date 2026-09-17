@@ -3,12 +3,7 @@ package com.wf.wfballistics.damage;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.damagesource.DamageType;
 
-/**
- * The type of a hit. A damage class bundles two things: the {@link DamageType} a weapon should deal, and
- * the armour {@linkplain DamageResistanceHandler#category(DamageClass) resistance category} that defends
- * against it. Several classes can map to the same category (LASER and ELECTRIC are both "energy"), so armour
- * can resist a broad family without enumerating every weapon.
- */
+/** The type of a hit. */
 public enum DamageClass {
 
     PHYSICAL(WFDamageTypes.PHYSICAL, DamageResistanceHandler.CATEGORY_PHYSICAL),

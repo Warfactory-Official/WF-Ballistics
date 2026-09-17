@@ -18,21 +18,8 @@ import java.util.List;
 import java.util.function.Predicate;
 
 /**
- * Continuous ("swept") collision for fast projectiles, used so a missile moving many blocks in a single
- * 20&nbsp;TPS tick can't tunnel through a wall.
- *
- * <p>The caller passes the <em>pre-move</em> {@code startPos} explicitly, so this is agnostic to whether
- * the entity has already been moved this tick. The traversed corridor {@code [startPos, startPos+delta]}
- * (extended forward by {@code noseForward} to account for an elongated body) is tested for the first
- * block or entity hit and returned as a vanilla {@link HitResult}, so callers reuse their existing impact
- * handler unchanged.
- *
- * <p>Blocks are found with {@link Level#clip(ClipContext)} — a DDA that visits every cell along the ray,
- * so it never tunnels regardless of speed. The corridor is split into contiguous sub-segments only to
- * bound per-call setup and (in {@code OBB_SWEEP} mode) to sample the oriented body box. Entities are
- * found with a single {@link ProjectileUtil#getEntityHitResult} broadphase capped at the block hit, which
- * already routes through the missile OBBs via {@code MixinProjectileUtil} and is continuous for OBB/AABB
- * targets. Slow projectiles collapse to a single ray + single broadphase (the common, near-free case).
+ * Continuous ("swept") collision for fast projectiles, used so a missile moving many blocks in a single 20&nbsp;TPS
+ * tick can't tunnel through a wall.
  */
 public final class SweptCollision {
 
@@ -40,16 +27,16 @@ public final class SweptCollision {
     }
 
     /**
-     * @param self           the projectile (excluded from its own hit test)
-     * @param level          the level to trace in
-     * @param startPos       pre-move position of the projectile origin
-     * @param delta          this tick's movement vector
-     * @param noseForward    distance from the origin to the body's front face along the heading (0 for a
-     *                       point-like projectile); folded into the ray length so the nose, not the base,
-     *                       triggers the hit
-     * @param filter         entity hit predicate
+     * @param self the projectile (excluded from its own hit test)
+     * @param level the level to trace in
+     * @param startPos pre-move position of the projectile origin
+     * @param delta this tick's movement vector
+     * @param noseForward distance from the origin to the body's front face along the heading (0 for a
+     *      point-like projectile); folded into the ray length so the nose, not the base,
+     *      triggers the hit
+     * @param filter entity hit predicate
      * @param maxSubstepDist max length of one sub-segment (blocks)
-     * @param maxSubsteps    hard clamp on sub-segments per call
+     * @param maxSubsteps hard clamp on sub-segments per call
      * @return the first block/entity hit along the corridor, or a {@code MISS} at the corridor end
      */
     public static HitResult sweep(Entity self, Level level,
@@ -69,8 +56,6 @@ public final class SweptCollision {
                 ? sweepBlocksObb(self, level, startPos, delta, moveDist, noseForward, maxSubstepDist, maxSubsteps)
                 : sweepBlocksRay(self, level, startPos, heading, moveDist, noseForward, maxSubstepDist, maxSubsteps);
 
-        // Entities: one broadphase over the corridor, capped at the block hit so nothing behind a wall is
-        // reported. getEntityHitResult already returns the nearest hit and (via the mixin) tests missile OBBs.
         Vec3 corridorEnd = (blockHit != null)
                 ? blockHit.getLocation()
                 : startPos.add(heading.scale(moveDist + Math.max(0.0, noseForward)));
@@ -106,14 +91,13 @@ public final class SweptCollision {
         return null;
     }
 
-
     private static BlockHitResult sweepBlocksObb(Entity self, Level level, Vec3 startPos, Vec3 delta,
                                                  double moveDist, double noseForward,
                                                  double maxSubstepDist, int maxSubsteps) {
         List<OBB> obbs = ((OBBEntity) self).getOBBs();
         Vec3 entityPos = self.position();               // post-move; sample offset is relative to it
         double bodyLen = noseForward > 1.0E-3 ? noseForward : moveDist;
-        double pitch = Math.min(maxSubstepDist, Math.max(0.5, bodyLen));
+        double pitch = Math.clamp(bodyLen, 0.5, maxSubstepDist);
         int n = Mth.clamp((int) Math.ceil(moveDist / pitch), 1, maxSubsteps);
 
         BlockPos.MutableBlockPos mp = new BlockPos.MutableBlockPos();

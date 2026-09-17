@@ -1,23 +1,28 @@
 package com.wf.wfballistics;
 
 import com.mojang.logging.LogUtils;
-import com.wf.wfballistics.api.MissileEventType;
-import com.wf.wfballistics.api.MissileTelemetry;
-import com.wf.wfballistics.api.MissileTelemetryService;
+import com.wf.wfballistics.api.WFEventType;
+import com.wf.wfballistics.api.WFTelemetry;
+import com.wf.wfballistics.api.WFTelemetryService;
 import com.wf.wfballistics.attitude.MissileAttitude;
 import com.wf.wfballistics.attitude.MissileAttitudeRegistry;
 import com.wf.wfballistics.chunk.MissileChunkLoader;
 import com.wf.wfballistics.chunk.DetonationChunkGuard;
 import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.compat.WarforgeCompat;
+import com.wf.wfballistics.drone.DroneEntity;
+import com.wf.wfballistics.entity.InterceptTarget;
+import com.wf.wfballistics.entity.ModelledProjectile;
 import com.wf.wfballistics.entity.OBBEntity;
 import com.wf.wfballistics.flight.*;
+import com.wf.wfballistics.recon.ContactClass;
 import org.jetbrains.annotations.Nullable;
 import com.wf.wfballistics.fx.ExplosionCreator;
 import com.wf.wfballistics.network.MissileFlightAudioPacket;
 import com.wf.wfballistics.sim.IMissileListener;
 import com.wf.wfballistics.sim.MissileListenerRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
+import net.minecraft.tags.DamageTypeTags;
 import com.wf.wfballistics.sim.SimMissileManager;
 import com.wf.wfballistics.swarm.SwarmManager;
 import com.wf.wfballistics.util.OBB;
@@ -33,12 +38,14 @@ import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.sounds.SoundEvent;
 import net.minecraft.sounds.SoundEvents;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
-import net.minecraftforge.registries.ForgeRegistries;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageSource;
@@ -47,6 +54,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
@@ -65,23 +73,16 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-public class MissileEntity extends Projectile implements OBBEntity, IMissileListener, WarheadCarrier {
+public class MissileEntity extends Projectile implements OBBEntity, InterceptTarget, IMissileListener, WarheadCarrier,
+        ModelledProjectile {
 
-    // DEBUG: per-tick flight diagnostics for swarm/recursive missiles (see logFlightDebug). Throttled to one
-    // line every LOG_INTERVAL ticks per missile so a long-lived spin doesn't flood the log.
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int LOG_INTERVAL = 4;
 
     public static final int DEFAULT_FRAGMENT_COUNT = 24;
 
-    // Chunk radius force-loaded (ticking) around the aim point once the missile enters its terminal run, so the
-    // warhead detonates into loaded terrain even in otherwise-unloaded chunks. 4 = a 9x9 chunk area, the
-    // smallest centred square that fully contains the largest ~50-block blast even when it lands off-centre.
-    // Per-missile via the Builder / preset; 0 disables it (the missile relies on the flight fan alone).
     public static final int DEFAULT_IMPACT_PRELOAD_RADIUS = 4;
 
-    // Default exhaust/trail tint: the hot RGB (0xRRGGBB) the client-side plume fades from as it cools. An
-    // orange rocket flame, matching the legacy hard-coded trail colour. Per-missile via the Builder.
     public static final int DEFAULT_EXHAUST_COLOR = 0xFFB20D;
 
     public static final double CRUISE_SPEED = 1.0;
@@ -91,13 +92,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public static final double DEFAULT_MAX_DIVE_ANGLE = 90.0;
     private static final double DIVE_RAYCAST_RANGE = 64.0;
     private static final int DIVE_ANGLE_SAMPLES = 6;
-    // Safety/arming: the warhead is inert until the missile has flown this far from its launch point, so it
-    // can't fuze, impact-detonate, or be blown up by damage while still on/near the launcher.
     public static final double ARMING_DISTANCE = 6.0;
     // Interception damage pool: CIWS fire / interceptors chip this down; at <= 0 the missile is destroyed.
     public static final float DEFAULT_HEALTH = 50.0f;
-    // Change in actual speed per tick (blocks/tick^2) while spooling up toward / braking down to the speed the
-    // guidance asks for. cruiseSpeed is the target/max speed; these govern how fast it is reached and shed.
     public static final double DEFAULT_ACCELERATION = 0.15;
     public static final double DEFAULT_DECELERATION = 0.25;
     /** Default distance (blocks) at which a missile's flight loop fades to silence and the server broadcasts it. */
@@ -105,36 +102,26 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     /** Default ceiling (blocks) on how far out a directional strike joins its attack line (see ApproachStage). */
     public static final double DEFAULT_APPROACH_JOIN_CAP = 1500.0;
     private static final double DIVE_ACCELERATION = 1.5;
-    // Ballistic fall (out of fuel): downward accel, terminal speed, and a light horizontal drag so momentum
-    // (inertia) carries the missile forward as it arcs down instead of being zeroed.
     private static final double FUEL_OUT_GRAVITY = 0.05;
     private static final double TERMINAL_FALL_SPEED = -3.9;
     private static final double FALL_HORIZONTAL_DRAG = 0.99;
-    // Downed-behaviour tuning: POWER_LOSS bleeds horizontal speed far harder than a plain ballistic fall (so it
-    // decelerates while keeping its momentum's direction); SPIN_OUT sinks mildly and cooks off after a short fuse.
     private static final double POWER_LOSS_DRAG = 0.93;
     private static final double SPINOUT_GRAVITY = 0.03;
     private static final int SPINOUT_MIN_FUSE = 15;
     private static final int SPINOUT_MAX_FUSE = 45;
-    // Ticks after a missile is downed during which further hits DON'T force-detonate it, so its downed animation
-    // (spin-out, fall, ...) actually plays instead of a rapid-fire weapon (CIWS, incl. other mods' via hurt())
-    // instantly re-detonating it. Long enough that a spin-out cooks off on its own (fuse <= SPINOUT_MAX_FUSE).
     private static final int DOWNED_REHIT_GRACE = 60;
-    // Evasive boost: a short high-speed burst (extra speed, so an interceptor whiffs) bought with a chunk of
-    // fuel — deliberately inefficient, so repeated dodging drains the tank and a dry missile can't dodge.
+    private static final double SURFACE_MARGIN = 2.0;
+    private static final int MAX_SUBMERGENCE = 96;
+    // Consecutive ticks out of the water before a submerged missile is written off (see tickBroach). A second.
+    private static final int BROACH_GRACE_TICKS = 20;
+    // Downward nudge (blocks/tick^2) applied while it is broached, on top of cutting the climb.
+    private static final double BROACH_RECOVERY = 0.04;
     private static final double BOOST_SPEED_MULT = 2.0;
     private static final int BOOST_DURATION = 8;
     private static final int BOOST_FUEL_COST = 150;
-    // Jink (opt-in evasive maneuvering): per-tick lateral deflection of the boosted velocity toward a break
-    // direction, so the dodge is a hard sidestep off the interceptor's committed lead rather than a predictable
-    // straight-line sprint. tan of the deflection angle (~31 degrees/tick), self-limiting as the heading turns.
     private static final double JINK_DEFLECT = 0.6;
-    // Formation flight: how hard a subordinate steers toward its slot, and how much it may overspeed its
-    // cruise to close a gap (so it throttles up when behind and eases back to the commander's pace on station).
     private static final double FORMATION_GAIN = 0.25;
     private static final double FORMATION_MAX_OVERSPEED = 1.6;
-    // Radius (blocks) of the saturation spread each subordinate disperses to when the swarm breaks for the
-    // terminal attack, so they fan out across the target area instead of stacking on one point.
     private static final double SATURATION_SPREAD = 10.0;
     // Ticks between sonic-boom shock rings while travelling supersonic.
     private static final int SONIC_BOOM_INTERVAL = 6;
@@ -143,16 +130,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Synced so the client-side exhaust trail can tint itself per missile (see InstancedTrailEffect).
     private static final EntityDataAccessor<Integer> EXHAUST_COLOR =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.INT);
-    // Per-missile looping flight sound id (synced so the client sound handler can pick it up on spawn); "" = the
-    // default WFSounds.MISSILE_FLIGHT loop.
+    private static final EntityDataAccessor<Boolean> SUBMERGED_MEDIUM =
+            SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<String> FLIGHT_SOUND =
             SynchedEntityData.defineId(MissileEntity.class, EntityDataSerializers.STRING);
     private static final double TURN_AGILITY = 1.0; // radians * (model units) per tick
-    // Predictive friendly deconfliction ("don't ram your own"): a missile looks AVOID_HORIZON ticks ahead
-    // for friendly missiles (same swarm or launcher) whose closest approach would fall within AVOID_MIN_SEP
-    // blocks, and if so applies a small course offset (perpendicular to the closing path, complementary
-    // between the pair, bounded by AVOID_STRENGTH blocks/tick) so they slip past instead of colliding.
-    // AVOID_RADIUS bounds the neighbour search. The offset only exists while a collision is predicted.
     private static final double AVOID_RADIUS = 24.0;
     private static final int AVOID_HORIZON = 20;
     private static final double AVOID_MIN_SEP = 4.0;
@@ -160,67 +142,47 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private static final double ARMING_DISTANCE_SQ = ARMING_DISTANCE * ARMING_DISTANCE;
     // Failsafe: arm anyway after this many ticks so a missile that somehow can't travel never stays a live dud.
     private static final int ARMING_FAILSAFE_TICKS = 100;
-    // Fuel is measured in ticks of powered flight (one burned per tick). When the tank is dry the missile
-    // stops thrusting and falls ballistically. Default is generous so ordinary strikes complete; a redirected
-    // or long-loitering missile/drone can still run out. Per-missile via the Builder / preset.
     public static int DEFAULT_FUEL_TICKS = 1200;
-    // Oriented bounding box that wraps the (elongated) missile model, giving projectiles an accurate,
-    // rotation-aware hitbox instead of the coarse vanilla AABB. Kept live-updated in refreshObb().
+    /**
+     * Scratch for {@link #refreshObb}, which runs every tick for every missile that moved, and again for every
+     * hit-check that asks for the box.
+     */
+    private final Vector3f obbHeading = new Vector3f();
+    private final Quaternionf obbOrientation = new Quaternionf();
+    private final Quaterniond obbRotation = new Quaterniond();
+    private final Vector3d obbScratch = new Vector3d();
     private final OBB obb = new OBB(new Vector3d(), new Vector3d(), new Quaterniond(), OBB.Part.BODY);
     private final List<OBB> obbList = List.of(this.obb);
     // Forces the chunks the missile needs while flying (own chunk ticking + non-ticking look-ahead fan).
     private final MissileChunkLoader chunkLoader = new MissileChunkLoader();
-    // Opt-in flight telemetry: null unless this missile is being tracked (debug on, or opened via the API).
-    // Cached reference so the per-event record is a field read, not a UUID map lookup.
-    private MissileTelemetry telemetry;
+    private WFTelemetry telemetry;
     private boolean telemetryInit;
     private boolean fuelOutRecorded;
-    // Transform (position + heading) the OBB was last built for; refreshObb() skips recomputation while
-    // these are unchanged, so the repeated getOBBs() calls during a hit-check don't rebuild it each time.
     private double obbX = Double.NaN, obbY, obbZ, obbDx, obbDy, obbDz;
     private Vec3 target = Vec3.ZERO;
     private Phase phase = Phase.ASCEND;
-    // How this missile flies: one swappable stage per phase (ascent curve, cruise/loiter, attack run),
-    // each resolved from FlightStageRegistry by id and composed into the runtime profile. Selecting stages
-    // independently is what lets a missile become e.g. a loitering drone; the choice survives save/load.
-    // Declared before the profile so the field initialisers run in order.
     private ResourceLocation ascentStageId = FlightStageRegistry.defaultId(Phase.ASCEND);
     private ResourceLocation cruiseStageId = FlightStageRegistry.defaultId(Phase.CRUISE);
     private ResourceLocation attackStageId = FlightStageRegistry.defaultId(Phase.ATTACK);
     private FlightProfile flightProfile = FlightProfile.fromIds(this.ascentStageId, this.cruiseStageId, this.attackStageId);
     // Loitering-munition timer: ticks spent orbiting on-station (see LoiterStage). Persisted.
     private int loiterTicks = 0;
-    // Terminal-dive commit latch: once the attack run has flown into its aim point while descending, it stops
-    // re-resolving the dive angle and flies straight on its current heading until it hits something (see
-    // AttackStage). Safeguard against re-aiming forever and orbiting an aim point it can't sit on (e.g. one
-    // left hanging in the air). One-way; not persisted (a reload re-commits on the next close descending pass).
     private boolean diveCommitted = false;
     private CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
+    // What the missile travels through, and so which way up its terrain scan reads. Persisted.
+    private Medium medium = Medium.AIR;
+    private int dryTicks = 0;
     private double cruiseAltitude = 200.0;
     private double terrainClearance = 24.0;
-    // Smoothed terrain-follow altitude the missile actually flies toward (eased from the raw scan);
-    // NaN until the first cruise tick, then re-seeded from the current scan.
     private double cruiseTargetY = Double.NaN;
-    // Horizontal cruise speed (blocks/tick). The off-world simulation advances at this same rate so
-    // simulated travel time matches an in-world flight.
     private double cruiseSpeed = CRUISE_SPEED;
     private double ascentSpeed = Double.NaN;
     private double attackAngle = Double.NaN;
     private double minDiveAngle = DEFAULT_MIN_DIVE_ANGLE;
     private double maxDiveAngle = DEFAULT_MAX_DIVE_ANGLE;
-    // Directional strike: normalized horizontal direction FROM the target toward the side the missile should
-    // approach from ("attack from the west"). null = no constraint (hit from wherever it arrives). When set,
-    // the cruise phase runs ApproachStage to swing onto this bearing before the terminal dive.
     private Vec3 attackApproachDir = null;
-    // How the terminal attack trades speed/steepness/path when the preferred dive angle won't fit the turn
-    // radius (see AttackProfile). Default SPEED = never shed speed.
     private AttackProfile attackProfile = AttackProfile.SPEED;
-    // Ceiling (blocks) on the directional-strike join distance: the approach joins its attack line at a fraction
-    // of the range to the target, clamped up to this cap (see ApproachStage). Per-missile so a type can pivot
-    // farther/nearer out; default DEFAULT_APPROACH_JOIN_CAP.
     private double approachJoinCap = DEFAULT_APPROACH_JOIN_CAP;
-    // Airburst fuze: while diving, detonate in the air once the missile is within this many
-    // blocks (Y difference) above the target. 0 disables it, giving a contact/ground detonation.
     private float explosionOffset = 0.0f;
     private ResourceLocation detonationId = WarheadRegistry.defaultId();
     // Number of bomblets the FRAGMENTATION warhead scatters; per-missile, set via the Builder.
@@ -228,62 +190,30 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     // Chunk radius force-loaded around the aim point during the terminal run (see DEFAULT_IMPACT_PRELOAD_RADIUS).
     private int impactPreloadRadius = DEFAULT_IMPACT_PRELOAD_RADIUS;
     private WarheadRegistry.Detonation detonation = WarheadRegistry.STANDARD;
-    // Per-missile damage response (resolved from its id, like the warhead), letting a preset resist/scale
-    // incoming damage by source. Default = take damage as dealt.
     private ResourceLocation damageResponseId = MissileDamageRegistry.defaultId();
     private MissileDamageResponse damageResponse = MissileDamageRegistry.STANDARD;
-    // Max change in velocity direction per tick, in radians. Default scales from the model's length
-    // (longer airframe = less nimble); overridable via the Builder.
     private double maxTurnRate = TURN_AGILITY / MissileModels.length(MissileModels.DEFAULT);
-    // Per-missile flight-audio tuning (server-authoritative; pushed to clients via MissileFlightAudioPacket, so
-    // it drives the sound even when the missile isn't tracked/rendered). range = fade-to-silence + broadcast
-    // radius (blocks); basePitch = idle engine pitch; speedPitch = added pitch per block/tick of the missile's
-    // OWN speed (engine rev), 0 = constant pitch regardless of speed (the loitering-drone exception).
     private double flightSoundRange = DEFAULT_FLIGHT_SOUND_RANGE;
     private float flightSoundBasePitch = 1.0f;
     private double flightSoundSpeedPitch = 0.0;
     // Consecutive ticks spent in CRUISE; gates the offload-to-simulation transition.
     private int cruiseTicks = 0;
     private float health = DEFAULT_HEALTH;
-    // Guards against re-entrant detonation: the warhead's own blast can hurt() this still-present missile,
-    // which would otherwise re-enter detonate() and recurse until the stack overflows.
     private boolean detonated = false;
-    // Shot-down state: instead of air-bursting, a downed missile runs its DownedAction (fall, spin out, ...)
-    // via tickDowned once shot down (see shootDown). downedAction is picked per-preset; the spin-out heading and
-    // fuse are set lazily the first tick a SPIN_OUT missile is downed.
     private boolean downed = false;
     private DownedAction downedAction = DownedAction.CRASH;
     private Vec3 spinOutDir = null;
     private int spinOutFuse = 0;
     private int downedGrace = 0; // ticks left before a re-hit may force-detonate this downed missile
-    // Arming state (see ARMING_DISTANCE): the launch point, captured on the first server tick, and whether
-    // the warhead has gone live. While unarmed all detonation triggers are suppressed.
     private Vec3 launchPos = null;
     private boolean armed = false;
-    // Recursive-fragmentation payload: how many more times this missile splits into child missiles before
-    // the leaf generation does a real blast (see RecursiveFrag). 0 = never splits (a normal missile).
     private int splitDepth = 0;
-    // Groups a fragmentation family so its members never collide with one another (see canHitEntity).
-    // 0 = no family; the missile collides with every other missile normally.
     private long swarmId = 0L;
-    // Formation leader flag: in a swarm with a commander, the commander flies the mission and the others hold a
-    // wedge formation on it (see SwarmManager). If the commander is lost, a successor is promoted and the rest
-    // obey the new commander. Swarms with no commander (e.g. a RecursiveFrag family) just fly independently.
     private boolean commander = false;
-    // A subordinate latches this once the commander begins its terminal dive: it breaks formation and runs its
-    // own attack on a dispersed aim point (saturation spread) instead of re-forming.
     private boolean brokeFormation = false;
-    // Launcher/control identity (see MissileDispenserBlockEntity): missiles sharing a non-null control id
-    // (fired from the same launcher, or one recursive family) are friendly and never collide with each other.
     private UUID controlId = null;
-    // WarForge faction id (see WarforgeCompat): the "team" a missile belongs to — a player's faction, or the
-    // faction claiming a launcher/battery's land. Missiles of the same / allied / truced faction are friendly,
-    // which is what stops a faction's defenses engaging its own missiles across different launchers.
     private UUID teamId = null;
 
-    // Interceptor mode
-    // When true this missile is an interceptor: it homes on another (moving) missile, re-writing its aim point
-    // to a per-tick lead point, and resolves a kill by a random roll (see tryIntercept) rather than a warhead.
     private boolean interceptor = false;
     // NEAREST re-acquires the closest hostile missile each tick; LOCK homes on one specific target UUID.
     private InterceptMode interceptMode = InterceptMode.NEAREST;
@@ -291,41 +221,19 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     private UUID lockTargetId = null;
     // Per-interceptor kill probability rolled on closest approach (default 90%).
     private float interceptChance = MissileSimConfig.DEFAULT_INTERCEPT_CHANCE;
-    // Transient: the UUID being homed on this tick (set by updateInterceptTarget, read by tryIntercept), and
-    // how many consecutive ticks we've had no resolvable target (drives the give-up/fizzle timeout).
     private UUID currentTargetId = null;
     private int noTargetTicks = 0;
-    // Transient: set each tick by leadPoint — true when the interceptor cannot win a timed intercept (the
-    // target outruns it) and is instead attempting to cross the target's flight path, which tryIntercept
-    // rolls at a reduced chance.
     private boolean crossingShot = false;
 
-    // Designated strike target (non-interceptor missiles/drones): a specific entity to hit. While set and
-    // alive, the missile re-aims onto it each tick; a loitering drone orbits it and pounces when on-station,
-    // and keeps loitering (until fuel runs out) if the target isn't currently present.
     private UUID designatedTargetId = null;
 
-    // Low-observable: a stealth missile is invisible to automatic detection (interceptor NEAREST acquisition,
-    // interceptor batteries, CIWS). It can still be engaged only by manually locking its exact UUID.
-    private boolean stealth = false;
-    // Evasion (0..1): chance to boost clear of an interception attempt — the "tier" that lets a better missile
-    // escape interceptors more often. On a successful dodge the missile burns fuel for a speed burst that
-    // turns the hit into a miss (see evadeBoost); the roll is amplified during the terminal dive.
+    private float rcs = 1.0f;
     private float evasion = 0.0f;
-    // Evasive maneuvering toggle: when set, an evasion boost also jinks the missile off its course (a lateral
-    // break away from the interceptor) instead of only sprinting straight, so the dodge is far less predictable
-    // and genuinely displaces it from the interceptor's lead (see evadeBoost / the guidance boost step).
     private boolean evasiveManeuver = false;
     // Remaining ticks of an active evasive speed burst (see evadeBoost / the guidance boost step).
     private int boostTicks = 0;
-    // Break direction captured when a maneuvering boost triggers: a world-space unit vector (roughly
-    // perpendicular to the heading, away from the interceptor, randomised) the boost deflects toward. Transient,
-    // like boostTicks; a reload mid-burst just finishes the burst straight.
     private Vec3 boostManeuver = null;
 
-    //Propulsion and fuel
-    // Whether the tank holds solid (preloaded charge) or liquid (kerosene) propellant. Burn is identical for
-    // both (ticks of thrust); the type is carried for flavour and future tank/bucket refuelling.
     private FuelType fuelType = FuelType.SOLID;
     private int fuelCapacity = DEFAULT_FUEL_TICKS; // initial tank size (telemetry / refuel reference)
     private int fuel = DEFAULT_FUEL_TICKS;         // remaining ticks of powered flight
@@ -335,8 +243,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     public MissileEntity(EntityType<? extends Projectile> type, Level level) {
         super(type, level);
 
-        // The missile integrates its own flight each tick, so vanilla physics and gravity are disabled to
-        // keep them from fighting the guidance; ballistic fall is applied manually once fuel runs out.
         this.noPhysics = true;
         this.setNoGravity(true);
     }
@@ -381,10 +287,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * @return the target UUIDs already "claimed" by interceptors in {@code missiles}, from the perspective of
-     * a claimant with entity id {@code selfId} (pass {@link Integer#MAX_VALUE} for a battery, which yields to
-     * every interceptor). A LOCK interceptor always claims its lock target; a NEAREST interceptor claims its
-     * current target only against higher-id peers — so exactly one interceptor keeps a shared target and the
-     * rest divert to other threats (no dogpiling, and no two interceptors swapping off each other forever).
+     *      a claimant with entity id {@code selfId} (pass {@link Integer#MAX_VALUE} for a battery, which yields to
+     *      every interceptor). A LOCK interceptor always claims its lock target; a NEAREST interceptor claims its
+     *      current target only against higher-id peers, so exactly one interceptor keeps a shared target and the
+     *      rest divert to other threats (no dogpiling, and no two interceptors swapping off each other forever).
      */
     public static Set<UUID> claimedTargets(List<MissileEntity> missiles, int selfId) {
         Set<UUID> claimed = new HashSet<>();
@@ -412,8 +318,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * A visible/audible flak burst at the intercept point so a kill and a miss are easy to tell apart at
-     * range: a bright burst + explosion boom on a kill, a small puff + lighter pop on a miss.
+     * A visible/audible flak burst at the intercept point so a kill and a miss are easy to tell apart at range: a
+     * bright burst + explosion boom on a kill, a small puff + lighter pop on a miss.
      */
     private static void spawnInterceptBurst(ServerLevel level, Vec3 p, boolean kill) {
         level.sendParticles(ParticleTypes.EXPLOSION, p.x, p.y, p.z, kill ? 3 : 1, 1.0, 1.0, 1.0, 0.0);
@@ -443,20 +349,15 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         this.initTelemetry();
 
-        // Wake any nearby missile listener (turret/CIWS) even if its chunk is unloaded, so a base's defenses
-        // engage a missile crossing an otherwise-unloaded region. Interceptors and downed missiles aren't
-        // engaged by turrets, so they don't wake them.
         if (!this.interceptor && !this.downed) {
             MissileListenerRegistry.get(serverLevel).noteThreat(currentPos, serverLevel.getGameTime());
         }
 
         if (this.fuel <= 0) {
-            // Out of fuel: latch the impact-area preload once so the ground under the crash is force-loaded
-            // (same system the terminal run uses), then fall ballistically and detonate into loaded terrain.
             if (!this.fuelOutRecorded && !this.downed) {
                 this.fuelOutRecorded = true;
                 this.chunkLoader.setTargetPreload(currentPos, Math.max(1, this.impactPreloadRadius));
-                this.recordEvent(MissileEventType.FUEL_OUT, "ballistic");
+                this.recordEvent(WFEventType.FUEL_OUT, "ballistic");
             }
             if (this.downed) {
                 this.tickDowned(serverLevel, currentPos);
@@ -467,7 +368,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
         this.fuel--;
 
-
         if (this.interceptor && !this.updateInterceptTarget(serverLevel, currentPos)) {
             return;
         }
@@ -475,7 +375,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (!this.interceptor && this.designatedTargetId != null) {
             Entity designated = serverLevel.getEntity(this.designatedTargetId);
             if (designated != null && designated.isAlive() && designated != this) {
-                this.setTarget(designated.position());
+                this.setTarget(designated.getBoundingBox().getCenter());
             }
         }
 
@@ -485,13 +385,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         double dz = targetPos.z - currentPos.z;
         double horizontalDist = Math.sqrt(dx * dx + dz * dz);
 
-
         boolean loadFan = this.cruiseMode == CruiseMode.TERRAIN_FOLLOW
                 || this.phase == Phase.ATTACK
                 || horizontalDist < MissileSimConfig.FAN_TERMINAL_RANGE;
-        // Terminal impact preload: once armed and closing on the aim point, force-load a target-centred block of
-        // chunks so the warhead detonates into loaded terrain even where the moving flight fan doesn't reach
-        // (the far side of the impact). Interceptors have no such blast, so they skip it.
         boolean preloadTarget = !this.interceptor && this.isArmed() && this.impactPreloadRadius > 0
                 && (this.phase == Phase.ATTACK || horizontalDist < MissileSimConfig.FAN_TERMINAL_RANGE);
         this.chunkLoader.setTargetPreload(preloadTarget ? targetPos : null, this.impactPreloadRadius);
@@ -505,20 +401,16 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             nz = dz / horizontalDist;
         }
         double safeAltitude = this.computeSafeAltitude(currentPos, dx, dz, horizontalDist);
-        FlightContext ctx = new FlightContext(currentPos, targetPos, horizontalDist, nx, nz, safeAltitude);
+        FlightContext ctx = new FlightContext(currentPos, targetPos, horizontalDist, nx, nz, safeAltitude,
+                this.computeSafeCeiling(currentPos));
 
-        // Formation flight: a swarm subordinate with a live commander holds its wedge slot (throttling speed to
-        // maintain station) instead of flying the mission stages — the commander leads the strike. Everything
-        // else (the commander, or a subordinate whose commander is gone) flies its own phased mission.
         MissileEntity commander = (this.swarmId != 0L && !this.commander && !this.brokeFormation)
                 ? SwarmManager.commander(serverLevel, this.swarmId) : null;
         if (commander != null && commander.isAlive() && commander.getPhase() == Phase.ATTACK) {
-            // The commander has begun its terminal dive: break formation, disperse onto our own aim point
-            // around the target (a saturation spread), and run our own attack from here on.
             this.brokeFormation = true;
             this.setTarget(this.saturationAim(commander.getTarget()));
             this.phase = Phase.ATTACK;
-            this.recordEvent(MissileEventType.ATTACK, "saturation break");
+            this.recordEvent(WFEventType.ATTACK, "saturation break");
             commander = null;
         }
         boolean inFormation = commander != null && commander != this && commander.isAlive();
@@ -537,16 +429,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
             velocity = this.flightProfile.stage(this.phase).guide(this, ctx);
 
-            // Coordinate with nearby friendly missiles: if their paths would cross, veer just enough to slip
-            // past instead of ramming. Folded into the desired velocity so the turn-rate limit smooths it in.
             if (this.controlId != null || this.swarmId != 0L) {
                 velocity = velocity.add(this.avoidFriendlies());
             }
         }
 
-        // Limit how far the heading can swing this tick so the missile arcs instead of snapping direction,
-        // then ramp the actual speed toward the guidance speed under the accel/decel limits (real spool-up
-        // from launch and smooth braking) rather than instantly matching it.
         velocity = constrainTurn(this.getDeltaMovement(), velocity, this.maxTurnRate);
         if (this.boostTicks > 0) {
             this.boostTicks--;
@@ -577,6 +464,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         // Position and heading just changed: re-fit the OBB and the vanilla AABB around the model.
         this.setBoundingBox(this.makeBoundingBox());
 
+        // Checked after the move, not before it: what matters is whether it ended the tick in the water.
+        if (this.tickBroach()) {
+            return;
+        }
+
         // Sonic boom
         double machSpeed = this.getDeltaMovement().length();
         if (machSpeed >= MissileSimConfig.SUPERSONIC_SPEED
@@ -585,9 +477,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                     (float) Mth.clamp(machSpeed * 1.5, 6.0, 24.0));
         }
 
-        // Long-range flight audio: push this missile's position/velocity to nearby players every few ticks so
-        // they hear it coming well before it enters view range. Continues seamlessly into the off-world sim
-        // (SimMissileManager broadcasts the same way) since both key on the missile's UUID.
         if (this.tickCount % MissileFlightAudioPacket.UPDATE_INTERVAL == 0) {
             MissileFlightAudioPacket.broadcastEntity(this);
         }
@@ -597,8 +486,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return;
         }
 
-        // Interceptors never offload to the off-world sim
         if (!this.interceptor
+                && !this.medium.hasCeiling()
                 && this.phase == Phase.CRUISE
                 && this.cruiseTicks > MissileSimConfig.CRUISE_SIM_DELAY_TICKS
                 && horizontalDist > MissileSimConfig.DESTINATION_RANGE
@@ -625,9 +514,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 return;
             }
 
-            // Swept collision over the segment actually traversed this tick (currentPos is the pre-move
-            // position), extended forward by the body length. Replaces the vanilla post-move look-ahead
-            // raycast, which let fast missiles tunnel through walls.
             HitResult hitResult = this.sweepForImpact(currentPos, this.getDeltaMovement());
 
             if (hitResult.getType() != HitResult.Type.MISS) {
@@ -637,12 +523,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * DEBUG: dump the flight state that explains a missilelet spinning instead of impacting — where it's
-     * aiming, how far the aim point sits above the actual ground beneath it ({@code tgtAGL} > 0 means it's
-     * aiming at empty air, e.g. over a crater), the terminal-dive angle it resolved (and the range it picked
-     * from — a shallow {@code diveAng} is what turns a clean plunge into a long, orbiting approach), and the
-     * geometry (closing speed, horizontal turn radius vs. distance). Limited to swarm/recursive missiles and
-     * throttled by {@link #LOG_INTERVAL}. Remove once the spin cause is settled.
+     * DEBUG: dump the flight state that explains a missilelet spinning instead of impacting (where it's aiming, how
+     * far the aim point sits above the actual ground beneath it ({@code tgtAGL} > 0 means it's aiming at empty air,
+     * e.g.
      */
     private void logFlightDebug(FlightContext ctx) {
         if (this.swarmId == 0L && !RecursiveFrag.ID.equals(this.detonationId)) {
@@ -675,11 +558,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         return String.format("%.1f", v);
     }
 
-    public MissileTelemetry telemetry() {
+    public WFTelemetry telemetry() {
         return this.telemetry;
     }
 
-    public void attachTelemetry(MissileTelemetry telemetry) {
+    public void attachTelemetry(WFTelemetry telemetry) {
         this.telemetry = telemetry;
         this.telemetryInit = true;
         this.recordSpawnIfFresh();
@@ -689,7 +572,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (this.level().isClientSide) {
             return;
         }
-        this.attachTelemetry(MissileTelemetryService.open(this.getUUID(), this.level().getGameTime()));
+        this.attachTelemetry(WFTelemetryService.open(this.getUUID(), this.level().getGameTime()));
     }
 
     private void initTelemetry() {
@@ -697,13 +580,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return;
         }
         this.telemetryInit = true;
-        MissileTelemetry existing = MissileTelemetryService.get(this.getUUID());
+        WFTelemetry existing = WFTelemetryService.get(this.getUUID());
         if (existing != null) {
-            // An addon-opened empty queue is a fresh launch; a non-empty one is a rematerialised missile (the
-            // sim path records its ONLOAD, not a SPAWN), which recordSpawnIfFresh skips.
             this.telemetry = existing;
-        } else if (MissileDebug.enabled() || MissileTelemetryService.autoOpen()) {
-            this.telemetry = MissileTelemetryService.open(this.getUUID(), this.level().getGameTime());
+        } else if (MissileDebug.enabled() || WFTelemetryService.autoOpen()) {
+            this.telemetry = WFTelemetryService.open(this.getUUID(), this.level().getGameTime());
             if (MissileDebug.enabled()) {
                 MissileDebug.markLatest(this.getUUID());
             }
@@ -711,35 +592,29 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         this.recordSpawnIfFresh();
     }
 
-    // Records the SPAWN marker exactly once, for a just-launched missile whose queue is still empty. A mid-flight
-    // attach (e.g. /track, or an addon opening telemetry on an in-flight missile) is not a launch, so it's skipped.
     private void recordSpawnIfFresh() {
         if (this.telemetry != null && this.telemetry.total() == 0 && this.tickCount <= 1) {
-            this.recordEvent(MissileEventType.SPAWN, "");
+            this.recordEvent(WFEventType.SPAWN, "");
         }
     }
 
-    public void recordEvent(MissileEventType type, String detail) {
+    public void recordEvent(WFEventType type, String detail) {
         if (this.level().isClientSide) {
             return;
         }
-        MissileTelemetryService.record(this.telemetry, this.getUUID(), type,
+        WFTelemetryService.record(this.telemetry, this.getUUID(), type,
                 this.level().getGameTime(), this.position(), false, detail);
     }
 
-    private static MissileEventType phaseEvent(Phase phase) {
+    private static WFEventType phaseEvent(Phase phase) {
         return switch (phase) {
-            case ASCEND -> MissileEventType.ASCEND;
-            case CRUISE -> MissileEventType.CRUISE;
-            case ATTACK -> MissileEventType.ATTACK;
+            case ASCEND -> WFEventType.ASCEND;
+            case CRUISE -> WFEventType.CRUISE;
+            case ATTACK -> WFEventType.ATTACK;
         };
     }
 
-    /**
-     * Whether the warhead is live. Latches true once the missile has flown {@link #ARMING_DISTANCE} from its
-     * launch point (or after {@link #ARMING_FAILSAFE_TICKS} as a stuck-missile failsafe), preventing a
-     * detonation on or right next to the launcher.
-     */
+    /** Whether the warhead is live. */
     private boolean isArmed() {
         if (this.armed) {
             return true;
@@ -753,71 +628,162 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * The altitude the missile should hold this tick: the scanned terrain top (looked ahead toward the target
-     * once past ascent) plus the terrain clearance. In HIGH_ALTITUDE mode it holds the fixed cruise height but
-     * is floored to that terrain-safe height so it still climbs over rising ground instead of into it.
-     * Shared by the flight stages via the {@link FlightContext}.
+     * The altitude the missile should hold this tick: the scanned terrain top (looked ahead toward the target once
+     * past ascent) plus the terrain clearance.
      */
     private double computeSafeAltitude(Vec3 pos, double dx, double dz, double horizontalDist) {
-        double terrainScanRadius = 24.0; // how far around the missile we look for terrain
-        double lookAhead = 32.0;         // how far ahead (toward target) to scan while cruising
+        Medium med = this.medium;
         double scanCenterX = pos.x;
         double scanCenterZ = pos.z;
         if (this.phase != Phase.ASCEND && horizontalDist > 1.0E-3) {
-            scanCenterX += (dx / horizontalDist) * lookAhead;
-            scanCenterZ += (dz / horizontalDist) * lookAhead;
+            scanCenterX += (dx / horizontalDist) * med.lookAhead();
+            scanCenterZ += (dz / horizontalDist) * med.lookAhead();
         }
-        double terrainSafe = scanTerrainTop(scanCenterX, scanCenterZ, terrainScanRadius) + this.terrainClearance;
-        if (this.cruiseMode == CruiseMode.HIGH_ALTITUDE) {
-            return Math.max(this.cruiseAltitude, terrainSafe);
+        double waterline = this.medium.hasCeiling() ? this.fluidSurfaceAbove(pos) : Double.NaN;
+        double terrainSafe = scanTerrainTop(med.heightmap(), scanCenterX, scanCenterZ, med.scanRadius(),
+                Double.isNaN(waterline) ? Double.POSITIVE_INFINITY : waterline) + this.terrainClearance;
+        if (this.cruiseMode != CruiseMode.HIGH_ALTITUDE) {
+            return terrainSafe;
         }
-        return terrainSafe;
+        if (med == Medium.WATER) {
+            double surface = this.fluidSurfaceAbove(pos);
+            return Double.isNaN(surface) ? terrainSafe : Math.max(terrainSafe, surface - this.cruiseAltitude);
+        }
+        return Math.max(this.cruiseAltitude, terrainSafe);
+    }
+
+    /** The highest altitude the missile may hold, or {@link Double#POSITIVE_INFINITY} when nothing caps it. */
+    private double computeSafeCeiling(Vec3 pos) {
+        if (!this.medium.hasCeiling()) {
+            return Double.POSITIVE_INFINITY;
+        }
+        double surface = this.fluidSurfaceAbove(pos);
+        return Double.isNaN(surface) ? Double.POSITIVE_INFINITY : surface - SURFACE_MARGIN;
     }
 
     /**
-     * Scans safe height based on mc heightmap
+     * @return the y of the surface of the fluid standing at {@code pos} (the bottom face of the first
+     *      non-fluid block above it), or {@link Double#NaN} when {@code pos} is not in a fluid at all, or when the
+     *      column above it is fluid for {@link #MAX_SUBMERGENCE} blocks without reaching one (water under an
+     *      overhang, or an aquifer sealed under stone, has no surface to broach through).
      */
-    private double scanTerrainTop(double centerX, double centerZ, double radius) {
+    private double fluidSurfaceAbove(Vec3 pos) {
+        BlockPos cursor = BlockPos.containing(pos);
+        if (this.level().getFluidState(cursor).isEmpty()) {
+            return Double.NaN;
+        }
+        for (int step = 0; step < MAX_SUBMERGENCE; step++) {
+            BlockPos above = cursor.above();
+            if (this.level().getFluidState(above).isEmpty()) {
+                return above.getY();
+            }
+            cursor = above;
+        }
+        return Double.NaN;
+    }
+
+    /**
+     * Keeps a submerged missile submerged, and writes off one that will not go back under.
+     *
+     * @return true if the missile was written off this tick, and the caller must stop ticking it.
+     */
+    private boolean tickBroach() {
+        if (!this.medium.hasCeiling() || this.phase == Phase.ASCEND || this.isSubmerged()) {
+            this.dryTicks = 0;
+            return false;
+        }
+        this.dryTicks++;
+        if (this.dryTicks < BROACH_GRACE_TICKS) {
+            Vec3 v = this.getDeltaMovement();
+            this.setDeltaMovement(v.x, Math.min(v.y, 0.0) - BROACH_RECOVERY, v.z);
+            return false;
+        }
+        this.recordEvent(WFEventType.DESTROYED, "broached");
+        this.shootDown(DownedAction.FIZZLE);
+        return true;
+    }
+
+    /**
+     * Scans safe height based on mc heightmap.
+     *
+     * @param cutoff tops at or above this are not terrain this vehicle could ever hold clearance over, and are
+     *      dropped from the fan rather than raising its answer. {@link Double#POSITIVE_INFINITY} for
+     *      anything flying in air, where every ridge counts; the waterline for anything submerged,
+     *      where a column reaching it is a bank and not a seabed.
+     */
+    private double scanTerrainTop(Heightmap.Types heightmap, double centerX, double centerZ, double radius,
+                                  double cutoff) {
         int r = (int) Math.ceil(radius);
         int step = Math.max(2, r / 4);
         int cx = Mth.floor(centerX);
         int cz = Mth.floor(centerZ);
 
         int maxTop = this.level().getMinBuildHeight();
+        boolean sampled = false;
+        ServerLevel server = this.level() instanceof ServerLevel sl ? sl : null;
         for (int ox = -r; ox <= r; ox += step) {
             for (int oz = -r; oz <= r; oz += step) {
-                int top = this.level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cx + ox, cz + oz);
+                int wx = cx + ox;
+                int wz = cz + oz;
+                if (server == null) {
+                    int clientTop = this.level().getHeight(heightmap, wx, wz);
+                    if (clientTop < cutoff) {
+                        maxTop = Math.max(maxTop, clientTop);
+                        sampled = true;
+                    }
+                    continue;
+                }
+                LevelChunk chunk = server.getChunkSource().getChunkNow(
+                        SectionPos.blockToSectionCoord(wx), SectionPos.blockToSectionCoord(wz));
+                if (chunk == null) {
+                    continue;
+                }
+                int top = chunk.getHeight(heightmap, wx, wz) + 1;
+                if (top >= cutoff) {
+                    continue; // dry land: not a floor, and not something this vehicle can get above
+                }
+                sampled = true;
                 if (top > maxTop) {
                     maxTop = top;
                 }
             }
         }
-        return maxTop;
+        return sampled ? maxTop : this.getY() - this.terrainClearance;
     }
 
     protected boolean canHitEntity(Entity target) {
         if (target == this || target.isSpectator() || !target.isAlive()) {
             return false;
         }
-        // Missiles aren't pickable (Entity#isPickable is false), so the vanilla check below would drop them
-        // and they'd pass through one another. Allow missile-vs-missile explicitly so they collide/intercept
-        // midair; everything else keeps the pickable requirement (this also keeps arrows from killing them).
+        if (this.interceptor && target instanceof InterceptTarget) {
+            return false;
+        }
         if (target instanceof MissileEntity other) {
-            // Interceptors never resolve missile hits by physical collision — they use the closest-approach
-            // roll in tryIntercept. Excluding both directions also stops a normal missile's own tick from
-            // mutually detonating (and thus destroying) an interceptor's target without a roll being made.
             if (this.interceptor || other.interceptor) {
                 return false;
             }
-            // Friendlies never collide: same fragmentation family (swarm) or same launcher (control id).
-            // This stops a salvo self-detonating while still letting rival launchers' missiles intercept.
             return !this.isFriendly(other);
         }
         return target.isPickable();
     }
 
     /**
-     * @return true if {@code other} is on the same side — same swarm (frag family) or launcher (control id).
+     * @return true if {@code other} is on the same side. A non-missile target has no swarm to share, so it
+     *      comes down to the launcher that owns it and the faction it flies for.
+     */
+    private boolean isFriendly(InterceptTarget other) {
+        if (other instanceof MissileEntity missile) {
+            return this.isFriendly(missile);
+        }
+        UUID control = other.interceptControlId();
+        if (this.controlId != null && this.controlId.equals(control)) {
+            return true;
+        }
+        return WarforgeCompat.areFactionsFriendly(this.teamId, other.interceptTeamId());
+    }
+
+    /**
+     * @return true if {@code other} is on the same side: same swarm (frag family) or launcher (control id).
      */
     private boolean isFriendly(MissileEntity other) {
         if (SwarmManager.sameSwarm(this, other)) {
@@ -845,9 +811,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * A non-zero pick radius so {@code MixinProjectileUtil} inflates the target OBB when another missile
-     * sweeps through it — makes fast crossing intercepts land reliably instead of needing a pixel-perfect
-     * centerline crossing. Also lets look-at / raytrace targeting see the missile.
+     * A non-zero pick radius so {@code MixinProjectileUtil} inflates the target OBB when another missile sweeps
+     * through it: makes fast crossing intercepts land reliably instead of needing a pixel-perfect centerline
+     * crossing.
      */
     @Override
     public float getPickRadius() {
@@ -855,9 +821,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Swept, substepped block/entity collision over the traversed segment, extended forward by the body
-     * length so the nose (not the base origin) triggers the hit. Non-tunneling at any speed. Fidelity and
-     * substep budget are tuned via {@link MissileSimConfig}. See {@link SweptCollision}.
+     * Swept, substepped block/entity collision over the traversed segment, extended forward by the body length so
+     * the nose (not the base origin) triggers the hit.
      */
     private HitResult sweepForImpact(Vec3 startPos, Vec3 delta) {
         return SweptCollision.sweep(this, this.level(), startPos, delta, this.noseForward(),
@@ -880,18 +845,13 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     @Override
     public List<OBB> getOBBs() {
-        // Kept current on demand so the box is right whichever side/tick order queries it (e.g. another
-        // projectile's hit-check). refreshObb() is a no-op while the transform is unchanged, so the repeated
-        // calls a single hit-check makes don't each rebuild it.
         this.refreshObb();
         return this.obbList;
     }
 
     /**
-     * Rebuilds the body OBB (center, extents, rotation) from the current missile model and heading, unless
-     * the position and heading are unchanged since the last build (then it's a no-op).
-     * The model's local +Y axis is its nose/long axis, so we map +Y onto the velocity direction, matching
-     * {@link MissileVisual}. Model units are rendered 1:1 with blocks, so mesh dimensions are used directly.
+     * Rebuilds the body OBB (center, extents, rotation) from the current missile model and heading, unless the
+     * position and heading are unchanged since the last build (then it's a no-op).
      */
     private void refreshObb() {
         double x = this.getX(), y = this.getY(), z = this.getZ();
@@ -911,34 +871,29 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         Vec3 localCenter = MissileModels.center(modelId);
 
         double lenSq = move.lengthSqr();
-        Quaterniond rot = new Quaterniond();
+        Quaterniond rot = obbRotation.identity();
         if (lenSq > 1.0E-8) {
             double inv = 1.0 / Math.sqrt(lenSq);
-            // Orient the hitbox with the SAME per-model attitude the render uses (nose-to-velocity for
-            // missiles, belly-down/wings-level for winged drones) so the OBB tracks the drawn model. Using a
-            // bare rotationTo here instead left a drone's box free-rolled to the shortest-arc angle — wrong
-            // for a level-flying airframe, and flipped to a mirrored box on a near-vertical dive (antiparallel
-            // rotationTo degenerates to a 180 deg turn about an arbitrary axis). See MissileAttitudeRegistry.
             MissileAttitude attitude = MissileAttitudeRegistry.get(MissileModels.attitudeId(modelId));
-            Quaternionf q = attitude.orientation(
-                    new Vector3f((float) (move.x * inv), (float) (move.y * inv), (float) (move.z * inv)));
+            obbHeading.set((float) (move.x * inv), (float) (move.y * inv), (float) (move.z * inv));
+            Quaternionf q = attitude.orientation(obbHeading, obbOrientation);
             rot.set(q.x, q.y, q.z, q.w);
         }
         // else: identity rotation (nose points straight up), which matches the ASCEND launch pose.
 
         // Box center = entity position + the rotated model-center offset (meshes sit base-at-origin).
-        Vector3d worldCenter = new Vector3d(localCenter.x, localCenter.y, localCenter.z);
+        Vector3d worldCenter = obbScratch.set(localCenter.x, localCenter.y, localCenter.z);
         rot.transform(worldCenter);
         worldCenter.add(x, y, z);
-
         this.obb.setCenter(worldCenter);
-        this.obb.setExtents(new Vector3d(dims.x * 0.5, dims.y * 0.5, dims.z * 0.5));
+
+        this.obb.setExtents(obbScratch.set(dims.x * 0.5, dims.y * 0.5, dims.z * 0.5));
         this.obb.updateRotation(rot);
     }
 
     /**
-     * The vanilla AABB is fit tightly around the oriented model (the enclosing box of the OBB's corners),
-     * so both frustum culling and the F3+B hitbox reflect the actual missile rather than a fixed cube.
+     * The vanilla AABB is fit tightly around the oriented model (the enclosing box of the OBB's corners), so both
+     * frustum culling and the F3+B hitbox reflect the actual missile rather than a fixed cube.
      */
     @Override
     protected AABB makeBoundingBox() {
@@ -951,8 +906,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (ext.x < 1.0E-3 && ext.y < 1.0E-3 && ext.z < 1.0E-3) {
             return super.makeBoundingBox();
         }
-        // Enclosing AABB of the rotated box without allocating its 8 corners: the world half-size along
-        // each axis is the sum of |axis component| * extent over the box's three (rotated) local axes.
         Vector3d c = this.obb.center();
         Vector3d[] ax = this.obb.getAxes();
         double hx = ext.x * Math.abs(ax[0].x) + ext.y * Math.abs(ax[1].x) + ext.z * Math.abs(ax[2].x);
@@ -968,14 +921,28 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     @Override
-    protected void defineSynchedData() {
-        this.entityData.define(MODEL_ID, MissileModels.DEFAULT.toString());
-        this.entityData.define(EXHAUST_COLOR, DEFAULT_EXHAUST_COLOR);
-        this.entityData.define(FLIGHT_SOUND, "");
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(MODEL_ID, MissileModels.DEFAULT.toString());
+        builder.define(EXHAUST_COLOR, DEFAULT_EXHAUST_COLOR);
+        builder.define(SUBMERGED_MEDIUM, false);
+        builder.define(FLIGHT_SOUND, "");
     }
 
+    /** Memoised {@link #getModelId}. */
+    private record ModelRef(String raw, ResourceLocation id) {
+    }
+
+    private volatile ModelRef modelRef;
+
+    @Override
     public ResourceLocation getModelId() {
-        return MissileModels.parse(this.entityData.get(MODEL_ID));
+        String raw = this.entityData.get(MODEL_ID);
+        ModelRef ref = this.modelRef;
+        if (ref == null || !ref.raw().equals(raw)) {
+            ref = new ModelRef(raw, MissileModels.parse(raw));
+            this.modelRef = ref;
+        }
+        return ref.id();
     }
 
     public void setModelId(ResourceLocation id) {
@@ -995,14 +962,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * @return the looping flight sound this missile plays client-side, or {@link WFSounds#MISSILE_FLIGHT} when
-     * none was set or the stored id doesn't resolve to a registered sound.
+     *      none was set or the stored id doesn't resolve to a registered sound.
      */
     public SoundEvent getFlightSound() {
         String id = this.entityData.get(FLIGHT_SOUND);
         if (id != null && !id.isEmpty()) {
             ResourceLocation rl = ResourceLocation.tryParse(id);
             if (rl != null) {
-                SoundEvent event = ForgeRegistries.SOUND_EVENTS.getValue(rl);
+                SoundEvent event = BuiltInRegistries.SOUND_EVENT.get(rl);
                 if (event != null) {
                     return event;
                 }
@@ -1056,6 +1023,36 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         return this.cruiseMode;
     }
 
+    /**
+     * @return what this missile travels through. {@link Medium#WATER} is a torpedo: its terrain is the seabed
+     *      and it is bounded above by the surface.
+     */
+    public Medium getMedium() {
+        return this.medium;
+    }
+
+    private void setMedium(Medium medium) {
+        this.medium = medium;
+        this.entityData.set(SUBMERGED_MEDIUM, medium.hasCeiling());
+    }
+
+    /**
+     * @return true if this missile travels submerged, readable on the client. Not the same question as
+     *      {@link #isSubmerged}, which asks where it is right now: a torpedo still falling toward the sea after an
+     *      air launch answers true here and false there.
+     */
+    public boolean isSubmergedMedium() {
+        return this.entityData.get(SUBMERGED_MEDIUM);
+    }
+
+    /**
+     * @return true if the missile's own block is standing in a fluid. The test the submerged stages, the
+     *      broach check and the client wake all share, so "in the water" means one thing everywhere.
+     */
+    public boolean isSubmerged() {
+        return !this.level().getFluidState(this.blockPosition()).isEmpty();
+    }
+
     public float getExplosionOffset() {
         return this.explosionOffset;
     }
@@ -1090,7 +1087,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * @return the explicit preferred dive angle in degrees below horizontal (90 = straight down, uncapped), or
-     * {@link Double#NaN} to auto-pick within [{@link #getMinDiveAngle()}, {@link #getMaxDiveAngle()}].
+     *      {@link Double#NaN} to auto-pick within [{@link #getMinDiveAngle()}, {@link #getMaxDiveAngle()}].
      */
     public double getAttackAngle() {
         return this.attackAngle;
@@ -1106,7 +1103,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * @return the normalized horizontal direction from the target toward the commanded approach side, or
-     * {@code null} for an unconstrained strike. See {@link #attackApproachDir}.
+     *      {@code null} for an unconstrained strike. See {@link #attackApproachDir}.
      */
     @Nullable
     public Vec3 getAttackApproachDir() {
@@ -1131,7 +1128,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * @return the horizontal direction the terminal run should travel (into the target), i.e. the negation of
-     * {@link #getAttackApproachDir()}, or {@code null} for an unconstrained strike.
+     *      {@link #getAttackApproachDir()}, or {@code null} for an unconstrained strike.
      */
     @Nullable
     public Vec3 getAttackTravelDir() {
@@ -1140,9 +1137,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Set the side the missile approaches the target from (a horizontal direction from target to approach
-     * origin); normalized, and null/near-zero clears the constraint. Setting it switches the cruise stage to
-     * {@link ApproachStage} so the bearing maneuver runs.
+     * Set the side the missile approaches the target from (a horizontal direction from target to approach origin);
+     * normalized, and null/near-zero clears the constraint.
      */
     public void setAttackApproachDir(@Nullable Vec3 dir) {
         if (dir == null) {
@@ -1162,13 +1158,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
     }
 
-    /**
-     * The dive angle (degrees below horizontal) the terminal stages should fly this tick. An explicitly set
-     * {@link #getAttackAngle() attack angle} wins outright; otherwise the missile raycasts each candidate angle
-     * in [{@link #minDiveAngle}, {@link #maxDiveAngle}] and takes the one nearest the straight-line shot to the
-     * target whose approach corridor is unobstructed - the fastest way in that terrain will actually allow.
-     * Only invoked from the ground-attack dive/cruise stages, so interceptors (all-InterceptStage) never hit it.
-     */
+    /** The dive angle (degrees below horizontal) the terminal stages should fly this tick. */
     public double resolveDiveAngle(FlightContext ctx) {
         if (!Double.isNaN(this.attackAngle)) {
             return this.attackAngle;
@@ -1267,8 +1257,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Rough remaining time-to-impact (ticks) from the current position, target and speed, accounting for the
-     * climb, transit, terminal descent and any remaining loiter time. See {@link ArrivalEstimator}.
+     * Rough remaining time-to-impact (ticks) from the current position, target and speed, accounting for the climb,
+     * transit, terminal descent and any remaining loiter time.
      */
     public int estimateArrivalTicks() {
         double cruiseAltitudeY = (this.cruiseMode == CruiseMode.HIGH_ALTITUDE)
@@ -1294,8 +1284,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     @Override
     public Vec3 angle() {
-        // Detonation heading = the missile's travel direction at impact (a top-attack dive points down-and-in),
-        // which a directional warhead uses as its jet axis. Fall back to straight down if somehow stationary.
         Vec3 v = this.getDeltaMovement();
         return v.lengthSqr() < 1.0e-8 ? new Vec3(0.0, -1.0, 0.0) : v.normalize();
     }
@@ -1328,14 +1316,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         this.controlId = controlId;
     }
 
-    /**
-     * Predictive deconfliction against nearby friendly missiles (same swarm or launcher). For each one whose
-     * closest approach over the next {@link #AVOID_HORIZON} ticks would fall within {@link #AVOID_MIN_SEP}
-     * blocks, adds a small offset away from where it will be — both missiles compute it, so the pair veers
-     * apart (a "slight course offset": climb or a lateral shift), bounded by {@link #AVOID_STRENGTH}. Returns
-     * {@link Vec3#ZERO} when nothing is actually on a collision course, so friendlies fly their normal path
-     * until the moment they would ram.
-     */
+    /** Predictive deconfliction against nearby friendly missiles (same swarm or launcher). */
     private Vec3 avoidFriendlies() {
         AABB box = this.getBoundingBox().inflate(AVOID_RADIUS);
         List<MissileEntity> others = this.level().getEntitiesOfClass(MissileEntity.class, box,
@@ -1359,18 +1340,16 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             double sx = rpx + rvx * t, sy = rpy + rvy * t, sz = rpz + rvz * t;
             double miss = Math.sqrt(sx * sx + sy * sy + sz * sz);
             if (miss > AVOID_MIN_SEP) {
-                continue; // they already clear each other — no course change
+                continue; // they already clear each other: no course change
             }
             double urgency = (AVOID_MIN_SEP - miss) / AVOID_MIN_SEP; // 0..1, larger the tighter the miss
             if (miss > 1.0e-3) {
-                // Veer away from the predicted closest-approach point (uses whichever axis separates them:
-                // a climb if stacked, a sideways shift if abreast).
                 double inv = urgency / miss;
                 ox -= sx * inv;
                 oy -= sy * inv;
                 oz -= sz * inv;
             } else {
-                // Dead-on (no defined "away"): split sideways, deterministically by id — a shift in x/z.
+                // Dead-on (no defined "away"): split sideways, deterministically by id (a shift in x/z).
                 double clen = Math.sqrt(rvx * rvx + rvz * rvz);
                 double perpx = clen > 1.0e-4 ? -rvz / clen : 1.0;
                 double perpz = clen > 1.0e-4 ? rvx / clen : 0.0;
@@ -1388,9 +1367,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Keep the turn-limited heading of {@code desired} but ramp the missile's <em>actual</em> speed toward
-     * the desired speed at the {@link #acceleration} (spooling up) or {@link #deceleration} (braking) limit,
-     * so speed changes are gradual instead of instantaneous.
+     * Keep the turn-limited heading of {@code desired} but ramp the missile's <em>actual</em> speed toward the
+     * desired speed at the {@link #acceleration} (spooling up) or {@link #deceleration} (braking) limit, so speed
+     * changes are gradual instead of instantaneous.
      */
     private Vec3 applyThrust(Vec3 desired) {
         double targetSpeed = desired.length();
@@ -1416,8 +1395,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * Formation guidance for a subordinate: steer to its wedge slot behind the commander while matching the
-     * commander's velocity, so it holds station and throttles its speed to keep the slot (speeding up when it
-     * falls behind, easing back once it's in place). The result is turn-rate + accel limited by the caller.
+     * commander's velocity, so it holds station and throttles its speed to keep the slot (speeding up when it falls
+     * behind, easing back once it's in place).
      */
     private Vec3 formationGuide(MissileEntity commander) {
         Vec3 slot = SwarmManager.formationSlot(commander, this);
@@ -1435,8 +1414,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * @return this commander's live formation subordinates if the whole swarm is eligible to offload as one
-     * object (every member alive, still in formation, and clear of any listener), or null if not — in which
-     * case the swarm keeps flying in-world. An empty list (commander with no surviving members) is eligible.
+     *      object (every member alive, still in formation, and clear of any listener), or null if not: in which
+     *      case the swarm keeps flying in-world. An empty list (commander with no surviving members) is eligible.
      */
     private List<MissileEntity> formationSubordinates(ServerLevel level) {
         List<MissileEntity> subs = new ArrayList<>();
@@ -1456,8 +1435,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * A per-missile dispersed aim point around {@code base} (the mission target) for the saturation break:
-     * a golden-angle spiral keyed on the entity id spreads the swarm evenly across the target area rather than
+     * A per-missile dispersed aim point around {@code base} (the mission target) for the saturation break: a
+     * golden-angle spiral keyed on the entity id spreads the swarm evenly across the target area rather than
      * stacking every missile on one point.
      */
     private Vec3 saturationAim(Vec3 base) {
@@ -1468,9 +1447,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Unpowered flight (out of fuel): no thrust or guidance — the missile keeps its horizontal momentum
-     * (lightly dragged) while gravity pulls it down toward a terminal speed, so it arcs over and falls with
-     * its inertia preserved. Still sweeps for an impact so it detonates when it hits the ground.
+     * Unpowered flight (out of fuel), with no thrust or guidance: the missile keeps its horizontal momentum
+     * (lightly dragged) while gravity pulls it down toward a terminal speed, so it arcs over and falls with its
+     * inertia preserved.
      */
     private void ballisticFall(ServerLevel level, Vec3 currentPos) {
         this.coastDown(level, currentPos, FALL_HORIZONTAL_DRAG, false);
@@ -1478,8 +1457,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * Shared unpowered coast: gravity toward terminal speed plus horizontal {@code drag}, moving and sweeping for
-     * an impact. {@code fizzleOnImpact} runs the neutralised effect at the crash site (a shot-down missile that
-     * lands) instead of the full impact detonation ({@link #onMissileImpact}).
+     * an impact.
      */
     private void coastDown(ServerLevel level, Vec3 currentPos, double drag, boolean fizzleOnImpact) {
         // Keep the missile's own chunks loaded while it coasts down.
@@ -1507,9 +1485,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Per-tick handling for a shot-down ({@link #downed}) missile, dispatched by its {@link DownedAction}:
-     * SPIN_OUT tumbles onto a random heading and cooks off; POWER_LOSS coasts down with heavy deceleration;
-     * CRASH (the default) coasts down with light drag. All but SPIN_OUT fizzle where they crash.
+     * Per-tick handling for a shot-down ({@link #downed}) missile, dispatched by its {@link DownedAction}: SPIN_OUT
+     * tumbles onto a random heading and cooks off; POWER_LOSS coasts down with heavy deceleration; CRASH (the
+     * default) coasts down with light drag.
      */
     private void tickDowned(ServerLevel level, Vec3 currentPos) {
         if (this.downedGrace > 0) {
@@ -1523,9 +1501,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Spin-out: the missile veers onto a random heading — turn-rate limited (via {@link #constrainTurn}), so it
-     * arcs out of control rather than snapping — sinking as it tumbles, and its warhead cooks off (a full
-     * detonation) on impact or once a short random fuse elapses.
+     * Spin-out: the missile veers onto a random heading (turn-rate limited (via {@link #constrainTurn}), so it arcs
+     * out of control rather than snapping) sinking as it tumbles, and its warhead cooks off (a full detonation) on
+     * impact or once a short random fuse elapses.
      */
     private void spinOut(ServerLevel level, Vec3 currentPos) {
         this.chunkLoader.update(this, level, currentPos, this.getDeltaMovement(), true);
@@ -1585,30 +1563,18 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     @Override
     public void remove(RemovalReason reason) {
-        // Point-defence guard. Some mods "shoot down" a projectile by calling discard() on it OUTRIGHT rather
-        // than damaging it — e.g. Superb Warfare's CIWS (AutoAimableEntity.rayShoot) does, for any Projectile
-        // that isn't its own DestroyableProjectile, `causeAirExplode(); target.discard();`. That deletes the
-        // missile in one frame with an airburst and skips our entire shoot-down/downed sequence (damageMissile
-        // → shootDown never gets to matter). Intercept such an EXTERNAL discard of a live, armed, not-yet-
-        // detonated missile and turn it into a proper shoot-down (it falls and fizzles) instead of vanishing.
-        // Our own detonate() sets `detonated` before it discards, so a real detonation passes straight through;
-        // KILLED (e.g. /kill), chunk-unloads, and unarmed missiles pass through too.
         if (reason == RemovalReason.DISCARDED && !this.level().isClientSide
                 && !this.detonated && this.isArmed() && this.isAlive()) {
             if (!this.downed) {
                 this.shootDown();
             }
-            return; // veto the deletion — keep the (now downed) missile alive to coast to its own crash/fizzle
+            return; // veto the deletion: keep the (now downed) missile alive to coast to its own crash/fizzle
         }
-        // Release forced chunks when the missile actually goes away (killed/discarded), but not on a
-        // plain chunk unload — those tickets persist so the missile resumes after a reload.
         if (!this.level().isClientSide && reason.shouldDestroy() && this.level() instanceof ServerLevel sl) {
             this.chunkLoader.releaseAll(this, sl);
             if (this.interceptor) {
                 MissileListenerRegistry.get(sl).deregister(this.getUUID());
             }
-            // Commander lost (intercepted or impacted): hand the lead to the nearest surviving swarm member so
-            // the rest obey a new commander.
             if (this.commander && this.swarmId != 0L) {
                 SwarmManager.promoteSuccessor(sl, this.swarmId, this);
             }
@@ -1617,10 +1583,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Interceptor per-tick update: keep this interceptor registered as a listener (so nearby off-world
-     * missiles rematerialize and a real target won't offload), resolve its current target, and write a lead
-     * point via {@link #setTarget} so the shared flight code flies toward the predicted intercept. Self-
-     * terminates (fizzle) once it exceeds its lifetime or has gone too long without any resolvable target.
+     * Interceptor per-tick update: keep this interceptor registered as a listener (so nearby off-world missiles
+     * rematerialize and a real target won't offload), resolve its current target, and write a lead point via {@link
+     * #setTarget} so the shared flight code flies toward the predicted intercept.
      *
      * @return false if the interceptor removed itself this tick (the caller should stop ticking it).
      */
@@ -1632,79 +1597,72 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return false;
         }
 
-        MissileEntity target = this.resolveInterceptTarget(level, currentPos);
+        InterceptTarget target = this.resolveInterceptTarget(level, currentPos);
         if (target == null) {
             this.currentTargetId = null;
             if (++this.noTargetTicks > MissileSimConfig.INTERCEPTOR_LOST_TARGET_TICKS) {
                 this.detonate(currentPos, true);
                 return false;
             }
-            // Coast: keep aiming along the current heading (or straight up if barely moving) so guidance
-            // stays stable while we wait for a target to appear/reappear.
             Vec3 vel = this.getDeltaMovement();
             Vec3 dir = vel.lengthSqr() > 1.0E-6 ? vel.normalize() : new Vec3(0.0, 1.0, 0.0);
             this.setTarget(currentPos.add(dir.scale(32.0)));
             return true;
         }
-        this.currentTargetId = target.getUUID();
+        this.currentTargetId = target.interceptEntity().getUUID();
         this.noTargetTicks = 0;
         this.setTarget(this.leadPoint(currentPos, target));
         return true;
     }
 
     /**
-     * @return the missile this interceptor should home on: in LOCK mode the exact {@link #lockTargetId} (any
-     * side — an explicit override), in NEAREST mode the closest live, non-friendly, non-interceptor missile
-     * within {@link MissileSimConfig#INTERCEPTOR_ACQUIRE_RANGE}. Null when none is resolvable.
+     * @return the air target this interceptor should home on: in LOCK mode the exact {@link #lockTargetId}
+     *      (any side: an explicit override), in NEAREST mode the closest live, non-friendly, non-interceptor
+     *      target within {@link MissileSimConfig#INTERCEPTOR_ACQUIRE_RANGE}. Null when none is resolvable.
      */
-    private MissileEntity resolveInterceptTarget(ServerLevel level, Vec3 currentPos) {
+    private InterceptTarget resolveInterceptTarget(ServerLevel level, Vec3 currentPos) {
         if (this.interceptMode == InterceptMode.LOCK) {
-            if (this.lockTargetId != null && level.getEntity(this.lockTargetId) instanceof MissileEntity m
-                    && m.isAlive() && !m.detonated) {
-                return m;
+            if (this.lockTargetId != null && level.getEntity(this.lockTargetId) instanceof InterceptTarget t
+                    && t.interceptEngageable()) {
+                return t;
             }
             return null;
         }
         double r = MissileSimConfig.INTERCEPTOR_ACQUIRE_RANGE;
         AABB box = this.getBoundingBox().inflate(r);
-        List<MissileEntity> nearby = level.getEntitiesOfClass(MissileEntity.class, box, MissileEntity::isAlive);
-        // Targets already covered by another committed interceptor, so a salvo spreads across threats instead
-        // of dogpiling one missile. If every hostile is covered we still take the nearest as a fallback.
-        Set<UUID> claimed = claimedTargets(nearby, this.getId());
-        MissileEntity best = null;
-        MissileEntity fallback = null;
+        List<MissileEntity> missiles = level.getEntitiesOfClass(MissileEntity.class, box, MissileEntity::isAlive);
+        List<InterceptTarget> nearby = new ArrayList<>(missiles);
+        nearby.addAll(level.getEntitiesOfClass(DroneEntity.class, box, DroneEntity::isAlive));
+        Set<UUID> claimed = claimedTargets(missiles, this.getId());
+        InterceptTarget best = null;
+        InterceptTarget fallback = null;
         double bestSq = r * r;
         double fallbackSq = r * r;
-        for (MissileEntity m : nearby) {
-            if (m == this || m.detonated || m.interceptor || this.isFriendly(m)) {
+        for (InterceptTarget t : nearby) {
+            if (t == this || !t.interceptEngageable() || this.isFriendly(t)) {
                 continue;
             }
-            double dsq = m.position().distanceToSqr(currentPos);
-            // Stealth missiles are only detectable at short range and with a per-scan chance (see detectableAt).
-            if (!m.detectableAt(dsq, level.random)) {
+            Entity entity = t.interceptEntity();
+            double dsq = entity.position().distanceToSqr(currentPos);
+            if (t instanceof MissileEntity m && !m.detectableAt(dsq, r)) {
                 continue;
             }
             if (dsq <= fallbackSq) {
                 fallbackSq = dsq;
-                fallback = m;
+                fallback = t;
             }
-            if (!claimed.contains(m.getUUID()) && dsq <= bestSq) {
+            if (!claimed.contains(entity.getUUID()) && dsq <= bestSq) {
                 bestSq = dsq;
-                best = m;
+                best = t;
             }
         }
         return best != null ? best : fallback;
     }
 
-    /**
-     * Predicted intercept point: where to aim so a run at cruise speed meets the target's straight-line
-     * motion. Solves {@code |D + Vt·t| = s·t} for the smallest positive {@code t} (D = target − interceptor,
-     * Vt = target velocity, s = interceptor speed); falls back to the target's current position when the
-     * target outruns the interceptor (no positive solution). Re-solved every tick, so it self-corrects.
-     */
-    private Vec3 leadPoint(Vec3 currentPos, MissileEntity target) {
-        Vec3 tPos = target.position();
-        Vec3 vt = target.getDeltaMovement();
+    /** Predicted intercept point: where to aim so a run at cruise speed meets the target's straight-line motion. */
+    private Vec3 leadPoint(Vec3 currentPos, InterceptTarget target) {
+        Vec3 tPos = target.interceptEntity().getBoundingBox().getCenter();
+        Vec3 vt = target.interceptEntity().getDeltaMovement();
         double s = this.getCruiseSpeed();
         Vec3 d = tPos.subtract(currentPos);
         double a = vt.lengthSqr() - s * s;
@@ -1727,8 +1685,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             this.crossingShot = false;
             return tPos.add(vt.scale(t));
         }
-        // Uncatchable — the target outruns us, so a stern chase can never connect. Aim at the nearest point on
-        // its forward flight path and try to cross it instead (a much lower-odds shot; see tryIntercept).
         this.crossingShot = true;
         double vlen2 = vt.lengthSqr();
         if (vlen2 < 1.0E-8) {
@@ -1739,11 +1695,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Closest-approach kill test against the current target over this tick's motion. If the interceptor and
-     * target pass within {@link MissileSimConfig#INTERCEPTOR_KILL_RADIUS}, roll {@link #interceptChance} once:
-     * on success the target runs its (neutralised) intercept effect; either way the interceptor is spent
-     * (one-shot). Robust to extremely fast missiles because it uses the two segments' relative-velocity
-     * closest approach, not an overlap snapshot.
+     * Closest-approach kill test against the current target over this tick's motion.
      *
      * @return true if the interceptor resolved (killed a target or was spent) and should stop ticking.
      */
@@ -1751,13 +1703,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (this.currentTargetId == null || !(this.level() instanceof ServerLevel level)) {
             return false;
         }
-        if (!(level.getEntity(this.currentTargetId) instanceof MissileEntity tgt)
-                || !tgt.isAlive() || tgt.detonated || tgt.downed || tgt.interceptor) {
+        if (!(level.getEntity(this.currentTargetId) instanceof InterceptTarget tgt)
+                || !tgt.interceptEngageable()) {
             return false;
         }
+        Entity tgtEntity = tgt.interceptEntity();
         Vec3 iV = this.getDeltaMovement();
-        Vec3 tEnd = tgt.position();
-        Vec3 tV = tgt.getDeltaMovement();
+        Vec3 tEnd = tgtEntity.getBoundingBox().getCenter();
+        Vec3 tV = tgtEntity.getDeltaMovement();
         Vec3 tStart = tEnd.subtract(tV);
         // Relative motion of the target vs. the interceptor over this tick's two segments.
         Vec3 rp = tStart.subtract(currentPos);
@@ -1774,20 +1727,14 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 ? this.interceptChance * MissileSimConfig.INTERCEPTOR_CROSSING_HIT_FACTOR
                 : this.interceptChance;
         boolean kill = level.random.nextFloat() < chance;
-        // A higher-tier target can boost clear at the cost of fuel — but only if it can out-run THIS
-        // interceptor (its speed decides the odds, see evadeBoost), so a fast interceptor still connects.
-        if (kill && tgt.evadeBoost(this.getCruiseSpeed(), this.position())) {
+        if (kill && tgt.interceptEvade(this.getCruiseSpeed(), this.position())) {
             kill = false;
         }
         spawnInterceptBurst(level, point, kill); // readable flak burst: big + boom on a kill, small on a miss
         if (MissileSimConfig.INTERCEPTOR_CHIP_MODE) {
-            // Chip mode: damage the shared health pool (combines with CIWS; tougher missiles survive more
-            // hits). A hit deals heavy damage, a miss a graze; damageMissile downs it when the pool empties.
-            tgt.damageMissile(kill ? MissileSimConfig.INTERCEPTOR_HIT_DAMAGE : MissileSimConfig.INTERCEPTOR_GRAZE_DAMAGE);
+            tgt.interceptDamage(kill ? MissileSimConfig.INTERCEPTOR_HIT_DAMAGE : MissileSimConfig.INTERCEPTOR_GRAZE_DAMAGE);
         } else if (kill) {
-            // Binary mode: an interceptor is a guaranteed clean kill — force a full-warhead DETONATE regardless
-            // of the target's own rolled downed action (flak/CIWS use that; the dedicated interceptor overrides it).
-            tgt.shootDown(DownedAction.DETONATE);
+            tgt.interceptKill();
         }
         this.detonate(point, true); // spent whether it hits or misses (one-shot)
         return true;
@@ -1816,11 +1763,18 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * @return true if this missile is stealth (invisible to automatic detection; engageable only by a manual
-     * UUID lock).
+     * @return this missile's radar cross-section, against a reference of 1.0.
+     */
+    public float getRcs() {
+        return this.rcs;
+    }
+
+    /**
+     * @return true if this missile is low-observable. Derived from {@link #getRcs}, for display and commands
+     *      only: nothing about detection reads this, because detection is a curve and not a flag.
      */
     public boolean isStealth() {
-        return this.stealth;
+        return this.rcs < MissileSimConfig.STEALTH_RCS_THRESHOLD;
     }
 
     public float getEvasion() {
@@ -1836,9 +1790,9 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
     /**
      * @return this missile's evasion right now (0..1): its base {@link #evasion}, amplified by
-     * {@link MissileSimConfig#DIVE_EVASION_MULTIPLIER} while in the terminal ATTACK dive (a maneuvering
-     * warhead is hardest to intercept on its way down). The interceptor's kill chance is scaled by
-     * {@code (1 - this)}.
+     *      {@link MissileSimConfig#DIVE_EVASION_MULTIPLIER} while in the terminal ATTACK dive (a maneuvering
+     *      warhead is hardest to intercept on its way down). The interceptor's kill chance is scaled by
+     *      {@code (1 - this)}.
      */
     public float effectiveEvasion() {
         if (this.evasion <= 0.0f) {
@@ -1885,38 +1839,27 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * @return whether an automatic detector may see this missile this scan, at squared distance {@code distSq}.
-     * A normal missile is always visible within the detector's own range; a stealth missile is visible only
-     * within the short {@link MissileSimConfig#STEALTH_DETECT_RANGE} and then only with
-     * {@link MissileSimConfig#STEALTH_DETECT_CHANCE} probability per scan — hard to engage, not invisible.
-     * Manual UUID locking bypasses this entirely.
+     * @return whether a detector of this range may see this missile, at squared distance {@code distSq}.
      */
-    public boolean detectableAt(double distSq, net.minecraft.util.RandomSource rand) {
-        if (!this.stealth) {
-            return true;
+    public boolean detectableAt(double distSq, double baseRange) {
+        if (this.rcs <= 0.0f) {
+            return false;
         }
-        double r = MissileSimConfig.STEALTH_DETECT_RANGE;
-        return distSq <= r * r && rand.nextFloat() < MissileSimConfig.STEALTH_DETECT_CHANCE;
+        double detection = baseRange * Math.sqrt(Math.sqrt(this.rcs));
+        return distSq <= detection * detection;
     }
 
     public float getInterceptChance() {
         return this.interceptChance;
     }
 
-    /**
-     * Switch this (already-built) interceptor to LOCK mode on a specific target missile's UUID. Used by the
-     * launch item / command after building the interceptor.
-     */
+    /** Switch this (already-built) interceptor to LOCK mode on a specific target missile's UUID. */
     public void setInterceptLock(UUID targetId) {
         this.interceptMode = InterceptMode.LOCK;
         this.lockTargetId = targetId;
     }
 
-    /**
-     * Assign a specific entity for this (non-interceptor) missile/drone to strike. It re-aims onto the entity
-     * each tick while the entity is alive; pair with the {@code "loiter"} cruise stage for a loitering munition
-     * that orbits the area and pounces when the target is present.
-     */
+    /** Assign a specific entity for this (non-interceptor) missile/drone to strike. */
     public void setDesignatedTarget(UUID entityId) {
         this.designatedTargetId = entityId;
     }
@@ -1952,6 +1895,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         tag.putDouble("TargetZ", target.z);
         tag.putString("Phase", this.phase.name());
         tag.putString("CruiseMode", this.cruiseMode.name());
+        tag.putString("Medium", this.medium.name());
         tag.putDouble("CruiseAltitude", this.cruiseAltitude);
         tag.putDouble("TerrainClearance", this.terrainClearance);
         tag.putFloat("ExplosionOffset", this.explosionOffset);
@@ -2006,7 +1950,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (this.designatedTargetId != null) {
             tag.putUUID("DesignatedTarget", this.designatedTargetId);
         }
-        tag.putBoolean("Stealth", this.stealth);
+        tag.putFloat("Rcs", this.rcs);
         tag.putFloat("Evasion", this.evasion);
         tag.putBoolean("EvasiveManeuver", this.evasiveManeuver);
         tag.putString("FuelType", this.fuelType.name());
@@ -2048,6 +1992,13 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             try {
                 this.cruiseMode = CruiseMode.valueOf(tag.getString("CruiseMode"));
             } catch (IllegalArgumentException nignored) {
+            }
+        }
+
+        if (tag.contains("Medium")) {
+            try {
+                this.setMedium(Medium.valueOf(tag.getString("Medium")));
+            } catch (IllegalArgumentException ignored) {
             }
         }
 
@@ -2185,7 +2136,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (tag.hasUUID("DesignatedTarget")) {
             this.designatedTargetId = tag.getUUID("DesignatedTarget");
         }
-        this.stealth = tag.getBoolean("Stealth");
+        this.rcs = tag.contains("Rcs") ? tag.getFloat("Rcs")
+                : (tag.getBoolean("Stealth") ? MissileSimConfig.STEALTH_RCS : 1.0f);
         this.evasiveManeuver = tag.getBoolean("EvasiveManeuver");
         if (tag.contains("Evasion")) {
             this.evasion = tag.getFloat("Evasion");
@@ -2229,10 +2181,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     private void onMissileImpact(HitResult hitResult) {
-        this.recordEvent(MissileEventType.IMPACTED, hitResult.getType().toString());
-        // Missile-vs-missile: this was an interception, not a strike on the target. Neutralise both missiles
-        // with the (cheap) intercept effect rather than running two full open-air warhead blasts in one tick.
-        // A hit on any other entity (or a block) is a real impact and detonates normally.
+        this.recordEvent(WFEventType.IMPACTED, hitResult.getType().toString());
         if (hitResult instanceof EntityHitResult ehr && ehr.getEntity() instanceof MissileEntity other) {
             Vec3 pos = hitResult.getLocation();
             this.detonate(pos, true);
@@ -2250,27 +2199,22 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
     }
 
     /**
-     * Removes the missile, running either the full warhead {@link WarheadRegistry.Detonation} or — when
-     * {@code intercepted} — the (typically neutralised) {@link WarheadRegistry#getIntercept intercept effect}
-     * used when the missile is shot down / rammed mid-air instead of reaching its target.
+     * Removes the missile, running either the full warhead {@link WarheadRegistry.Detonation} or, when {@code
+     * intercepted}, the (typically neutralised) {@link WarheadRegistry#getIntercept intercept effect} used when the
+     * missile is shot down / rammed mid-air instead of reaching its target.
      */
     private void detonate(Vec3 pos, boolean intercepted) {
         if (this.detonated) {
             return;
         }
         this.detonated = true; // set before the blast: it can hurt() this missile before discard() runs
-        this.recordEvent(intercepted ? MissileEventType.INTERCEPTED : MissileEventType.DETONATED, "");
-        // Run the warhead while the impact-preload chunks are still held, then release: the blast (and any
-        // effect entities it spawns) lands into loaded terrain instead of racing the chunk teardown.
+        this.recordEvent(intercepted ? WFEventType.INTERCEPTED : WFEventType.DETONATED, "");
         if (intercepted) {
             WarheadRegistry.getIntercept(this.detonationId).detonate(this, pos);
         } else {
             this.detonation.detonate(this, pos);
         }
         if (this.level() instanceof ServerLevel sl) {
-            // For a real warhead blast, keep the impact area loaded for a grace window after we release our own
-            // tickets, so any multi-tick effect it spawned (fire boxes, gas cloud, ...) isn't frozen by a chunk
-            // unload the instant this missile is discarded. A neutralised intercept fizzle needs no such hold.
             if (!intercepted) {
                 DetonationChunkGuard.hold(sl, pos, Math.max(1, this.impactPreloadRadius));
             }
@@ -2287,43 +2231,32 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         if (this.level().isClientSide || this.isRemoved() || this.detonated || amount <= 0.0f) {
             return;
         }
-        // While unarmed, absorb damage without cooking off — a stray hit shouldn't blow it up on the launcher.
+        // While unarmed, absorb damage without cooking off: a stray hit shouldn't blow it up on the launcher.
         if (!this.isArmed()) {
             return;
         }
         this.health -= amount;
-        this.recordEvent(MissileEventType.DAMAGED, "dmg=" + f1(amount) + " hp=" + f1(this.health));
+        this.recordEvent(WFEventType.DAMAGED, "dmg=" + f1(amount) + " hp=" + f1(this.health));
         if (this.health <= 0.0f) {
-            // Shot down (CIWS / interceptor fire): cut power and let it fall out of the sky rather than
-            // air-bursting on the spot — it fizzles (neutralised) where it crashes (see shootDown).
             this.shootDown();
         }
     }
 
     /**
-     * Neutralise this missile by shooting it down: it cuts thrust and guidance and falls ballistically (see
-     * {@link #ballisticFall}), then runs the neutralised intercept effect where it hits the ground instead of a
-     * full warhead blast. No-op once already downed or detonated. Prefer this over a mid-air
-     * {@code detonate(pos, true)} anywhere a missile is "shot out of the sky".
+     * Neutralise this missile by shooting it down: it cuts thrust and guidance and falls ballistically (see {@link
+     * #ballisticFall}), then runs the neutralised intercept effect where it hits the ground instead of a full
+     * warhead blast.
      */
     public void shootDown() {
         this.shootDown(this.downedAction);
     }
 
-    /**
-     * Shoot this missile down with an explicit {@link DownedAction}, overriding its per-launch rolled action.
-     * Used where the downing weapon dictates the outcome — e.g. an interceptor forces a clean full-warhead
-     * {@code DETONATE} regardless of what the target rolled. The no-arg {@link #shootDown()} uses the rolled action
-     * (flak / CIWS / external hits go through that).
-     */
+    /** Shoot this missile down with an explicit {@link DownedAction}, overriding its per-launch rolled action. */
     public void shootDown(DownedAction action) {
         if (this.detonated) {
             return;
         }
         if (this.downed) {
-            // Hit again while it's already falling / spinning out. Ignore hits during the grace window so the
-            // downed animation plays out (a rapid-fire CIWS would otherwise re-detonate it the same instant it
-            // goes down); once the window elapses a follow-up hit sets the warhead off where it is.
             if (this.downedGrace <= 0) {
                 this.detonate(this.position(), false);
             }
@@ -2333,13 +2266,11 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             case FIZZLE -> this.detonate(this.position(), true);   // neutralised fizzle on the spot, mid-air
             case DETONATE -> this.detonate(this.position(), false); // full warhead blast on the spot, mid-air
             default -> {
-                // CRASH / POWER_LOSS / SPIN_OUT: cut power so the tick's fuel<=0 branch runs tickDowned from here.
-                // Store the (possibly overridden) action so tickDowned dispatches on the actual downed behaviour.
                 this.downedAction = action;
                 this.downed = true;
                 this.fuel = 0;
                 this.downedGrace = DOWNED_REHIT_GRACE;
-                this.recordEvent(MissileEventType.DESTROYED, "shot down: " + action);
+                this.recordEvent(WFEventType.DESTROYED, "shot down: " + action);
             }
         }
     }
@@ -2351,15 +2282,55 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         return this.downed;
     }
 
+    // --- InterceptTarget: what air defence is allowed to know about this missile ---
+
+    /**
+     * An interceptor is not a target: shooting one only spends a second interceptor on a shot that was already
+     * taken.
+     */
+    @Override
+    public boolean interceptEngageable() {
+        return this.isAlive() && !this.detonated && !this.downed && !this.interceptor;
+    }
+
+    @Override
+    public ContactClass interceptClass() {
+        return ContactClass.MISSILE;
+    }
+
+    @Override
+    public UUID interceptControlId() {
+        return this.controlId;
+    }
+
+    @Override
+    public UUID interceptTeamId() {
+        return this.teamId;
+    }
+
+    @Override
+    public void interceptDamage(float amount) {
+        this.damageMissile(amount);
+    }
+
+    @Override
+    public void interceptKill() {
+        this.shootDown(DownedAction.DETONATE);
+    }
+
+    @Override
+    public boolean interceptEvade(double interceptorSpeed, Vec3 interceptorPos) {
+        return this.evadeBoost(interceptorSpeed, interceptorPos);
+    }
+
     @Override
     public boolean hurt(DamageSource source, float amount) {
-        // TODO: don't let stray projectiles (e.g. arrows) destroy the missile.
         if (this.level().isClientSide || this.isRemoved()) {
             return false;
         }
-        // Per-missile damage response: a preset can resist or scale incoming damage by source (e.g. a hardened
-        // airframe that only takes explosion damage). Interceptor/CIWS hits go through damageMissile() directly
-        // and are intentionally not gated here.
+        if (source.is(DamageTypeTags.IS_PROJECTILE) && amount < MissileSimConfig.MIN_PROJECTILE_DAMAGE) {
+            return false;
+        }
         float effective = this.damageResponse.apply(this, source, amount);
         if (effective <= 0.0f) {
             return false;
@@ -2386,13 +2357,49 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         HIGH_ALTITUDE
     }
 
+    /** The fluid the missile travels in, which is what decides what "terrain" means to it. */
+    public enum Medium {
+        AIR(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, 32.0, 24.0),
+        WATER(Heightmap.Types.OCEAN_FLOOR, 12.0, 8.0);
+
+        private final Heightmap.Types heightmap;
+        private final double lookAhead;
+        private final double scanRadius;
+
+        Medium(Heightmap.Types heightmap, double lookAhead, double scanRadius) {
+            this.heightmap = heightmap;
+            this.lookAhead = lookAhead;
+            this.scanRadius = scanRadius;
+        }
+
+        /** The heightmap whose top is the surface this medium must not run into. */
+        public Heightmap.Types heightmap() {
+            return this.heightmap;
+        }
+
+        /** How far ahead along the track the terrain fan is centred, in blocks. */
+        public double lookAhead() {
+            return this.lookAhead;
+        }
+
+        /** Half-width of the terrain fan, in blocks. */
+        public double scanRadius() {
+            return this.scanRadius;
+        }
+
+        /** @return true if a vehicle in this medium is bounded above as well as below. */
+        public boolean hasCeiling() {
+            return this == WATER;
+        }
+    }
+
     /**
      * What a missile does when it is shot out of the sky (see {@link #shootDown}). Picked per-preset.
      */
     public enum DownedAction {
         /** Neutralised fizzle on the spot, in mid-air where it was hit (the original shot-down behaviour). */
         FIZZLE,
-        /** Instant FULL warhead blast in mid-air where it was hit — a real "detonated on the spot". */
+        /** Instant FULL warhead blast in mid-air where it was hit: a real "detonated on the spot". */
         DETONATE,
         /** Cut power and fall ballistically (light drag, momentum preserved); fizzles at the crash site. */
         CRASH,
@@ -2410,25 +2417,16 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         LOCK
     }
 
-    /**
-     * Propellant kind: SOLID is a preloaded charge; LIQUID is kerosene (see {@code WFFluids}). Burn behaviour
-     * is identical (ticks of thrust) — the type is carried for flavour and future tank/bucket refuelling.
-     */
+    /** Propellant kind: SOLID is a preloaded charge; LIQUID is kerosene (see {@code WFFluids}). */
     public enum FuelType {
         SOLID,
         LIQUID
     }
 
     /**
-     * Example use:
-     * <pre>{@code
-     * MissileEntity m = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
-     *         .target(pos)
-     *         .highAltitude(250.0)   // or .terrainFollow(24.0)
-     *         .explosionOffset(30f)  // airburst 30 blocks above the target
-     *         .build();
-     * level.addFreshEntity(m);
-     * }</pre>
+     * Example use: <pre>{@code MissileEntity m = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
+     * .target(pos) .highAltitude(250.0) // or .terrainFollow(24.0) .explosionOffset(30f) // airburst 30 blocks
+     * above the target .build(); level.addFreshEntity(m); }</pre>
      */
     public static final class Builder {
         private final EntityType<? extends Projectile> type;
@@ -2436,6 +2434,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         private Vec3 target;
         private CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
+        private Medium medium = Medium.AIR;
         private double cruiseAltitude = 200.0;
         private double terrainClearance = 24.0;
         private float explosionOffset = 0.0f;
@@ -2480,7 +2479,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         private double acceleration = DEFAULT_ACCELERATION;
         private double deceleration = DEFAULT_DECELERATION;
         private UUID designatedTargetId = null;
-        private boolean stealth = false;
+        private float rcs = 1.0f;
         private float evasion = 0.0f;
         private boolean evasiveManeuver = false;
 
@@ -2513,6 +2512,21 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
+         * Set the terrain clearance without touching the cruise mode, so a fixed-altitude missile still has a floor
+         * it holds above the ground, or, for a torpedo running at a set depth, above the seabed.
+         */
+        public Builder clearance(double terrainClearance) {
+            this.terrainClearance = terrainClearance;
+            return this;
+        }
+
+        /** Travel through the given medium. */
+        public Builder medium(Medium medium) {
+            this.medium = medium;
+            return this;
+        }
+
+        /**
          * Airburst {@code offset} blocks above the target; 0 (default) is a contact detonation.
          */
         public Builder explosionOffset(float offset) {
@@ -2521,8 +2535,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Pick the warhead by its registered id (see {@link WarheadRegistry#register}); defaults to
-         * {@code "standard"}. Using an id (rather than a raw lambda) lets the warhead survive save/load.
+         * Pick the warhead by its registered id (see {@link WarheadRegistry#register}); defaults to {@code
+         * "standard"}.
          */
         public Builder detonation(ResourceLocation detonationId) {
             this.detonationId = detonationId;
@@ -2554,8 +2568,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Number of bomblets the {@code "fragmentation"} warhead scatters; defaults to
-         * {@link #DEFAULT_FRAGMENT_COUNT}. No effect for other warheads.
+         * Number of bomblets the {@code "fragmentation"} warhead scatters; defaults to {@link
+         * #DEFAULT_FRAGMENT_COUNT}.
          */
         public Builder fragmentCount(int fragmentCount) {
             this.fragmentCount = fragmentCount;
@@ -2564,7 +2578,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         /**
          * Chunk radius force-loaded around the aim point during the terminal run so the warhead detonates into
-         * loaded terrain (see {@link #DEFAULT_IMPACT_PRELOAD_RADIUS}). 0 disables it.
+         * loaded terrain (see {@link #DEFAULT_IMPACT_PRELOAD_RADIUS}).
          */
         public Builder impactPreloadRadius(int chunkRadius) {
             this.impactPreloadRadius = Math.max(0, chunkRadius);
@@ -2579,10 +2593,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return this;
         }
 
-        /**
-         * Set the horizontal cruise speed (blocks/tick); default {@link #CRUISE_SPEED}. The off-world
-         * simulation advances at this same rate, so travel time matches whether flown or simulated.
-         */
+        /** Set the horizontal cruise speed (blocks/tick); default {@link #CRUISE_SPEED}. */
         public Builder cruiseSpeed(double blocksPerTick) {
             this.cruiseSpeed = blocksPerTick;
             return this;
@@ -2595,7 +2606,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         /**
          * Explicit preferred dive angle in degrees below horizontal (90 = straight down / top-attack), uncapped.
-         * Leave unset to auto-pick within {@link #diveAngleRange}.
          */
         public Builder attackAngle(double degrees) {
             this.attackAngle = degrees;
@@ -2604,8 +2614,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         /**
          * When no explicit {@link #attackAngle} is set, the terminal dive auto-picks an angle in this range
-         * (degrees below horizontal) by raycasting for the fastest unobstructed approach. Defaults to
-         * [{@link #DEFAULT_MIN_DIVE_ANGLE}, {@link #DEFAULT_MAX_DIVE_ANGLE}].
+         * (degrees below horizontal) by raycasting for the fastest unobstructed approach.
          */
         public Builder diveAngleRange(double minDegrees, double maxDegrees) {
             this.minDiveAngle = minDegrees;
@@ -2614,11 +2623,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Strike the target from a commanded side: {@code (dirX, dirZ)} is the horizontal direction from the
-         * target toward where the missile should come in from ("attack from the west" = a westward vector). The
-         * missile swings onto that bearing before the terminal dive (see {@link ApproachStage}); the shortest
-         * turn-radius-feasible way there - overfly-and-loop or arc-around - is chosen automatically. A zero
-         * vector leaves the strike unconstrained.
+         * Strike the target from a commanded side: {@code (dirX, dirZ)} is the horizontal direction from the target
+         * toward where the missile should come in from ("attack from the west" = a westward vector).
          */
         public Builder attackFrom(double dirX, double dirZ) {
             double h = Math.sqrt(dirX * dirX + dirZ * dirZ);
@@ -2627,8 +2633,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Pick how the terminal attack trades speed for a steep dive when the preferred angle won't fit the
-         * turn radius (see {@link AttackProfile}). Default {@link AttackProfile#SPEED}.
+         * Pick how the terminal attack trades speed for a steep dive when the preferred angle won't fit the turn
+         * radius (see {@link AttackProfile}).
          */
         public Builder attackProfile(AttackProfile profile) {
             this.attackProfile = profile == null ? AttackProfile.SPEED : profile;
@@ -2636,9 +2642,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Ceiling (blocks) on how far out a directional strike joins its attack line (see
-         * {@link ApproachStage}). The join scales with range and is clamped up to this cap; default
-         * {@link #DEFAULT_APPROACH_JOIN_CAP}.
+         * Ceiling (blocks) on how far out a directional strike joins its attack line (see {@link ApproachStage}).
          */
         public Builder approachJoinCap(double cap) {
             this.approachJoinCap = cap;
@@ -2655,26 +2659,22 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         /**
          * Tint of the exhaust trail: the hot RGB (0xRRGGBB) the client-side plume fades from as it cools and
-         * dissipates. Default {@link #DEFAULT_EXHAUST_COLOR} (an orange rocket flame).
+         * dissipates.
          */
         public Builder exhaustColor(int rgb) {
             this.exhaustColor = rgb;
             return this;
         }
 
-        /**
-         * The looping flight sound this missile plays client-side. Register the {@link SoundEvent} with your mod
-         * and pass its id; unset (or an unknown id) keeps WF-B's default {@code missile_flight} loop.
-         */
+        /** The looping flight sound this missile plays client-side. */
         public Builder flightSound(ResourceLocation id) {
             this.flightSoundId = id;
             return this;
         }
 
         /**
-         * Distance in blocks at which this missile's flight loop fades to silence — and, since the audio is
-         * server-pushed independently of entity tracking, the radius the server broadcasts it to. Default
-         * {@link #DEFAULT_FLIGHT_SOUND_RANGE}. Raise it for a loitering drone you should hear from far off.
+         * Distance in blocks at which this missile's flight loop fades to silence, and, since the audio is
+         * server-pushed independently of entity tracking, the radius the server broadcasts it to.
          */
         public Builder flightSoundRange(double blocks) {
             this.flightSoundRange = blocks;
@@ -2688,55 +2688,43 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Added flight-loop pitch per block/tick of the missile's OWN speed — the engine "revs" as it flies
-         * faster. Default 0 keeps the pitch constant regardless of speed (the loitering-drone exception:
-         * only Doppler from relative motion then shifts it).
+         * Added flight-loop pitch per block/tick of the missile's OWN speed: the engine "revs" as it flies faster.
          */
         public Builder flightSoundSpeedPitch(double perBlockPerTick) {
             this.flightSoundSpeedPitch = perBlockPerTick;
             return this;
         }
 
-        /**
-         * How this missile responds to incoming damage, by {@link MissileDamageRegistry} id (e.g.
-         * {@code explosion_only} to shrug off everything but blasts). Register custom responses before build;
-         * {@code null} or an unknown id falls back to the standard take-damage-as-dealt response.
-         */
+        /** How this missile responds to incoming damage, by {@link MissileDamageRegistry} id (e.g. */
         public Builder damageResponse(ResourceLocation id) {
             this.damageResponseId = (id != null) ? id : MissileDamageRegistry.defaultId();
             return this;
         }
 
-        /**
-         * What this missile does when shot out of the sky (see {@link DownedAction}). Default {@link
-         * DownedAction#CRASH} — it falls and fizzles where it lands instead of air-bursting on the spot.
-         */
+        /** What this missile does when shot out of the sky (see {@link DownedAction}). */
         public Builder downedAction(DownedAction action) {
             this.downedAction = (action != null) ? action : DownedAction.CRASH;
             return this;
         }
 
         /**
-         * Start the missile already in the CRUISE phase (used when respawning a simulated missile
-         * that had long since finished its ascent).
+         * Start the missile already in the CRUISE phase (used when respawning a simulated missile that had long
+         * since finished its ascent).
          */
         public Builder startInCruise() {
             this.startInCruise = true;
             return this;
         }
 
-        /**
-         * Spawn already in the terminal ATTACK dive. Used by {@link RecursiveFrag} so split missilelets go
-         * straight into their attack run ("instant attack mode") instead of ascending/cruising first.
-         */
+        /** Spawn already in the terminal ATTACK dive. */
         public Builder startInAttack() {
             this.startInAttack = true;
             return this;
         }
 
         /**
-         * Number of recursive split generations (see {@link RecursiveFrag}); leave unset to take the
-         * warhead default ({@link RecursiveFrag#DEFAULT_DEPTH} for {@code recursive_frag}, else none).
+         * Number of recursive split generations (see {@link RecursiveFrag}); leave unset to take the warhead
+         * default ({@link RecursiveFrag#DEFAULT_DEPTH} for {@code recursive_frag}, else none).
          */
         public Builder splitDepth(int splitDepth) {
             this.splitDepth = splitDepth;
@@ -2744,8 +2732,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Group this missile into a fragmentation family (a non-zero id shared by all its descendants) so
-         * the family's members won't collide with each other (see {@link #canHitEntity}).
+         * Group this missile into a fragmentation family (a non-zero id shared by all its descendants) so the
+         * family's members won't collide with each other (see {@link #canHitEntity}).
          */
         public Builder swarmId(long swarmId) {
             this.swarmId = swarmId;
@@ -2753,8 +2741,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Mark this missile as the swarm commander: it flies the mission and the rest of its {@link #swarmId}
-         * hold formation on it (see {@link SwarmManager}). Exactly one member of a swarm should be commander.
+         * Mark this missile as the swarm commander: it flies the mission and the rest of its {@link #swarmId} hold
+         * formation on it (see {@link SwarmManager}).
          */
         public Builder commander(boolean commander) {
             this.commander = commander;
@@ -2762,8 +2750,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Stamp this missile with a launcher/control id (see {@link MissileDispenserBlockEntity}) so missiles
-         * fired from the same launcher treat each other as friendly and never collide.
+         * Stamp this missile with a launcher/control id (see {@link MissileDispenserBlockEntity}) so missiles fired
+         * from the same launcher treat each other as friendly and never collide.
          */
         public Builder controlId(UUID controlId) {
             this.controlId = controlId;
@@ -2771,9 +2759,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Stamp this missile with a WarForge faction/team id (see {@link WarforgeCompat}); missiles of the
-         * same / allied / truced faction are friendly. Usually the launching player's faction, or the faction
-         * whose land a launcher/battery sits on.
+         * Stamp this missile with a WarForge faction/team id (see {@link WarforgeCompat}); missiles of the same /
+         * allied / truced faction are friendly.
          */
         public Builder teamId(UUID teamId) {
             this.teamId = teamId;
@@ -2781,8 +2768,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Spawn with the warhead already armed (used when respawning a simulated missile that has long since
-         * flown clear of its launcher). A freshly launched missile leaves this off and arms by distance.
+         * Spawn with the warhead already armed (used when respawning a simulated missile that has long since flown
+         * clear of its launcher).
          */
         public Builder startArmed() {
             this.startArmed = true;
@@ -2798,9 +2785,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Make this an interceptor: it homes on another missile and resolves a kill by a random roll (see
-         * {@link #tryIntercept}) instead of a warhead. Forces the flight profile to all-{@code "intercept"}
-         * and launches already armed and cruising. Combine with {@link #lockTarget}/{@link #interceptMode}.
+         * Make this an interceptor: it homes on another missile and resolves a kill by a random roll (see {@link
+         * #tryIntercept}) instead of a warhead.
          */
         public Builder interceptor(boolean interceptor) {
             this.interceptor = interceptor;
@@ -2808,8 +2794,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Pick the interceptor targeting mode: {@code NEAREST} (closest hostile, re-acquired each tick) or
-         * {@code LOCK} (a specific UUID, set via {@link #lockTarget}).
+         * Pick the interceptor targeting mode: {@code NEAREST} (closest hostile, re-acquired each tick) or {@code
+         * LOCK} (a specific UUID, set via {@link #lockTarget}).
          */
         public Builder interceptMode(InterceptMode mode) {
             this.interceptMode = mode;
@@ -2826,8 +2812,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Per-interceptor kill probability rolled on closest approach; default
-         * {@link MissileSimConfig#DEFAULT_INTERCEPT_CHANCE}.
+         * Per-interceptor kill probability rolled on closest approach; default {@link
+         * MissileSimConfig#DEFAULT_INTERCEPT_CHANCE}.
          */
         public Builder interceptChance(float chance) {
             this.interceptChance = chance;
@@ -2835,8 +2821,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         }
 
         /**
-         * Load the tank: {@code type} of propellant and {@code ticks} of powered flight before it runs dry
-         * (after which the missile falls ballistically). Default {@link #DEFAULT_FUEL_TICKS} of SOLID fuel.
+         * Load the tank: {@code type} of propellant and {@code ticks} of powered flight before it runs dry (after
+         * which the missile falls ballistically).
          */
         public Builder fuel(FuelType type, int ticks) {
             this.fuelType = type;
@@ -2868,19 +2854,20 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             return this;
         }
 
-        /**
-         * Low-observable: make this missile invisible to automatic detection (only a manual UUID lock can
-         * engage it — see {@link MissileEntity#isStealth}).
-         */
-        public Builder stealth(boolean stealth) {
-            this.stealth = stealth;
+        /** Radar cross-section against a reference of 1.0. */
+        public Builder rcs(float rcs) {
+            this.rcs = Math.max(0.0f, rcs);
             return this;
         }
 
+        /** Low-observable, as a switch. */
+        public Builder stealth(boolean stealth) {
+            return rcs(stealth ? MissileSimConfig.STEALTH_RCS : 1.0f);
+        }
+
         /**
-         * Evasion (0..1): how often this missile shrugs off an interception attempt — the tier that lets a
-         * better missile escape interceptors more often (amplified in its terminal dive). See
-         * {@link MissileEntity#effectiveEvasion}.
+         * Evasion (0..1): how often this missile shrugs off an interception attempt, the tier that lets a better
+         * missile escape interceptors more often (amplified in its terminal dive).
          */
         public Builder evasion(float evasion) {
             this.evasion = evasion;
@@ -2889,8 +2876,8 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
 
         /**
          * Evasive maneuvering: when on, an evasion boost also jinks the missile off its course (a hard lateral
-         * break away from the interceptor) instead of only sprinting straight, making the dodge unpredictable
-         * and genuinely displacing it from the interceptor's lead. Needs {@link #evasion} to fire at all.
+         * break away from the interceptor) instead of only sprinting straight, making the dodge unpredictable and
+         * genuinely displacing it from the interceptor's lead.
          */
         public Builder evasiveManeuver(boolean evasiveManeuver) {
             this.evasiveManeuver = evasiveManeuver;
@@ -2900,6 +2887,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
         public MissileEntity build() {
             MissileEntity missile = new MissileEntity(this.type, this.level);
             missile.cruiseMode = this.cruiseMode;
+            missile.setMedium(this.medium);
             missile.cruiseAltitude = this.cruiseAltitude;
             missile.terrainClearance = this.terrainClearance;
             missile.explosionOffset = this.explosionOffset;
@@ -2922,9 +2910,6 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             missile.approachJoinCap = this.approachJoinCap;
             missile.fragmentCount = this.fragmentCount;
             missile.impactPreloadRadius = this.impactPreloadRadius;
-            // Recursive-frag payload + defaults so a "recursive_frag" missile picked from the dispenser GUI
-            // just works: it gets a split depth and, unless the launcher set one, an airburst altitude to
-            // split at. Non-recursive missiles are unaffected (depth 0, swarm 0).
             boolean recursive = RecursiveFrag.ID.equals(this.detonationId);
             missile.splitDepth = (this.splitDepth != null)
                     ? this.splitDepth
@@ -2981,7 +2966,7 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
             missile.acceleration = this.acceleration;
             missile.deceleration = this.deceleration;
             missile.designatedTargetId = this.designatedTargetId;
-            missile.stealth = this.stealth;
+            missile.rcs = this.rcs;
             missile.evasion = this.evasion;
             missile.evasiveManeuver = this.evasiveManeuver;
 
@@ -2992,17 +2977,10 @@ public class MissileEntity extends Projectile implements OBBEntity, IMissileList
                 missile.interceptChance = this.interceptChance;
             }
             if (this.interceptor) {
-                // Home in every phase, launched already armed (it can kill immediately, no arming-distance
-                // delay) and with no ground-attack terrain-follow. It starts in ASCEND so InterceptStage first
-                // boosts straight up clear of any silo/depression walls before homing (see InterceptStage);
-                // in the open that clear is satisfied almost at once, so reaction time is barely affected.
                 missile.ascentStageId = FlightStageRegistry.keyOf(InterceptStage.INSTANCE);
                 missile.cruiseStageId = FlightStageRegistry.keyOf(InterceptStage.INSTANCE);
                 missile.attackStageId = FlightStageRegistry.keyOf(InterceptStage.INSTANCE);
                 missile.rebuildFlightProfile();
-                // A fresh launch starts in ASCEND so it climbs clear of any silo/depression before homing; a
-                // rematerialized interceptor (startInCruise) is already airborne mid-intercept, so it keeps
-                // homing without a launch clear.
                 missile.phase = this.startInCruise ? Phase.CRUISE : Phase.ASCEND;
                 missile.armed = true;
             }

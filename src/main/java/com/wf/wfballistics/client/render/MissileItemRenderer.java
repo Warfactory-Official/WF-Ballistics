@@ -4,7 +4,7 @@ import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.math.Axis;
 import com.wf.wfballistics.ModModels;
-import com.wf.wfballistics.item.MissileItem;
+import com.wf.wfballistics.item.ModelledItem;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.BlockEntityWithoutLevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -16,13 +16,8 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 /**
- * Renders a {@link MissileItem} as the actual 3D missile model — the same baked OBJ the flying entity uses.
- * HBM-style: the model is scaled to stand in the item's unit space, and in the inventory it slowly spins on
- * its long axis so you can read the airframe.
- *
- * <p>The per-perspective placement (hand pose, GUI tilt, ground) comes from the item model's {@code display}
- * block (see {@code assets/.../models/item/missile_render_base.json}); here we only fit the mesh into that
- * unit space and add the spin.
+ * Renders a {@link ModelledItem} (a missile, a shell) as the actual 3D model: the same baked OBJ the flying entity
+ * uses.
  */
 public class MissileItemRenderer extends BlockEntityWithoutLevelRenderer {
 
@@ -43,10 +38,10 @@ public class MissileItemRenderer extends BlockEntityWithoutLevelRenderer {
     @Override
     public void renderByItem(ItemStack stack, ItemDisplayContext ctx, PoseStack pose,
                              MultiBufferSource buffer, int light, int overlay) {
-        if (!(stack.getItem() instanceof MissileItem missile)) {
+        if (!(stack.getItem() instanceof ModelledItem modelled)) {
             return;
         }
-        renderModel(missile.modelId(), stack, ctx, pose, buffer, light, overlay, RenderType.cutout());
+        renderModel(modelled.modelId(), stack, ctx, pose, buffer, light, overlay, RenderType.cutout());
     }
 
     public void renderModel(ResourceLocation modelId, ItemStack stack, ItemDisplayContext ctx, PoseStack pose,

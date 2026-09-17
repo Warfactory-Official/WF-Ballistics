@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "online=false": {
+      "model": "wfballistics:block/probe_radar"
+    },
+    "online=true": {
+      "model": "wfballistics:block/probe_radar_online"
+    }
+  }
+}

@@ -3,7 +3,7 @@ package com.wf.wfballistics.aef.nuke.util;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import net.minecraft.world.level.chunk.ChunkStatus;
+import net.minecraft.world.level.chunk.status.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 
@@ -34,10 +34,12 @@ public class SubChunkSnapshot {
     /**
      * Creates a SubChunkSnapshot.
      *
-     * @param level           The ServerLevel instance from which to retrieve the chunk.
-     * @param key             The SubChunkKey identifying the section.
-     * @param allowGeneration Whether to generate chunks. If false, attempting to retrieve a snapshot of a chunk that doesn't exist would return {@link SubChunkSnapshot#EMPTY}.
-     * @return A SubChunkSnapshot containing the palette and block data for the section, or {@link SubChunkSnapshot#EMPTY} if the region contains only air.
+     * @param level The ServerLevel instance from which to retrieve the chunk.
+     * @param key The SubChunkKey identifying the section.
+     * @param allowGeneration Whether to generate chunks. If false, attempting to retrieve a snapshot of a chunk
+     *      that doesn't exist would return {@link SubChunkSnapshot#EMPTY}.
+     * @return A SubChunkSnapshot containing the palette and block data for the section, or {@link
+     *      SubChunkSnapshot#EMPTY} if the region contains only air.
      */
     public static SubChunkSnapshot getSnapshot(ServerLevel level, SubChunkKey key, boolean allowGeneration) {
         LevelChunk chunk = allowGeneration

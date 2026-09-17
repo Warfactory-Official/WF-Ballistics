@@ -11,16 +11,11 @@ import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.world.entity.*;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.fml.DistExecutor;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.List;
 
 public class FireLingeringEntity extends Entity {
-
-    public static final int TYPE_DIESEL = 0;
-    public static final int TYPE_PHOSPHORUS = 1;
 
     private static final EntityDataAccessor<Float> WIDTH = SynchedEntityData.defineId(FireLingeringEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> HEIGHT = SynchedEntityData.defineId(FireLingeringEntity.class, EntityDataSerializers.FLOAT);
@@ -38,7 +33,7 @@ public class FireLingeringEntity extends Entity {
     }
 
     public static FireLingeringEntity spawn(Level level, double x, double y, double z,
-                                            float width, float height, int duration, int type) {
+                                            float width, float height, int duration, FireType type) {
         FireLingeringEntity fire = new FireLingeringEntity(ModEntities.FIRE_LINGERING.get(), level);
         fire.setPos(x, y, z);
         fire.setArea(width, height);
@@ -49,7 +44,7 @@ public class FireLingeringEntity extends Entity {
     }
 
     public static FireLingeringEntity spawnBox(Level level, double minX, double minY, double minZ,
-                                               float sizeX, float sizeY, float sizeZ, int duration, int type) {
+                                               float sizeX, float sizeY, float sizeZ, int duration, FireType type) {
         FireLingeringEntity fire = new FireLingeringEntity(ModEntities.FIRE_LINGERING.get(), level);
         fire.setDuration(duration);
         fire.setType(type);
@@ -60,13 +55,13 @@ public class FireLingeringEntity extends Entity {
     }
 
     @Override
-    protected void defineSynchedData() {
-        this.entityData.define(TYPE, 0);
-        this.entityData.define(WIDTH, 1F);
-        this.entityData.define(HEIGHT, 1F);
-        this.entityData.define(BOX_X, 0F);
-        this.entityData.define(BOX_Y, 0F);
-        this.entityData.define(BOX_Z, 0F);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(TYPE, 0);
+        builder.define(WIDTH, 1F);
+        builder.define(HEIGHT, 1F);
+        builder.define(BOX_X, 0F);
+        builder.define(BOX_Y, 0F);
+        builder.define(BOX_Z, 0F);
     }
 
     public boolean isBox() {
@@ -93,13 +88,13 @@ public class FireLingeringEntity extends Entity {
         return this;
     }
 
-    public FireLingeringEntity setType(int type) {
-        this.entityData.set(TYPE, type);
+    public FireLingeringEntity setType(FireType type) {
+        this.entityData.set(TYPE, type.id());
         return this;
     }
 
-    public int getVariant() {
-        return this.entityData.get(TYPE);
+    public FireType getFireType() {
+        return FireType.byId(this.entityData.get(TYPE));
     }
 
     @Override
@@ -117,8 +112,8 @@ public class FireLingeringEntity extends Entity {
         super.tick();
 
         if (!level().isClientSide) {
-            if (getVariant() == TYPE_DIESEL && this.isInWater()) {
-                this.kill(); //Only phosphorus lingers in water
+            if (!getFireType().survivesWater && this.isInWater()) {
+                this.kill();
             }
             if (this.tickCount >= this.maxAge) {
                 discard();
@@ -130,20 +125,18 @@ public class FireLingeringEntity extends Entity {
                 if (e instanceof LivingEntity living) {
                     applyFire(living);
                 } else {
-                    e.setSecondsOnFire(4);
+                    e.igniteForSeconds(4);
                 }
             }
         } else {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> FireClientFX.tick(this));
+            // isClientSide is already true here; call directly (DistExecutor is gone in NeoForge).
+            FireClientFX.tick(this);
         }
     }
 
     private void applyFire(LivingEntity living) {
-        if (getVariant() == TYPE_PHOSPHORUS) {
-            WFFire.ignite(living, FireType.PHOSPHORUS, 300);
-        } else {
-            WFFire.ignite(living, FireType.NORMAL, 60);
-        }
+        FireType type = getFireType();
+        WFFire.ignite(living, type, type.burnTicks);
     }
 
     @Override

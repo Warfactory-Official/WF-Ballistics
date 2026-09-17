@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "wfballistics:block/glyphid_spawner"
+    }
+  }
+}

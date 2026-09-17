@@ -21,7 +21,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.client.extensions.common.IClientItemExtensions;
+import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -29,7 +29,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 
 
-public class MissileItem extends Item {
+public class MissileItem extends Item implements ModelledItem {
 
     private static final double AIM_RANGE = 256.0;
     private static final int LAUNCH_COOLDOWN = 20;
@@ -104,6 +104,7 @@ public class MissileItem extends Item {
         return this.preset;
     }
 
+    @Override
     public ResourceLocation modelId() {
         return this.preset.modelId();
     }
@@ -118,7 +119,7 @@ public class MissileItem extends Item {
             Vec3 target = aimTarget(level, player);
             MissileEntity missile = preset.build(level, target);
             missile.setControlId(player.getUUID());
-            missile.setTeamId(WarforgeCompat.factionOfPlayer(player.getUUID()));
+            missile.setTeamId(com.wf.wfballistics.recon.ReconOwners.owningEntity(player));
             if (preset.isInterceptor()) {
                 MissileEntity locked = lockCandidate(level, player);
                 if (locked != null) {
@@ -143,7 +144,7 @@ public class MissileItem extends Item {
     }
 
     @Override
-    public void appendHoverText(ItemStack stack, @Nullable Level level, List<Component> tooltip, TooltipFlag flag) {
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context, List<Component> tooltip, TooltipFlag flag) {
         tooltip.add(kv("Airframe", preset.modelId().getPath(), ChatFormatting.WHITE));
         tooltip.add(kv("Warhead", preset.warheadId().getPath(), ChatFormatting.WHITE));
         if (preset.isInterceptor()) {

@@ -1,46 +1,78 @@
 package com.wf.wfballistics;
 
+import com.wf.wfballistics.anim.Rotor;
+import com.wf.wfballistics.anim.Rotors;
 import dev.engine_room.flywheel.lib.model.baked.PartialModel;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class ModModels {
 
+    private static final Map<ResourceLocation, PartialModel> PROPS = new LinkedHashMap<>();
+
     // Flat billboard quad instanced for GPU-batched particle clouds (see client.flywheel).
-    public static final PartialModel INSTANCED_QUAD = PartialModel.of(
-            new ResourceLocation(WFBallistics.MODID, "effect/instanced_quad")
-    );
+    public static final PartialModel INSTANCED_QUAD = prop("effect/instanced_quad");
     // Cremation skeleton bones, instanced per body part (see client.flywheel.SkeletonBoneEffect).
-    public static final PartialModel BONE_SKULL = PartialModel.of(
-            new ResourceLocation(WFBallistics.MODID, "effect/bone_skull")
-    );
-    public static final PartialModel BONE_TORSO = PartialModel.of(
-            new ResourceLocation(WFBallistics.MODID, "effect/bone_torso")
-    );
-    public static final PartialModel BONE_LIMB = PartialModel.of(
-            new ResourceLocation(WFBallistics.MODID, "effect/bone_limb")
-    );
+    public static final PartialModel BONE_SKULL = prop("effect/bone_skull");
+    public static final PartialModel BONE_TORSO = prop("effect/bone_torso");
+    public static final PartialModel BONE_LIMB = prop("effect/bone_limb");
+    public static final PartialModel CRATE = prop("entity/crate");
+    public static final PartialModel BOMBLET = prop("entity/bomblet");
     private static final Map<ResourceLocation, PartialModel> MISSILES = new HashMap<>();
-    // Baked models for spinning parts, keyed by the rotor mesh's model location (see MissileModels.Rotor).
-    private static final Map<ResourceLocation, PartialModel> ROTORS = new HashMap<>();
+    private static final Map<ResourceLocation, PartialModel> PARTS = new LinkedHashMap<>();
 
     static {
         for (ResourceLocation id : MissileModels.ids()) {
             MISSILES.put(id, PartialModel.of(MissileModels.model(id)));
-            for (MissileModels.Rotor rotor : MissileModels.rotors(id)) {
-                ROTORS.computeIfAbsent(rotor.model(), PartialModel::of);
+            // A missile's only moving parts are its props, so its rotor list is its part list.
+            for (Rotor rotor : Rotors.of(id)) {
+                bakePart(rotor.model());
             }
         }
     }
 
+    private static void bakePart(ResourceLocation model) {
+        PARTS.computeIfAbsent(model, PartialModel::of);
+    }
+
+    /** Declares a standalone model and remembers it, so the model gallery can enumerate what is here. */
+    private static PartialModel prop(String path) {
+        ResourceLocation id = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, path);
+        PartialModel partial = PartialModel.of(id);
+        PROPS.put(id, partial);
+        return partial;
+    }
+
+    /**
+     * @return the loose models above (the billboards, the bones, the crate, the bomblet), by model id,
+     *      in the order they are declared. For the model gallery; nothing in the game looks a prop up by id.
+     */
+    public static Map<ResourceLocation, PartialModel> props() {
+        return Collections.unmodifiableMap(PROPS);
+    }
+
+    /** @return every moving part baked for a missile, by model id, in registration order. */
+    public static Map<ResourceLocation, PartialModel> parts() {
+        return Collections.unmodifiableMap(PARTS);
+    }
+
+    /**
+     * @return whether this missile's <em>own</em> model baked.
+     */
+    public static boolean baked(ResourceLocation id) {
+        return usableBaked(MISSILES.get(id)) != null;
+    }
+
     /**
      * @return the baked model for a missile id, falling back to {@link MissileModels#DEFAULT} when the id is
-     * unknown or its own model failed to bake (missing/unbaked).
+     *      unknown or its own model failed to bake (missing/unbaked).
      */
     public static PartialModel missile(ResourceLocation id) {
         PartialModel partial = MISSILES.get(id);
@@ -70,10 +102,10 @@ public class ModModels {
     }
 
     /**
-     * @return the baked model for a spinning part, or null if it wasn't registered.
+     * @return the baked model for a moving part (rotor disc, gripper jaw) or null if it wasn't registered.
      */
-    public static PartialModel rotor(ResourceLocation model) {
-        return ROTORS.get(model);
+    public static PartialModel part(ResourceLocation model) {
+        return PARTS.get(model);
     }
 
     public static void init() {

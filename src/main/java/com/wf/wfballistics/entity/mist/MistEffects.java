@@ -11,18 +11,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The lookup that decides what a fluid does as mist. Two ways to register, mirroring the "registry or tags"
- * choice:
- * <ul>
- *   <li>{@link #register(Fluid, MistEffect)} — bind a specific fluid (used for the built-in gases).</li>
- *   <li>{@link #register(TagKey, MistEffect)} — bind a whole {@code #namespace:tag} of fluids, so packs and
- *       other mods can opt their fluids into a behaviour without touching code.</li>
- * </ul>
- *
- * <p>{@link #get} resolves exact-fluid bindings first, then falls back to tag bindings in registration order.
- * Call {@link #bootstrap()} once during common setup (it runs on both sides so the client can tint mist).
- */
+/** The lookup that decides what a fluid does as mist. */
 public final class MistEffects {
 
     private static final Map<Fluid, MistEffect> BY_FLUID = new HashMap<>();
@@ -62,5 +51,6 @@ public final class MistEffects {
         bootstrapped = true;
         register(WFFluids.PHOSGENE.get(), new PhosgeneMistEffect());
         register(WFFluids.MUSTARD_GAS.get(), new MustardGasMistEffect());
+        register(WFFluids.GLYPHID_ACID.get(), new GlyphidAcidMistEffect());
     }
 }

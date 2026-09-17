@@ -21,11 +21,10 @@ public final class FireUtil {
     }
 
     public static int spawn(Level level, Vec3 center) {
-        return spawn(level, center, DEFAULT_RADIUS, DEFAULT_HEIGHT, DEFAULT_LINGER, FireLingeringEntity.TYPE_DIESEL);
+        return spawn(level, center, DEFAULT_RADIUS, DEFAULT_HEIGHT, DEFAULT_LINGER, FireType.NORMAL);
     }
 
-    //TODO:Enumify fire
-    public static int spawn(Level level, Vec3 center, int radius, float fireHeight, int tickLinger, int type) {
+    public static int spawn(Level level, Vec3 center, int radius, float fireHeight, int tickLinger, FireType type) {
         if (level.isClientSide) {
             return 0;
         }

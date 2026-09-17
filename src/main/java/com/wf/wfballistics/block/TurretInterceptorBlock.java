@@ -1,5 +1,8 @@
 package com.wf.wfballistics.block;
 
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import com.wf.wfballistics.block.entity.TurretInterceptorBlockEntity;
 import com.wf.wfballistics.block.entity.TurretInterceptorNormalBlockEntity;
 import com.wf.wfballistics.block.entity.TurretInterceptorSupersonicBlockEntity;
@@ -14,17 +17,26 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Auto-defense interceptor battery block: hosts a {@link TurretInterceptorBlockEntity} that automatically
- * launches guided interceptor missiles at nearby hostile missiles. Passive/automatic — no player interaction.
- * The {@code supersonic} flag selects the target class + interceptor (see the block entity).
+ * Auto-defense interceptor battery block: hosts a {@link TurretInterceptorBlockEntity} that automatically launches
+ * guided interceptor missiles at nearby hostile missiles.
  */
 public class TurretInterceptorBlock extends BaseEntityBlock {
+
+    public static final MapCodec<TurretInterceptorBlock> CODEC = RecordCodecBuilder.mapCodec(inst -> inst.group(
+            propertiesCodec(),
+            Codec.BOOL.fieldOf("supersonic").forGetter(b -> b.supersonic)
+    ).apply(inst, TurretInterceptorBlock::new));
 
     private final boolean supersonic;
 
     public TurretInterceptorBlock(Properties props, boolean supersonic) {
         super(props);
         this.supersonic = supersonic;
+    }
+
+    @Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
     }
 
     @Nullable

@@ -1,0 +1,24 @@
+{
+    "targets": [ "wf_a", "wf_b" ],
+    "passes": [
+        {
+            "name": "wfballistics:wf_lowlight",
+            "intarget": "minecraft:main",
+            "outtarget": "wf_a"
+        },
+        {
+            "name": "wfballistics:wf_macroblock",
+            "intarget": "wf_a",
+            "outtarget": "wf_b"
+        },
+        {
+            "name": "wfballistics:wf_video",
+            "intarget": "wf_b",
+            "outtarget": "minecraft:main",
+            "uniforms": [
+                { "name": "Saturation", "values": [ 1.0 ] },
+                { "name": "NoiseFloor", "values": [ 0.09 ] }
+            ]
+        }
+    ]
+}

@@ -14,19 +14,13 @@ import net.minecraft.world.entity.projectile.ProjectileUtil;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.api.distmarker.Dist;
-import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
 
 /**
- * A bomblet: a small, tumbling orange fragment flung out by a fragmentation warhead (see
- * {@link com.wf.wfballistics.util.FragmentationUtil}). It's a gravity-affected projectile that carries a
- * pluggable {@link WarheadRegistry.Detonation} — the exact same warhead interface
- * {@link com.wf.wfballistics.MissileEntity} uses — and goes off on the first thing it hits or when its fuse
- * runs out, whichever comes first.
- *
- * <p>Because a burst spawns many of these at once, the payload is intentionally light: a small radius kill and
- * a compact FX puff by default (see {@link BombletWarhead}). Pick the warhead by registered id so it survives
- * save/load, exactly like the missile's warheads.
+ * A bomblet: a small, tumbling orange fragment flung out by a fragmentation warhead (see {@link
+ * com.wf.wfballistics.util.FragmentationUtil}).
  */
 public class BombletEntity extends Projectile implements WarheadCarrier {
 
@@ -46,10 +40,10 @@ public class BombletEntity extends Projectile implements WarheadCarrier {
     }
 
     /**
-     * @param velocity     initial launch vector (blocks/tick); gravity and drag take over from here
-     * @param detonation   warhead fired on impact / fuse-out
+     * @param velocity initial launch vector (blocks/tick); gravity and drag take over from here
+     * @param detonation warhead fired on impact / fuse-out
      * @param detonationId registered id for that warhead so it persists across save/load
-     * @param fuse         ticks before self-detonation (<= 0 disables the fuse)
+     * @param fuse ticks before self-detonation (<= 0 disables the fuse)
      */
     public BombletEntity(Level level, Vec3 pos, Vec3 velocity, WarheadRegistry.Detonation detonation, ResourceLocation detonationId, int fuse) {
         this(ModEntities.BOMBLET.get(), level);
@@ -74,7 +68,7 @@ public class BombletEntity extends Projectile implements WarheadCarrier {
 
     @Override
     public Vec3 angle() {
-        // Travel direction at detonation — the jet axis for a directional warhead. Falls back to straight down.
+        // Travel direction at detonation: the jet axis for a directional warhead. Falls back to straight down.
         Vec3 v = this.getDeltaMovement();
         return v.lengthSqr() < 1.0e-8 ? new Vec3(0.0, -1.0, 0.0) : v.normalize();
     }
@@ -123,8 +117,6 @@ public class BombletEntity extends Projectile implements WarheadCarrier {
 
     @Override
     protected boolean canHitEntity(Entity entity) {
-        // Bomblets pass harmlessly through one another so a dense burst doesn't chain-detonate at the muzzle,
-        // and through their owner so a point-blank burst doesn't detonate on the firer at spawn.
         if (entity instanceof BombletEntity || entity == this.getOwner()) {
             return false;
         }
@@ -150,9 +142,7 @@ public class BombletEntity extends Projectile implements WarheadCarrier {
     }
 
     @Override
-    protected void defineSynchedData() {
-        // No synced state: position/velocity ride the vanilla spawn + tracker packets, and the cube is a
-        // fixed-colour render.
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
     }
 
     @Override

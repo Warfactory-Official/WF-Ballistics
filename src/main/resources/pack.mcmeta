@@ -1,8 +1,12 @@
 {
   "pack": {
     "description": {
-      "text": "${mod_id} resources"
+      "text": "wfballistics resources"
     },
-    "pack_format": 15
+    "pack_format": 34,
+    "supported_formats": {
+      "min_inclusive": 34,
+      "max_inclusive": 48
+    }
   }
 }

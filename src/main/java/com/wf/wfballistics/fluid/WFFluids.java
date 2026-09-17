@@ -4,35 +4,39 @@ import com.wf.wfballistics.WFBallistics;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BucketItem;
 import net.minecraft.world.item.Item;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.item.Items;
-import net.minecraftforge.client.extensions.common.IClientFluidTypeExtensions;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.fluids.FluidType;
-import net.minecraftforge.fluids.ForgeFlowingFluid;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
+import net.neoforged.neoforge.fluids.BaseFlowingFluid;
+import net.neoforged.neoforge.fluids.FluidType;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.NeoForgeRegistries;
 
 import java.util.function.Consumer;
 
 public final class WFFluids {
 
     public static final DeferredRegister<FluidType> FLUID_TYPES =
-            DeferredRegister.create(ForgeRegistries.Keys.FLUID_TYPES, WFBallistics.MODID);
+            DeferredRegister.create(NeoForgeRegistries.Keys.FLUID_TYPES, WFBallistics.MODID);
     public static final DeferredRegister<net.minecraft.world.level.material.Fluid> FLUIDS =
-            DeferredRegister.create(ForgeRegistries.FLUIDS, WFBallistics.MODID);
+            DeferredRegister.create(Registries.FLUID, WFBallistics.MODID);
     public static final DeferredRegister<Item> ITEMS =
-            DeferredRegister.create(ForgeRegistries.ITEMS, WFBallistics.MODID);
+            DeferredRegister.create(Registries.ITEM, WFBallistics.MODID);
 
     //Phosgene
-    public static final RegistryObject<FluidType> PHOSGENE_TYPE =
+    public static final DeferredHolder<FluidType, FluidType> PHOSGENE_TYPE =
             FLUID_TYPES.register("phosgene", () -> new GasFluidType(0xCFE0C0));
     // Mustard gas
-    public static final RegistryObject<FluidType> MUSTARD_GAS_TYPE =
+    public static final DeferredHolder<FluidType, FluidType> MUSTARD_GAS_TYPE =
             FLUID_TYPES.register("mustard_gas", () -> new GasFluidType(0xB8A038));
-    public static final RegistryObject<FluidType> KEROSENE_TYPE =
-            FLUID_TYPES.register("kerosene", KeroseneFluidType::new);    public static final RegistryObject<ForgeFlowingFluid> PHOSGENE =
-            FLUIDS.register("phosgene", () -> new ForgeFlowingFluid.Source(WFFluids.PHOSGENE_PROPS));
+    public static final DeferredHolder<FluidType, FluidType> KEROSENE_TYPE =
+            FLUID_TYPES.register("kerosene", KeroseneFluidType::new);
+    // Glyphid acid
+    public static final DeferredHolder<FluidType, FluidType> GLYPHID_ACID_TYPE =
+            FLUID_TYPES.register("glyphid_acid", () -> new GasFluidType(0x8CD836));    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> PHOSGENE =
+            FLUIDS.register("phosgene", () -> new BaseFlowingFluid.Source(WFFluids.PHOSGENE_PROPS));
 
     private WFFluids() {
     }
@@ -41,13 +45,13 @@ public final class WFFluids {
         FLUID_TYPES.register(modBus);
         FLUIDS.register(modBus);
         ITEMS.register(modBus);
-    }    public static final RegistryObject<ForgeFlowingFluid> FLOWING_PHOSGENE =
-            FLUIDS.register("flowing_phosgene", () -> new ForgeFlowingFluid.Flowing(WFFluids.PHOSGENE_PROPS));
+    }    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>FLOWING_PHOSGENE =
+            FLUIDS.register("flowing_phosgene", () -> new BaseFlowingFluid.Flowing(WFFluids.PHOSGENE_PROPS));
 
     public static class GasFluidType extends FluidType {
 
-        private static final ResourceLocation STILL = new ResourceLocation("block/water_still");
-        private static final ResourceLocation FLOW = new ResourceLocation("block/water_flow");
+        private static final ResourceLocation STILL = ResourceLocation.withDefaultNamespace("block/water_still");
+        private static final ResourceLocation FLOW = ResourceLocation.withDefaultNamespace("block/water_flow");
 
         private final int tint;
 
@@ -89,8 +93,8 @@ public final class WFFluids {
 
     public static class KeroseneFluidType extends FluidType {
 
-        private static final ResourceLocation STILL = new ResourceLocation("block/water_still");
-        private static final ResourceLocation FLOW = new ResourceLocation("block/water_flow");
+        private static final ResourceLocation STILL = ResourceLocation.withDefaultNamespace("block/water_still");
+        private static final ResourceLocation FLOW = ResourceLocation.withDefaultNamespace("block/water_flow");
         private static final int TINT = 0xC8A64B; // amber
 
         public KeroseneFluidType() {
@@ -121,30 +125,31 @@ public final class WFFluids {
                 }
             });
         }
-    }    public static final ForgeFlowingFluid.Properties PHOSGENE_PROPS =
-            new ForgeFlowingFluid.Properties(PHOSGENE_TYPE, PHOSGENE, FLOWING_PHOSGENE);
+    }    public static final BaseFlowingFluid.Properties PHOSGENE_PROPS =
+            new BaseFlowingFluid.Properties(PHOSGENE_TYPE, PHOSGENE, FLOWING_PHOSGENE);
 
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>MUSTARD_GAS =
+            FLUIDS.register("mustard_gas", () -> new BaseFlowingFluid.Source(WFFluids.MUSTARD_GAS_PROPS));
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>FLOWING_MUSTARD_GAS =
+            FLUIDS.register("flowing_mustard_gas", () -> new BaseFlowingFluid.Flowing(WFFluids.MUSTARD_GAS_PROPS));
+    public static final BaseFlowingFluid.Properties MUSTARD_GAS_PROPS =
+            new BaseFlowingFluid.Properties(MUSTARD_GAS_TYPE, MUSTARD_GAS, FLOWING_MUSTARD_GAS);
 
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> GLYPHID_ACID =
+            FLUIDS.register("glyphid_acid", () -> new BaseFlowingFluid.Source(WFFluids.GLYPHID_ACID_PROPS));
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> FLOWING_GLYPHID_ACID =
+            FLUIDS.register("flowing_glyphid_acid", () -> new BaseFlowingFluid.Flowing(WFFluids.GLYPHID_ACID_PROPS));
+    public static final BaseFlowingFluid.Properties GLYPHID_ACID_PROPS =
+            new BaseFlowingFluid.Properties(GLYPHID_ACID_TYPE, GLYPHID_ACID, FLOWING_GLYPHID_ACID);
 
-    public static final RegistryObject<ForgeFlowingFluid> MUSTARD_GAS =
-            FLUIDS.register("mustard_gas", () -> new ForgeFlowingFluid.Source(WFFluids.MUSTARD_GAS_PROPS));
-    public static final RegistryObject<ForgeFlowingFluid> FLOWING_MUSTARD_GAS =
-            FLUIDS.register("flowing_mustard_gas", () -> new ForgeFlowingFluid.Flowing(WFFluids.MUSTARD_GAS_PROPS));
-    public static final ForgeFlowingFluid.Properties MUSTARD_GAS_PROPS =
-            new ForgeFlowingFluid.Properties(MUSTARD_GAS_TYPE, MUSTARD_GAS, FLOWING_MUSTARD_GAS);
-
-
-
-    public static final RegistryObject<ForgeFlowingFluid> KEROSENE =
-            FLUIDS.register("kerosene", () -> new ForgeFlowingFluid.Source(WFFluids.KEROSENE_PROPS));
-    public static final RegistryObject<ForgeFlowingFluid> FLOWING_KEROSENE =
-            FLUIDS.register("flowing_kerosene", () -> new ForgeFlowingFluid.Flowing(WFFluids.KEROSENE_PROPS));
-    public static final RegistryObject<Item> KEROSENE_BUCKET =
-            ITEMS.register("kerosene_bucket", () -> new BucketItem(KEROSENE,
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>KEROSENE =
+            FLUIDS.register("kerosene", () -> new BaseFlowingFluid.Source(WFFluids.KEROSENE_PROPS));
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>FLOWING_KEROSENE =
+            FLUIDS.register("flowing_kerosene", () -> new BaseFlowingFluid.Flowing(WFFluids.KEROSENE_PROPS));
+    public static final DeferredHolder<Item, Item> KEROSENE_BUCKET =
+            ITEMS.register("kerosene_bucket", () -> new BucketItem(KEROSENE.get(),
                     new Item.Properties().craftRemainder(Items.BUCKET).stacksTo(1)));
-    public static final ForgeFlowingFluid.Properties KEROSENE_PROPS =
-            new ForgeFlowingFluid.Properties(KEROSENE_TYPE, KEROSENE, FLOWING_KEROSENE).bucket(KEROSENE_BUCKET);
-
-
+    public static final BaseFlowingFluid.Properties KEROSENE_PROPS =
+            new BaseFlowingFluid.Properties(KEROSENE_TYPE, KEROSENE, FLOWING_KEROSENE).bucket(KEROSENE_BUCKET);
 
 }

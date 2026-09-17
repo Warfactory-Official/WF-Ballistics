@@ -1,0 +1,49 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "minecraft:block/polished_deepslate",
+    "body": "minecraft:block/polished_deepslate",
+    "lens": "minecraft:block/black_concrete"
+  },
+  "elements": [
+    {
+      "__comment": "housing, against the wall behind the lens",
+      "from": [5, 5, 9],
+      "to": [11, 11, 16],
+      "faces": {
+        "north": { "texture": "#body" },
+        "south": { "texture": "#body" },
+        "east":  { "texture": "#body" },
+        "west":  { "texture": "#body" },
+        "up":    { "texture": "#body" },
+        "down":  { "texture": "#body" }
+      }
+    },
+    {
+      "__comment": "barrel, pointing along FACING",
+      "from": [6, 6, 6],
+      "to": [10, 10, 9],
+      "faces": {
+        "north": { "texture": "#lens" },
+        "south": { "texture": "#lens" },
+        "east":  { "texture": "#lens" },
+        "west":  { "texture": "#lens" },
+        "up":    { "texture": "#lens" },
+        "down":  { "texture": "#lens" }
+      }
+    },
+    {
+      "__comment": "mounting bracket",
+      "from": [7, 11, 12],
+      "to": [9, 14, 15],
+      "faces": {
+        "north": { "texture": "#body" },
+        "south": { "texture": "#body" },
+        "east":  { "texture": "#body" },
+        "west":  { "texture": "#body" },
+        "up":    { "texture": "#body" },
+        "down":  { "texture": "#body" }
+      }
+    }
+  ]
+}

@@ -1,9 +1,12 @@
 plugins {
+    id 'java-library'
     id 'eclipse'
     id 'idea'
     id 'maven-publish'
-    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
-    id 'org.spongepowered.mixin' version '0.7.+'
+    // ModDevGradle 2: NeoForge's own single-version build plugin. Replaces ForgeGradle +
+    // the SpongePowered MixinGradle plugin (both removed: NeoForge bundles Mixin/MixinExtras and
+    // uses MojMap at runtime, so no reobf/refmap step is needed).
+    id 'net.neoforged.moddev' version '2.0.143'
 }
 
 version = mod_version
@@ -13,16 +16,14 @@ base {
     archivesName = mod_id
 }
 
-// Mojang ships Java 17 to end users in 1.18+, so your mod should target Java 17.
-java.toolchain.languageVersion = JavaLanguageVersion.of(17)
-
-jarJar.enable()
+// Mojang ships Java 21 to end users in 1.21.1, so this mod targets Java 21.
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
 println "Java: ${System.getProperty 'java.version'}, JVM: ${System.getProperty 'java.vm.version'} (${System.getProperty 'java.vendor'}), Arch: ${System.getProperty 'os.arch'}"
 
-// MC 1.20.1 (LWJGL 3.3.1) bundles OpenAL Soft 1.21.1, which has no PipeWire backend and garbles
-// audio on most launches on PipeWire systems. Prefer the system OpenAL Soft (native PipeWire
-// backend) when installed. No-ops on Windows/macOS or when absent, so it is safe for other builds.
+// MC bundles an OpenAL Soft with no PipeWire backend, which garbles audio on most PipeWire systems.
+// Prefer the system OpenAL Soft (native PipeWire backend) when installed. No-ops on Windows/macOS or
+// when absent, so it is safe for other builds. Wired into the client run below.
 def systemOpenAl = [
         '/usr/lib/libopenal.so.1',
         '/usr/lib64/libopenal.so.1',
@@ -33,273 +34,332 @@ if (systemOpenAl != null) {
     logger.lifecycle "OpenAL: overriding bundled LWJGL native with system ${systemOpenAl}"
 }
 
-minecraft {
-    // The mappings can be changed at any time and must be in the following format.
-    // Channel:   Version:
-    // official   MCVersion             Official field/method names from Mojang mapping files
-    // parchment  YYYY.MM.DD-MCVersion  Open community-sourced parameter names and javadocs layered on top of official
-    //
-    // You must be aware of the Mojang license when using the 'official' or 'parchment' mappings.
-    // See more information here: https://github.com/MinecraftForge/MCPConfig/blob/master/Mojang.md
-    //
-    // Parchment is an unofficial project maintained by ParchmentMC, separate from MinecraftForge
-    // Additional setup is needed to use their mappings: https://parchmentmc.org/docs/getting-started
-    //
-    // Use non-default mappings at your own risk. They may not always work.
-    // Simply re-run your setup task after changing the mappings to update your workspace.
-    mappings channel: mapping_channel, version: mapping_version
-
-    // When true, this property will have all Eclipse/IntelliJ IDEA run configurations run the "prepareX" task for the given run configuration before launching the game.
-    // In most cases, it is not necessary to enable.
-    // enableEclipsePrepareRuns = true
-    // enableIdeaPrepareRuns = true
-
-    // This property allows configuring Gradle's ProcessResources task(s) to run on IDE output locations before launching the game.
-    // It is REQUIRED to be set to true for this template to function.
-    // See https://docs.gradle.org/current/dsl/org.gradle.language.jvm.tasks.ProcessResources.html
-    copyIdeResources = true
-
-    // When true, this property will add the folder name of all declared run configurations to generated IDE run configurations.
-    // The folder name can be set on a run configuration using the "folderName" property.
-    // By default, the folder name of a run configuration is the name of the Gradle project containing it.
-    // generateRunFolders = true
-
-    // This property enables access transformers for use in development.
-    // They will be applied to the Minecraft artifact.
-    // The access transformer file can be anywhere in the project.
-    // However, it must be at "META-INF/accesstransformer.cfg" in the final mod jar to be loaded by Forge.
-    // This default location is a best practice to automatically put the file in the right place in the final jar.
-    // See https://docs.minecraftforge.net/en/latest/advanced/accesstransformers/ for more information.
-    // accessTransformer = file('src/main/resources/META-INF/accesstransformer.cfg')
-
-    // Default run configurations.
-    // These can be tweaked, removed, or duplicated as needed.
-    runs {
-        // applies to all the run configs below
-        configureEach {
-            workingDirectory project.file('run')
-
-            // Recommended logging data for a userdev environment
-            // The markers can be added/remove as needed separated by commas.
-            // "SCAN": For mods scan.
-            // "REGISTRIES": For firing of registry events.
-            // "REGISTRYDUMP": For getting the contents of all registries.
-            property 'forge.logging.markers', 'REGISTRIES'
-
-            // Recommended logging level for the console
-            // You can set various levels here.
-            // Please read: https://stackoverflow.com/questions/2031163/when-to-use-the-different-log-levels
-            property 'forge.logging.console.level', 'debug'
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
-        }
-
-        client {
-            // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
-            property 'forge.enabledGameTestNamespaces', mod_id
-
-            if (systemOpenAl != null) {
-                property 'org.lwjgl.openal.libname', systemOpenAl.absolutePath
-            }
-
-            // Required for flywheel
-            property 'mixin.env.remapRefMap', 'true'
-            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
-        }
-
-        server {
-            property 'forge.enabledGameTestNamespaces', mod_id
-            args '--nogui'
-        }
-
-        // This run config launches GameTestServer and runs all registered gametests, then exits.
-        // By default, the server will crash when no gametests are provided.
-        // The gametest system is also enabled by default for other run configs under the /test command.
-        gameTestServer {
-            property 'forge.enabledGameTestNamespaces', mod_id
-        }
-
-        data {
-            // example of overriding the workingDirectory set in configureEach above
-            workingDirectory project.file('run-data')
-
-            // Specify the modid for data generation, where to output the resulting resource, and where to look for existing resources.
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-        }
-    }
+sourceSets.main.resources {
+    // Include resources generated by data generators.
+    srcDir 'src/generated/resources'
+    // NOTE: assets/wfballistics/raw_models/**/*.obj IS referenced at runtime by the neoforge:obj model loader
+    // (see the missile model JSONs), so it must ship, so it is NOT excluded here.
+    // Dev-only authoring sources that are never loaded:
+    exclude '**/*.bbmodel'
+    exclude 'src/generated/**/.cache'
 }
 
-// Include resources generated by data generators.
-sourceSets.main.resources { srcDir 'src/generated/resources' }
-
 repositories {
-    // Put repositories for dependencies here
-    // ForgeGradle automatically adds the Forge maven and Maven Central for you
-
-    // If you have mod jar dependencies in ./libs, you can declare them as a repository like so.
-    // See https://docs.gradle.org/current/userguide/declaring_repositories.html#sub:flat_dir_resolver
-    // flatDir {
-    //     dir 'libs'
-    // }
-
     maven {
-        name "createmod maven"
-        url "https://maven.createmod.net/"
+        name = 'NeoForged'
+        url = 'https://maven.neoforged.net/releases'
+    }
+    maven {
+        name = 'createmod maven' // the new Engine-Room Flywheel
+        url = 'https://maven.createmod.net'
+    }
+    maven {
+        name = 'ParchmentMC'
+        url = 'https://maven.parchmentmc.org'
+    }
+    maven {
+        // Modrinth's maven, for dev-time optimisation mods we benchmark against. Scoped so it can never
+        // shadow a real dependency.
+        name = 'Modrinth'
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+    maven {
+        // CurseMaven hosts curse.maven:* artifacts (spark). Scoped to the curse.maven group.
+        name = 'CurseMaven'
+        url = 'https://cursemaven.com'
+        content { includeGroup 'curse.maven' }
+    }
+    maven {
+        // JourneyMap's own maven, which is the only place the client API is published. Scoped to
+        // info.journeymap; the mod itself comes from Modrinth above.
+        name = 'JourneyMap'
+        url = 'https://jm.gserv.me/repository/maven-public/'
+        content { includeGroup 'info.journeymap' }
     }
 
+    // --- WarForge Factions Remaintained ------------------------------------------------------
+    // Its own release maven, then mavenLocal. Both scoped to com.flansmod.warforge so mavenLocal
+    // can never shadow a real dependency. repo.warfactory.co is still on 2.1.0 (1.20.1 Forge), so
+    // the 1.21.1 build (${warforge_version}) currently comes from mavenLocal (see gradle.properties).
     maven {
-        // CurseMaven — hosts curse.maven:* artifacts (e.g. spark, WarForge). Scoped to the curse.maven
-        // group so it is not queried for anything else.
-        name "Cursemaven"
-        url "https://cursemaven.com"
-        content {
-            includeGroup "curse.maven"
-        }
+        name = 'Warfactory Releases'
+        url = 'https://repo.warfactory.co/releases'
+        content { includeGroup 'com.flansmod.warforge' }
     }
+    mavenLocal { content { includeGroup 'com.flansmod.warforge' } }
 
-    // --- Optional GregTech Modern integration (compile-only) ---
-    maven {
-        name "GTCEu Maven"
-        url "https://maven.gtceu.com"
-        content { includeGroup "com.gregtechceu.gtceu" }
-    }
-    maven {
-        name "FirstDark Maven" // LDLib (bundles ModularUI)
-        url "https://maven.firstdark.dev/snapshots"
-        content { includeGroupAndSubgroups "com.lowdragmc" }
-    }
-    maven {
-        name "tterrag Maven" // Registrate
-        url "https://maven.tterrag.com/"
-        content { includeGroup "com.tterrag.registrate" }
-    }
-    maven {
-        name "toma Maven" // Configuration
-        url "https://repo.repsy.io/mvn/toma/public/"
-        content { includeGroup "dev.toma.configuration" }
-    }
-    // ForgeGradle's deobf resolves GregTech's own (mod) dependency tree even for a compile-only use, so these
-    // must be reachable: AE2, JEI, KubeJS/Rhino, Architectury.
-    maven { name "ModMaven"; url "https://modmaven.dev" }
-    maven { name "BlameJared"; url "https://maven.blamejared.com" }
-    maven { name "Latvian"; url "https://maven.latvian.dev/releases" }
-    maven { name "Architectury"; url "https://maven.architectury.dev/" }
-    maven { name "Shedaniel"; url "https://maven.shedaniel.me/" }
+    // --- Repos for the compile-only integrations (kept from the Forge build; re-enable with the
+    //     corresponding dependencies once their 1.21.1 coordinates are confirmed) ---
+    maven { name = 'GTCEu Maven'; url = 'https://maven.gtceu.com'; content { includeGroup 'com.gregtechceu.gtceu' } }
+    maven { name = 'FirstDark Maven'; url = 'https://maven.firstdark.dev/snapshots'; content { includeGroupAndSubgroups 'com.lowdragmc' } }
+    maven { name = 'tterrag Maven'; url = 'https://maven.tterrag.com/'; content { includeGroup 'com.tterrag.registrate' } }
+    maven { name = 'toma Maven'; url = 'https://repo.repsy.io/mvn/toma/public/'; content { includeGroup 'dev.toma.configuration' } }
+    maven { name = 'ModMaven'; url = 'https://modmaven.dev' }
+    maven { name = 'BlameJared'; url = 'https://maven.blamejared.com' }
+    maven { name = 'Latvian'; url = 'https://maven.latvian.dev/releases' }
+    maven { name = 'Architectury'; url = 'https://maven.architectury.dev/' }
+    maven { name = 'Shedaniel'; url = 'https://maven.shedaniel.me/' }
 
     mavenCentral()
 }
 
-mixin {
-    add sourceSets.main, "${mod_id}.refmap.json"
-    config "${mod_id}.mixins.json"
+neoForge {
+    version = project.neo_version
+
+    parchment {
+        mappingsVersion = project.parchment_mappings_version
+        minecraftVersion = project.parchment_minecraft_version
+    }
+
+    // Access Transformers are auto-detected at src/main/resources/META-INF/accesstransformer.cfg.
+    // (None ship today; uncomment to make it explicit if one is added.)
+    // accessTransformers = project.files('src/main/resources/META-INF/accesstransformer.cfg')
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+            if (systemOpenAl != null) {
+                systemProperty 'org.lwjgl.openal.libname', systemOpenAl.absolutePath
+            }
+            // -PquickPlay=<world> boots straight into a save instead of the main menu. Client-side work
+            // (renderers, HUDs, the scope) can only be checked by looking at it, and every menu click
+            // between launch and the world is a step an automated check has to get right blind.
+            if (project.hasProperty('quickPlay')) {
+                programArguments.addAll '--quickPlaySingleplayer', project.property('quickPlay').toString()
+            }
+            // -PquickJoin=<host:port> connects straight to a server, the multiplayer counterpart of the
+            // above. Some behaviour only exists on a server (the recon map overlay treats a singleplayer
+            // host as an operator by design, so its permission rule cannot be checked in a single-player
+            // world at all), and the menu path to a join is four blind clicks and a typed address.
+            if (project.hasProperty('quickJoin')) {
+                programArguments.addAll '--quickPlayMultiplayer', project.property('quickJoin').toString()
+            }
+        }
+        server {
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+        gameTestServer {
+            type = 'gameTestServer'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+        data {
+            data()
+            gameDirectory = project.file('run-data')
+            programArguments.addAll '--mod', project.mod_id, '--all',
+                    '--output', file('src/generated/resources/').absolutePath,
+                    '--existing', file('src/main/resources/').absolutePath
+        }
+        configureEach {
+            // -PwithWarforge runs get their own game directory: WarForge keeps faction/claim state in
+            // the save, so a factions run must not share a world with the plain dev run.
+            gameDirectory = project.file(project.hasProperty('withWarforge') ? 'run-warforge' : 'run')
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+
+            // -Pjfr makes the run profilable with Java Flight Recorder, without starting a recording:
+            // attach one on demand with `jcmd <pid> JFR.start`, so a recording covers the benchmark window
+            // rather than ten minutes of startup.
+            //
+            // DebugNonSafepoints is the flag that makes the profile worth reading. Without it the JIT only
+            // emits stack-trace metadata at safepoints, so every sample is attributed to the nearest safepoint
+            // rather than to where the time actually went: hot leaf methods vanish and their callers inherit
+            // the cost. Left off by default because it slightly constrains optimisation.
+
+            // -Paccel=FFM pins Accelerated Recoiling's collision backend. Explicit rather than AUTO, because
+            // AUTO prefers its OpenCL backend and a headless server has no GPU to prefer: benchmarking the
+            // GPU path on a dev box reports a number no server can reproduce.
+            // -PprobeTrace logs every scroll the probe sees, for diagnosing a modifier that is not arriving.
+            if (project.hasProperty('probeTrace')) {
+                systemProperty 'wfballistics.probeInputTrace', 'true'
+            }
+
+            if (project.hasProperty('accel')) {
+                systemProperty 'acceleratedrecoiling.backend', project.property('accel')
+            }
+
+            // Gas clouds are raymarched in the dev run. This is the client.gas.volumetric config option,
+            // forced from here rather than by writing the toml, because the config file is generated on
+            // first launch and a run directory that already has one would silently keep the old value.
+            // -PvolumetricGas=false turns it back off for an A/B against the billboard path;
+            // -PvolumetricGasQuality=LOW|MEDIUM|HIGH picks the step count.
+            systemProperty 'wfballistics.volumetricGas',
+                    project.hasProperty('volumetricGas') ? project.property('volumetricGas').toString() : 'true'
+            if (project.hasProperty('volumetricGasQuality')) {
+                systemProperty 'wfballistics.volumetricGasQuality',
+                        project.property('volumetricGasQuality').toString()
+            }
+            if (project.hasProperty('jfr')) {
+                // stackdepth is 64 by default and JFR truncates the *outermost* frames, which are the ones a
+                // sample has to be attributed by: an entity tick under mixins is well past 64 frames deep, so
+                // at the default every sample inside the pathfinder arrives with `Entity.tick` already cut off
+                // and cannot be charged to a phase.
+                jvmArguments.addAll '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints',
+                        '-XX:FlightRecorderOptions=stackdepth=192',
+                        '-XX:StartFlightRecording:name=idle,settings=none'
+            }
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+// 'localRuntime' is present for dev-time testing but is NOT published as a dependency of this mod.
+configurations {
+    localRuntime
+    runtimeClasspath.extendsFrom localRuntime
 }
 
 dependencies {
-    // MixinExtras — companion annotation processor for the Mixin toolchain
-    implementation annotationProcessor("io.github.llamalad7:mixinextras-common:0.4.0")
-    annotationProcessor "org.spongepowered:mixin:0.8.5:processor"
+    // --- Benchmarking company ----------------------------------------------------------------
+    // Lithium is dev-runtime only and never published. It is here so the swarm work is measured in
+    // the environment it will actually ship into, and (more pointedly), so that anywhere we patch
+    // vanilla for performance, we find out immediately whether Lithium already patched it or, worse,
+    // patched it a different way. Vanilla's PathTypeCache is exactly that kind of contested ground.
+    localRuntime "maven.modrinth:lithium:${lithium_version}"
 
-    compileOnly fg.deobf("dev.engine-room.flywheel:flywheel-forge-api-${minecraft_version}:${flywheel_version}")
-    // Dev run: plain runtimeOnly so FML discovers flywheel as a mod in the workspace. A jarJar-only dep is
-    // embedded for the production jar but is NOT loaded in the dev environment (JiJ only unpacks from a built
-    // jar), which leaves flywheel [MISSING] in-dev. Keep both: runtimeOnly for dev, jarJar for the shipped jar.
-    runtimeOnly fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}")
-    jarJar(fg.deobf("dev.engine-room.flywheel:flywheel-forge-${minecraft_version}:${flywheel_version}")) {
-        jarJar.ranged(it, flywheel_version_range)
+    // Sodium, behind -PwithSodium, because it is an A/B and not a baseline. The drone camera renders the
+    // world a second time from a second camera, which is exactly the thing a rewritten chunk renderer is
+    // entitled to break, and Sodium keeps its own per-camera state (SodiumWorldRenderer.lastCameraPos,
+    // RenderSectionManager.needsGraphUpdate) that alternating cameras fight over. There is no compileOnly
+    // counterpart on purpose: everything we touch of Sodium's goes through reflection in SodiumChunkProbe,
+    // so the mod builds and runs identically whether or not Sodium is installed.
+    //     ./gradlew runClient -PwithSodium
+    if (project.hasProperty('withSodium')) {
+        localRuntime "maven.modrinth:sodium:${sodium_version}"
     }
-    runtimeOnly fg.deobf("curse.maven:spark-361579:4738952")
 
-
-    compileOnly(fg.deobf("com.gregtechceu.gtceu:gtceu-1.20.1:7.5.3")) { transitive = false }
-
-    compileOnly(fg.deobf("com.lowdragmc.ldlib:ldlib-forge-1.20.1:1.0.40.b")) {
-        exclude group: "appeng"
-        exclude group: "dev.latvian.mods"
-        exclude group: "mezz.jei"
+    // --- GemRender (skinned/rigged models on Flywheel) ---------------------------------------
+    // Every animated entity draws through it: drones, missiles and both tiers of the glyphid swarm are
+    // one instance each posed from a shared bone palette, instead of one instance per moving part.
+    // A local jar because GemRender is not published anywhere yet; declared required in the toml, so
+    // it is not jar-in-jar'd either.
+    compileOnly files('libs/gemrender-1.21.1-0.1.0.jar')
+    // Client runs only, for the same reason as JourneyMap below: GemRender jar-in-jars lwjgl-ktx for its
+    // KTX2 textures, and that module requires org.lwjgl, which a dedicated server does not have on its
+    // module path. FML dies building the transforming module layer before any mod is constructed. The
+    // dependency is declared side = "CLIENT" in neoforge.mods.toml, so the server never wanted it: the
+    // server does not build a rig.
+    if (!gradle.startParameter.taskNames.any { it.toLowerCase().contains('server') }) {
+        localRuntime files('libs/gemrender-1.21.1-0.1.0.jar')
     }
-    compileOnly(fg.deobf("com.tterrag.registrate:Registrate:MC1.20-1.3.11")) { transitive = false }
 
-    // Optional WarForge Factions integration.
-    compileOnly fg.deobf("curse.maven:warforge-factions-remaintained-1340172:8324861")
+    // --- Flywheel (Engine-Room, NeoForge 1.21.1) ---------------------------------------------
+    // Flywheel is declared a required dependency in neoforge.mods.toml, so it is NOT jar-in-jar'd
+    // (ships separately, avoids clashing with the copy Create bundles).
+    //
+    // The FULL jar rather than flywheel-neoforge-api, matching what GemRender compiles against:
+    // GemRenderInstance extends ColoredLitInstance, which lives in flywheel-lib and not in the API.
+    compileOnly "dev.engine-room.flywheel:flywheel-neoforge-1.21.1:${flywheel_version}"
+    localRuntime "dev.engine-room.flywheel:flywheel-neoforge-1.21.1:${flywheel_version}"
 
+    // --- spark profiler (runtime-only) -------------------------------------------------------
+    // TODO(port): find the spark file id for NeoForge 1.21.1 on CurseForge, then:
+    // localRuntime "curse.maven:spark-361579:<neo_1.21.1_file_id>"
 
-    // Specify the version of Minecraft to use.
-    // Any artifact can be supplied so long as it has a "userdev" classifier artifact and is a compatible patcher artifact.
-    // The "userdev" classifier will be requested and setup by ForgeGradle.
-    // If the group id is "net.minecraft" and the artifact id is one of ["client", "server", "joined"],
-    // then special handling is done to allow a setup of a vanilla dependency without the use of an external repository.
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+    // --- GregTechCEu Modern (compile-only optional integration): NeoForge 1.21.1 build via CurseMaven.
+    //     compileOnly (NOT implementation): the EMP-warhead integration compiles against GregTech but GregTech
+    //     is only loaded at runtime if the user installs it. transitive=false to avoid dragging GregTech's
+    //     whole dependency tree (AE2/LDLib/JEI/KubeJS) onto the classpath.
+    compileOnly("curse.maven:gregtechceu-modern-890405:6766269") { transitive = false }
 
-    // Example mod dependency with JEI - using fg.deobf() ensures the dependency is remapped to your development mappings
-    // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
-    // compileOnly fg.deobf("mezz.jei:jei-${mc_version}-common-api:${jei_version}")
-    // compileOnly fg.deobf("mezz.jei:jei-${mc_version}-forge-api:${jei_version}")
-    // runtimeOnly fg.deobf("mezz.jei:jei-${mc_version}-forge:${jei_version}")
+    // LDLib: GregTech's UI/syncdata library. Needed at COMPILE time because GregTech's public types
+    // (IMaintenanceMachine, MetaMachine, NotifiableEnergyContainer) extend LDLib interfaces (IUIHolder,
+    // IEnhancedManaged). compileOnly + transitive=false, same rationale as GregTech.
+    // Pinned to 1.0.35.a: the exact version GregTech 7.0.1 (file 6766269) was built against.
+    // Newer LDLib (1.0.41) dropped IEnhancedManaged, which GregTech's MetaMachine still implements.
+    compileOnly("com.lowdragmc.ldlib:ldlib-neoforge-1.21.1:1.0.35.a") { transitive = false }
+    runtimeOnly("curse.maven:spark-361579:6225208")
 
-    // Example mod dependency using a mod jar from ./libs with a flat dir repository
-    // This maps to ./libs/coolmod-${mc_version}-${coolmod_version}.jar
-    // The group id is ignored when searching -- in this case, it is "blank"
-    // implementation fg.deobf("blank:coolmod-${mc_version}:${coolmod_version}")
+    // --- JourneyMap (compile-only API, dev-runtime mod) ---------------------------------------
+    // The recon grid overlay draws through JourneyMap's client API. compileOnly + never shaded, same
+    // rationale as GregTech: the plugin class is only ever classloaded by JourneyMap's own annotation
+    // scan, so the mod builds and runs identically with JourneyMap absent.
+    //
+    // The API is published only as a live SNAPSHOT, so the version is pinned to a timestamped build
+    // rather than to -SNAPSHOT: the latter would silently change what this compiles against between
+    // one build and the next, and the 2.0 API is still moving.
+    compileOnly "info.journeymap:journeymap-api-neoforge:${journeymap_api_version}"
 
-    // For more info:
-    // http://www.gradle.org/docs/current/userguide/artifact_dependencies_tutorial.html
-    // http://www.gradle.org/docs/current/userguide/dependency_management.html
+    // The mod itself, dev-runtime only and never published; there is nothing to draw on without it.
+    // Not behind a -P flag (unlike Sodium) because this one is the feature under test rather than an
+    // A/B: a dev client with no minimap cannot show whether the overlay works.
+    //
+    // Client runs only, and not by preference: JourneyMap jar-in-jars lwjgl-ktx, whose module descriptor
+    // requires org.lwjgl. A dedicated server has no lwjgl on its module path, so FML fails to build the
+    // transforming module layer ("Module org.lwjgl not found, required by org.lwjgl.ktx") before any
+    // mod is constructed and runServer dies in about a second. Keyed off the task name rather than a
+    // property so that `./gradlew runServer` simply works; a minimap is client-side anyway, so nothing
+    // server-side loses a dependency it was using.
+    if (!gradle.startParameter.taskNames.any { it.toLowerCase().contains('server') }) {
+        localRuntime "maven.modrinth:journeymap:${journeymap_version}"
+    }
+
+    // --- WarForge Factions Remaintained (compile-only optional integration) -------------------
+    //     Backs compat/warforge/WarforgeApi: faction friend-or-foe and claim-aware explosions.
+    //     compileOnly + transitive=false, same rationale as GregTech: WarForge is only present at
+    //     runtime if the user installs it, and its LDLib2 dependency has no business on our
+    //     compile classpath.
+    compileOnly("com.flansmod.warforge:warforge-remaintained:${warforge_version}") { transitive = false }
+
+    // Dev-only: `-PwithWarforge` puts WarForge and its LDLib2 runtime dependency into the dev run
+    // classpath so the integration can actually be exercised in-game. Off by default, since a dev
+    // run without it is the "WarForge absent" path the compat layer also has to handle.
+    if (project.hasProperty('withWarforge')) {
+        localRuntime("com.flansmod.warforge:warforge-remaintained:${warforge_version}") { transitive = false }
+        localRuntime "com.lowdragmc.ldlib2:ldlib2-neoforge-${minecraft_version}:${ldlib2_version}:all"
+    }
+
+    // --- Other compile-only integrations (disabled until their 1.21.1 coordinates are confirmed) ---
+    // TODO(port): Registrate 1.21.1
+    // compileOnly("com.tterrag.registrate:Registrate:MC1.21.1-<ver>") { transitive = false }
+
+    // --- Mixin ------------------------------------------------------------------------------
+    // NeoForge bundles Mixin (0.8.x) + MixinExtras and puts them on the compile classpath via the
+    // neoForge dependency, so no explicit dependency or annotation processor is required. If the
+    // mixin phase hits "cannot find symbol" for org.spongepowered.asm.* add a compileOnly here.
 }
 
-// This block of code expands all declared replace properties in the specified resource targets.
-// A missing property will result in an error. Properties are expanded using ${} Groovy notation.
-// When "copyIdeResources" is enabled, this will also run before the game launches in IDE environments.
-// See https://docs.gradle.org/current/dsl/org.gradle.language.jvm.tasks.ProcessResources.html
-tasks.named('processResources', ProcessResources).configure {
+// Expand ${...} tokens in src/main/templates (notably META-INF/neoforge.mods.toml) and feed the
+// result into the main source set. Mirrors the official MDK's generateModMetadata task.
+var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
     var replaceProperties = [
-            minecraft_version: minecraft_version, minecraft_version_range: minecraft_version_range,
-            forge_version: forge_version, forge_version_range: forge_version_range,
-            flywheel_version_range: flywheel_version_range,
-            loader_version_range: loader_version_range,
-            mod_id: mod_id, mod_name: mod_name, mod_license: mod_license, mod_version: mod_version,
-            mod_authors: mod_authors, mod_description: mod_description,
+            minecraft_version      : minecraft_version,
+            minecraft_version_range: minecraft_version_range,
+            neo_version            : neo_version,
+            neo_version_range      : neo_version_range,
+            loader_version_range   : loader_version_range,
+            flywheel_version_range : flywheel_version_range,
+            mod_id                 : mod_id,
+            mod_name               : mod_name,
+            mod_license            : mod_license,
+            mod_version            : mod_version,
+            mod_authors            : mod_authors,
+            mod_description        : mod_description,
     ]
     inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into 'build/generated/sources/modMetadata'
+}
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
 
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
-        expand replaceProperties + [project: project]
-    }
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
 }
 
-// Example for how to get properties into the manifest for reading at runtime.
-tasks.named('jar', Jar).configure {
-    manifest {
-        attributes([
-                'Specification-Title'     : mod_id,
-                'Specification-Vendor'    : mod_authors,
-                'Specification-Version'   : '1', // We are version 1 of ourselves
-                'Implementation-Title'    : project.name,
-                'Implementation-Version'  : project.jar.archiveVersion,
-                'Implementation-Vendor'   : mod_authors,
-                'Implementation-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
-
-                "MixinConfigs": "wfballistics.mixins.json"
-        ])
-    }
-
-    // This is the preferred method to reobfuscate your jar file
-    finalizedBy 'reobfJar'
-}
-
-// However if you are in a multi-project build, dev time needs unobfed jar files, so you can delay the obfuscation until publishing by doing:
-// tasks.named('publish').configure {
-//     dependsOn 'reobfJar'
-// }
-
-// Example configuration to allow publishing using the maven-publish plugin
 publishing {
     publications {
         register('mavenJava', MavenPublication) {
-            artifact jar
+            from components.java
         }
     }
     repositories {
@@ -309,6 +369,9 @@ publishing {
     }
 }
 
-tasks.withType(JavaCompile).configureEach {
-    options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
 }

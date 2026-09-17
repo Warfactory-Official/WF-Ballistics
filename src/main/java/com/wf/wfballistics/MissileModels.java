@@ -1,6 +1,9 @@
 package com.wf.wfballistics;
 
+import com.wf.wfballistics.anim.Rotor;
+import com.wf.wfballistics.anim.Rotors;
 import com.wf.wfballistics.util.ObjBounds;
+import net.minecraft.core.Direction.Axis;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
@@ -9,22 +12,16 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registry of the missile models a {@link MissileEntity} can render with, keyed by a stable
- * {@link ResourceLocation} (persisted/synced on the entity so the model is chosen at runtime, HBM-style,
- * rather than compiled in).
- *
- * <p>Server-safe: it only holds {@link ResourceLocation}s and reads model geometry off the jar via
- * {@link ObjBounds}, so the flight code can look up a model's length without touching client render classes.
- * The client separately bakes a {@code PartialModel} for each of these ids (see {@code ModModels}).
+ * Registry of the missile models a {@link MissileEntity} can render with, keyed by a stable {@link
+ * ResourceLocation} (persisted/synced on the entity so the model is chosen at runtime, HBM-style, rather than
+ * compiled in).
  */
 public final class MissileModels {
 
     /**
      * Id used when a requested one is unknown or unset.
      */
-    public static final ResourceLocation DEFAULT = new ResourceLocation(WFBallistics.MODID, "v2");
-    // Per-model orientation style ("attitude") id — how the model rotates to its heading (missile vs drone).
-    // Resolved to a strategy shared by render + hitbox (see attitude.MissileAttitudeRegistry). Default = "missile".
+    public static final ResourceLocation DEFAULT = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "v2");
     public static final String DEFAULT_ATTITUDE = "missile";
     // Continuous spin speed for the Shahed pusher propeller (degrees per tick). Purely visual.
     private static final float SHAHED_ROTOR_SPEED = 45.0f;
@@ -32,9 +29,6 @@ public final class MissileModels {
     private static final Map<ResourceLocation, Double> LENGTHS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, Vec3> DIMENSIONS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, Vec3> CENTERS = new ConcurrentHashMap<>();
-    // Spinning parts ("rotors") per model id, and a cache of each rotor mesh's centre (its spin pivot).
-    private static final Map<ResourceLocation, List<Rotor>> ROTORS = new HashMap<>();
-    private static final Map<ResourceLocation, Vec3> ROTOR_PIVOTS = new ConcurrentHashMap<>();
     private static final Map<ResourceLocation, String> ATTITUDES = new HashMap<>();
 
     static {
@@ -55,9 +49,6 @@ public final class MissileModels {
         reg("thermo", "missilethermo");
         reg("v2", "missile_v2");
 
-        // Skins: the same airframe OBJ re-textured. Each variant model json points at the shared .obj (whose
-        // .mtl reads its texture from the json via #missile_texture) with a different skin, so one shape can
-        // be flown in several liveries. Selectable anywhere a model id is (dispenser GUI, missile presets).
         reg("v2_bunker", "missile_v2_bu");
         reg("v2_cluster", "missile_v2_cl");
         reg("v2_decoy", "missile_v2_decoy");
@@ -82,14 +73,11 @@ public final class MissileModels {
         reg("atlas_tectonic", "missile_atlas_tectonic");
         reg("atlas_thermo", "missile_atlas_thermo");
 
-        // Shahed-136 loitering drones: a winged airframe (body model) with a pusher propeller (the "prop"
-        // mesh, split into its own model) that spins continuously about the fuselage/long (+Y) axis. Adding a
-        // spinning part is just reg(body) + rotor(prop) — no per-model code anywhere in the render path.
         reg("shahed", "shahed_body");
-        rotor("shahed", "shahed_prop", 0.0f, 1.0f, 0.0f, SHAHED_ROTOR_SPEED);
+        rotor("shahed", "shahed_prop", Axis.Y, SHAHED_ROTOR_SPEED);
         attitude("shahed", "drone");
         reg("shahedjarty", "shahedjarty_body");
-        rotor("shahedjarty", "shahedjarty_prop", 0.0f, 1.0f, 0.0f, SHAHED_ROTOR_SPEED);
+        rotor("shahedjarty", "shahedjarty_prop", Axis.Y, SHAHED_ROTOR_SPEED);
         attitude("shahedjarty", "drone");
     }
 
@@ -97,14 +85,18 @@ public final class MissileModels {
     }
 
     private static void reg(String id, String modelName) {
-        BY_ID.put(rl(id), new ResourceLocation(WFBallistics.MODID, "entity/missiles/" + modelName));
+        BY_ID.put(rl(id), partModel(modelName));
+    }
+
+    public static ResourceLocation partModel(String modelName) {
+        return ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "entity/missiles/" + modelName);
     }
 
     /**
      * @return the {@link ResourceLocation} key for a model's short path under the mod namespace.
      */
     public static ResourceLocation rl(String id) {
-        return new ResourceLocation(WFBallistics.MODID, id);
+        return ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, id);
     }
 
     /**
@@ -115,8 +107,8 @@ public final class MissileModels {
     }
 
     /**
-     * Resolve a persisted/typed id string to a model key: a bare path is taken under the mod namespace, a
-     * {@code namespace:path} string is parsed as-is, and anything unparseable falls back to {@link #DEFAULT}.
+     * Resolve a persisted/typed id string to a model key: a bare path is taken under the mod namespace, a {@code
+     * namespace:path} string is parsed as-is, and anything unparseable falls back to {@link #DEFAULT}.
      */
     public static ResourceLocation parse(String id) {
         if (id == null || id.isEmpty()) {
@@ -149,7 +141,7 @@ public final class MissileModels {
 
     /**
      * @return the longest axis of the model's mesh, in model units (cached). Reads the model json + obj
-     * off the jar, so it works server-side. Falls back to 1.0 if the assets can't be read.
+     *      off the jar, so it works server-side. Falls back to 1.0 if the assets can't be read.
      */
     public static double length(ResourceLocation id) {
         return LENGTHS.computeIfAbsent(id, i -> {
@@ -164,7 +156,7 @@ public final class MissileModels {
 
     /**
      * @return the mesh size (per-axis, model units) of the missile model, cached. Reads the model json +
-     * obj off the jar so it works server-side. Falls back to a 1×1×1 box if the assets can't be read.
+     *      obj off the jar so it works server-side. Falls back to a 1×1×1 box if the assets can't be read.
      */
     public static Vec3 dimensions(ResourceLocation id) {
         return DIMENSIONS.computeIfAbsent(id, i -> {
@@ -179,7 +171,7 @@ public final class MissileModels {
 
     /**
      * @return the geometric center offset (model units) of the missile model relative to its origin,
-     * cached. Missile meshes sit base-at-origin, so this is roughly {@code (0, length/2, 0)}.
+     *      cached. Missile meshes sit base-at-origin, so this is roughly {@code (0, length/2, 0)}.
      */
     public static Vec3 center(ResourceLocation id) {
         return CENTERS.computeIfAbsent(id, i -> {
@@ -191,28 +183,25 @@ public final class MissileModels {
         });
     }
 
-    /**
-     * Register a spinning part for a model. Drop in the rotor's model json/obj and add one call — the client
-     * renderer picks it up generically; there is no per-model spin code.
-     */
-    public static void rotor(String id, String rotorModelName, float axisX, float axisY, float axisZ,
-                             float degreesPerTick) {
-        ResourceLocation model = new ResourceLocation(WFBallistics.MODID, "entity/missiles/" + rotorModelName);
-        ROTORS.computeIfAbsent(rl(id), k -> new ArrayList<>())
-                .add(new Rotor(model, new Vector3f(axisX, axisY, axisZ).normalize(), degreesPerTick));
+    public static void rotor(String id, String rotorModelName, Axis axis, float degreesPerTick) {
+        Rotors.assign(rl(id), Rotor.of(partModel(rotorModelName), axis, degreesPerTick));
     }
 
-    /**
-     * @return the spinning parts registered for a model id (empty if none).
-     */
+    public static void rotor(String id, String rotorModelName, Vector3f axis, float degreesPerTick) {
+        Rotors.assign(rl(id), Rotor.of(partModel(rotorModelName), axis, degreesPerTick));
+    }
+
+    public static void rotors(String id, Axis axis, float degreesPerTick, String... rotorModelNames) {
+        for (String rotorModelName : rotorModelNames) {
+            rotor(id, rotorModelName, axis, degreesPerTick);
+        }
+    }
+
     public static List<Rotor> rotors(ResourceLocation id) {
-        return ROTORS.getOrDefault(id, List.of());
+        return Rotors.of(id);
     }
 
-    /**
-     * Set how a model orients to its heading, by attitude id (see {@code MissileAttitudeRegistry}). Models
-     * default to {@link #DEFAULT_ATTITUDE} ("missile") unless assigned another, e.g. "drone".
-     */
+    /** Set how a model orients to its heading, by attitude id (see {@code MissileAttitudeRegistry}). */
     public static void attitude(String id, String attitudeId) {
         ATTITUDES.put(rl(id), attitudeId);
     }
@@ -224,29 +213,4 @@ public final class MissileModels {
         return ATTITUDES.getOrDefault(id, DEFAULT_ATTITUDE);
     }
 
-    /**
-     * @return the spin pivot for a rotor mesh (its geometric centre, cached), read off the jar so it works
-     * without hardcoded coordinates.
-     */
-    public static Vec3 rotorPivot(ResourceLocation rotorModel) {
-        return ROTOR_PIVOTS.computeIfAbsent(rotorModel, m -> {
-            try {
-                return ObjBounds.centerFromModel(m);
-            } catch (Throwable t) {
-                return Vec3.ZERO;
-            }
-        });
-    }
-
-    /**
-     * A continuously spinning part of a missile model (rotor / propeller): a separate mesh the client draws
-     * as its own instance, spun about {@code axis} at {@code degreesPerTick}. The spin pivot is derived from
-     * the mesh's own centre (see {@link #rotorPivot}), so nothing is hardcoded per model.
-     *
-     * @param model          model-json location of the rotor mesh (baked separately by {@code ModModels})
-     * @param axis           unit spin axis in model space
-     * @param degreesPerTick constant spin rate
-     */
-    public record Rotor(ResourceLocation model, Vector3f axis, float degreesPerTick) {
-    }
 }

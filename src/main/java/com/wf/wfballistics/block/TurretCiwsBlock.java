@@ -1,5 +1,6 @@
 package com.wf.wfballistics.block;
 
+import com.mojang.serialization.MapCodec;
 import com.wf.wfballistics.block.entity.TurretCiwsBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
@@ -13,11 +14,18 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Close-in weapon system block: hosts a {@link TurretCiwsBlockEntity} that automatically shoots down nearby
- * missiles. Passive/automatic — no player interaction.
+ * missiles. Passive/automatic: no player interaction.
  */
 public class TurretCiwsBlock extends BaseEntityBlock {
+    public static final MapCodec<TurretCiwsBlock> CODEC = simpleCodec(TurretCiwsBlock::new);
+
     public TurretCiwsBlock(Properties props) {
         super(props);
+    }
+
+    @Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
     }
 
     @Nullable

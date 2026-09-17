@@ -35,13 +35,8 @@ public final class CruiseStage implements FlightStage {
         return new Vec3(ctx.nx() * maxSpeed, vy, ctx.nz() * maxSpeed);
     }
 
-    /**
-     * Eased, deadbanded vertical guidance toward the terrain-safe (or fixed) cruise altitude. Shared with
-     * {@link ApproachStage} so a directional run holds the same smooth altitude while it steers horizontally.
-     */
+    /** Eased, deadbanded vertical guidance toward the terrain-safe (or fixed) cruise altitude. */
     public static double verticalVelocity(MissileEntity missile, FlightContext ctx) {
-        // Ease the guidance altitude toward the freshly scanned safe height so terrain-sample noise doesn't
-        // turn into constant vertical twitching. cruiseTargetY is per-missile memory kept on the entity.
         double targetY = missile.getCruiseTargetY();
         if (Double.isNaN(targetY)) {
             targetY = ctx.safeAltitude();
@@ -71,12 +66,10 @@ public final class CruiseStage implements FlightStage {
     }
 
     /**
-     * The horizontal range at which to hand off to the terminal attack: the straight-dive horizontal
-     * ({@code height/tan}) plus, only for a terminal stage that flies a curved pitch-over (see
-     * {@link FlightStage#needsPitchoverLead}), the pitch-over lead ({@code r·tan(theta/2)}, r = terminal speed /
-     * turn rate) so that stage can reach the aim on the resolved dive angle without a turn tighter than its
-     * radius. A stage that dives straight in adds no lead, so its handoff (and its terminal evasion) doesn't
-     * start out ahead of the real descent. Floored at {@link #BRAKING_RANGE}.
+     * The horizontal range at which to hand off to the terminal attack: the straight-dive horizontal ({@code
+     * height/tan}) plus, only for a terminal stage that flies a curved pitch-over (see {@link
+     * FlightStage#needsPitchoverLead}), the pitch-over lead ({@code r·tan(theta/2)}, r = terminal speed / turn
+     * rate) so that stage can reach the aim on the resolved dive angle without a turn tighter than its radius.
      */
     private static double handoffRange(MissileEntity missile, FlightContext ctx) {
         double theta = Math.toRadians(missile.resolveDiveAngle(ctx));

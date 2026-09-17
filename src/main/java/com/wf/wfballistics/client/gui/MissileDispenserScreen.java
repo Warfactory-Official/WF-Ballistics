@@ -25,7 +25,6 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-
 public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispenserMenu> {
 
     private static final List<ResourceLocation> MODELS = new ArrayList<>(MissileModels.ids());
@@ -34,8 +33,6 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     private static final List<ResourceLocation> CRUISE_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.CRUISE));
     private static final List<ResourceLocation> ATTACK_STAGES = new ArrayList<>(FlightStageRegistry.ids(Phase.ATTACK));
     private static final String[] CRUISE_LABELS = {"Terrain Follow", "High Altitude"};
-    // Directional strike: the side the missile comes in from. Index 0 = Auto (unconstrained); the rest are the
-    // approach-from directions as MC world vectors (east=+X, south=+Z).
     private static final String[] ATTACK_DIR_LABELS = {"Auto", "N", "NE", "E", "SE", "S", "SW", "W", "NW"};
     private static final double[][] ATTACK_DIRS = {
             {0.0, 0.0}, {0.0, -1.0}, {0.707, -0.707}, {1.0, 0.0}, {0.707, 0.707},
@@ -211,8 +208,6 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         }).bounds(x, y, W_FULL, BTN_H).build());
         y += BTN_H + ROW_GAP;
 
-        // Flight-stage selectors (ascent / cruise / attack). Each cycles the stages registered for its phase,
-        // so the missile's flight can be reconfigured at will (e.g. cruise -> loiter to make a drone).
         ascentStageButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
             ascentStageIndex = (ascentStageIndex + 1) % Math.max(1, ASCENT_STAGES.size());
             refreshButtonLabels();
@@ -414,7 +409,6 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
 
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(gg); // dim the world behind the panel
         super.render(gg, mouseX, mouseY, partialTick);
 
         gg.drawString(this.font, this.title, leftPos + PAD, topPos + 4, 0xE0E0F0, false);

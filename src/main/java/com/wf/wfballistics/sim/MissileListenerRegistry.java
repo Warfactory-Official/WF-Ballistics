@@ -1,15 +1,18 @@
 package com.wf.wfballistics.sim;
 
 import com.wf.wfballistics.WFBallistics;
+import com.wf.wfballistics.chunk.WFChunkValidation;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.common.world.ForgeChunkManager;
+import net.neoforged.neoforge.common.world.chunk.TicketController;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -20,39 +23,29 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Per-dimension registry of things that want a chance to engage a passing missile. Two kinds of listener:
- *
- * <ul>
- *   <li><b>Block listeners</b> (turret batteries, CIWS, the debug block) are keyed by {@link BlockPos} and kept
- *       as persistent records ({@link SavedData}). They survive chunk unload and a full server restart, so a
- *       missile crossing an unmanned base's defenses is still seen. When a missile closes on such a listener
- *       whose chunk is unloaded, {@link #tickWakeups} force-loads the block (ticking) so the real block entity
- *       wakes, tracks, and fires; the ticket is dropped once the threat clears.</li>
- *   <li><b>Entity listeners</b> (in-world interceptor missiles) are keyed by {@link UUID} and held transiently as
- *       live references, purged when they go invalid. They are never force-loaded (they self-load or offload).</li>
- * </ul>
- */
+/** Per-dimension registry of things that want a chance to engage a passing missile. */
 public final class MissileListenerRegistry extends SavedData {
     public static final String NAME = "wfballistics_missile_listeners";
 
-    // How long after a missile was last seen within a block listener's range the wakeup ticket is held, so a
-    // brief gap between threat reports doesn't unload-and-reload the turret repeatedly.
     private static final long THREAT_TTL_TICKS = 60L;
-    // Extra reach beyond the raw detection range at which a threat starts waking the block, giving the block
-    // entity a couple of ticks to load and start tracking before the missile is in firing range.
     private static final double WAKE_MARGIN = MissileSimConfig.LISTENER_SPAWN_MARGIN;
+
+    /** Registered on the mod bus by {@code WFServerEvents.ModBusEvents#onRegisterTicketControllers}. */
+    public static final TicketController CHUNK_TICKET = new TicketController(
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "missile_listener"),
+            WFChunkValidation::validateTickets);
 
     private final Map<BlockPos, BlockRecord> blockRecords = new HashMap<>();
     private final Map<UUID, IMissileListener> entityListeners = new HashMap<>();
     // BlockPos of block listeners we currently hold a wakeup chunk ticket for (transient).
     private final Set<BlockPos> forced = new HashSet<>();
-    // On the first wakeup tick after (re)load, release any wakeup tickets left over from a previous session
-    // before re-deriving them from live threats, so a ticket can't leak across a restart.
     private boolean reconciled = false;
 
     public static MissileListenerRegistry get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(MissileListenerRegistry::load, MissileListenerRegistry::new, NAME);
+        return level.getDataStorage().computeIfAbsent(
+                new SavedData.Factory<>(MissileListenerRegistry::new,
+                        (tag, reg) -> MissileListenerRegistry.load(tag)),
+                NAME);
     }
 
     public static MissileListenerRegistry load(CompoundTag tag) {
@@ -68,7 +61,7 @@ public final class MissileListenerRegistry extends SavedData {
     }
 
     @Override
-    public CompoundTag save(CompoundTag tag) {
+    public CompoundTag save(CompoundTag tag, HolderLookup.Provider registries) {
         ListTag list = new ListTag();
         for (BlockRecord r : blockRecords.values()) {
             CompoundTag t = new CompoundTag();
@@ -85,10 +78,7 @@ public final class MissileListenerRegistry extends SavedData {
         return tag;
     }
 
-    /**
-     * Register or refresh a listener. A {@link BlockPos} key is a persistent block listener; any other key
-     * (a {@link UUID}) is a transient entity listener.
-     */
+    /** Register or refresh a listener. */
     public void register(Object key, IMissileListener listener) {
         if (key instanceof BlockPos pos) {
             Vec3 center = listener.listenerCenter();
@@ -115,8 +105,8 @@ public final class MissileListenerRegistry extends SavedData {
     }
 
     /**
-     * Detection view of every active listener (block records, never dropped on unload, plus valid entity
-     * listeners) as plain center/range pairs.
+     * Detection view of every active listener (block records, never dropped on unload, plus valid entity listeners)
+     * as plain center/range pairs.
      */
     public List<ListenerView> views() {
         List<ListenerView> out = new ArrayList<>();
@@ -136,9 +126,8 @@ public final class MissileListenerRegistry extends SavedData {
     }
 
     /**
-     * Note that a missile is at {@code threatPos} this tick: any block listener within range wakes (or stays
-     * awake) for {@link #THREAT_TTL_TICKS}. Cheap distance checks over the (small) record set; safe to call
-     * every tick from every missile.
+     * Note that a missile is at {@code threatPos} this tick: any block listener within range wakes (or stays awake)
+     * for {@link #THREAT_TTL_TICKS}.
      */
     public void noteThreat(Vec3 threatPos, long now) {
         if (blockRecords.isEmpty()) {
@@ -152,10 +141,7 @@ public final class MissileListenerRegistry extends SavedData {
         }
     }
 
-    /**
-     * Hold a ticking chunk ticket on every block listener with a live threat, and release the rest. Also
-     * self-heals records whose block is gone. Runs once per dimension per tick.
-     */
+    /** Hold a ticking chunk ticket on every block listener with a live threat, and release the rest. */
     public void tickWakeups(ServerLevel level, long now) {
         if (!reconciled) {
             for (BlockRecord r : blockRecords.values()) {
@@ -197,7 +183,7 @@ public final class MissileListenerRegistry extends SavedData {
 
     private static void setForced(ServerLevel level, BlockPos pos, boolean add) {
         ChunkPos cp = new ChunkPos(pos);
-        ForgeChunkManager.forceChunk(level, WFBallistics.MODID, pos, cp.x, cp.z, add, true);
+        CHUNK_TICKET.forceChunk(level, pos, cp.x, cp.z, add, true);
     }
 
     public record ListenerView(Vec3 center, double range) {

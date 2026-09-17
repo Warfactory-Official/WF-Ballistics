@@ -1,23 +1,26 @@
 package com.wf.wfballistics.menu;
 
 import com.wf.wfballistics.WFBallistics;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.world.inventory.MenuType;
-import net.minecraftforge.common.extensions.IForgeMenuType;
-import net.minecraftforge.eventbus.api.IEventBus;
-import net.minecraftforge.registries.DeferredRegister;
-import net.minecraftforge.registries.ForgeRegistries;
-import net.minecraftforge.registries.RegistryObject;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 
 public class ModMenus {
     public static final DeferredRegister<MenuType<?>> MENUS =
-            DeferredRegister.create(ForgeRegistries.MENU_TYPES, WFBallistics.MODID);
+            DeferredRegister.create(Registries.MENU, WFBallistics.MODID);
 
     public static void register(IEventBus bus) {
         MENUS.register(bus);
     }
 
-    public static final RegistryObject<MenuType<MissileDispenserMenu>> MISSILE_DISPENSER =
-            MENUS.register("missile_dispenser", () -> IForgeMenuType.create(MissileDispenserMenu::new));
+    public static final DeferredHolder<MenuType<?>, MenuType<MissileDispenserMenu>> MISSILE_DISPENSER =
+            MENUS.register("missile_dispenser", () -> IMenuTypeExtension.create(MissileDispenserMenu::new));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<DronePadMenu>> DRONE_PAD =
+            MENUS.register("drone_pad", () -> IMenuTypeExtension.create(DronePadMenu::new));
 
 
 }

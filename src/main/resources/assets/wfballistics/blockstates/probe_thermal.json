@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "online=false": {
+      "model": "wfballistics:block/probe_thermal"
+    },
+    "online=true": {
+      "model": "wfballistics:block/probe_thermal_online"
+    }
+  }
+}

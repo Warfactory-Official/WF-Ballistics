@@ -8,6 +8,7 @@ import com.wf.wfballistics.sim.MissileSimConfig;
 import com.wf.wfballistics.warhead.FireWarhead;
 import com.wf.wfballistics.warhead.GasWarhead;
 import com.wf.wfballistics.warhead.RecursiveFrag;
+import com.wf.wfballistics.warhead.TorpedoWarhead;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.resources.ResourceLocation;
 
@@ -17,13 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Registry of launch-ready {@link MissilePreset}s, keyed by {@link ResourceLocation}. Each registered preset
- * is turned into a carryable {@link MissileItem} by {@link ModItems}. Register your own during mod construction
- * (before items are frozen) with {@link #register}; the built-ins are added by {@link #bootstrap()}.
- *
- * <p>Registration order is preserved so the creative tab and item list stay stable.
- */
+/** Registry of launch-ready {@link MissilePreset}s, keyed by {@link ResourceLocation}. */
 public final class MissilePresetRegistry {
 
     private static final ResourceLocation DEFAULT_ID = rl("cruise");
@@ -34,7 +29,7 @@ public final class MissilePresetRegistry {
     }
 
     public static ResourceLocation rl(String path) {
-        return new ResourceLocation(WFBallistics.MODID, path);
+        return ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, path);
     }
 
     public static ResourceLocation parse(String id) {
@@ -74,7 +69,6 @@ public final class MissilePresetRegistry {
             return;
         }
         bootstrapped = true;
-
 
         register(MissilePreset.builder(rl("cruise"), MissileModels.rl("v2"), WarheadRegistry.rl("standard"))
                 .terrainFollow(24.0).cruiseSpeed(1.0).fuel(MissileEntity.FuelType.LIQUID, 1500).build());
@@ -117,7 +111,6 @@ public final class MissilePresetRegistry {
                 .terrainFollow(30.0).cruiseSpeed(5.0)
                 .accel(0.4, 0.5).fuel(MissileEntity.FuelType.LIQUID, 1600).evasion(0.15f).build());
 
-
         register(MissilePreset.builder(rl("hypersonic"), MissileModels.rl("neon"), WarheadRegistry.rl("standard"))
                 .highAltitude(300.0).cruiseSpeed(12.0).health(60.0f)
                 .accel(0.8, 0.9).fuel(MissileEntity.FuelType.SOLID, 2000).evasion(0.3f)
@@ -128,7 +121,6 @@ public final class MissilePresetRegistry {
                 .accel(0.5, 0.6).fuel(MissileEntity.FuelType.SOLID, 1800).evasion(0.6f)
                 .evasiveManeuver().build());
 
-
         register(MissilePreset.builder(rl("stealth"), MissileModels.rl("stealth"), WarheadRegistry.rl("standard"))
                 .terrainFollow(24.0).cruiseSpeed(1.2).stealth().evasion(0.3f)
                 .fuel(MissileEntity.FuelType.LIQUID, 1600).build());
@@ -137,6 +129,17 @@ public final class MissilePresetRegistry {
                 .terrainFollow(24.0).cruiseSpeed(1.2).stealth().evasion(0.3f)
                 .fuel(MissileEntity.FuelType.LIQUID, 1600).build());
 
+        register(MissilePreset.builder(rl("torpedo"), MissileModels.rl("micro"), TorpedoWarhead.ID)
+                .torpedo().highAltitude(8.0).clearance(4.0).cruiseSpeed(0.35).turnRate(0.1)
+                .health(20.0f).accel(0.05, 0.05).fuel(MissileEntity.FuelType.SOLID, 1400).build());
+
+        register(MissilePreset.builder(rl("torpedo_bottom"), MissileModels.rl("micro"), TorpedoWarhead.ID)
+                .torpedo().terrainFollow(3.0).cruiseSpeed(0.25).turnRate(0.1)
+                .health(20.0f).accel(0.04, 0.04).fuel(MissileEntity.FuelType.SOLID, 2000).build());
+
+        register(MissilePreset.builder(rl("torpedo_fast"), MissileModels.rl("micro"), TorpedoWarhead.ID)
+                .torpedo().highAltitude(5.0).clearance(3.0).cruiseSpeed(0.9).turnRate(0.06)
+                .health(12.0f).accel(0.15, 0.15).fuel(MissileEntity.FuelType.SOLID, 500).build());
 
         register(MissilePreset.builder(rl("interceptor"), MissileModels.rl("abm"), WarheadRegistry.rl("interceptor"))
                 .highAltitude(200.0)

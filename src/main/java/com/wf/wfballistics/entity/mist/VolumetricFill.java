@@ -10,10 +10,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Shared voxel machinery for wall-respecting area effects: a chunk-cached flood fill of reachable air from a
- * point, and a decomposition of the filled cells into a small set of maximal axis-aligned boxes. Used by
- * {@link GasCloud} (fills the whole volume) and {@link com.wf.wfballistics.fire.FireUtil} (keeps only the
- * floor shell so fire drapes over the reachable terrain).
+ * Shared voxel machinery for wall-respecting area effects: a chunk-cached flood fill of reachable air from a point,
+ * and a decomposition of the filled cells into a small set of maximal axis-aligned boxes.
  */
 public final class VolumetricFill {
 
@@ -223,7 +221,7 @@ public final class VolumetricFill {
 
         /**
          * A derived fill keeping only the floor shell: open cells whose cell directly below is a wall (or the
-         * buffer floor). Decomposing this gives the terrain surface within the reachable region.
+         * buffer floor).
          */
         public Fill floorView() {
             byte[] fc = new byte[cell.length];
@@ -248,8 +246,7 @@ public final class VolumetricFill {
 
     /**
      * Reads block solidity while caching the current chunk, so a spatially coherent fill mostly reads a single
-     * field instead of resolving a chunk per sample. Unloaded chunks read as walls, so the fill never expands
-     * into (or generates) ungenerated terrain.
+     * field instead of resolving a chunk per sample.
      */
     private static final class ChunkView {
         private final Level level;

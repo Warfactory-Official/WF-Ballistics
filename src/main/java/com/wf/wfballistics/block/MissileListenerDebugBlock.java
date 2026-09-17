@@ -3,11 +3,11 @@ package com.wf.wfballistics.block;
 import com.wf.wfballistics.block.entity.MissileListenerDebugBlockEntity;
 import com.wf.wfballistics.sim.SimMissile;
 import com.wf.wfballistics.sim.SimMissileManager;
+import com.mojang.serialization.MapCodec;
 import com.wf.wfballistics.sim.SimMissileRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -23,12 +23,19 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * Debug block that acts as a missile listener (via its block entity) and, on right-click, launches a
- * simulated interceptor at the nearest simulated missile — a test harness for both listener respawns
+ * simulated interceptor at the nearest simulated missile: a test harness for both listener respawns
  * and simulated interception.
  */
 public class MissileListenerDebugBlock extends BaseEntityBlock {
+    public static final MapCodec<MissileListenerDebugBlock> CODEC = simpleCodec(MissileListenerDebugBlock::new);
+
     public MissileListenerDebugBlock(Properties props) {
         super(props);
+    }
+
+    @Override
+    protected MapCodec<? extends BaseEntityBlock> codec() {
+        return CODEC;
     }
 
     @Nullable
@@ -53,8 +60,8 @@ public class MissileListenerDebugBlock extends BaseEntityBlock {
     }
 
     @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos, Player player,
-                                 InteractionHand hand, BlockHitResult hit) {
+    protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
+                                               BlockHitResult hit) {
         if (!level.isClientSide && level instanceof ServerLevel sl) {
             SimMissileRegistry reg = SimMissileRegistry.get(sl);
             Vec3 center = Vec3.atCenterOf(pos);

@@ -4,24 +4,19 @@ import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.WFBallistics;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
-import net.minecraftforge.event.entity.EntityJoinLevelEvent;
-import net.minecraftforge.event.entity.EntityLeaveLevelEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Tracks missile <em>swarms</em>: families of missiles (typically a {@link com.wf.wfballistics.warhead.RecursiveFrag}
- * cluster) that share a non-zero {@code swarmId}. Members of one swarm never collide with each other, spread
- * apart in flight (separation steering), and share a colour in the debug overlay.
- *
- * <p>Membership is maintained server-side from Forge join/leave events, mirroring {@link
- * com.wf.wfballistics.entity.OBBEntityTracker}: an O(1) per-swarm set so a member can find its neighbours
- * without scanning every entity in the level. {@code swarmId == 0} means "not in a swarm" and is never tracked.
+ * Tracks missile <em>swarms</em>: families of missiles (typically a {@link
+ * com.wf.wfballistics.warhead.RecursiveFrag} cluster) that share a non-zero {@code swarmId}.
  */
-@Mod.EventBusSubscriber(modid = WFBallistics.MODID)
+@EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.GAME)
 public final class SwarmManager {
 
     // level -> (swarmId -> members). Server-side only; the client never queries membership.
@@ -77,7 +72,7 @@ public final class SwarmManager {
 
     /**
      * @return same-swarm members within {@code radius} of {@code missile} (excluding itself). Allocates a
-     * small list, so call it at most once per member per tick.
+     *      small list, so call it at most once per member per tick.
      */
     public static List<MissileEntity> nearby(MissileEntity missile, double radius) {
         Set<MissileEntity> set = members(missile.level(), missile.getSwarmId());
@@ -112,8 +107,8 @@ public final class SwarmManager {
 
     /**
      * @return the world position of {@code subordinate}'s slot in a wedge (V) formation trailing the commander:
-     * alternating left/right and stepping back one rank every two slots, held at the commander's altitude.
-     * Slots are assigned by a stable id ordering so a missile doesn't swap slots tick to tick.
+     *      alternating left/right and stepping back one rank every two slots, held at the commander's altitude.
+     *      Slots are assigned by a stable id ordering so a missile doesn't swap slots tick to tick.
      */
     public static Vec3 formationSlot(MissileEntity commander, MissileEntity subordinate) {
         int idx = formationIndex(commander, subordinate); // 1-based slot among the subordinates
@@ -199,8 +194,6 @@ public final class SwarmManager {
     @SubscribeEvent
     public static void onJoin(EntityJoinLevelEvent event) {
         if (event.getEntity() instanceof MissileEntity missile) {
-            // swarmId is set on the entity (builder or NBT) before it is added to the level, so it is
-            // already correct here.
             add(missile);
         }
     }

@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "online=false": {
+      "model": "wfballistics:block/probe_weather"
+    },
+    "online=true": {
+      "model": "wfballistics:block/probe_weather_online"
+    }
+  }
+}

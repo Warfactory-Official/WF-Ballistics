@@ -60,6 +60,8 @@ public class EntityNukeExplosionMK5 extends EntityExplosionChunkLoading {
             }
 
             if (explosion == null) {
+                com.wf.wfballistics.recon.event.SeismicEvents.report((ServerLevel) level(),
+                        getX(), getY(), getZ(), getStrength());
                 if (NukeConfig.explosionAlgorithm == 0) {
                     explosion = new ExplosionNukeRayBatched(level(), blockPosition(),
                             getStrength(), getSpeed(), getRadius());
@@ -97,10 +99,10 @@ public class EntityNukeExplosionMK5 extends EntityExplosionChunkLoading {
     }
 
     @Override
-    protected void defineSynchedData() {
-        this.entityData.define(EXPLODE_STRENGTH, default_explode_strength);
-        this.entityData.define(EXPLODE_RADIUS, 100);
-        this.entityData.define(RADIATION_SPEED, 0);
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+        builder.define(EXPLODE_STRENGTH, default_explode_strength);
+        builder.define(EXPLODE_RADIUS, 100);
+        builder.define(RADIATION_SPEED, 0);
     }
 
     @Override

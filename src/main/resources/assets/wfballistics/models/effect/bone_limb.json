@@ -1,5 +1,5 @@
 {
-  "loader": "forge:obj",
+  "loader": "neoforge:obj",
   "emissive_ambient": false,
   "model": "wfballistics:models/effect/bone_limb.obj",
   "flip_v": true,

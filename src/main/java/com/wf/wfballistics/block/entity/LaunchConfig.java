@@ -8,6 +8,7 @@ import com.wf.wfballistics.compat.WarforgeCompat;
 import com.wf.wfballistics.flight.ArrivalEstimator;
 import com.wf.wfballistics.flight.FlightStageRegistry;
 import com.wf.wfballistics.flight.LoiterStage;
+import com.wf.wfballistics.recon.ReconOwners;
 import com.wf.wfballistics.warhead.WarheadRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
@@ -171,8 +172,6 @@ public final class LaunchConfig {
         int frags = Math.max(0, fragmentCount);
         float hp = health > 0.0f ? health : MissileEntity.DEFAULT_HEALTH;
 
-        // Fuel is ticks of powered flight. 0/auto sizes it to actually reach the target under power; a positive
-        // value is honoured verbatim (and may deliberately run the missile dry mid-flight).
         Vec3 target = new Vec3(targetX, targetY, targetZ);
         double cruiseAltitudeY = highAltitude ? altitudeParam : pos.getY() + altitudeParam;
         int loiter = LoiterStage.loiterTicksOf(cruiseStageId);
@@ -192,7 +191,7 @@ public final class LaunchConfig {
                 .fuel(MissileEntity.FuelType.SOLID, fuel)
                 .health(hp)
                 .controlId(dispenser.getControlId())
-                .teamId(WarforgeCompat.factionClaiming(level, pos))
+                .teamId(ReconOwners.owningAt(level, pos))
                 .ascentStage(FlightStageRegistry.exists(Phase.ASCEND, ascentStageId)
                         ? ascentStageId : FlightStageRegistry.defaultId(Phase.ASCEND))
                 .cruiseStage(FlightStageRegistry.exists(Phase.CRUISE, cruiseStageId)
