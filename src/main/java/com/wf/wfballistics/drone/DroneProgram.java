@@ -13,14 +13,6 @@ import java.util.List;
 /**
  * An ordered list of {@link DroneTask}s and how far through it a drone has got.
  *
- * <p>This is the mission as something you can write rather than something the code decides. A stock delivery
- * is a two-step program ({@code deliver}, {@code exfil}) and reads exactly the same to the state machine as a
- * strike that then goes and watches the crater; the difference between the two lives entirely in this list.
- *
- * <p>Immutable: {@link #advanced()} returns a new one rather than moving a cursor. That is what lets the
- * whole program ride inside a {@code DroneSnapshot} and be read by the off-thread planner with no copying and
- * no synchronisation, alongside everything else the brain is allowed to see.
- *
  * @param cursor index of the step being flown; at or past {@code tasks.size()} the program is spent
  */
 public record DroneProgram(List<DroneTask> tasks, int cursor) {
@@ -38,7 +30,7 @@ public record DroneProgram(List<DroneTask> tasks, int cursor) {
 
     /**
      * @return the step being flown, or null once the program is spent. A drone with no step left falls back
-     * to the behaviour it had before programs existed: finish up and go home.
+     *      to the behaviour it had before programs existed: finish up and go home.
      */
     @Nullable
     public DroneTask current() {
@@ -47,7 +39,7 @@ public record DroneProgram(List<DroneTask> tasks, int cursor) {
 
     /**
      * @return true if finishing the current step leaves another one to fly. What the arrival handlers ask to
-     * decide between carrying on and heading home.
+     *      decide between carrying on and heading home.
      */
     public boolean hasNext() {
         return cursor + 1 < tasks.size();
@@ -73,7 +65,7 @@ public record DroneProgram(List<DroneTask> tasks, int cursor) {
 
     /**
      * @return a spent copy: everything queued is abandoned. What a battery abort leaves behind, so a drone
-     * sent home early does not pick the queue back up on the way.
+     *      sent home early does not pick the queue back up on the way.
      */
     public DroneProgram abandoned() {
         return tasks.isEmpty() ? EMPTY : new DroneProgram(tasks, tasks.size());
@@ -81,7 +73,7 @@ public record DroneProgram(List<DroneTask> tasks, int cursor) {
 
     /**
      * @return this program with {@code task} appended, or unchanged if it is already at
-     * {@link DroneTask#MAX_STEPS}.
+     *      {@link DroneTask#MAX_STEPS}.
      */
     public DroneProgram plus(DroneTask task) {
         if (tasks.size() >= DroneTask.MAX_STEPS) {
@@ -125,7 +117,7 @@ public record DroneProgram(List<DroneTask> tasks, int cursor) {
 
     /**
      * @return the point the drone should be heading for right now, or null if the program has nothing left
-     * to say. {@link DroneTask.Exfil} resolves to the drone's own exfil point, which is why this needs it.
+     *      to say. {@link DroneTask.Exfil} resolves to the drone's own exfil point, which is why this needs it.
      */
     @Nullable
     public Vec3 destination(Vec3 exfil) {
@@ -138,7 +130,7 @@ public record DroneProgram(List<DroneTask> tasks, int cursor) {
 
     /**
      * @return where the drone ends up once the last step is flown, or {@code fallback} for a program with no
-     * steps. What the return leg is priced from.
+     *      steps. What the return leg is priced from.
      */
     public Vec3 endsAt(Vec3 fallback, Vec3 exfil) {
         int last = tasks.size() - 1;
@@ -151,8 +143,8 @@ public record DroneProgram(List<DroneTask> tasks, int cursor) {
 
     /**
      * @return the total distance flown from {@code origin} through every remaining step. What the dispatcher
-     * prices the battery against: a three-stop program costs what all three legs cost, not what the first
-     * one does.
+     *      prices the battery against: a three-stop program costs what all three legs cost, not what the first
+     *      one does.
      */
     public double routeLength(Vec3 origin, Vec3 exfil) {
         Vec3 from = origin;
@@ -175,13 +167,7 @@ public record DroneProgram(List<DroneTask> tasks, int cursor) {
         buf.writeVarInt(cursor);
     }
 
-    /**
-     * Read a program off the wire.
-     *
-     * <p>The step count is clamped before anything is allocated, not after. This is read from a packet the
-     * drone pad screen sends, so the count is whatever a client says it is, and a length prefix trusted far
-     * enough to size a list with is the whole of that class of bug.
-     */
+    /** Read a program off the wire. */
     public static DroneProgram read(FriendlyByteBuf buf) {
         int count = Math.min(Math.max(0, buf.readVarInt()), DroneTask.MAX_STEPS);
         List<DroneTask> tasks = new ArrayList<>(count);

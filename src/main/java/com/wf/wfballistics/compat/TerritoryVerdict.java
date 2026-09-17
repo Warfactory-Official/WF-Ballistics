@@ -1,12 +1,6 @@
 package com.wf.wfballistics.compat;
 
-/**
- * Whether a faction may have drones change blocks somewhere, and if not, why not.
- *
- * <p>Lives here rather than in {@code compat.warforge} on purpose: this package is safe to reference with
- * WarForge absent, and the verdict type has to be namable by callers that must never class-load a WarForge
- * type. With the mod missing, everything is {@link #ALLOWED}: no factions means no territory.
- */
+/** Whether a faction may have drones change blocks somewhere, and if not, why not. */
 public enum TerritoryVerdict {
     /**
      * Nobody's, ours, or a friend's.

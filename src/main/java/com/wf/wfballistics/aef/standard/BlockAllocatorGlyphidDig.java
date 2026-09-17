@@ -12,21 +12,8 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * The bite a glyphid takes out of terrain: a spherical ray-march like {@link BlockAllocatorStandard}, but
- * priced on what the bug can chew rather than on blast power.
- *
- * <p>Two differences from a blast, and both are what make it read as digging:
- * <ul>
- *   <li><b>Rays stop at anything too tough, they do not weaken.</b> A standard blast spends power per block
- *       and eventually peters out, so a strong charge always gets a little way into a hard wall. A glyphid
- *       either can chew a material or cannot, so a ray hitting anything above {@code maximum} hardness ends
- *       there and everything behind it survives. Reinforced walls hold completely instead of eroding.</li>
- *   <li><b>Range is fixed.</b> The march runs to the explosion radius rather than until power runs out, so
- *       one bite is the same size every time.</li>
- * </ul>
- *
- * <p>{@code stopAt} guards blocks the colony must not eat regardless of how soft they are: its own spawners,
- * most obviously, which a digger would otherwise happily demolish on its way past.
+ * The bite a glyphid takes out of terrain: a spherical ray-march like {@link BlockAllocatorStandard}, but priced on
+ * what the bug can chew rather than on blast power.
  */
 public class BlockAllocatorGlyphidDig extends BlockAllocatorStandard {
 
@@ -81,9 +68,6 @@ public class BlockAllocatorGlyphidDig extends BlockAllocatorStandard {
                             if (GlyphidDigging.stopsABite(state, level, cursor, maximum) || stopAt.test(state)) {
                                 break;
                             }
-                            // Air is never collected: it costs a BlockPos allocation per step and the block
-                            // processor would only discard it. Matters here more than for a blast, since a
-                            // swarm of diggers runs this far more often than anything fires a missile.
                             if (canDestroy(explosion, level, cursor, state, size)) {
                                 affectedBlocks.add(cursor.immutable());
                             }

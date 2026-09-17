@@ -13,11 +13,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.EnumSet;
 
 /**
- * Drops ordnance on whatever a flying glyphid happens to be over, which is what makes wings an attack rather
- * than a way of arriving: a flight can corrode a base from above without landing.
- *
- * <p>Runs alongside the flight goal rather than competing with it — no movement flag, so a glyphid bombs on
- * its way past. Aiming is crude: released on the approach, and gravity does the rest.
+ * Drops ordnance on whatever a flying glyphid happens to be over, which is what makes wings an attack rather than a
+ * way of arriving: a flight can corrode a base from above without landing.
  */
 public class GlyphidBombGoal extends Goal {
 
@@ -65,7 +62,7 @@ public class GlyphidBombGoal extends Goal {
 
     /**
      * @return whether there is a target below worth spending a bomb on, and enough air under the glyphid to
-     * drop it through.
+     *      drop it through.
      */
     private boolean overSomethingWorthHitting() {
         double clearance = glyphid.getY() - groundBelow();
@@ -90,8 +87,6 @@ public class GlyphidBombGoal extends Goal {
         bomb.setExplosive(glyphid.dropsExplosives());
         bomb.setPos(glyphid.getX(), glyphid.getY() - 0.4, glyphid.getZ());
 
-        // Released, not thrown: it inherits the glyphid's motion and falls, so a fast pass throws the pattern
-        // forward exactly as it should.
         Vec3 motion = glyphid.getDeltaMovement();
         bomb.setDeltaMovement(motion.x, Math.min(0.0, motion.y) - 0.1, motion.z);
 

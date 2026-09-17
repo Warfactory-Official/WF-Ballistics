@@ -18,25 +18,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-/**
- * Every open {@link WorkJob} on the server.
- *
- * <p>Held once for the whole server rather than per dimension, matching {@code StationRegistry}: a job is in
- * one world but the things that might work it are not necessarily in the same one, and a single directory
- * means {@code /wfballistics job list} answers the whole question. It lives on the overworld's data storage
- * because that is the one level guaranteed to exist.
- */
+/** Every open {@link WorkJob} on the server. */
 public final class WorkRegistry extends SavedData {
 
     public static final String NAME = "wfballistics_work";
-    /**
-     * How long a finished job stays in the list before it is swept, in ticks. Twenty minutes: long enough
-     * that the operator who started it can come back and see whether it worked, short enough that a world
-     * left running does not accumulate them.
-     *
-     * <p>Kept rather than deleted on completion for the same reason: "finished, 40 blocked" is the answer to
-     * how the job went, and a job that vanished the moment it stopped would take that with it.
-     */
+    /** How long a finished job stays in the list before it is swept, in ticks. */
     public static final long RETENTION = 24000L;
 
     private final Map<UUID, WorkJob> jobs = new LinkedHashMap<>();
@@ -67,10 +53,6 @@ public final class WorkRegistry extends SavedData {
 
     /**
      * @return every job in this dimension that is still worth working, nearest first.
-     *
-     * <p>Nearest to {@code near} rather than oldest first, because the question a worker is asking is not
-     * "what has been waiting longest" but "what can I get to". A job on the far side of the world is not
-     * really available to a drone that would flatten its battery reaching it.
      */
     public List<WorkJob> openNear(ResourceKey<Level> dimension, BlockPos near) {
         List<WorkJob> open = new ArrayList<>();
@@ -106,13 +88,7 @@ public final class WorkRegistry extends SavedData {
         return this.jobs.size();
     }
 
-    /**
-     * Expire lapsed claims and sweep jobs that have been over for a while.
-     *
-     * <p>Called once per tick per level, and only touches jobs in that level's dimension: the claims being
-     * expired belong to workers in that world, and a dimension that is not ticking has no workers to have
-     * lost anything.
-     */
+    /** Expire lapsed claims and sweep jobs that have been over for a while. */
     public void tick(ServerLevel level) {
         long now = level.getGameTime();
         List<UUID> sweep = null;
@@ -144,8 +120,7 @@ public final class WorkRegistry extends SavedData {
     }
 
     /**
-     * Give back everything this worker was holding, everywhere. Called when a drone is destroyed or recalled;
-     * unpenalised, because the orders did nothing wrong.
+     * Give back everything this worker was holding, everywhere.
      *
      * @return how many claims were released
      */

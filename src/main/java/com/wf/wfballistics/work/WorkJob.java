@@ -9,18 +9,7 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 
 import java.util.UUID;
 
-/**
- * A {@link WorkQueue} with somewhere to be and a name on it.
- *
- * <p>Thin on purpose. The queue is the interesting part and knows nothing about the domain; this adds only
- * what any job needs regardless of what the work is (which world it is in, what volume it occupies, what to
- * call it in a list) plus an opaque {@link #detail()} tag for whatever created it. A construction job keeps
- * its blueprint id and its supplying station in there; something else will keep something else.
- *
- * <p>{@link #kind()} is a plain id rather than a registry entry. There is no {@code WorkKind} interface
- * because there is nothing yet that all kinds would have to implement, and inventing one before there is a
- * second consumer would be guessing at its shape.
- */
+/** A {@link WorkQueue} with somewhere to be and a name on it. */
 public final class WorkJob {
 
     private final UUID id;
@@ -32,14 +21,7 @@ public final class WorkJob {
     private final WorkQueue queue;
     private final CompoundTag detail;
     private boolean cancelled;
-    /**
-     * Why the job is temporarily not being worked, or null if it is.
-     *
-     * <p>Distinct from {@link #cancelled}, which is somebody's decision and permanent. A suspension is the
-     * world's decision and reversible: a siege starts over a half-built structure, the drones stop being sent,
-     * the siege ends, the build resumes. Not saved: it is re-derived within
-     * {@code SiteRules.RECHECK_TICKS} of a reload, and a stale reason on disk would be worse than none.
-     */
+    /** Why the job is temporarily not being worked, or null if it is. */
     private transient String suspended;
 
     public WorkJob(UUID id, ResourceLocation kind, ResourceKey<Level> dimension, BoundingBox bounds,
@@ -112,9 +94,6 @@ public final class WorkJob {
 
     /**
      * @return true when nothing more will be done here: the queue ran out, or somebody called it off.
-     *
-     * <p>A suspension is deliberately <em>not</em> over: the job is still live, still holds its progress, and
-     * will pick up again. What it stops is being handed to drones: see {@link #workable}.
      */
     public boolean over() {
         return this.cancelled || this.queue.finished();

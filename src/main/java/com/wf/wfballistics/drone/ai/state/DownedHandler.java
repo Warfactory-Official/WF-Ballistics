@@ -1,18 +1,14 @@
 package com.wf.wfballistics.drone.ai.state;
 
 import com.wf.wfballistics.drone.DroneState;
+import com.wf.wfballistics.drone.RotorDamage;
 import com.wf.wfballistics.drone.ai.DroneSnapshot;
 import com.wf.wfballistics.drone.ai.DroneStateHandler;
 import com.wf.wfballistics.drone.ai.SquadView;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Shot down. The rotors are gone, so there is no lift and no steering: the airframe keeps whatever momentum
- * it had, accelerates downward, and spins about its own axis on the way (the spin itself is applied in
- * {@code DroneBrain}, which owns the yaw). It comes to rest as a wreck and stays one: a downed drone never
- * returns to {@link DroneState#IDLE}, so it can't take off again, but it can still be looted.
- */
+/** Shot down. */
 public final class DownedHandler implements DroneStateHandler {
 
     public static final DownedHandler INSTANCE = new DownedHandler();
@@ -37,9 +33,24 @@ public final class DownedHandler implements DroneStateHandler {
             return Vec3.ZERO;
         }
         Vec3 velocity = self.velocity();
-        return new Vec3(velocity.x * Tuning.DOWNED_DRAG,
-                Math.max(Tuning.DOWNED_TERMINAL, velocity.y - Tuning.DOWNED_GRAVITY),
-                velocity.z * Tuning.DOWNED_DRAG);
+        double fall = Math.max(Tuning.DOWNED_TERMINAL, velocity.y - Tuning.DOWNED_GRAVITY);
+        Vec3 slip = sideslip(self);
+        return new Vec3(velocity.x * Tuning.DOWNED_DRAG + slip.x,
+                fall,
+                velocity.z * Tuning.DOWNED_DRAG + slip.z);
+    }
+
+    /** The way a crippled airframe slides while it comes down. */
+    private static Vec3 sideslip(DroneSnapshot self) {
+        RotorDamage rotors = self.rotors();
+        if (!rotors.damaged() || rotors.dead()) {
+            return Vec3.ZERO;
+        }
+        double sin = Math.sin(self.yaw());
+        double cos = Math.cos(self.yaw());
+        double x = rotors.leanX() * cos + rotors.leanZ() * sin;
+        double z = rotors.leanZ() * cos - rotors.leanX() * sin;
+        return new Vec3(x * Tuning.DOWNED_SIDESLIP, 0.0, z * Tuning.DOWNED_SIDESLIP);
     }
 
     @Override

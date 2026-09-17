@@ -13,20 +13,12 @@ import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 
 /**
- * Client-only renderer of a {@link MistEntity}: fills its bounding box with tinted {@link MistParticle}s
- * every tick. Kept out of the entity class proper so the dedicated server never touches client code.
- *
- * <p>The cloud's tint comes from its {@link MistEffect} (if it overrides {@code color}), otherwise from the
- * fluid's own render colour.
+ * Client-only renderer of a {@link MistEntity}: fills its bounding box with tinted {@link MistParticle}s every
+ * tick.
  */
 public final class MistClientFX {
 
-    /**
-     * Particles per block of cloud volume per tick, and the per-entity cap. Scaling by volume keeps the total
-     * density roughly constant whether a cloud is one big box or many small {@link MistEntity} cells: a
-     * volumetric gas cloud is now typically a few big boxes, so the cap is generous enough that one big cell
-     * still reads as dense fog rather than a sparse sprinkle.
-     */
+    /** Particles per block of cloud volume per tick, and the per-entity cap. */
     private static final double PARTICLE_DENSITY = 0.06;
     private static final int MAX_PARTICLES = 120;
 
@@ -34,6 +26,7 @@ public final class MistClientFX {
     }
 
     public static void spawn(MistEntity mist) {
+        if (com.wf.wfballistics.client.flywheel.FlywheelEffectManager.isAvailable(mist.level())) return;
         if (WFParticleSprites.mist == null) return;
 
         ClientLevel level = (ClientLevel) mist.level();
@@ -55,7 +48,7 @@ public final class MistClientFX {
         }
     }
 
-    private static int tintFor(MistEntity mist) {
+    public static int tintFor(MistEntity mist) {
         MistEffect effect = MistEffects.get(mist.getFluid());
         if (effect != null) {
             int c = effect.color(mist);

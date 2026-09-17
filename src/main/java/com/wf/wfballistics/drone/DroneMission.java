@@ -19,22 +19,12 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A delivery order: what to fly, where to, where back, and how many. The drone counterpart of
- * {@code LaunchConfig}, and the single config both dispatch paths (the command and the drone pad) fill in.
- */
+/** A delivery order: what to fly, where to, where back, and how many. */
 public final class DroneMission {
 
-    /**
-     * Default gap between launches, in ticks. A second: long enough that the drone ahead is well clear of the
-     * pad (at the stock climb rate that is seven blocks, against a hull a little over one block tall) and
-     * short enough that even a maximum flight of sixteen is fully airborne in a quarter of a minute.
-     */
+    /** Default gap between launches, in ticks. */
     public static final int DEFAULT_LAUNCH_INTERVAL = 20;
-    /**
-     * The range a configured interval is held to, applied where it enters the system. The ceiling is a
-     * minute, past which a flight spends more battery waiting for itself than the stagger can be worth.
-     */
+    /** The range a configured interval is held to, applied where it enters the system. */
     public static final int MAX_LAUNCH_INTERVAL = 1200;
 
     public ResourceLocation modelId = DroneModels.DEFAULT;
@@ -46,63 +36,36 @@ public final class DroneMission {
     public Vec3 exfil;
     public int count = 1;
     public ResourceLocation formationId = Formations.DEFAULT;
-    /**
-     * How far apart the flight holds its slots, in blocks. The formation's shape and its size are two
-     * separate choices, a wedge is a wedge whether it is flown tight or loose, so this is its own setting
-     * rather than something baked into the shape.
-     */
+    /** How far apart the flight holds its slots, in blocks. */
     public double formationSpacing = Formation.DEFAULT_SPACING;
     /**
-     * Which architecture the flight holds its shape with: what the slots are measured <em>against</em>, as
-     * opposed to where the slots are. Separate from the shape and from the spacing because it is a genuinely
-     * separate decision, and the one of the three that decides how tightly the formation is actually held.
+     * Which architecture the flight holds its shape with: what the slots are measured <em>against</em>, as opposed
+     * to where the slots are.
      */
     public ResourceLocation coordinationId = CoordinationModels.DEFAULT;
-    /**
-     * Ticks between one drone leaving the pad and the next, or 0 to put the whole flight up at once.
-     *
-     * <p>A flight goes up one at a time by default, and the reason is what happens afterwards rather than how
-     * it looks: drones released together are three-block hulls all trying to occupy the same climb-out, and
-     * the ones shouldered aside spend the first part of the mission recovering from a shove rather than
-     * forming up. Released in series, each has the airspace to itself. What makes it a formation rather than
-     * a straggle is that nobody leaves until everybody is up: see {@code DroneState#MUSTER}.
-     *
-     * <p>Zero is still honoured and is what the scenarios use, because a test that wants four drones in the
-     * air on the tick it asked for should get them.
-     */
+    /** Ticks between one drone leaving the pad and the next, or 0 to put the whole flight up at once. */
     public int launchInterval = DEFAULT_LAUNCH_INTERVAL;
     public double cruiseSpeed = DroneEntity.DEFAULT_CRUISE_SPEED;
     public double cruiseAltitude = DroneEntity.DEFAULT_CRUISE_ALTITUDE;
     public double batteryCapacity = DroneBattery.DEFAULT_CAPACITY;
-    /**
-     * Warhead to sling under each drone, by registered id. Null makes this a cargo delivery instead of a
-     * strike: the two mission kinds differ only by this field.
-     */
+    /** Warhead to sling under each drone, by registered id. */
     @Nullable
     public ResourceLocation payloadId;
+    /** The rack of mines to sling under each drone, or null for a mission that lays none. */
+    @Nullable
+    public MineLoad mines;
     public double releaseSpeed = DroneEntity.DEFAULT_RELEASE_SPEED;
     /**
      * How hard this delivery tries to hide where it came from.
      */
     public ExchangeMode mode = ExchangeMode.DIRECT;
-    /**
-     * The station being traded with, for a handshake. A code, never a position: the server resolves it, and
-     * the client that typed it in never learns what it resolved to.
-     */
+    /** The station being traded with, for a handshake. */
     @Nullable
     public String recipientCode;
-    /**
-     * The queued mission steps. Empty means the classic one-stop mission, and {@link #destination} is then
-     * the whole of it; a program replaces that with as many stops as were written, and the destination
-     * becomes whichever one the drone is currently flying to.
-     */
+    /** The queued mission steps. */
     public DroneProgram program = DroneProgram.EMPTY;
 
-    /**
-     * Staging waypoints flown before the destination, and after the drop. Drawn from a cryptographic source
-     * when the mission is dispatched, so neither the sender nor an observer can predict the shape of the
-     * route.
-     */
+    /** Staging waypoints flown before the destination, and after the drop. */
     public List<Vec3> approachLegs = List.of();
     public List<Vec3> egressLegs = List.of();
     /**
@@ -113,13 +76,7 @@ public final class DroneMission {
     public java.util.UUID exchangeId;
     @Nullable
     public String stationCode;
-    /**
-     * The construction or salvage job this flight is being sent to work, or null for an ordinary mission.
-     *
-     * <p>Server-side and never on the wire, like the fields above it. Saved, because the launch queue holds
-     * the mission for the drones still to come and every one of them has to join the same job: a flight
-     * half of which is building and half of which flew to the site and went home again is not a flight.
-     */
+    /** The construction or salvage job this flight is being sent to work, or null for an ordinary mission. */
     @Nullable
     public java.util.UUID jobId;
 
@@ -131,13 +88,13 @@ public final class DroneMission {
     }
 
     /**
-     * Serialise for the wire.
-     *
-     * <p><b>A handshake writes no coordinates.</b> Not blanked, not zeroed: the fields are simply absent
-     * from the packet, so there is nothing for a modified client to read and nothing for the server to be
-     * tricked into trusting. The destination of a handshake exists only on the server, resolved from a
-     * station code after this packet has been received.
+     * @return true if this mission sows a minefield rather than dropping a warhead or a crate.
      */
+    public boolean isMinelay() {
+        return mines != null;
+    }
+
+    /** Serialise for the wire. */
     public void write(FriendlyByteBuf b) {
         b.writeResourceLocation(modelId);
         b.writeEnum(mode);
@@ -165,6 +122,10 @@ public final class DroneMission {
         if (payloadId != null) {
             b.writeResourceLocation(payloadId);
         }
+        b.writeBoolean(mines != null);
+        if (mines != null) {
+            mines.write(b);
+        }
         b.writeDouble(releaseSpeed);
         program.write(b);
     }
@@ -187,6 +148,7 @@ public final class DroneMission {
         m.cruiseAltitude = b.readDouble();
         m.batteryCapacity = b.readDouble();
         m.payloadId = b.readBoolean() ? WarheadRegistry.parse(b.readResourceLocation().toString()) : null;
+        m.mines = b.readBoolean() ? MineLoad.read(b) : null;
         m.releaseSpeed = b.readDouble();
         m.program = DroneProgram.read(b);
         return m;
@@ -213,6 +175,9 @@ public final class DroneMission {
         tag.putDouble("BatteryCapacity", batteryCapacity);
         if (payloadId != null) {
             tag.putString("Payload", payloadId.toString());
+        }
+        if (mines != null) {
+            tag.put("Mines", mines.save());
         }
         tag.putDouble("ReleaseSpeed", releaseSpeed);
         tag.putString("Mode", mode.name());
@@ -289,6 +254,9 @@ public final class DroneMission {
         if (tag.contains("Payload")) {
             m.payloadId = WarheadRegistry.parse(tag.getString("Payload"));
         }
+        if (tag.contains("Mines")) {
+            m.mines = MineLoad.load(tag.getCompound("Mines"));
+        }
         m.releaseSpeed = tag.contains("ReleaseSpeed")
                 ? tag.getDouble("ReleaseSpeed") : DroneEntity.DEFAULT_RELEASE_SPEED;
         m.mode = ExchangeMode.byName(tag.getString("Mode"));
@@ -305,24 +273,20 @@ public final class DroneMission {
 
     /**
      * @return the charge a single drone is short by for the outbound leg, or 0 if it can make it. A mission
-     * it cannot even reach the destination on is refused rather than launched to strand halfway.
+     *      it cannot even reach the destination on is refused rather than launched to strand halfway.
      */
     public double shortfall(Vec3 origin, boolean hasCargo) {
-        return PowerPolicy.shortfallForRoute(batteryCapacity, PowerProfile.DEFAULT, Airframe.QUADCOPTER,
+        return PowerPolicy.shortfallForRoute(batteryCapacity, PowerProfile.DEFAULT, DroneModels.airframe(modelId),
                 cruiseSpeed, outboundDistance(origin), hasCargo);
     }
 
     public boolean canRoundTrip(Vec3 origin, boolean hasCargo) {
-        return PowerPolicy.canRoundTripForRoute(batteryCapacity, PowerProfile.DEFAULT, Airframe.QUADCOPTER,
+        return PowerPolicy.canRoundTripForRoute(batteryCapacity, PowerProfile.DEFAULT, DroneModels.airframe(modelId),
                 cruiseSpeed, outboundDistance(origin), returnDistance(origin), hasCargo);
     }
 
     /**
      * @return how far the drone actually flies to reach the destination, following every staging waypoint.
-     *
-     * <p>The dogleg is not free, and pricing the mission on the straight-line distance would launch drones
-     * that strand a third of the way round the detour. This is the difference between "indirect costs more"
-     * being a design statement and it being true.
      */
     public double outboundDistance(Vec3 origin) {
         Vec3 from = origin;
@@ -350,10 +314,7 @@ public final class DroneMission {
         return total + from.distanceTo(exfilOr(origin));
     }
 
-    /**
-     * Draw the staging waypoints for this mission's mode. Called server-side at dispatch, from a
-     * cryptographic source.
-     */
+    /** Draw the staging waypoints for this mission's mode. */
     public void planObfuscation(java.util.random.RandomGenerator rng, Vec3 origin) {
         if (mode == ExchangeMode.DIRECT) {
             approachLegs = List.of();
@@ -369,11 +330,10 @@ public final class DroneMission {
     }
 
     /**
-     * Spawn and launch the drones. The first is the squad leader and carries the cargo; the rest form up on
-     * it. A mission out of battery range is refused.
+     * Spawn and launch the drones.
      *
      * @param cargo optional cargo for the leader, as saved container contents. Non-null means "a crate,
-     *              even if it is empty": no crate entity is created here or at any point in flight
+     *      even if it is empty": no crate entity is created here or at any point in flight
      */
     public Result dispatch(ServerLevel level, Vec3 origin, @Nullable CompoundTag cargo) {
         if (!program.isEmpty()) {
@@ -416,10 +376,6 @@ public final class DroneMission {
     /**
      * Put one drone of this mission on the ground and hand it over to the AI.
      *
-     * <p>Separated from {@link #dispatch} because the rest of the flight is spawned later, by
-     * {@link DroneLaunchQueue}, and both paths have to produce identical drones: a follower that came up a
-     * second late but with a different battery or a different formation is not the same mission.
-     *
      * @param index how far into the flight this drone is; 0 leads
      * @param total how many the mission ordered, which the drone has to know before the rest of them exist
      */
@@ -427,6 +383,8 @@ public final class DroneMission {
         Vec3 at = origin.add((index % 2 == 0 ? -1 : 1) * ((index + 1) / 2) * DroneEntity.SPAWN_SPACING,
                 0.0, 0.0);
         DroneEntity drone = new DroneEntity(level, at);
+        drone.setTeamId(com.wf.wfballistics.recon.ReconOwners.owningAt(
+                level, net.minecraft.core.BlockPos.containing(origin)));
         drone.setModelId(modelId);
         drone.setDestination(destination);
         drone.setExfil(exfilOr(origin));
@@ -448,6 +406,10 @@ public final class DroneMission {
             drone.setPayload(payloadId);
             drone.setReleaseSpeed(releaseSpeed);
         }
+        if (mines != null) {
+            drone.setMines(mines);
+            drone.setReleaseSpeed(releaseSpeed);
+        }
         level.addFreshEntity(drone);
         return drone;
     }
@@ -459,10 +421,7 @@ public final class DroneMission {
         return Math.max(0, Math.min(MAX_LAUNCH_INTERVAL, interval));
     }
 
-    /**
-     * Staging bearings come from a cryptographic source, not the level's seeded random. A predictable
-     * detour is not a detour.
-     */
+    /** Staging bearings come from a cryptographic source, not the level's seeded random. */
     private static final java.security.SecureRandom OBFUSCATION_RNG = new java.security.SecureRandom();
 
     private static long squadId(ServerLevel level) {
@@ -471,10 +430,10 @@ public final class DroneMission {
     }
 
     /**
-     * @param drones  the drones that exist <em>now</em>. With a staggered launch that is just the leader:
-     *                the rest are still queued, so anything counting aircraft wants {@link #ordered} instead
+     * @param drones the drones that exist <em>now</em>. With a staggered launch that is just the leader:
+     *      the rest are still queued, so anything counting aircraft wants {@link #ordered} instead
      * @param ordered how many the mission asked for
-     * @param error   null on success, otherwise why the mission was refused
+     * @param error null on success, otherwise why the mission was refused
      */
     public record Result(List<DroneEntity> drones, int ordered, @Nullable String error) {
         public boolean ok() {

@@ -5,36 +5,17 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Locale;
 import java.util.UUID;
 
-/**
- * One thing a squad of glyphids has been sent to deal with.
- *
- * <p>Plain data, and deliberately a position rather than a reference to whatever it was derived from: a
- * machine cluster is a centre of mass with no entity behind it, and a player who logs out should leave the
- * squad walking to where they were rather than losing its orders. {@link #player} is the exception, carried
- * so a squad sent after somebody keeps preferring them over whatever else wanders past.
- */
+/** One thing a squad of glyphids has been sent to deal with. */
 public record GlyphidObjective(Kind kind, int x, int y, int z, @Nullable UUID player) {
 
     public enum Kind {
-        /**
-         * Somebody in particular. Two squads never take the same one, which is what splits a group of
-         * defenders up instead of landing the whole swarm on whoever is nearest.
-         */
+        /** Somebody in particular. */
         PLAYER,
-        /**
-         * A base, off the industry pressure field. What makes an attack read as aimed at what you built
-         * rather than at you.
-         */
+        /** A base, off the industry pressure field. */
         MACHINES,
-        /**
-         * A hole to make. Assigned when the way to everything else is walled off, so one squad concentrates
-         * on opening it instead of the whole swarm piling into the same dead end.
-         */
+        /** A hole to make. */
         BREACH,
-        /**
-         * Where the warband was going in the first place. Always available, so a squad is never left without
-         * orders.
-         */
+        /** Where the warband was going in the first place. */
         RALLY
     }
 

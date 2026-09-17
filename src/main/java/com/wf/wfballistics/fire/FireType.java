@@ -1,12 +1,6 @@
 package com.wf.wfballistics.fire;
 
-/**
- * A kind of burning. Carries everything that used to be decided by comparing an {@code int} variant at the
- * call site: how hard it hurts, how long it sticks to whatever it catches, and whether water puts it out.
- *
- * <p>Ordinals are persisted, both by {@link WFFireData} and as the synched variant of
- * {@code FireLingeringEntity}, so append new kinds at the end and do not reorder these.
- */
+/** A kind of burning. */
 public enum FireType {
 
     /** Ordinary burning fuel. Diesel, napalm, a ruptured tank. Goes out in water. */
@@ -29,8 +23,8 @@ public enum FireType {
 
     /**
      * @return the kind with this ordinal, or {@link #NORMAL} if the id is out of range. Used where the kind
-     *         arrives as a raw int: synched entity data and saved NBT, neither of which can be trusted to
-     *         match the current set of constants.
+     *      arrives as a raw int: synched entity data and saved NBT, neither of which can be trusted to
+     *      match the current set of constants.
      */
     public static FireType byId(int id) {
         FireType[] values = values();

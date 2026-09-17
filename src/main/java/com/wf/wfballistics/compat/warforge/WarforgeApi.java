@@ -29,15 +29,7 @@ public final class WarforgeApi {
         return (claim == null || claim.equals(NULL_UUID)) ? null : claim;
     }
 
-    /**
-     * Whether {@code faction} may have a drone change blocks in this chunk.
-     *
-     * <p>Asked in the order the answers matter. A live siege beats everything, including a claim the asking
-     * faction owns, the ground being fought over is precisely the ground nobody should be quietly rebuilding,
-     * and it is asked first because {@code getClaim} would otherwise report the defender's ordinary claim
-     * and read as friendly to the defender. After that it is the claim: nobody's is fair game, the neutral
-     * pseudo-factions are not, and a real claim comes down to standing.
-     */
+    /** Whether {@code faction} may have a drone change blocks in this chunk. */
     public static TerritoryVerdict buildVerdict(Level level, UUID faction, BlockPos pos) {
         DimChunkPos chunk = new DimChunkPos(level.dimension(), pos);
         FactionStorage.SiegeZoneResult siege = WarForgeMod.FACTIONS.getSiegeZone(chunk);
@@ -72,20 +64,10 @@ public final class WarforgeApi {
         return fa != null && (fa.isAllyOf(b) || fa.isInTruceWith(b));
     }
 
-    // Drop the blocks the owning faction is not allowed to blow up under the real WarForge chunk rules,
-    // leaving the rest for the blast. igniterFaction is the blast's owning faction (a missile's teamId), or
-    // null for an unattributed blast. This respects siege/war/safe zones and faction standing from that
-    // faction's perspective (it may breach a claim it is besieging, is stopped by claims it may not touch)
-    // instead of blindly stopping at any claim.
     public static void filterClaimProtected(Level level, UUID igniterFaction, Collection<BlockPos> positions) {
         ExplosionProtection.filter(level, actingPlayerFor(igniterFaction), positions);
     }
 
-    // WarForge evaluates explosion protection from an acting *player's* perspective (it resolves that player
-    // to their faction internally). Map the blast's owning faction to one of its members, its leader, so
-    // the real chunk rules are applied as if that faction set the blast off. Falls back to the null igniter
-    // (an unattributed foe, protected everywhere but active siege zones) when the blast has no faction, the
-    // faction no longer exists, or it has no members.
     private static UUID actingPlayerFor(UUID igniterFaction) {
         if (igniterFaction == null || igniterFaction.equals(NULL_UUID)) {
             return NULL_UUID;
@@ -94,8 +76,6 @@ public final class WarforgeApi {
         if (faction == null) {
             return NULL_UUID;
         }
-        // getLeaderId() returns Faction.nullUuid (not Java null) when the faction has no leader; either way
-        // an empty/leaderless faction falls back to the unattributed igniter.
         UUID leader = faction.getLeaderId();
         return (leader == null || leader.equals(NULL_UUID)) ? NULL_UUID : leader;
     }

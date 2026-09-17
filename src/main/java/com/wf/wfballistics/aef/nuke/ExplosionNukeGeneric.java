@@ -18,9 +18,9 @@ public class ExplosionNukeGeneric {
     }
 
     public static void dealDamage(Level level, Vec3 pos, double radius, float maxDamage) {
-        List<Entity> entities = level.getEntities((Entity) null, new AABB(pos, pos).expandTowards(radius, radius, radius), Entity::isAlive);
+        List<Entity> entities = level.getEntities((Entity) null, new AABB(pos, pos).inflate(radius), Entity::isAlive);
         for (Entity entity : entities) {
-            double dist = entity.distanceToSqr(pos);
+            double dist = Math.sqrt(entity.distanceToSqr(pos));
             if (dist <= radius) {
                 Vec3 eyePosition = entity.getEyePosition();
                 if (!isExplosionExempt(entity) && isObstructed(level, pos, eyePosition)) {

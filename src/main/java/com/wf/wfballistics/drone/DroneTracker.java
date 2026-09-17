@@ -16,12 +16,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Keeps an O(1) per-level set of live drones so the scheduler doesn't have to sweep every entity in the
- * world each tick. Maintained from join/leave events, mirroring {@code SwarmManager} and
- * {@code OBBEntityTracker}.
- *
- * <p>Also registers itself as the scheduler's source of in-world drones; the off-world sim adds a second
- * source of its own.
+ * Keeps an O(1) per-level set of live drones so the scheduler doesn't have to sweep every entity in the world each
+ * tick.
  */
 @EventBusSubscriber(modid = WFBallistics.MODID, bus = EventBusSubscriber.Bus.GAME)
 public final class DroneTracker {
@@ -35,10 +31,7 @@ public final class DroneTracker {
     private DroneTracker() {
     }
 
-    /**
-     * Touching this class runs its static initialiser, which registers the carrier source. Called from mod
-     * setup so the scheduler knows about in-world drones before the first tick.
-     */
+    /** Touching this class runs its static initialiser, which registers the carrier source. */
     public static void bootstrap() {
     }
 
@@ -62,6 +55,7 @@ public final class DroneTracker {
         if (!(event.getEntity() instanceof DroneEntity drone) || event.getLevel().isClientSide) {
             return;
         }
+        DroneRecall.leaving(drone);
         Set<DroneEntity> set = BY_LEVEL.get(event.getLevel());
         if (set != null) {
             set.remove(drone);

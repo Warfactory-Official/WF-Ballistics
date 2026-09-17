@@ -14,25 +14,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-/**
- * Flights still going up: one drone leaves the pad, then the next, then the next.
- *
- * <p>A squad used to appear all at once, which is the one moment in a mission when every drone in it wants
- * the same piece of sky. Three-block hulls are solid to one another, so what actually happened was a
- * scrimmage on the pad: the ones shoved aside spent the first part of the flight recovering from the shove
- * rather than forming up, and a wide formation made it worse, because the slots they were being told to fly
- * to were further away. Releasing them in series gives each the climb-out to itself, and
- * {@code DroneState#MUSTER} is what stops the first one leaving without the rest.
- *
- * <p>Persistent, and that is not incidental. A launch is a promise to put a specific number of drones in the
- * air, and the flight already up is <em>waiting</em> on it: if a world reload lost the queue, the drones
- * that made it would hold over the pad until the muster timeout and then fly the mission short-handed. So
- * the whole mission rides along, including the dispatch-time fields (the drawn-once dogleg, the exchange it
- * belongs to) because a drone that came up after a restart has to fly the same route as the one that came
- * up before it.
- *
- * <p>Everything here runs on the world thread, from {@code WFServerEvents}' level tick.
- */
+/** Flights still going up: one drone leaves the pad, then the next, then the next. */
 public final class DroneLaunchQueue extends SavedData {
 
     public static final String NAME = "wfballistics_drone_launches";
@@ -47,13 +29,7 @@ public final class DroneLaunchQueue extends SavedData {
                 NAME);
     }
 
-    /**
-     * Release whatever is due this tick.
-     *
-     * <p>Only one drone per launch per tick even if several are overdue: a server that stalled for a second
-     * should resume the stagger, not dump the backlog into the air at once, which is the exact pile-up the
-     * stagger exists to prevent.
-     */
+    /** Release whatever is due this tick. */
     public static void tick(ServerLevel level) {
         DroneLaunchQueue queue = level.getDataStorage().get(
                 new SavedData.Factory<>(DroneLaunchQueue::new, (tag, reg) -> DroneLaunchQueue.load(tag)),
@@ -89,8 +65,7 @@ public final class DroneLaunchQueue extends SavedData {
     }
 
     /**
-     * Queue the rest of a flight. The leader is already in the air, see {@code DroneMission#dispatch}, so
-     * this starts at index 1.
+     * Queue the rest of a flight.
      *
      * @param total how many the mission ordered, leader included
      * @param first the tick the second drone is due
@@ -113,8 +88,8 @@ public final class DroneLaunchQueue extends SavedData {
 
     /**
      * @return how many drones are still waiting to go up across all flights. Reported by
-     * {@code /wfballistics drone list} so a squad that looks short-handed can be told apart from one that is
-     * still launching.
+     *      {@code /wfballistics drone list} so a squad that looks short-handed can be told apart from one that is
+     *      still launching.
      */
     public int pending() {
         int total = 0;

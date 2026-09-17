@@ -13,35 +13,18 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * What the client knows about the glyphids that have no entity.
- *
- * <p>The store behind {@link SimGlyphidVisual}. It holds one {@link Ghost} per record in range, updated
- * every {@link SimGlyphidSyncPacket#INTERVAL} ticks and interpolated in between, which is exactly what a
- * client already does with an entity — the difference is that nothing here has a hitbox, a sound, a name
- * tag, a light source or a tick.
- *
- * <p><b>Published as a whole array, never edited in place.</b> Flywheel poses visuals from its own worker
- * pool while the network thread's work is running on the client thread, so a store that mutated a live
- * {@code Ghost} would be a glyphid drawn half at its old position and half at its new one. Each update
- * builds a fresh set and swaps the reference, so a frame either sees the whole of one update or the whole
- * of the last.
- */
+/** What the client knows about the glyphids that have no entity. */
 public final class SimGlyphids {
 
-    /**
-     * Ticks with nothing to draw before the flywheel effect is retired. Not zero, because a swarm's records
-     * come and go as they cross the promotion boundary and rebuilding the instancers each time would cost
-     * more than keeping an idle effect.
-     */
+    /** Ticks with nothing to draw before the flywheel effect is retired. */
     private static final int IDLE_TICKS = 60;
 
     /**
-     * One glyphid, as the client sees it. Immutable: the interpolation reads it from a render thread.
+     * One glyphid, as the client sees it.
      *
      * @param walk the walk cycle's accumulated phase, carried across updates from the previous ghost with
-     *             the same id. Vanilla keeps this on the entity as {@code walkAnimation}; here it is derived
-     *             from how far the record actually moved, which is the same input
+     *      the same id. Vanilla keeps this on the entity as {@code walkAnimation}; here it is derived
+     *      from how far the record actually moved, which is the same input
      */
     public record Ghost(int id, GlyphidCaste caste,
                         double prevX, double prevY, double prevZ,
@@ -87,7 +70,7 @@ public final class SimGlyphids {
 
     /**
      * @return how far between the last two updates this frame is, clamped so a dropped packet leaves the
-     * swarm standing where it was rather than extrapolating it into the distance.
+     *      swarm standing where it was rather than extrapolating it into the distance.
      */
     public static float alpha(float partialTick) {
         return Math.min(1.0f, (sinceUpdate + partialTick) / SimGlyphidSyncPacket.INTERVAL);
@@ -126,10 +109,6 @@ public final class SimGlyphids {
             double fromY = was == null ? y : was.y;
             double fromZ = was == null ? z : was.z;
             float fromYaw = was == null ? yaw : was.yaw;
-            // Vanilla's walk animation is accumulated horizontal speed; a record's speed is how far it
-            // actually went, so the legs cannot get out of step with the walk the way a guessed phase would.
-            // Wrapped to one cycle so a record that has been walking for an hour does not lose the fraction
-            // the pose table indexes on to float precision.
             float walk = was == null ? 0.0f
                     : (float) ((was.walk + Math.hypot(x - fromX, z - fromZ) * 4.0) % (Math.PI * 2.0));
 
@@ -154,10 +133,7 @@ public final class SimGlyphids {
         return map;
     }
 
-    /**
-     * Advance the interpolation clock. Driven off the effect's tick so it stops with the game rather than
-     * running on through a pause.
-     */
+    /** Advance the interpolation clock. */
     public static void tick() {
         sinceUpdate++;
         if (ghosts.length == 0) {
@@ -179,7 +155,7 @@ public final class SimGlyphids {
 
     /**
      * @return true if flywheel can draw these at all. With the backend off they are not drawn, which is the
-     * same trade the entity tier already makes: {@code skipVanillaRender} is set there too.
+     *      same trade the entity tier already makes: {@code skipVanillaRender} is set there too.
      */
     public static boolean drawable(Level candidate) {
         return FlywheelEffectManager.isAvailable(candidate);

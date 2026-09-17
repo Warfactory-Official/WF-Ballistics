@@ -4,17 +4,7 @@ import net.minecraft.world.entity.ai.goal.Goal;
 
 import java.util.EnumSet;
 
-/**
- * Wraps a goal so that any pathfinding it triggers is charged to it by name.
- *
- * <p>Path search was a third of a swarm's tick with no way to tell which goal was spending it. The search
- * happens several frames below the goal, inside the navigator, on an object that does not know who asked —
- * so the goal has to say so on the way in. A decorator rather than a mixin because the goals are ours to
- * register, and this way any goal can be put under the microscope by wrapping it at the call site.
- *
- * <p>Wrapping is transparent: flags are copied from the delegate, so the goal selector's mutual-exclusion
- * still behaves exactly as it did unwrapped.
- */
+/** Wraps a goal so that any pathfinding it triggers is charged to it by name. */
 public final class ProfiledGoal extends Goal {
 
     private final Goal delegate;

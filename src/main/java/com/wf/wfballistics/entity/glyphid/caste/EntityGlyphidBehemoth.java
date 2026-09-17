@@ -14,31 +14,18 @@ import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.level.Level;
 
-/**
- * The siege caste: plants itself and breathes acid.
- *
- * <p>Breathing is a commitment. It roots the behemoth for a full six seconds — slowed, facing one way — so
- * the counterplay is to be somewhere else by the time it starts, and the cost of ignoring one is a corridor
- * that dissolves. That trade is why the yaw is pinned rather than tracking: a breath that follows you is an
- * attack with no answer.
- */
+/** The siege caste: plants itself and breathes acid. */
 public class EntityGlyphidBehemoth extends EntityGlyphid {
 
     private static final int BREATH_COOLDOWN = 120;
     private static final int BREATH_TICKS = 120;
     private static final double BREATH_RANGE = 20.0;
-    /**
-     * Ticks between puffs. Every tick would be a hundred and twenty clouds per breath; this is twelve, each
-     * lasting long enough to overlap the next.
-     */
+    /** Ticks between puffs. */
     private static final int BREATH_PUFF_INTERVAL = 10;
     private static final int BREATH_PUFF_DURATION = 60;
     private static final float BREATH_PUFF_RADIUS = 2.5F;
     private static final float BREATH_PUFF_HEIGHT = 2.5F;
-    /**
-     * Where along the line to the target the puffs land. The near end is at the behemoth's feet and the far
-     * end is where the stream runs out, so the cloud reads as a jet rather than a ring.
-     */
+    /** Where along the line to the target the puffs land. */
     private static final double BREATH_NEAR = 2.0;
     private static final double BREATH_FAR = 9.0;
 
@@ -66,10 +53,9 @@ public class EntityGlyphidBehemoth extends EntityGlyphid {
         return GlyphidStats.getStats().getBehemoth();
     }
 
-
     /**
-     * Pins the facing across the whole tick, because the look control runs inside {@code super.tick()} and
-     * would otherwise swing the head onto the target between breaths.
+     * Pins the facing across the whole tick, because the look control runs inside {@code super.tick()} and would
+     * otherwise swing the head onto the target between breaths.
      */
     @Override
     public void tick() {
@@ -98,8 +84,6 @@ public class EntityGlyphidBehemoth extends EntityGlyphid {
             if (!swinging) {
                 swing(InteractionHand.MAIN_HAND);
             }
-            // Renewed each tick rather than applied once, so the root cannot be walked out of by a lucky
-            // effect expiry partway through the breath.
             addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 2 * 20, 6));
             if (breathTicks % BREATH_PUFF_INTERVAL == 0) {
                 spray(target);

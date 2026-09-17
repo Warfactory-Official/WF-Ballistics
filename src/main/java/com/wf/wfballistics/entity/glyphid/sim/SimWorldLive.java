@@ -5,14 +5,7 @@ import com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowFields;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.levelgen.Heightmap;
 
-/**
- * {@link SimWorld} asked straight through to the level, on the world thread.
- *
- * <p>What the tier used before the pass moved off-thread, and still what it uses when
- * {@code swarmbench simasync off} switches the worker back off. Kept rather than deleted because it is the
- * control arm: an off-thread pass whose answers differ from the on-thread one is not faster, it is different,
- * and the only way to tell those apart is to be able to run both.
- */
+/** {@link SimWorld} asked straight through to the level, on the world thread. */
 public record SimWorldLive(ServerLevel level) implements SimWorld {
 
     @Override

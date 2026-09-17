@@ -8,18 +8,8 @@ import org.joml.Quaternionf;
 /**
  * How a rotorcraft is currently leaning, and how hard it is pushing.
  *
- * <p>The lean is stored as a <em>world-frame</em> vector rather than as roll/pitch: {@code (tiltX, tiltZ)} is
- * the direction the thrust axis is tipped away from vertical, and its length is the tilt angle in radians.
- * That representation is what makes the rate limit in {@link Multirotor} correct: a real attitude loop is
- * limited in how fast it can swing the thrust axis, in any direction, and clamping the length of one vector
- * expresses that exactly. Doing it as separate roll and pitch limits would let a diagonal move tilt
- * {@code √2} faster than a straight one, and would go singular when the drone yaws under a fixed lean.
- *
- * <p>Roll and pitch are derived on demand, only for drawing, by projecting the lean onto the airframe's own
- * axes: see {@link #roll} and {@link #pitch}.
- *
  * @param throttle thrust as a multiple of what it takes to hover unladen, so 1.0 is a stationary hover, less
- *                 is sinking and more is climbing or leaning
+ *      is sinking and more is climbing or leaning
  */
 public record FlightAttitude(double tiltX, double tiltZ, double throttle) {
 
@@ -41,7 +31,7 @@ public record FlightAttitude(double tiltX, double tiltZ, double throttle) {
 
     /**
      * @return the unit vector the thrust actually points along. This is the whole of a multirotor's steering:
-     * it has no control surfaces and no vectoring, so every force it can produce is along this axis.
+     *      it has no control surfaces and no vectoring, so every force it can produce is along this axis.
      */
     public Vec3 thrustAxis() {
         double tilt = tilt();
@@ -68,22 +58,12 @@ public record FlightAttitude(double tiltX, double tiltZ, double throttle) {
         return (float) (tiltX * Math.sin(yaw) + tiltZ * Math.cos(yaw));
     }
 
-    /**
-     * The rotation that tips the world's up axis over into the lean direction.
-     *
-     * <p>Shared by the hitbox and the renderer so the box a shot has to hit is always the shape the drone is
-     * drawn in. Tipping up toward {@code (tiltX, 0, tiltZ)} is a rotation about the perpendicular
-     * {@code (tiltZ, 0, −tiltX)}, which is where the swapped and negated components below come from.
-     */
+    /** The rotation that tips the world's up axis over into the lean direction. */
     public static Quaternionf leanRotation(double tiltX, double tiltZ) {
         return leanRotation(tiltX, tiltZ, new Quaternionf());
     }
 
-    /**
-     * The same rotation written into {@code dest}. The render path rebuilds this every frame for every
-     * airframe on screen, and a lean is two trig calls' worth of work: not worth a fresh quaternion each
-     * time.
-     */
+    /** The same rotation written into {@code dest}. */
     public static Quaternionf leanRotation(double tiltX, double tiltZ, Quaternionf dest) {
         double tilt = Math.sqrt(tiltX * tiltX + tiltZ * tiltZ);
         if (tilt < 1.0E-6) {
@@ -101,8 +81,8 @@ public record FlightAttitude(double tiltX, double tiltZ, double throttle) {
     }
 
     /**
-     * The hitbox counterpart of {@link #leanRotation(double, double, Quaternionf)}, rebuilt every tick for
-     * every drone that moved.
+     * The hitbox counterpart of {@link #leanRotation(double, double, Quaternionf)}, rebuilt every tick for every
+     * drone that moved.
      */
     public static Quaterniond leanRotationPrecise(double tiltX, double tiltZ, Quaterniond dest) {
         double tilt = Math.sqrt(tiltX * tiltX + tiltZ * tiltZ);
@@ -133,5 +113,26 @@ public record FlightAttitude(double tiltX, double tiltZ, double throttle) {
         double z = tilt < 1.0E-4 ? 0.0 : tiltZ / tilt;
         double next = Math.min(limit, tilt + rate);
         return new FlightAttitude(x * next, z * next, 0.0);
+    }
+
+    /**
+     * Tip over toward a direction rather than further along the lean it already has: a wreck goes over the side its
+     * lift stopped on, which is not necessarily the way it happened to be leaning when it was hit.
+     *
+     * @param x world-space X of the direction to drop, need not be normalised
+     * @param z world-space Z of the same
+     * @param rate radians per tick
+     * @param limit how far over it can end up
+     */
+    public FlightAttitude tumbleToward(double x, double z, double rate, double limit) {
+        double length = Math.sqrt(x * x + z * z);
+        if (length < 1.0E-6) {
+            return tumble(rate, limit);
+        }
+        double ux = x / length;
+        double uz = z / length;
+        double along = tiltX * ux + tiltZ * uz;
+        double next = Math.min(limit, along + rate);
+        return new FlightAttitude(ux * next, uz * next, 0.0);
     }
 }

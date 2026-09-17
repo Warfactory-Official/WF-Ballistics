@@ -10,17 +10,17 @@ import com.wf.wfballistics.debug.MissileDebug;
 import com.wf.wfballistics.network.MissileFlightAudioPacket;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.slf4j.Logger;
 
 import java.util.*;
 
 /**
- * Drives all off-world missiles for one level each server tick: advances their positions from
- * gametime deltas, resolves simulated interceptions, and respawns real entities when a missile
- * nears its target or a listener. All logic runs on the server thread.
- * TODO: Async simulation constrained by game time every now and then
+ * Drives all off-world missiles for one level each server tick: advances their positions from gametime deltas,
+ * resolves simulated interceptions, and respawns real entities when a missile nears its target or a listener.
  */
 public final class SimMissileManager {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -60,8 +60,6 @@ public final class SimMissileManager {
             sm.lastGameTime = now;
             if (dt > 0) {
                 advance(sm, dt, byId);
-                // Powered missiles burn fuel off-world too; one that runs dry over unloaded terrain is
-                // treated as having crashed (interceptors are short-lived and resolved separately).
                 if (sm.role == SimMissile.Role.NORMAL) {
                     sm.fuel -= (int) dt;
                     if (!sm.swarmMembers.isEmpty()) {
@@ -71,10 +69,6 @@ public final class SimMissileManager {
                         sm.swarmMembers.removeIf(mem -> mem.fuel <= 0);
                     }
                     if (sm.fuel <= 0) {
-                        // Ran dry off-world. Rather than silently deleting it, rematerialize it as a real
-                        // entity with an empty tank at its current position so it falls ballistically and
-                        // detonates into loaded terrain (spawnOne force-loads the spawn chunk; the entity's own
-                        // fuel<=0 branch keeps the impact area held and the detonation guard finishes the blast).
                         sm.fuel = 0;
                         WFTelemetryService.record(sm.id, WFEventType.FUEL_OUT, now, sm.pos, true,
                                 "ballistic respawn");
@@ -84,9 +78,6 @@ public final class SimMissileManager {
                         dead.add(sm);
                     }
                 }
-                // Long-range flight audio for offloaded missiles: the same heartbeat a live entity sends, so a
-                // missile cruising past while sim-offloaded is still heard. Keyed by UUID, so the sound is
-                // continuous across the offload↔onload handoff.
                 if (!dead.contains(sm) && now % MissileFlightAudioPacket.UPDATE_INTERVAL == 0) {
                     Vec3 vel = sm.pos.subtract(oldPos.get(sm)).scale(1.0 / dt);
                     MissileFlightAudioPacket.broadcastSim(level, sm, vel);
@@ -169,9 +160,6 @@ public final class SimMissileManager {
     private static void resolveByChance(ServerLevel level, SimMissile interceptor, SimMissile target, Set<SimMissile> dead) {
         double d = MissileSimConfig.INTERCEPT_DISTANCE;
         if (interceptor.pos.distanceToSqr(target.pos) <= d * d) {
-            // Higher-tier (evasive) targets can boost clear, but only to the extent they can out-run the
-            // interceptor: escape scales with the boosted-speed / interceptor-speed ratio, so a much faster
-            // interceptor still connects (matches the in-world evadeBoost math; cruising, so no dive bonus).
             double boosted = target.speed * 2.0; // approximates the evasive boost burst
             double speedFactor = Math.min(1.0, boosted / Math.max(1.0E-3, interceptor.speed));
             float escape = (float) (target.evasion * speedFactor);
@@ -207,8 +195,6 @@ public final class SimMissileManager {
         Vec3 tSpawn = new Vec3(c.x - tHeading.x * dist, target.simY, c.z - tHeading.z * dist);
         respawn(level, target, tSpawn);
 
-        // Interceptor: a real interceptor entity (its LOCK on the target rides in SimMissile.toEntity),
-        // spawned back along its own approach so it flies in and rolls for the kill.
         Vec3 toC = c.subtract(interceptor.pos);
         double len = toC.length();
         Vec3 iUnit = len > 1.0E-6 ? toC.scale(1.0 / len) : new Vec3(0.0, 0.0, 1.0);
@@ -226,7 +212,6 @@ public final class SimMissileManager {
         double h = Math.sqrt(dx * dx + dz * dz);
         return h > 1.0E-6 ? new Vec3(dx / h, 0.0, dz / h) : new Vec3(0.0, 0.0, 1.0);
     }
-
 
     private static Vec3 firstListenerSpawnPos(ServerLevel level, Vec3 p0, Vec3 p1) {
         double bestT = Double.MAX_VALUE;
@@ -287,9 +272,8 @@ public final class SimMissileManager {
 
     /**
      * Offload a coordinated swarm (a commander plus its formation members) as a single simulated object: the
-     * commander drives the track; each member rides along as a snapshot at its offset from the commander, and
-     * the whole formation rematerializes together (see {@link #respawn}). Members are discarded before the
-     * commander so no successor is promoted on the way out.
+     * commander drives the track; each member rides along as a snapshot at its offset from the commander, and the
+     * whole formation rematerializes together (see {@link #respawn}).
      */
     public static void startSimSwarm(MissileEntity commander, List<MissileEntity> subordinates) {
         if (!(commander.level() instanceof ServerLevel level)) {
@@ -312,6 +296,14 @@ public final class SimMissileManager {
         commander.discard();
     }
 
+    /** Lift a respawn point clear of the ground under it, and only ever upward. */
+    private static Vec3 clearOfGround(ServerLevel level, SimMissile sm, Vec3 spawnPos) {
+        double ground = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                Mth.floor(spawnPos.x), Mth.floor(spawnPos.z));
+        double safe = ground + sm.terrainClearance;
+        return spawnPos.y >= safe ? spawnPos : new Vec3(spawnPos.x, safe, spawnPos.z);
+    }
+
     private static void respawn(ServerLevel level, SimMissile sm, Vec3 spawnPos) {
         spawnOne(level, sm, spawnPos);
         for (SimMissile member : sm.swarmMembers) {
@@ -320,20 +312,14 @@ public final class SimMissileManager {
     }
 
     private static void spawnOne(ServerLevel level, SimMissile sm, Vec3 spawnPos) {
-        MissileEntity m = sm.toEntity(level, spawnPos);
+        MissileEntity m = sm.toEntity(level, clearOfGround(level, sm, spawnPos));
         ChunkPos cp = m.chunkPosition();
-        // Force the spawn chunk (ticking) before adding so there is a loaded chunk to place into; the
-        // entity's own MissileChunkLoader takes over from its first tick and eventually releases it. The
-        // forceChunk ticket only takes effect next tick, so synchronously load the chunk first: without it a
-        // missile rematerialising into an unloaded chunk (e.g. a listener boundary crossed before the offload
-        // dwell elapsed) would be added to a not-yet-loaded chunk and sit dormant until the ticket resolves.
         MissileListenerRegistry.CHUNK_TICKET.forceChunk(level, m, cp.x, cp.z, true, true);
         level.getChunk(cp.x, cp.z);
         level.addFreshEntity(m);
         WFTelemetryService.record(sm.id, WFEventType.ONLOAD, level.getGameTime(), spawnPos, false, "from sim");
         LOGGER.debug("[wfballistics] simulated missile {} respawned at {}", sm.id, spawnPos);
     }
-
 
     public static void launchInterceptor(ServerLevel level, Vec3 start, UUID targetId) {
         launchInterceptor(level, start, targetId, MissileSimConfig.DEFAULT_INTERCEPT_CHANCE);

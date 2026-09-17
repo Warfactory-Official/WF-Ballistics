@@ -12,13 +12,9 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Registry of the missile models a {@link MissileEntity} can render with, keyed by a stable
- * {@link ResourceLocation} (persisted/synced on the entity so the model is chosen at runtime, HBM-style,
- * rather than compiled in).
- *
- * <p>Server-safe: it only holds {@link ResourceLocation}s and reads model geometry off the jar via
- * {@link ObjBounds}, so the flight code can look up a model's length without touching client render classes.
- * The client separately bakes a {@code PartialModel} for each of these ids (see {@code ModModels}).
+ * Registry of the missile models a {@link MissileEntity} can render with, keyed by a stable {@link
+ * ResourceLocation} (persisted/synced on the entity so the model is chosen at runtime, HBM-style, rather than
+ * compiled in).
  */
 public final class MissileModels {
 
@@ -26,8 +22,6 @@ public final class MissileModels {
      * Id used when a requested one is unknown or unset.
      */
     public static final ResourceLocation DEFAULT = ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "v2");
-    // Per-model orientation style ("attitude") id: how the model rotates to its heading (missile vs drone).
-    // Resolved to a strategy shared by render + hitbox (see attitude.MissileAttitudeRegistry). Default = "missile".
     public static final String DEFAULT_ATTITUDE = "missile";
     // Continuous spin speed for the Shahed pusher propeller (degrees per tick). Purely visual.
     private static final float SHAHED_ROTOR_SPEED = 45.0f;
@@ -55,9 +49,6 @@ public final class MissileModels {
         reg("thermo", "missilethermo");
         reg("v2", "missile_v2");
 
-        // Skins: the same airframe OBJ re-textured. Each variant model json points at the shared .obj (whose
-        // .mtl reads its texture from the json via #missile_texture) with a different skin, so one shape can
-        // be flown in several liveries. Selectable anywhere a model id is (dispenser GUI, missile presets).
         reg("v2_bunker", "missile_v2_bu");
         reg("v2_cluster", "missile_v2_cl");
         reg("v2_decoy", "missile_v2_decoy");
@@ -81,7 +72,6 @@ public final class MissileModels {
         reg("atlas_doomsday_weathered", "missile_atlas_doomsday_weathered");
         reg("atlas_tectonic", "missile_atlas_tectonic");
         reg("atlas_thermo", "missile_atlas_thermo");
-
 
         reg("shahed", "shahed_body");
         rotor("shahed", "shahed_prop", Axis.Y, SHAHED_ROTOR_SPEED);
@@ -117,8 +107,8 @@ public final class MissileModels {
     }
 
     /**
-     * Resolve a persisted/typed id string to a model key: a bare path is taken under the mod namespace, a
-     * {@code namespace:path} string is parsed as-is, and anything unparseable falls back to {@link #DEFAULT}.
+     * Resolve a persisted/typed id string to a model key: a bare path is taken under the mod namespace, a {@code
+     * namespace:path} string is parsed as-is, and anything unparseable falls back to {@link #DEFAULT}.
      */
     public static ResourceLocation parse(String id) {
         if (id == null || id.isEmpty()) {
@@ -151,7 +141,7 @@ public final class MissileModels {
 
     /**
      * @return the longest axis of the model's mesh, in model units (cached). Reads the model json + obj
-     * off the jar, so it works server-side. Falls back to 1.0 if the assets can't be read.
+     *      off the jar, so it works server-side. Falls back to 1.0 if the assets can't be read.
      */
     public static double length(ResourceLocation id) {
         return LENGTHS.computeIfAbsent(id, i -> {
@@ -166,7 +156,7 @@ public final class MissileModels {
 
     /**
      * @return the mesh size (per-axis, model units) of the missile model, cached. Reads the model json +
-     * obj off the jar so it works server-side. Falls back to a 1×1×1 box if the assets can't be read.
+     *      obj off the jar so it works server-side. Falls back to a 1×1×1 box if the assets can't be read.
      */
     public static Vec3 dimensions(ResourceLocation id) {
         return DIMENSIONS.computeIfAbsent(id, i -> {
@@ -181,7 +171,7 @@ public final class MissileModels {
 
     /**
      * @return the geometric center offset (model units) of the missile model relative to its origin,
-     * cached. Missile meshes sit base-at-origin, so this is roughly {@code (0, length/2, 0)}.
+     *      cached. Missile meshes sit base-at-origin, so this is roughly {@code (0, length/2, 0)}.
      */
     public static Vec3 center(ResourceLocation id) {
         return CENTERS.computeIfAbsent(id, i -> {
@@ -211,10 +201,7 @@ public final class MissileModels {
         return Rotors.of(id);
     }
 
-    /**
-     * Set how a model orients to its heading, by attitude id (see {@code MissileAttitudeRegistry}). Models
-     * default to {@link #DEFAULT_ATTITUDE} ("missile") unless assigned another, e.g. "drone".
-     */
+    /** Set how a model orients to its heading, by attitude id (see {@code MissileAttitudeRegistry}). */
     public static void attitude(String id, String attitudeId) {
         ATTITUDES.put(rl(id), attitudeId);
     }

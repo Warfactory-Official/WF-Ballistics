@@ -22,11 +22,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-
 public class MissileDispenserBlockEntity extends BlockEntity implements MenuProvider {
 
-    // Stable per-launcher identity, stamped onto every missile this dispenser fires as its "control id" so
-    // its own missiles never collide with each other (friendly fire), while still hitting other launchers'.
     private UUID controlId;
     private LaunchConfig config;
     private boolean wasPowered;

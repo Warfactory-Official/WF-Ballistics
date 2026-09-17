@@ -17,24 +17,11 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * The code-to-station directory, and the only thing that knows what a station code means.
- *
- * <p>Stored once for the whole server rather than per dimension: stations trade across dimensions, and a
- * code has to resolve from wherever it is quoted. It lives on the overworld's data storage because that is
- * the one level guaranteed to exist.
- *
- * <p><b>This class is the secret.</b> Every other part of the exchange system works in codes; only here does
- * a code become a position. Nothing in this class is reachable from a packet handler that writes back to a
- * client, and nothing that returns a {@link StationRecord} should ever have its result serialised toward one.
- */
+/** The code-to-station directory, and the only thing that knows what a station code means. */
 public final class StationRegistry extends SavedData {
 
     public static final String NAME = "wfballistics_stations";
-    /**
-     * Attempts to draw an unused code before giving up. With 60 bits of entropy a single collision is
-     * already implausible; this is a formality rather than a real loop.
-     */
+    /** Attempts to draw an unused code before giving up. */
     private static final int CODE_ATTEMPTS = 8;
 
     private final Map<String, StationRecord> byCode = new HashMap<>();
@@ -72,13 +59,7 @@ public final class StationRegistry extends SavedData {
         return tag;
     }
 
-    /**
-     * Give a pad a code, or return the one it already has.
-     *
-     * <p>Codes are tied to a position, so a pad broken and replaced in the same spot keeps its identity and
-     * its allow-list. That is deliberate: losing your code because you nudged a block would mean re-arranging
-     * every trading relationship you have.
-     */
+    /** Give a pad a code, or return the one it already has. */
     public String register(ServerLevel level, BlockPos pos) {
         StationRecord existing = at(level.dimension(), pos);
         if (existing != null) {
@@ -128,11 +109,6 @@ public final class StationRegistry extends SavedData {
 
     /**
      * @return true if {@code recipientCode} has authorised {@code senderCode} to send it cargo.
-     *
-     * <p>Two questions, both of which have to pass: is this station willing to receive cargo at all, and is
-     * it willing to receive it from you. A supplier that only hands materials out has no business being
-     * flown crates, and saying so here rather than at the sender means it holds however the sender was
-     * talked into asking.
      */
     public boolean allows(String recipientCode, String senderCode) {
         StationRecord recipient = byCode(recipientCode);
@@ -171,10 +147,6 @@ public final class StationRegistry extends SavedData {
 
     /**
      * @return every station in this dimension willing to do {@code role}, nearest first.
-     *
-     * <p>Nearest because the only reason to ask is that something needs one and has to fly there, and a
-     * supplier on the far side of the world is not really an answer. Dimension-scoped for the same reason:
-     * the directory spans worlds, but a drone does not.
      */
     public List<StationRecord> withRole(ResourceKey<Level> dimension, BlockPos near, StationRole role) {
         List<StationRecord> found = new ArrayList<>();

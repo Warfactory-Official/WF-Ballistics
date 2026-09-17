@@ -8,14 +8,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Gates the mod's mixins that are incompatible with third-party chunk renderers.
- *
- * <p>{@link MixinLevelRenderer} shift-injects into {@code LevelRenderer#renderChunkLayer}, which the
- * Sodium family (Embeddium / Rubidium) fully rewrites. Injecting a shifted {@code @At} into their merged
- * method both fails to apply (a hard crash at mixin-apply time) and would be a no-op anyway, since those
- * renderers bypass vanilla's chunk-layer path. When one of them is installed we simply skip that mixin.
- */
+/** Gates the mod's mixins that are incompatible with third-party chunk renderers. */
 public class WFMixinPlugin implements IMixinConfigPlugin {
 
     private static boolean isSodiumFamilyLoaded() {
@@ -39,6 +32,9 @@ public class WFMixinPlugin implements IMixinConfigPlugin {
     @Override
     public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
         if (mixinClassName.endsWith("MixinLevelRenderer")) {
+            return !isSodiumFamilyLoaded();
+        }
+        if (mixinClassName.endsWith("MixinLevelRendererFeed") || mixinClassName.endsWith("MixinViewArea")) {
             return !isSodiumFamilyLoaded();
         }
         if (mixinClassName.contains(".gt.")) {

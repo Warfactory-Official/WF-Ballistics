@@ -8,18 +8,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.network.PacketDistributor;
 
-/**
- * Send-helpers for the mod's server→client effect payloads.
- *
- * <p>Everything the explosion framework shows the player (knockback, block debris, custom particle
- * effects) is computed on the server and shipped here, because particles and client-authoritative player
- * motion only exist on the client. Payload types are registered separately in {@link WFPayloadRegistrar}.
- *
- * <p><b>Efficiency:</b> positional effects go out via {@link #sendToTracking}
- * ({@link PacketDistributor#sendToPlayersTrackingChunk}), which targets only the players who actually have
- * that chunk loaded, instead of iterating every player in the dimension and distance-checking them. Payloads
- * are kept small too: see {@link ExplosionBlockFXPacket}'s delta-varint block encoding.
- */
+/** Send-helpers for the mod's server→client effect payloads. */
 public final class WFNetwork {
 
     private WFNetwork() {
@@ -33,8 +22,8 @@ public final class WFNetwork {
     }
 
     /**
-     * Sends to every player who has the chunk containing {@code (x, z)} loaded: the correct, cheap audience
-     * for a localized effect. No-op off the server.
+     * Sends to every player who has the chunk containing {@code (x, z)} loaded: the correct, cheap audience for a
+     * localized effect.
      */
     public static void sendToTracking(Level level, double x, double z, CustomPacketPayload msg) {
         if (!(level instanceof ServerLevel sl)) return;

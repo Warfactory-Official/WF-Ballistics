@@ -82,18 +82,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Predicate;
 
-/**
- * The base glyphid: an armoured, wall-climbing, terrain-chewing swarm mob.
- *
- * <p>Armour is five plates in a bitmask. Each surviving plate raises the damage threshold the bug turns away
- * and a hard enough hit knocks one off, so it degrades as it is worn down rather than only losing health.
- *
- * <p>On top of target-and-chase it runs a colony task: orders are passed to neighbours through
- * {@link #communicate}, and anything between the bug and its waypoint gets chewed.
- *
- * <p>Runs on stock vanilla AI — one goal stack, one A* per bug — as the baseline the swarm work is measured
- * against, which is why the tick is instrumented for {@link SwarmProfiler} at every level.
- */
+/** The base glyphid: an armoured, wall-climbing, terrain-chewing swarm mob. */
 public class EntityGlyphid extends Monster implements DynamicResistance, GlyphidCarrier {
 
     public static final byte TYPE_NORMAL = 0;
@@ -110,10 +99,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     private static final EntityDataAccessor<Byte> DW_SUBTYPE =
             SynchedEntityData.defineId(EntityGlyphid.class, EntityDataSerializers.BYTE);
 
-    /**
-     * Wings, packed: bit 0 is "has them", bit 1 is "using them right now". A modifier rather than a caste,
-     * since a winged glyphid still walks, digs, climbs and takes orders the same way.
-     */
+    /** Wings, packed: bit 0 is "has them", bit 1 is "using them right now". */
     private static final EntityDataAccessor<Byte> DW_FLIGHT =
             SynchedEntityData.defineId(EntityGlyphid.class, EntityDataSerializers.BYTE);
     /** Lean, quantised for the wire as {@code DroneEntity} does. Only written while airborne. */
@@ -134,17 +120,10 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     /** How far a glyphid notices non-players. Short: a colony crosses the map for what provoked it. */
     private static final double PREY_RANGE = 24.0;
 
-    /**
-     * What a water cell costs the pathfinder, against a vanilla default of 8. Zero, not merely low: at 8 an
-     * eight-block pond costs more than a sixty-block detour, so a column refuses to cross one. {@code Drowned}
-     * uses the same value.
-     */
+    /** What a water cell costs the pathfinder, against a vanilla default of 8. */
     private static final float WATER_MALUS = 0.0F;
 
-    /**
-     * Ticks a submerged glyphid lasts, against a vanilla 300. Long enough that crossing water is never lethal,
-     * short enough that a flooded pit still is.
-     */
+    /** Ticks a submerged glyphid lasts, against a vanilla 300. */
     private static final int MAX_AIR = 600;
 
     public boolean hasHome = false;
@@ -152,22 +131,14 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     public int homeY;
     public int homeZ;
 
-    /**
-     * This bug is a nest's standing defence, and the colony at {@link #homeX}/{@link #homeZ} is counting it.
-     * Flagged rather than guessed from position, or a warband resting on its own nest would read as garrison
-     * and suppress growth already spent elsewhere.
-     */
+    /** This bug is a nest's standing defence, and the colony at {@link #homeX}/{@link #homeZ} is counting it. */
     public boolean garrison = false;
 
     public int taskX;
     public int taskY;
     public int taskZ;
 
-    /**
-     * Where this glyphid was headed before a squad sent it somewhere else. Remembered rather than re-read,
-     * since an assignment overwrites the task and the rally would then drift one reassignment at a time.
-     * Saved, unlike the squad itself: it is the warband's orders, not squad state.
-     */
+    /** Where this glyphid was headed before a squad sent it somewhere else. */
     public boolean hasRally;
     public int rallyX;
     public int rallyY;
@@ -198,20 +169,13 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     private boolean climbableFlag;
     private boolean aggressiveFlag;
 
-    /**
-     * The same for the frozen-tick counter, which vanilla rewrites every tick from {@code aiStep}. Starts at
-     * the synched default, and every later write goes through {@link #setTicksFrozen}.
-     */
+    /** The same for the frozen-tick counter, which vanilla rewrites every tick from {@code aiStep}. */
     private int frozenTicksMirror;
 
     /** Whether every equipment slot has only ever held an empty stack. See {@link #setItemSlot}. */
     private boolean equipmentEmpty = true;
 
-    /**
-     * The bridge this glyphid is walking out to join or holding still in, and the slot it has on it. Not
-     * saved: a reloaded swarm rebuilds any crossing it still wants in a few seconds, which is cheaper than
-     * persisting a structure made of entities that may not have survived the reload.
-     */
+    /** The bridge this glyphid is walking out to join or holding still in, and the slot it has on it. */
     private @Nullable GlyphidBridge bridge;
     private @Nullable GlyphidBridge.Slot bridgeSlot;
     /** Tick the slot was claimed on, so one that cannot reach its slot gives it back rather than blocking. */
@@ -219,18 +183,13 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     /** True once in place: no AI, no gravity, and a surface the rest of the swarm can walk over. */
     private boolean anchored;
 
-    /**
-     * Which squad this glyphid is in and what it was sent to do. Not saved or synced: {@code GlyphidSquads}
-     * recomputes the split every few seconds, and a reloaded bug still has its task destination.
-     */
+    /** Which squad this glyphid is in and what it was sent to do. */
     public int squad;
     public @Nullable GlyphidObjective objective;
 
     public EntityGlyphid(EntityType<? extends EntityGlyphid> type, Level level) {
         super(type, level);
         setPathfindingMalus(PathType.WATER, WATER_MALUS);
-        // The air cell above water, which a glyphid on the shore has to step through. At its default of 8,
-        // entering the water is expensive even once being in it is free.
         setPathfindingMalus(PathType.WATER_BORDER, WATER_MALUS);
         applyEntityAttributes();
     }
@@ -240,8 +199,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
                 .add(Attributes.MAX_HEALTH, GlyphidStats.getStats().getGrunt().health())
                 .add(Attributes.MOVEMENT_SPEED, GlyphidStats.getStats().getGrunt().movementSpeed())
                 .add(Attributes.ATTACK_DAMAGE, GlyphidStats.getStats().getGrunt().damage())
-                // Swimming at marching pace: this replaces vanilla's flat 0.02 thrust with the mob's own
-                // speed. Measured on a 40-block crossing, 20 s against 85 s at the vanilla 0.
                 .add(Attributes.WATER_MOVEMENT_EFFICIENCY, 1.0D);
     }
 
@@ -285,12 +242,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
 
     @Override
     protected void registerGoals() {
-        // Keeps a swimmer's head up, and turns on the navigation's float flag -- without which the
-        // pathfinder refuses every water cell whatever its malus. JUMP flag only, so it runs alongside.
         goalSelector.addGoal(0, new FloatGoal(this));
-        // One goal for biting and marching both, decided inside the brain rather than by goal priority --
-        // a warband record has no goal selector. The vanilla melee goal stays reachable for A/B and outranks
-        // the brain goal so it wins the MOVE flag.
         if (SwarmBench.vanillaMeleeGoal) {
             goalSelector.addGoal(2, new ProfiledGoal(new MeleeAttackGoal(this, 1.0D, true),
                     SwarmProfiler.Phase.PATH_MELEE));
@@ -300,8 +252,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         goalSelector.addGoal(2, new GlyphidBombGoal(this));
         // Flight outranks walking to the same place, and falls back to it for anything without wings.
         goalSelector.addGoal(4, new GlyphidFlightGoal(this));
-        // Mutually exclusive with the brain goal by way of the MOVE flag: one runs under orders, the other
-        // only when idle.
         goalSelector.addGoal(4, new GlyphidWanderGoal(this, 1.0D));
         targetSelector.addGoal(1, new HurtByTargetGoal(this));
         targetSelector.addGoal(2, new GlyphidTargetGoal(this));
@@ -311,9 +261,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     public HumanoidArm getMainArm() {
         return HumanoidArm.RIGHT;
     }
-
-    // --- profiling hooks ---
-    // At every level the swarm cost could hide in. One branch each when profiling is off.
 
     @Override
     public void tick() {
@@ -325,11 +272,8 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     // The AI bucket cannot be an override: Mob#serverAiStep is final. It is taken in MixinMob instead.
 
     /**
-     * Glyphids do not shove each other, and only look for anything else to shove every
-     * {@link #PUSH_INTERVAL} ticks. Entity push was 1.8% of the tick at a hundred glyphids and 15.5% at three
-     * hundred packed, all of it a swarm pushing itself apart. {@link GlyphidSeparation} does that properly.
-     *
-     * <p>Side effect: this skips vanilla's entity cramming, so a packed swarm no longer suffocates itself.
+     * Glyphids do not shove each other, and only look for anything else to shove every {@link #PUSH_INTERVAL}
+     * ticks.
      */
     @Override
     protected void pushEntities() {
@@ -362,10 +306,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         SwarmProfiler.end(SwarmProfiler.Phase.MOVE, t);
     }
 
-    /**
-     * Vanilla walks every block the hitbox overlaps. Measured here rather than in a mixin because the method
-     * is overridable; the rest of {@code move} is split in {@link com.wf.wfballistics.mixin.MixinEntity}.
-     */
+    /** Vanilla walks every block the hitbox overlaps. */
     @Override
     protected void checkInsideBlocks() {
         long t = SwarmProfiler.begin();
@@ -389,22 +330,9 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         return inFluid;
     }
 
-    // --- per-tick writes vanilla makes whether or not anything changed ---
-    // For a bug that is never cold and never armed, both answers were settled when it spawned. Measured with
-    // JFR at 2000 bodies: 0.28 ms and 0.26 ms of tick respectively.
-
-    /**
-     * Mirrors the frozen-tick counter so the common no-op write never reaches the synched data.
-     * {@code LivingEntity#aiStep} writes it every tick, which for a bug that has never touched powder snow is
-     * zero over zero — and the accessor lookup vanilla pays before noticing is a cache miss per bug.
-     *
-     * <p>Only writes that would have changed nothing are skipped, so reads are unaffected.
-     */
+    /** Mirrors the frozen-tick counter so the common no-op write never reaches the synched data. */
     @Override
     public void setTicksFrozen(int ticks) {
-        // Server side only. The freezing code that makes this call is itself server-gated, and a client
-        // receives the counter over the wire rather than through this setter -- so on a client the mirror
-        // is not authoritative and must not be allowed to swallow a write.
         if (!level().isClientSide && ticks == frozenTicksMirror) {
             return;
         }
@@ -413,8 +341,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     }
 
     /**
-     * Notes the first time this glyphid is given anything to wear, so the equipment scan can be skipped until
-     * then. One-way: proving every slot empty again is not worth it for a case that never happens.
+     * Notes the first time this glyphid is given anything to wear, so the equipment scan can be skipped until then.
      */
     @Override
     public void setItemSlot(EquipmentSlot slot, ItemStack stack) {
@@ -447,11 +374,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         return (entityData.get(DW_FLIGHT) & FLIGHT_AIRBORNE) != 0;
     }
 
-    /**
-     * Take off or land. Gravity goes to the flight model while airborne, since
-     * {@link com.wf.wfballistics.drone.flight.Multirotor} already subtracts it and applying both would keep
-     * the glyphid on the ground.
-     */
+    /** Take off or land. */
     public void setAirborne(boolean value) {
         if (value && !canFly()) {
             return;
@@ -508,8 +431,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         setDeltaMovement(step.velocity());
         move(MoverType.SELF, getDeltaMovement());
 
-        // Flown into something the lookahead missed -- an overhang, or a wall rising faster than the
-        // samples along it. Climb out rather than grind against it.
         if (horizontalCollision && !landing) {
             setDeltaMovement(getDeltaMovement().add(0.0, GlyphidFlight.WINGS.maxClimbRate() * 0.5, 0.0));
             unstick();
@@ -526,8 +447,8 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     }
 
     /**
-     * Lift a glyphid that has ended up inside terrain back to open air — the one state flight cannot recover
-     * from, since every axis is blocked. Only reached from the collision branch, so it is off the hot path.
+     * Lift a glyphid that has ended up inside terrain back to open air: the one state flight cannot recover from,
+     * since every axis is blocked.
      */
     private void unstick() {
         if (level().noCollision(this)) {
@@ -565,8 +486,8 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     }
 
     /**
-     * @return the surface height of a column, or this glyphid's own altitude where the chunk is not loaded --
-     * which keeps it holding station rather than diving at terrain nobody has generated.
+     * @return the surface height of a column, or this glyphid's own altitude where the chunk is not loaded,
+     *      which keeps it holding station rather than diving at terrain nobody has generated.
      */
     protected int surfaceAt(int x, int z) {
         if (!level().hasChunk(x >> 4, z >> 4)) {
@@ -601,10 +522,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
 
     // --- damage ---
 
-    /**
-     * The damage threshold and resistance this bug presents, as {@code [threshold, resistance]}. Varies with
-     * live armour state, which is what {@link DynamicResistance} exists for.
-     */
+    /** The damage threshold and resistance this bug presents, as {@code [threshold, resistance]}. */
     @Override
     public float[] currentDTDR(DamageSource damage) {
         if (damage.is(DamageTypeTags.BYPASSES_ARMOR)) return new float[]{0F, 0F};
@@ -633,21 +551,11 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         return source.is(DamageTypeTags.IS_EXPLOSION) || source.is(WFDamageTypes.EXPLOSIVE);
     }
 
-    /**
-     * Marks a block a glyphid threw, so the swarm's own siege engineering cannot cut it down.
-     *
-     * <p>A tag rather than an owner field because the projectile is a vanilla {@code FallingBlockEntity} —
-     * it is spawned by {@code FallingBlockEntity.fall} and there is nowhere on it to record who threw it.
-     */
+    /** Marks a block a glyphid threw, so the swarm's own siege engineering cannot cut it down. */
     public static final String RUBBLE_TAG = "wfballistics_glyphid_rubble";
 
     @Override
     public boolean hurt(DamageSource source, float amount) {
-        // Glyphids never hurt each other, so a packed swarm does not cut itself down with its own splash.
-        // The rubble counts: a digger's ground slam throws real falling blocks, and the damage they do names
-        // the block as the attacker rather than the bug that launched it, so it went straight past this test.
-        // Measured, 150 diggers under a tower killed 110 of themselves in four minutes with nothing else in
-        // the arena -- the one caste whose whole job is opening terrain, unable to do it in a group.
         Entity attacker = source.getEntity();
         if (attacker instanceof EntityGlyphid || (attacker != null && attacker.getTags().contains(RUBBLE_TAG))) {
             return false;
@@ -730,8 +638,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
             onBlinded();
         }
 
-        // Wings are for getting somewhere: anything else comes down, so a stale airborne flag cannot leave
-        // one hovering with its gravity off.
         if (isAirborne() && (getCurrentTask() != GlyphidTasks.TASK_FOLLOW || isInWater())) {
             setAirborne(false);
         }
@@ -759,7 +665,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         setCurrentTask(previousTask, previousWaypoint);
     }
 
-    /** Chew one bite, leaving orders alone -- so something blocked on its way can bite through. */
+    /** Chew one bite, leaving orders alone, so something blocked on its way can bite through. */
     public void digAt(int x, int y, int z) {
         swing(InteractionHand.MAIN_HAND);
 
@@ -771,23 +677,19 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         blast.setEntityProcessor(null);
         blast.setPlayerProcessor(null);
         blast.explode();
-        // Breaking a block makes ServerLevel repath every mob routed through it, synchronously. Charged to
-        // the search, not to the bite.
         SwarmProfiler.endExcluding(SwarmProfiler.Phase.DIG, t, SwarmProfiler.Phase.PATH, pathBefore);
     }
 
     /**
-     * What this glyphid would attack if it looked right now: players first and furthest, then anything alive
-     * and worth biting — livestock and villagers included, since a colony that walked past a farm would not
-     * read as an infestation. Monsters are skipped so a swarm does not brawl with the local zombies.
+     * What this glyphid would attack if it looked right now: players first and furthest, then anything alive and
+     * worth biting: livestock and villagers included, since a colony that walked past a farm would not read as an
+     * infestation.
      */
     public @Nullable LivingEntity findTargetCandidate() {
         if (hasEffect(MobEffects.BLINDNESS)) return null;
 
         double radius = useExtendedTargeting() ? 128D : 16D;
 
-        // A squad goes after who it was sent after, not whoever is closest -- otherwise four squads walk
-        // four ways and then converge on one defender on arrival.
         LivingEntity assigned = assignedTarget(radius);
         if (assigned != null) {
             return assigned;
@@ -819,9 +721,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     protected @Nullable LivingEntity nearestPrey(double radius) {
         AABB box = getBoundingBox().inflate(radius);
 
-        // Through PreyTracker, not the level: in a swarm the level's answer is almost entirely this
-        // glyphid's own squadmates, fetched one at a time and then rejected. Identical results -- the box
-        // test and isPrey still decide, and above SCAN_LIMIT the level's index is used instead.
         Iterable<LivingEntity> candidates = PreyTracker.worthScanning(level())
                 ? PreyTracker.prey(level())
                 : level().getEntitiesOfClass(LivingEntity.class, box, EntityGlyphid::isPrey);
@@ -893,10 +792,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         return block == Blocks.LANTERN || block == Blocks.SOUL_LANTERN;
     }
 
-    /**
-     * Blocks the colony will not chew through, whatever their resistance: its own mound. At 0.5 hardness one
-     * bite would take a chamber with it, and a colony would kill itself by defending.
-     */
+    /** Blocks the colony will not chew through, whatever their resistance: its own mound. */
     public static boolean isSpawnerBlock(BlockState state) {
         Block block = state.getBlock();
         return block instanceof GlyphidSpawnerBlock || block instanceof GlyphidNestBlock;
@@ -990,7 +886,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         push(dx, 0.0, dz);
     }
 
-
     /** How near the slot centre a glyphid has to get before it sits down. */
     private static final double ANCHOR_REACH = 0.5;
     /** Ticks to reach a claimed slot before giving it back, so one that cannot get there blocks nothing. */
@@ -1016,9 +911,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         this.bridge = bridge;
         this.bridgeSlot = slot;
         this.bridgeClaimedAt = tickCount;
-        // A glyphid at the edge of a chasm has usually given up walking and started eating the ground. That is
-        // exactly the one that should lie down instead, so the chew is abandoned rather than being a reason
-        // not to recruit it.
         GlyphidBody.clearCracks(this, mind);
         mind.stopChewing();
         getNavigation().stop();
@@ -1036,6 +928,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
 
     /**
      * One tick of being part of a bridge: walk out to the slot, then hold it.
+     *
      * @return true while this glyphid is on bridge duty and the brain should be left alone
      */
     public boolean tickBridgeSlot(ServerLevel level) {
@@ -1052,8 +945,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
 
         double x = slot.x + 0.5;
         double z = slot.z + 0.5;
-        // Pinned by the top of the hitbox, not the bottom, so the deck is flush with the bank whatever caste
-        // ends up standing in it.
         double y = span.deckY - getBbHeight();
 
         if (anchored) {
@@ -1064,8 +955,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
             return true;
         }
 
-        // Walked to, and stepped out from: the slot is over the gap, so approaching it directly would be
-        // walking into open air.
         int[] approach = span.approach(slot);
         double dx = approach[0] + 0.5 - getX();
         double dz = approach[1] + 0.5 - getZ();
@@ -1078,8 +967,6 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
             GlyphidBridges.seat(level, span, slot, getBoundingBox());
             return true;
         }
-        // Given up on when it runs out of patience, and immediately if it has been shoved into the gap it was
-        // meant to be spanning — a slot held by something falling is a slot nobody else can take.
         if (tickCount - bridgeClaimedAt > ANCHOR_WALK_TICKS || getY() < span.deckY - ANCHOR_FALL) {
             GlyphidBridges.release(level, this);
             return false;
@@ -1100,8 +987,8 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     }
 
     /**
-     * A glyphid killed mid-bite leaves its cracks on the block, and the client only expires an abandoned
-     * overlay after twenty seconds.
+     * A glyphid killed mid-bite leaves its cracks on the block, and the client only expires an abandoned overlay
+     * after twenty seconds.
      */
     @Override
     public void remove(RemovalReason reason) {
@@ -1203,10 +1090,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
         }
     }
 
-    /**
-     * Pull the destination height onto real terrain once its column is loaded. A glyphid materialises with a
-     * placeholder, and left stale the arrival test never passes — walkers mill on top of their own target.
-     */
+    /** Pull the destination height onto real terrain once its column is loaded. */
     public void resolveTaskHeight() {
         if (!level().hasChunk(taskX >> 4, taskZ >> 4)) {
             return;
@@ -1292,11 +1176,8 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     }
 
     /**
-     * Written through a mirror, so the common unchanged case costs a boolean compare instead of a trip
-     * through the data table. Profiled at 300: 4.9% of the swarm's time here and 3.6% on the climbable flag,
-     * all of it re-setting values to what they already were.
-     *
-     * <p>Safe only because nothing else writes these two flags.
+     * Written through a mirror, so the common unchanged case costs a boolean compare instead of a trip through the
+     * data table.
      */
     @Override
     public void setAggressive(boolean aggressive) {

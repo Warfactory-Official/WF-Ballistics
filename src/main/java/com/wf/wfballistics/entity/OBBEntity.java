@@ -9,9 +9,8 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 
 /**
- * Marks an entity that carries one or more oriented bounding boxes ({@link OBB}) used for precise,
- * rotation-aware hit detection in place of the coarse vanilla AABB.
- *
+ * Marks an entity that carries one or more oriented bounding boxes ({@link OBB}) used for precise, rotation-aware
+ * hit detection in place of the coarse vanilla AABB.
  */
 public interface OBBEntity {
 
@@ -41,7 +40,7 @@ public interface OBBEntity {
 
     /**
      * @return true if any of this entity's OBBs (offset by {@code vec3}) overlaps the given entity,
-     * using OBB-vs-OBB when the other entity is also an {@link OBBEntity}.
+     *      using OBB-vs-OBB when the other entity is also an {@link OBBEntity}.
      */
     default boolean isInObb(Entity entity, Vec3 vec3) {
         List<OBB> obbList = this.getOBBs();

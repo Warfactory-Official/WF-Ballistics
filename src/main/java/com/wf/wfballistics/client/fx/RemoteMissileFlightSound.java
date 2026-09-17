@@ -11,11 +11,8 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 
 /**
- * A looping missile flight sound driven entirely by {@link MissileFlightAudioPacket} heartbeats from the
- * server, rather than by a tracked entity. This is what lets a missile be heard before it renders and across
- * the entity↔off-world-sim boundary. Position is dead-reckoned from the last reported velocity between
- * heartbeats and snapped on each new one; the loop fades out and stops if heartbeats stop arriving (detonation,
- * leaving range, unload). Managed by {@link MissileAudioClient}.
+ * A looping missile flight sound driven entirely by {@link MissileFlightAudioPacket} heartbeats from the server,
+ * rather than by a tracked entity.
  */
 public final class RemoteMissileFlightSound extends AbstractTickableSoundInstance {
 
@@ -45,9 +42,6 @@ public final class RemoteMissileFlightSound extends AbstractTickableSoundInstanc
         this.x = this.curX;
         this.y = this.curY;
         this.z = this.curZ;
-        // Start at the right distance-based volume so there's no 1-tick silent gap. canStartSilent() (below)
-        // covers the case where this is exactly 0 (missile entering at the very edge of range): otherwise the
-        // sound engine would cull a volume-zero sound at play time and it would never tick up.
         this.volume = distanceVolume();
     }
 
@@ -124,15 +118,9 @@ public final class RemoteMissileFlightSound extends AbstractTickableSoundInstanc
         double uz = lz - this.curZ;
         double dist = Math.sqrt(ux * ux + uy * uy + uz * uz);
 
-        // Volume: linear fade to silence at `range`, plus a short fade once heartbeats go stale (so a missile
-        // that detonates or leaves range fades out over a few ticks instead of cutting abruptly).
         float distFade = (float) Mth.clamp(1.0 - dist / this.range, 0.0, 1.0);
         this.volume = MAX_VOLUME * distFade * stalenessFade();
 
-        // Engine pitch: idle base plus a rev proportional to the missile's OWN speed (speedPitch). A speedPitch
-        // of 0 is the constant-note drone/loiter class: it opts out of the engine rev AND of the closing-motion
-        // Doppler factor below, so the loop holds a steady pitch instead of revving up as it closes and dives.
-        // Rocket engines (speedPitch > 0) still get the Doppler shift.
         double ownSpeed = Math.sqrt(this.velX * this.velX + this.velY * this.velY + this.velZ * this.velZ);
         double enginePitch = this.basePitch + this.speedPitch * ownSpeed;
 

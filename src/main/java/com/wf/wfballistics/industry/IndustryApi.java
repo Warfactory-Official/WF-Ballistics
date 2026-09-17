@@ -7,26 +7,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
 
-/**
- * The public face of industry tracking, and the seam other mods in the stack integrate through.
- *
- * <p>It exists because the dependency runs the wrong way for the obvious approach. wfcore already depends
- * on this mod, so this mod cannot depend on wfcore to ask what a GregTech machine is worth — that is a
- * cycle. Instead the model lives here and wfcore <em>reports into</em> it, which also puts the judgement in
- * the mod that actually knows GregTech. With no reporter present the config whitelist in
- * {@link IndustryValues} is the fallback, so this works standalone.
- */
+/** The public face of industry tracking, and the seam other mods in the stack integrate through. */
 public final class IndustryApi {
 
     private IndustryApi() {
     }
 
-    /**
-     * Declare what a block is worth as a provocation, overriding the config whitelist.
-     *
-     * <p>Call during setup, or whenever the reporting mod's own registries are ready. Values are additive
-     * per placed block; a value of 0 or less removes the block from tracking.
-     */
+    /** Declare what a block is worth as a provocation, overriding the config whitelist. */
     public static void registerValue(ResourceLocation blockId, int value) {
         IndustryValues.put(blockId, value);
     }
@@ -54,7 +41,7 @@ public final class IndustryApi {
 
     /**
      * @return the machine most worth attacking near a position in the loaded world, or null. Block-precise
-     * and ranked by provocation, unlike {@link #nearestCluster}, which answers in 512-block region cells.
+     *      and ranked by provocation, unlike {@link #nearestCluster}, which answers in 512-block region cells.
      */
     public static @Nullable BlockPos pressingMachine(ServerLevel level, double x, double z, double radius) {
         return IndustryTracker.pressingMachine(level, x, z, radius, null, 0.0);

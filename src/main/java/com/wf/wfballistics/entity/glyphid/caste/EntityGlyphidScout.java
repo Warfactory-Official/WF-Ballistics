@@ -21,14 +21,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * How a colony becomes two colonies. The scout walks out to a spot far enough from home to be worth having,
- * sits on it, and turns itself into a colony record — the only path in the mod that creates a colony from
- * inside the world rather than from the simulation.
- *
- * <p>It fights badly on purpose: fragile, no extended targeting, and it notices only a player standing on
- * top of it. A scout that stops to brawl never founds anything.
- */
+/** How a colony becomes two colonies. */
 public class EntityGlyphidScout extends EntityGlyphid {
 
     /** How often the scouting logic runs. Site selection reads the heightmap and the colony registry. */
@@ -38,14 +31,10 @@ public class EntityGlyphidScout extends EntityGlyphid {
     /** Minimum spacing between nests, or the map fills with colonies all attacking the same base. */
     private static final int NEST_SPACING = 32;
     /**
-     * How long a scout sits on a chosen site before committing, so a site it was chased off is not settled
-     * anyway.
+     * How long a scout sits on a chosen site before committing, so a site it was chased off is not settled anyway.
      */
     private static final int SETTLE_TICKS = 100;
-    /**
-     * Attempts per selection pass. One draw usually lands somewhere unusable; a handful is enough and bounds
-     * the heightmap reads.
-     */
+    /** Attempts per selection pass. */
     private static final int SITE_ATTEMPTS = 6;
 
     private static final int WAYPOINT_RADIUS = 5;
@@ -73,7 +62,6 @@ public class EntityGlyphidScout extends EntityGlyphid {
     public GlyphidStats.StatBundle getStats() {
         return GlyphidStats.getStats().getScout();
     }
-
 
     @Override
     public boolean isScoutType() {
@@ -133,11 +121,7 @@ public class EntityGlyphidScout extends EntityGlyphid {
         }
     }
 
-    /**
-     * Pick somewhere to found, drop a marker on it and take the escort along. The marker is what makes this
-     * an expansion rather than one bug wandering off: a {@code TASK_BUILD_HIVE} waypoint passes the order to
-     * everything that walks through it.
-     */
+    /** Pick somewhere to found, drop a marker on it and take the escort along. */
     private void chooseSite(ServerLevel server) {
         ColonyRegistry registry = ColonyRegistry.get(server);
 
@@ -179,15 +163,10 @@ public class EntityGlyphidScout extends EntityGlyphid {
 
         int y = server.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         BlockState ground = server.getBlockState(new BlockPos(x, y - 1, z));
-        // Solid, dry ground only. A nest founded on a lake surface resolves its height to the water and
-        // never gets built.
         return !ground.isAir() && ground.getFluidState().isEmpty() && ground.isSolidRender(server, new BlockPos(x, y - 1, z));
     }
 
-    /**
-     * Become the colony. The scout is spent doing it, which is what keeps expansion costed: a colony that
-     * wants to spread has to raise and lose a bug for every nest it plants.
-     */
+    /** Become the colony. */
     private void settle(ServerLevel server) {
         settling = 0;
 

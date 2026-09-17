@@ -13,13 +13,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Inspection for the industry model.
- *
- * <p>Present from the start on purpose: a simulation that runs in unloaded chunks is one nobody can see, so
- * without a way to ask it what it thinks the world looks like there is no way to tell a tuning problem from
- * a bug.
- */
+/** Inspection for the industry model. */
 public final class IndustryDebug {
 
     private IndustryDebug() {
@@ -74,12 +68,7 @@ public final class IndustryDebug {
         return pressure;
     }
 
-    /**
-     * Re-sweep the chunks around the caller, forgetting what was recorded there first.
-     *
-     * <p>Needed whenever the whitelist values change, and it is also the only way to pick up blocks placed
-     * by something that fires no placement event — {@code /setblock} being the obvious one.
-     */
+    /** Re-sweep the chunks around the caller, forgetting what was recorded there first. */
     public static int rescan(CommandSourceStack source, int radiusChunks) {
         ServerLevel level = source.getLevel();
         Vec3 pos = source.getPosition();
@@ -119,8 +108,8 @@ public final class IndustryDebug {
     }
 
     /**
-     * The occupied cells themselves, for when a base count looks wrong and the question is whether the
-     * cells or the clustering are at fault.
+     * The occupied cells themselves, for when a base count looks wrong and the question is whether the cells or the
+     * clustering are at fault.
      */
     public static int cells(CommandSourceStack source) {
         IndustryRegistry registry = IndustryRegistry.get(source.getLevel());

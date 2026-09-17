@@ -13,15 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-/**
- * The queue editor: build the list of steps a flight will fly, in order.
- *
- * <p>A screen of its own rather than another panel on {@link DronePadScreen}, because a list that can hold
- * {@link DroneTask#MAX_STEPS} entries needs room to be read and the pad screen has none spare. It opens over
- * the pad, hands the edited program back on close, and never talks to the server itself: the program travels
- * with the mission when the pad screen next saves or dispatches, so there is one packet and one place that
- * decides what a pad is configured to do.
- */
+/** The queue editor: build the list of steps a flight will fly, in order. */
 public class DroneProgramScreen extends Screen {
 
     private static final int W = 300;
@@ -192,10 +184,7 @@ public class DroneProgramScreen extends Screen {
         }
     }
 
-    /**
-     * Keep the selected row on screen, and the window inside the list. Called after anything that changes
-     * either, which is cheaper to get right than to chase.
-     */
+    /** Keep the selected row on screen, and the window inside the list. */
     private void clampScroll() {
         int max = Math.max(0, program.tasks().size() - VISIBLE_ROWS);
         if (selected >= 0) {
@@ -222,16 +211,20 @@ public class DroneProgramScreen extends Screen {
         return true;
     }
 
+    /** The panel, drawn as part of the background so that the widgets on it land on top of it. */
     @Override
-    public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(gg, mouseX, mouseY, partialTick);
+    public void renderBackground(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
+        super.renderBackground(gg, mouseX, mouseY, partialTick);
         int x = left();
         int y = top();
         gg.fill(x, y, x + W, y + H, 0xF0101018);
         gg.fill(x, y, x + W, y + 14, 0xFF2B2B44);
         gg.renderOutline(x, y, W, H, 0xFF404060);
         gg.drawString(this.font, this.title, x + PAD, y + 4, 0xE0E0F0, false);
+    }
 
+    @Override
+    public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         super.render(gg, mouseX, mouseY, partialTick);
 
         if (radiusBox != null) {
@@ -259,8 +252,6 @@ public class DroneProgramScreen extends Screen {
                     index == selected ? 0xFFFFFF : 0xC0C0D0, false);
         }
 
-        // Enough of the shape of the whole program to see at a glance, drawn from the same arithmetic the
-        // dispatcher will price it with.
         int route = (int) program.routeLength(defaultAt, defaultAt);
         String summary = tasks.size() + "/" + DroneTask.MAX_STEPS + " steps"
                 + (tasks.isEmpty() ? "" : ", ~" + route + "m of route");

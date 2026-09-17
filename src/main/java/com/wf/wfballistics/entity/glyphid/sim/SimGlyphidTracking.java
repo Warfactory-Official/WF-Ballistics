@@ -10,15 +10,7 @@ import net.minecraft.util.Mth;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Ships the record tier to the clients that can see it.
- *
- * <p>Nothing about the sim tier is meant to be visible, so records are drawn out to the same distance
- * vanilla would have tracked the entities they replaced. See {@code SimGlyphidVisual} for the drawing and
- * {@link SimGlyphidSyncPacket} for the wire format.
- *
- * <p>Per player rather than per chunk: a record has no chunk to be tracked from, which is the point of it.
- */
+/** Ships the record tier to the clients that can see it. */
 public final class SimGlyphidTracking {
 
     /** Furthest a record is sent. The audience is the smaller of this and the client's view distance. */
@@ -60,9 +52,6 @@ public final class SimGlyphidTracking {
                         quantise(sim.x - originX),
                         quantise(sim.y - originY),
                         quantise(sim.z - originZ),
-                        // Wrapped before it is quantised. The heading comes out of an atan2 minus ninety, so
-                        // it ranges past -180; unwrapped, everything between -270 and -180 overflows the byte
-                        // and comes back out of the wire pointing the other way.
                         (byte) Mth.floor(Mth.wrapDegrees(sim.yRot) * 256.0F / 360.0F),
                         (byte) sim.caste.ordinal()));
             }
@@ -80,8 +69,8 @@ public final class SimGlyphidTracking {
     }
 
     /**
-     * Which players are currently being sent glyphids, so the one packet that empties a client's swarm is
-     * sent and the empty ones after it are not.
+     * Which players are currently being sent glyphids, so the one packet that empties a client's swarm is sent and
+     * the empty ones after it are not.
      */
     private static final class SimGlyphidClientState {
 
@@ -103,7 +92,7 @@ public final class SimGlyphidTracking {
 
     /**
      * @return how many castes the wire format can name, so the client can reject an out-of-range index rather
-     * than index off the end of the enum.
+     *      than index off the end of the enum.
      */
     public static int casteCount() {
         return GlyphidCaste.VALUES.length;

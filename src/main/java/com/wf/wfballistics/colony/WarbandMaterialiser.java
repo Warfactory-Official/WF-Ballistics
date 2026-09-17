@@ -20,14 +20,8 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 
 /**
- * Turns a warband record into actual glyphids when somebody is there to be attacked by them: the T2 -> T0
- * step, and the one place in the colony simulation where numbers can go wrong.
- *
- * <p>{@link Warband#count} is the only ledger and {@link #materialise} holds the only line that debits it, by
- * exactly the number of bodies that reached the world — a glyphid that could not be placed is still owed.
- * Nothing is placed without a loaded chunk, a real surface height and a clear box.
- *
- * <p>A large warband streams in over several ticks rather than spawning as a single-tick spike.
+ * Turns a warband record into actual glyphids when somebody is there to be attacked by them: the T2 -> T0 step, and
+ * the one place in the colony simulation where numbers can go wrong.
  */
 public final class WarbandMaterialiser {
 
@@ -42,10 +36,7 @@ public final class WarbandMaterialiser {
     private WarbandMaterialiser() {
     }
 
-    /**
-     * Materialise whatever is owed in this dimension. Server thread only: it touches the world. Kept out of
-     * {@code tickWarbands}, which {@code fastForward} runs many times over and which must not spawn anything.
-     */
+    /** Materialise whatever is owed in this dimension. */
     public static void tick(ServerLevel level) {
         ColonyRegistry registry = ColonyRegistry.get(level);
         if (registry.warbands().isEmpty()) {
@@ -132,8 +123,6 @@ public final class WarbandMaterialiser {
         int centerX = (int) Math.floor(warband.x);
         int centerZ = (int) Math.floor(warband.z);
 
-        // Rolled per bug rather than per warband, so a mixed column reads as an army rather than as a boss
-        // fight. See GlyphidCaste for what evolution has unlocked by now.
         GlyphidCaste caste = GlyphidCaste.roll(random, Evolution.of(level));
         EntityType<? extends EntityGlyphid> type = caste.type();
         EntityDimensions size = type.getDimensions();
@@ -150,8 +139,6 @@ public final class WarbandMaterialiser {
                 continue;
             }
 
-            // A flight needs clearance rather than footing, which is why it crosses a coastline intact where
-            // a walking warband leaves most of itself owed.
             int y = warband.flying
                     ? Math.min(level.getMaxBuildHeight() - 2, surface + GlyphidFlight.CLEARANCE)
                     : surface;
@@ -195,8 +182,6 @@ public final class WarbandMaterialiser {
         glyphid.homeY = origin != null && origin.hasResolvedY() ? origin.y : y;
         glyphid.homeZ = origin != null ? origin.z : (int) warband.z;
 
-        // A placeholder height: the target column is usually unloaded from here, and the move goal
-        // re-resolves it against real terrain as the swarm closes in.
         glyphid.taskX = warband.targetX;
         glyphid.taskY = y;
         glyphid.taskZ = warband.targetZ;

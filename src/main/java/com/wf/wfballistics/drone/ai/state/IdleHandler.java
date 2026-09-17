@@ -8,11 +8,7 @@ import com.wf.wfballistics.drone.ai.SquadView;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Parked on the ground, waiting for a mission. Also where a drone lands up after delivering, aborting, or
- * running its battery flat: it never launches again until it has both a destination and the charge to reach
- * it, so a dead drone sits still instead of hopping.
- */
+/** Parked on the ground, waiting for a mission. */
 public final class IdleHandler implements DroneStateHandler {
 
     public static final IdleHandler INSTANCE = new IdleHandler();

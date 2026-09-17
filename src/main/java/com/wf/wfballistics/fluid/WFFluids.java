@@ -128,8 +128,6 @@ public final class WFFluids {
     }    public static final BaseFlowingFluid.Properties PHOSGENE_PROPS =
             new BaseFlowingFluid.Properties(PHOSGENE_TYPE, PHOSGENE, FLOWING_PHOSGENE);
 
-
-
     public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>MUSTARD_GAS =
             FLUIDS.register("mustard_gas", () -> new BaseFlowingFluid.Source(WFFluids.MUSTARD_GAS_PROPS));
     public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>FLOWING_MUSTARD_GAS =
@@ -137,17 +135,12 @@ public final class WFFluids {
     public static final BaseFlowingFluid.Properties MUSTARD_GAS_PROPS =
             new BaseFlowingFluid.Properties(MUSTARD_GAS_TYPE, MUSTARD_GAS, FLOWING_MUSTARD_GAS);
 
-
-    // Glyphid acid. Registered as a fluid because that is the key MistEffects looks an effect up by; there is
-    // deliberately no bucket, since the only thing that produces it is a bug.
     public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> GLYPHID_ACID =
             FLUIDS.register("glyphid_acid", () -> new BaseFlowingFluid.Source(WFFluids.GLYPHID_ACID_PROPS));
     public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> FLOWING_GLYPHID_ACID =
             FLUIDS.register("flowing_glyphid_acid", () -> new BaseFlowingFluid.Flowing(WFFluids.GLYPHID_ACID_PROPS));
     public static final BaseFlowingFluid.Properties GLYPHID_ACID_PROPS =
             new BaseFlowingFluid.Properties(GLYPHID_ACID_TYPE, GLYPHID_ACID, FLOWING_GLYPHID_ACID);
-
-
 
     public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>KEROSENE =
             FLUIDS.register("kerosene", () -> new BaseFlowingFluid.Source(WFFluids.KEROSENE_PROPS));
@@ -158,7 +151,5 @@ public final class WFFluids {
                     new Item.Properties().craftRemainder(Items.BUCKET).stacksTo(1)));
     public static final BaseFlowingFluid.Properties KEROSENE_PROPS =
             new BaseFlowingFluid.Properties(KEROSENE_TYPE, KEROSENE, FLOWING_KEROSENE).bucket(KEROSENE_BUCKET);
-
-
 
 }

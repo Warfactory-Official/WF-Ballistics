@@ -8,6 +8,7 @@ import com.wf.wfballistics.drone.DroneState;
 import com.wf.wfballistics.drone.DroneTracker;
 import com.wf.wfballistics.drone.ai.DroneAiScheduler;
 import com.wf.wfballistics.drone.ai.DroneCarrier;
+import com.wf.wfballistics.drone.cam.CameraNet;
 import com.wf.wfballistics.sim.MissileListenerRegistry;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -20,35 +21,29 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Moves drones between being real entities and being {@link SimDrone} records, the drone equivalent of
- * {@code SimMissileManager}.
- *
- * <p>The difference from missiles: a simulated drone is not advanced by a simplified straight-line model
- * here. It stays a {@link DroneCarrier}, so {@code DroneAiScheduler} keeps planning and moving it with the
- * same brain: this class only decides <em>when</em> a drone should stop being an entity and when it has to
- * become one again.
+ * Moves drones between being real entities and being {@link SimDrone} records, the drone equivalent of {@code
+ * SimMissileManager}.
  */
 public final class SimDroneManager {
 
-    /**
-     * A drone further than this from any player offloads. Deliberately shorter than the missile equivalent:
-     * drones are slow and low, so there is no point keeping one as an entity out where nobody can see it.
-     */
+    /** A drone further than this from any player offloads. */
     public static final double OFFLOAD_PLAYER_RANGE = 192.0;
     /**
      * Slack between the offload and onload ranges so a drone near the boundary doesn't flicker.
      */
     public static final double ONLOAD_MARGIN = 32.0;
     /**
-     * Distance from its waypoint at which a simulated drone must become real again, so the delivery, the
-     * landing and the crate all happen in a loaded world.
+     * Distance from its waypoint at which a simulated drone must become real again, so the delivery, the landing
+     * and the crate all happen in a loaded world.
      */
     public static final double WAYPOINT_ONLOAD_RANGE = 96.0;
     /**
-     * Ticks a drone must be airborne and travelling before it may offload, so it doesn't offload during the
-     * first moments of a launch.
+     * Ticks a drone must be airborne and travelling before it may offload, so it doesn't offload during the first
+     * moments of a launch.
      */
     public static final int OFFLOAD_DELAY_TICKS = 40;
+    /** How long a camera drone's feed must have gone unwatched before the drone may leave the world. */
+    public static final int CAMERA_QUIET_TICKS = 200;
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
@@ -56,15 +51,7 @@ public final class SimDroneManager {
         DroneAiScheduler.addSource(SimDroneManager::collect);
     }
 
-    /**
-     * Testing switch: with this off, drones never leave the world for the simulation.
-     *
-     * <p>The sim deliberately has no terrain: an offloaded drone holds its altitude and flies straight,
-     * which is the trade that makes it cheap. That also means the terrain following and the path planner are
-     * only exercised on the parts of a route flown for real, which without a player nearby is just the last
-     * hundred blocks of each leg. Turning this off keeps a drone in the world for its whole mission so the
-     * navigation can actually be watched.
-     */
+    /** Testing switch: with this off, drones never leave the world for the simulation. */
     public static boolean offloadEnabled = true;
 
     private SimDroneManager() {
@@ -80,10 +67,7 @@ public final class SimDroneManager {
         out.addAll(SimDroneRegistry.get(level).view());
     }
 
-    /**
-     * Run the offload/onload decisions for one dimension. Called before the scheduler each tick so a drone
-     * that changes form is planned in its new form the same tick.
-     */
+    /** Run the offload/onload decisions for one dimension. */
     public static void tick(ServerLevel level) {
         offloadEligible(level);
         onloadEligible(level);
@@ -108,6 +92,10 @@ public final class SimDroneManager {
             return false;
         }
         if (!drone.isAlive() || drone.isRemoved()) {
+            return false;
+        }
+        if (drone.cameraSpec() != null
+                && CameraNet.quietFor(level, drone.getId()) < CAMERA_QUIET_TICKS) {
             return false;
         }
         DroneState state = drone.getDroneState();
@@ -139,7 +127,27 @@ public final class SimDroneManager {
         }
     }
 
-    private static void respawn(ServerLevel level, SimDrone sd) {
+    /**
+     * Bring one drone back into the world because somebody asked to see through it.
+     *
+     * @return true if it was off-world and is now a real entity again. False means it was never in the
+     *      simulation, and the caller should try the slower recovery.
+     */
+    public static boolean onload(ServerLevel level, java.util.UUID id) {
+        SimDroneRegistry registry = SimDroneRegistry.get(level);
+        SimDrone sd = registry.getById(id);
+        if (sd == null) {
+            return false;
+        }
+        DroneEntity drone = respawn(level, sd);
+        registry.remove(sd);
+        if (drone.cameraSpec() != null) {
+            CameraNet.markWatched(level, drone.getId());
+        }
+        return true;
+    }
+
+    private static DroneEntity respawn(ServerLevel level, SimDrone sd) {
         DroneEntity drone = sd.toEntity(level, sd.pos);
         ChunkPos cp = drone.chunkPosition();
         MissileListenerRegistry.CHUNK_TICKET.forceChunk(level, drone, cp.x, cp.z, true, true);
@@ -147,6 +155,7 @@ public final class SimDroneManager {
         level.addFreshEntity(drone);
         WFTelemetryService.record(sd.id, WFEventType.ONLOAD, level.getGameTime(), sd.pos, false, "from drone sim");
         LOGGER.debug("[wfballistics] simulated drone {} respawned at {}", sd.id, sd.pos);
+        return drone;
     }
 
     /**
@@ -164,8 +173,8 @@ public final class SimDroneManager {
 
     /**
      * @return the waypoint of the leg currently being flown. On the way home that is the exfil point, not
-     * the destination the drone still remembers: using the wrong one leaves a returning drone simulated
-     * right through its own landing.
+     *      the destination the drone still remembers: using the wrong one leaves a returning drone simulated
+     *      right through its own landing.
      */
     private static Vec3 waypoint(DroneState state, @Nullable Vec3 destination, Vec3 exfil) {
         return (state == DroneState.EXFIL || destination == null) ? exfil : destination;

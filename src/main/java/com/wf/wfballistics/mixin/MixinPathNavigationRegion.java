@@ -9,17 +9,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/**
- * Counts the block-state reads a path search makes.
- *
- * <p>Node expansion measured as ~89% of path search, which points at the world reads inside it rather than at
- * the A* algorithm — but "points at" is not a measurement. Counting them turns nanoseconds per node into
- * nanoseconds per block read, which is the number that says whether the fix is fewer searches, fewer nodes,
- * or a cheaper way to read a block.
- *
- * <p>{@code PathNavigationRegion} is the pathfinder's private chunk snapshot, so every read through it belongs
- * to a search and nothing else in the game uses it.
- */
+/** Counts the block-state reads a path search makes. */
 @Mixin(PathNavigationRegion.class)
 public abstract class MixinPathNavigationRegion {
 

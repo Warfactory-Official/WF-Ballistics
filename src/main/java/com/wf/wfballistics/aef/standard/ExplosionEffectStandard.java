@@ -13,20 +13,12 @@ import net.minecraft.world.level.Level;
 import java.util.List;
 
 /**
- * The default explosion presentation: the bang, a central explosion puff, and a burst of smoke + debris
- * radiating from every block that was broken. This is a faithful reproduction of vanilla's explosion
- * particles, just driven from the framework's affected-block set instead of vanilla's.
- *
- * <p>The server half ({@link #doEffect}) plays the sound and broadcasts the block set; the client half
- * ({@link #performClient}) is invoked from the packet handler and does the actual particle spawning.
+ * The default explosion presentation: the bang, a central explosion puff, and a burst of smoke + debris radiating
+ * from every block that was broken.
  */
 public class ExplosionEffectStandard implements IExplosionSFX {
 
-    /**
-     * Spawns the explosion particles on the client. Each broken block emits a small explosion puff and a
-     * puff of smoke, kicked outward from the epicentre with a speed that falls off with distance: the
-     * classic "shrapnel" look.
-     */
+    /** Spawns the explosion particles on the client. */
     public static void performClient(Level level, double x, double y, double z, float size, List<BlockPos> affectedBlocks) {
         if (size >= 2.0F) {
             level.addParticle(ParticleTypes.EXPLOSION_EMITTER, x, y, z, 1.0D, 0.0D, 0.0D);

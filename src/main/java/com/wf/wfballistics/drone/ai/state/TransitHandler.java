@@ -9,10 +9,7 @@ import com.wf.wfballistics.drone.ai.Steering;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Outbound cruise to the delivery destination. Battery aborts are decided upstream by
- * {@code PowerPolicy}, so this only has to fly the leg and hand over on arrival.
- */
+/** Outbound cruise to the delivery destination. */
 public final class TransitHandler implements DroneStateHandler {
 
     public static final TransitHandler INSTANCE = new TransitHandler();
@@ -39,6 +36,9 @@ public final class TransitHandler implements DroneStateHandler {
         if (arrival == DroneState.PAYLOAD_RUN) {
             return range <= Tuning.PAYLOAD_RUN_IN ? DroneState.PAYLOAD_RUN : null;
         }
+        if (arrival == DroneState.MINELAY) {
+            return range <= minelayRunIn(self) ? DroneState.MINELAY : null;
+        }
         if (arrival == null) {
             return null;
         }
@@ -46,6 +46,16 @@ public final class TransitHandler implements DroneStateHandler {
                 self.airframe().stoppingDistance(self.cruiseSpeed()));
         return range <= approach ? arrival : null;
     }
+
+    /** How far short of the lay point a minelayer breaks off cruise. */
+    private static double minelayRunIn(DroneSnapshot self) {
+        com.wf.wfballistics.drone.MineLoad rack = self.mines();
+        double halfLane = rack == null ? 0.0 : rack.laneLength() * 0.5;
+        return Math.max(Tuning.PAYLOAD_RUN_IN, halfLane + LANE_ENTRY_MARGIN);
+    }
+
+    /** Room a minelayer wants ahead of its own lane to settle onto the heading and reach release speed. */
+    private static final double LANE_ENTRY_MARGIN = 48.0;
 
     @Override
     public void act(DroneSnapshot self, SquadView squad, java.util.List<DroneAction> out) {

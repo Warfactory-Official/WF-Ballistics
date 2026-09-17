@@ -22,10 +22,6 @@ import net.neoforged.neoforge.entity.IEntityWithComplexSpawn;
 
 import java.util.ArrayList;
 
-/*
- * Toroidial Convection Simulation Explosion Effect
- * Tor                             Ex
- */
 public class EntityNukeTorex extends Entity implements IEntityWithComplexSpawn {
 
     public static final EntityDataAccessor<Float> DATA_SCALE = SynchedEntityData.defineId(EntityNukeTorex.class, EntityDataSerializers.FLOAT);
@@ -48,8 +44,6 @@ public class EntityNukeTorex extends Entity implements IEntityWithComplexSpawn {
     public static final double BR2 = 0.1D;
     public static final double BG2 = 0.1D;
     public static final double BB2 = 0.1D;
-    // Effective simulation age (client), decoupled from the client-local tickCount so a player who starts
-    // tracking this entity late resumes at the correct point rather than replaying the effect from t=0.
     private static final int CATCHUP_TARGET_TICKS = 20; // spread a late-join catch-up over ~this many ticks
     private static final int CATCHUP_MAX_BUDGET = 200;  // ...but never simulate more than this per tick
     public final ArrayList<Cloudlet> cloudlets = new ArrayList<>();
@@ -111,9 +105,6 @@ public class EntityNukeTorex extends Entity implements IEntityWithComplexSpawn {
         super.tick();
 
         if (level().isClientSide) {
-            // Advance the client simulation, catching a late-joining player up to the true age (synced in
-            // the spawn packet) rather than replaying the whole effect from t=0. Catch-up is amortized over
-            // a short window and its steps don't fire the one-shot boom / sky-flash (those are in the past).
             this.localAge++;
             long target = (long) this.spawnAge + this.localAge;
             int budget;
@@ -134,11 +125,7 @@ public class EntityNukeTorex extends Entity implements IEntityWithComplexSpawn {
         }
     }
 
-    /**
-     * Runs one tick of the client-side convection simulation at the given effective {@code age}. When
-     * {@code live} is false the step is part of a late-join catch-up (the elapsed-before-join portion), so
-     * one-shot effects (the boom, the sky flash) are suppressed.
-     */
+    /** Runs one tick of the client-side convection simulation at the given effective {@code age}. */
     private void simulateStep(int age, boolean live) {
         this.effectiveAge = age;
 
@@ -349,9 +336,6 @@ public class EntityNukeTorex extends Entity implements IEntityWithComplexSpawn {
         builder.define(DATA_SCALE, 1F);
         builder.define(DATA_TYPE, (byte) 0);
     }
-
-    // getAddEntityPacket() is removed: IEntityWithComplexSpawn is detected automatically by NeoForge's
-    // entity spawn handling; no override needed.
 
     @Override
     public void writeSpawnData(RegistryFriendlyByteBuf buffer) {

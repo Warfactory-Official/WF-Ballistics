@@ -3,16 +3,11 @@ package com.wf.wfballistics.entity.glyphid.nav;
 import net.minecraft.world.phys.AABB;
 import org.jetbrains.annotations.Nullable;
 
-
 public final class GlyphidBridge {
 
     /** Columns a span may cover, bank to bank. Beyond this the swarm is better off digging or going round. */
     public static final int MAX_SPAN = 8;
-    /**
-     * Height a caste may be and still anchor. The deck needs one block of body under it and two of headroom
-     * over it, and the clearance probe checks exactly three cells — so a taller caste would not fit the hole
-     * its own bridge was approved for. Grunts are the bulk of any swarm and clear this comfortably.
-     */
+    /** Height a caste may be and still anchor. */
     public static final float MAX_ANCHOR_HEIGHT = 1.0F;
     /** Ticks a claimed but unseated slot is held before the claim is dropped and offered to somebody else. */
     private static final int CLAIM_TIMEOUT = 100;
@@ -32,10 +27,7 @@ public final class GlyphidBridge {
         long claimedAtTick;
         /** True once the occupant is in place and holding still. */
         boolean seated;
-        /**
-         * The seated anchor's hitbox, captured when it sat down. Kept here so the deck can be handed out as
-         * collision shapes without going back to the entity, which is the whole point of not querying.
-         */
+        /** The seated anchor's hitbox, captured when it sat down. */
         @Nullable AABB box;
 
         Slot(int index, int x, int z) {
@@ -53,13 +45,7 @@ public final class GlyphidBridge {
         }
     }
 
-    /**
-     * Column the swarm arrives from, and the floor it is standing on there.
-     *
-     * <p>Not final, and not known at proposal time. A flood runs outward from the destination, so the end it
-     * finds a crossing from is the end the swarm is <em>not</em> on; which side is the near bank is settled by
-     * {@link #orient} when somebody actually walks up to one.
-     */
+    /** Column the swarm arrives from, and the floor it is standing on there. */
     public int bankX;
     public int bankZ;
     /** The floor a crosser walks at: the bank's own floor, so the deck is flush with it. */
@@ -99,20 +85,12 @@ public final class GlyphidBridge {
         this.bounds = new AABB(minX, deckY - 2.0, minZ, maxX + 1.0, deckY + 2.0, maxZ + 1.0);
     }
 
-    /**
-     * Turn the span round if this recruit is standing at the far end of it. Both ends are banks — the deck is
-     * flat and the crossing is symmetric — so the only thing that has to be decided is which one the bridge
-     * grows from, and the first glyphid to arrive decides it.
-     *
-     * <p>Ignored once anything is seated: by then the bridge has an end it is growing from.
-     */
+    /** Turn the span round if this recruit is standing at the far end of it. */
     void orient(double x, double z) {
         if (seated > 0) {
             return;
         }
         for (Slot slot : slots) {
-            // Somebody is already walking out to a slot. Turning the span round now would move the slot out
-            // from under them and send them across the gap they are meant to be spanning.
             if (slot.occupantId != -1) {
                 return;
             }
@@ -150,12 +128,8 @@ public final class GlyphidBridge {
     }
 
     /**
-     * The block a glyphid stands on to reach a slot: the bank for the first, and the deck the bridge has
-     * already grown for every one after it.
-     *
-     * <p>A recruit walks here, not to the slot — the slot itself is over the gap, and a glyphid told to walk
-     * into open air falls into it. Reaching the end of what is built and then extending it by one is both
-     * what makes the walk possible and what an ant bridge actually looks like.
+     * The block a glyphid stands on to reach a slot: the bank for the first, and the deck the bridge has already
+     * grown for every one after it.
      *
      * @return {@code {x, z}} of the block to approach from
      */
@@ -180,7 +154,7 @@ public final class GlyphidBridge {
 
     /**
      * The next slot somebody may walk out to, or null when the bridge is finished or already has a claim
-     * outstanding. Only ever the first unseated slot: everything past it is over open air.
+     * outstanding.
      */
     public @Nullable Slot offer(long tick) {
         if (seated >= slots.length) {
@@ -201,7 +175,7 @@ public final class GlyphidBridge {
     }
 
     /**
-     * Note that an occupant is in place. Advances the seated prefix, which is what the deck is measured by.
+     * Note that an occupant is in place.
      *
      * @return true if this completed the bridge
      */
@@ -216,11 +190,11 @@ public final class GlyphidBridge {
     }
 
     /**
-     * Give up a slot, and with it every slot further out — the deck past a hole cannot be reached, so holding
-     * those anchors would strand them over the gap.
+     * Give up a slot, and with it every slot further out: the deck past a hole cannot be reached, so holding those
+     * anchors would strand them over the gap.
      *
      * @return the ids of every occupant that has to be let go, this one included, or an empty array if this
-     * glyphid did not hold a slot here
+     *      glyphid did not hold a slot here
      */
     public int[] release(int occupantId) {
         int from = -1;

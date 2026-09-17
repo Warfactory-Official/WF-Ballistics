@@ -9,19 +9,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 
-/**
- * {@link EntityProcessorCross} variant for weapons rather than terrain-cratering blasts. Two differences:
- *
- * <ul>
- *   <li><b>Flat falloff.</b> Damage is {@code fixedDamage * (1 - distanceScaled)}: a predictable linear
- *       drop from full damage at the centre to zero at the edge, instead of the vanilla quadratic curve.</li>
- *   <li><b>Real damage routing.</b> Living targets are hit through {@link EntityDamageUtil}, so the blast's
- *       {@link DamageClass} and armour-piercing ({@link #setupPiercing}) go through the DT/DR model. Kills
- *       on burning targets are sent to {@link AshHandler} so they crumble to ash.</li>
- * </ul>
- *
- * <p>Self-damage is enabled by default (a weapon's own user is in range of its own shell).
- */
+/** {@link EntityProcessorCross} variant for weapons rather than terrain-cratering blasts. */
 public class EntityProcessorCrossSmooth extends EntityProcessorCross {
 
     protected final float fixedDamage;

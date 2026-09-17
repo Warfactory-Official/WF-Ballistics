@@ -17,9 +17,8 @@ import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Debug block: right-click to open a simple GUI that configures and launches a {@link com.wf.wfballistics.MissileEntity}
- * from the block's position. The configured launch parameters persist on the block entity, and a redstone rising edge
- * re-fires the stored configuration.
+ * Debug block: right-click to open a simple GUI that configures and launches a {@link
+ * com.wf.wfballistics.MissileEntity} from the block's position.
  */
 public class MissileDispenserBlock extends BaseEntityBlock {
     public static final MapCodec<MissileDispenserBlock> CODEC = simpleCodec(MissileDispenserBlock::new);

@@ -27,32 +27,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Locale;
 
-/**
- * Terrain a swarm has to solve, built on demand.
- *
- * <p>Everything the swarm benchmark measured until now happened on a flat plain, because a flat plain is the
- * only arena two runs can be compared on. That is the right call for a timing number and it answers none of
- * the questions worth asking about behaviour: a swarm that walks in a straight line across nothing is not
- * demonstrating navigation, grouping, digging or climbing, and it cannot fail at them either. These are five
- * shapes it can fail at, each with a stated expectation, so a run has a verdict rather than a screenshot.
- *
- * <h2>Two constants decide every layout here</h2>
- *
- * <p>A glyphid <b>climbs</b>: {@code onClimbable()} is true whenever it is pressed against something, and
- * vanilla then gives it 0.2 blocks a tick upward for as long as it stays pressed. A wall of any height is a
- * ramp. So a wall does not enclose anything, and a maze with an open top is a floor plan rather than a maze —
- * the swarm goes over it. Only a roof, or an overhang, stops one going up.
- *
- * <p>The flow field connects columns up to {@link com.wf.wfballistics.entity.glyphid.nav.GlyphidFlowField}'s
- * {@code CLIMB_UP} of 8 blocks, deliberately, because glyphids climb. Anything an arena means to be a barrier
- * must therefore be more than eight blocks above the floor beside it, or the field routes the swarm straight
- * over the top of it and the arena tests nothing. Every roof and wall height below is chosen for that and not
- * for looks.
- *
- * <p>Built with a command rather than by the probe over rcon so the same scenario can be watched in a dev
- * client, which is the only way some of these failures are legible at all. Build before spawning: writing
- * twenty thousand blocks re-runs the navigation of every mob standing in them.
- */
+/** Terrain a swarm has to solve, built on demand. */
 public final class GlyphidArena {
 
     /** Clear of the field's CLIMB_UP, so a roof is a roof rather than a route. */
@@ -73,14 +48,14 @@ public final class GlyphidArena {
     private static @Nullable Layout current;
 
     /**
-     * @param objective    where the swarm is ordered, exactly: not heightmapped, since half of these put the
-     *                     goal under a roof and the heightmap would name the roof
-     * @param goal         the box that counts as having got there
-     * @param escape       when set, the swarm starts inside {@link #footprint} and the goal is being out of it
-     * @param footprint    everything the build wrote, so it can be wiped again
-     * @param generators   machines the swarm can destroy, for an arm where damage to a base is the score
-     * @param expectation  what this arena is supposed to prove, printed with the result so a run reads as a
-     *                     verdict rather than a number
+     * @param objective where the swarm is ordered, exactly: not heightmapped, since half of these put the
+     *      goal under a roof and the heightmap would name the roof
+     * @param goal the box that counts as having got there
+     * @param escape when set, the swarm starts inside {@link #footprint} and the goal is being out of it
+     * @param footprint everything the build wrote, so it can be wiped again
+     * @param generators machines the swarm can destroy, for an arm where damage to a base is the score
+     * @param expectation what this arena is supposed to prove, printed with the result so a run reads as a
+     *      verdict rather than a number
      */
     public record Layout(String name, String material, BlockPos origin, Vec3 spawn, double spawnRadius,
                          BlockPos objective, AABB goal, boolean escape, AABB footprint,
@@ -107,8 +82,6 @@ public final class GlyphidArena {
                     + "'. One of: stone, obsidian, bedrock."));
             return 0;
         }
-        // Sampled before anything is written, so a wipe puts back whatever this world's surface actually is
-        // rather than the superflat the bench happens to use.
         BlockState ground = level.getBlockState(origin.below());
 
         Layout layout = switch (name) {
@@ -151,14 +124,7 @@ public final class GlyphidArena {
         };
     }
 
-    /**
-     * A real maze, carved out of a solid block rather than walled off.
-     *
-     * <p>Solid because of the climbing: walls with sky above them are a suggestion, and a swarm asked to cross
-     * an open-topped maze crosses it in a straight line over the tops. Ten blocks of stone above the corridor
-     * puts the roof out of the field's reach as well as out of the swarm's, so the only way to the middle is
-     * the way through.
-     */
+    /** A real maze, carved out of a solid block rather than walled off. */
     private static Layout maze(ServerLevel level, BlockPos origin, Block wall, BlockState ground) {
         int ox = origin.getX();
         int oy = origin.getY();
@@ -245,14 +211,7 @@ public final class GlyphidArena {
         fill(level, x0, y, z0, x1, y + 2, z1, Blocks.AIR.defaultBlockState());
     }
 
-    /**
-     * A sealed room with the swarm inside it and somewhere to be outside.
-     *
-     * <p>Two arms out of one build. In stone the walls are 1.5 hardness against a grunt's ceiling of 10, so
-     * the swarm should eat its way out and the question is how long and how many; in obsidian, 50 against the
-     * same ceiling, so nothing should ever get out and the question is what three hundred glyphids with no
-     * route cost per tick. Both are worth knowing, and the second is the one a player builds for.
-     */
+    /** A sealed room with the swarm inside it and somewhere to be outside. */
     private static Layout box(ServerLevel level, BlockPos origin, Block wall, BlockState ground) {
         int ox = origin.getX();
         int oy = origin.getY();
@@ -278,17 +237,7 @@ public final class GlyphidArena {
                         + "than a swarm with one.");
     }
 
-    /**
-     * A walled compound with a bunker in it, two people inside and four machines to lose.
-     *
-     * <p>The wall is five high and open on top, which is not an oversight: a glyphid climbs, and the flow
-     * field's eight-block connection is there precisely so that a swarm goes over a compound wall instead of
-     * queueing at the gate. There is a gate as well, so the run says which one it actually used.
-     *
-     * <p>The generators are furnaces standing in for the real thing. GregTech is a compile-only dependency and
-     * is not in this runtime, so nothing here provokes a colony the way a real machine would — what they are
-     * is 3.5 hardness in the swarm's way, which makes "how much of the base is left" a number.
-     */
+    /** A walled compound with a bunker in it, two people inside and four machines to lose. */
     private static Layout base(ServerLevel level, BlockPos origin, BlockState ground) {
         int ox = origin.getX();
         int oy = origin.getY();
@@ -317,9 +266,6 @@ public final class GlyphidArena {
         BenchPlayer.place(level, "Alpha", new Vec3(ox - 1.5, oy, oz + 0.5));
         BenchPlayer.place(level, "Bravo", new Vec3(ox + 1.5, oy, oz + 0.5));
 
-        // The goal is the inside of the bunker, not a box around it. A radius generous enough to be safe
-        // reaches through the bunker's own walls, and then a swarm milling about outside the door scores as
-        // a swarm that got in.
         return new Layout("base", "stone_bricks", origin,
                 new Vec3(ox + 0.5, oy, oz + 40.5), 14.0, origin,
                 new AABB(ox - 5, oy - 1, oz - 3, ox + 6, oy + 4, oz + 4), false,
@@ -331,12 +277,8 @@ public final class GlyphidArena {
     }
 
     /**
-     * Eighty blocks of ground that is not flat: a staircase, a drop, broken pillars, a ravine, a sheer
-     * plateau and water.
-     *
-     * <p>Fenced, because otherwise it is not a course. The sides are ten high — over the field's connection
-     * limit, so the flood never routes round the outside — and lipped, since a ten-high wall on its own is a
-     * ladder to something that climbs.
+     * Eighty blocks of ground that is not flat: a staircase, a drop, broken pillars, a ravine, a sheer plateau and
+     * water.
      */
     private static Layout terrain(ServerLevel level, BlockPos origin, BlockState ground) {
         int ox = origin.getX();
@@ -344,8 +286,6 @@ public final class GlyphidArena {
         int oz = origin.getZ();
         int z0 = oz - TERRAIN_HALF_WIDTH;
         int z1 = oz + TERRAIN_HALF_WIDTH;
-        // The fence starts well west of the spawn pad, so the swarm is on the course from its first step
-        // rather than free to walk round the outside of the first obstacle.
         int x0 = ox - 56;
         int x1 = ox + 8;
         BlockState rock = Blocks.STONE.defaultBlockState();
@@ -364,8 +304,6 @@ public final class GlyphidArena {
         }
         fill(level, ox - 34, oy, z0, ox - 30, oy + 5, z1, rock);
 
-        // Broken ground: pillars on a fixed pattern, one to three high. Keyed off the offset from the origin
-        // rather than off world coordinates, so the same arena is the same course wherever it is built.
         for (int x = ox - 28; x <= ox - 20; x++) {
             for (int z = z0; z <= z1; z++) {
                 int height = Math.floorMod((x - ox) * 7 + (z - oz) * 13, 5) - 1;
@@ -375,14 +313,6 @@ public final class GlyphidArena {
             }
         }
 
-        // A ravine, as deep as the world underneath will allow: inside DROP and CLIMB_UP, so the field sends
-        // the swarm down into it and expects it to come out the far side.
-        //
-        // Clamped and then floored, in that order, because the first version was neither. On the superflat
-        // the bench runs there are four blocks between the surface and the world floor, so a cut six deep
-        // went through the bottom of the world; `fill` clamped the air away but the stone floor's whole range
-        // was below the limit and simply never ran. The result was a hole with nothing under it, and the arm
-        // reported that difficult terrain killed a third of the swarm -- true, and nothing to do with terrain.
         int ravineFloor = Math.max(level.getMinBuildHeight() + 1, oy - 7);
         fill(level, ox - 18, ravineFloor + 1, z0, ox - 15, oy + 2, z1, Blocks.AIR.defaultBlockState());
         fill(level, ox - 18, ravineFloor, z0, ox - 15, ravineFloor, z1, rock);
@@ -399,20 +329,12 @@ public final class GlyphidArena {
                 around(origin, 5.0, 4.0), false,
                 new AABB(x0 - 1, oy - 8, z0 - 2, x1 + 1, oy + UNCLIMBABLE + 1, z1 + 2),
                 List.of(), ground,
-                // The ravine's depth depends on how much world there is underneath, so the build says where
-                // it actually put the floor. A probe that assumes the depth is checking its own arithmetic.
                 "expect: the swarm crosses all six obstacles (ravine floor at y=" + ravineFloor + ", "
                         + ravineDepth + " deep here) and arrives still bunched; nothing is left permanently "
                         + "stuck, and the water is survivable.");
     }
 
-    /**
-     * The classic anti-spider build: a tower with a wider top.
-     *
-     * <p>A glyphid climbs the shaft the way a spider does and is stopped by the overhang the way a spider is,
-     * because there is nothing above it to press against. Unlike a spider it can eat, so the two materials ask
-     * different questions: whether a stone lip is worth building, and whether an obsidian one is.
-     */
+    /** The classic anti-spider build: a tower with a wider top. */
     private static Layout tower(ServerLevel level, BlockPos origin, Block material, BlockState ground) {
         int ox = origin.getX();
         int oy = origin.getY();
@@ -433,7 +355,7 @@ public final class GlyphidArena {
                 List.of(), ground,
                 chewable
                         ? "expect: the lip stops the climb, and the swarm gets up anyway by eating into the "
-                        + "shaft -- a stone lip buys time, not safety."
+                        + "shaft: a stone lip buys time, not safety."
                         : "expect: the lip holds. Glyphids stack up under the overhang and none reaches the "
                         + "top, which is what makes the material worth the cost.");
     }
@@ -450,28 +372,16 @@ public final class GlyphidArena {
         return launch(source, count, GlyphidCaste.GRUNT);
     }
 
-    /**
-     * Send a swarm of one caste at the current arena.
-     *
-     * <p>The caste is an argument because for half of these arenas it <em>is</em> the scenario. An obsidian
-     * lip is 50 hardness: it stops a grunt at a ceiling of 10 and not a digger at 60, so "can the swarm get
-     * up there" has two answers and which one you get depends on who was sent. One caste at a time rather
-     * than a rolled mix, for the same reason {@link SwarmBench#spawn} does it — an arm that fields a random
-     * assortment is not comparable with the next one.
-     */
+    /** Send a swarm of one caste at the current arena. */
     public static int launch(CommandSourceStack source, int count, GlyphidCaste caste) {
         Layout layout = current;
         if (layout == null) {
             source.sendFailure(Component.literal("No arena built. Try: swarmbench arena maze"));
             return 0;
         }
-        // Forced out to the far corner of the arena, not just around the spawn ring: with nobody logged in a
-        // chunk that is not forced does not tick, and half of these arenas are longer than a spawn ring.
         double reach = Math.max(layout.spawn().distanceTo(Vec3.atCenterOf(layout.objective())),
                 layout.spawnRadius()) + 24.0;
         SwarmBench.spawnAt(source, count, layout.spawnRadius(), caste, layout.spawn(), reach);
-        // Exactly, not heightmapped: the maze objective is under ten blocks of rock and the tower's is on a
-        // roof, and a heightmap sample would name the wrong one of the two floors in both.
         SwarmBench.march(source, Vec3.atCenterOf(layout.objective()), false);
         source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
                 "Launched %d %s at the %s arena: objective (%d, %d, %d).", count, caste.lowerName(),
@@ -480,12 +390,7 @@ public final class GlyphidArena {
         return count;
     }
 
-    /**
-     * Send more, of a different caste, into an arm already running.
-     *
-     * <p>Marched at the same objective as everything else, so the arena stays one scenario rather than two
-     * swarms with different orders standing in the same field.
-     */
+    /** Send more, of a different caste, into an arm already running. */
     public static int reinforce(CommandSourceStack source, int count, GlyphidCaste caste) {
         Layout layout = current;
         if (layout == null) {
@@ -501,12 +406,7 @@ public final class GlyphidArena {
         return count;
     }
 
-    /**
-     * How the current arena is going.
-     *
-     * <p>Ends with one machine-readable line so a probe does not have to parse prose, and prose above it so a
-     * player watching in a dev client can read the same run.
-     */
+    /** How the current arena is going. */
     public static int report(CommandSourceStack source) {
         Layout layout = current;
         ServerLevel level = source.getLevel();
@@ -581,12 +481,7 @@ public final class GlyphidArena {
         return got;
     }
 
-    /**
-     * Put the ground back, take the defenders out, and forget the arena.
-     *
-     * <p>Flat, not original: anything below the surface is refilled with stone, so a wiped arena is level
-     * with what is round it rather than a restoration of the strata that were there.
-     */
+    /** Put the ground back, take the defenders out, and forget the arena. */
     public static int clear(CommandSourceStack source) {
         Layout layout = current;
         if (layout == null) {
@@ -597,9 +492,6 @@ public final class GlyphidArena {
         ServerLevel level = source.getLevel();
         AABB box = layout.footprint();
         int floor = layout.origin().getY();
-        // Deepest first, then the surface, then the air. The other order fills the substrate last and paves
-        // over the surface it has just put back, which leaves a wiped arena a block lower than the ground
-        // beside it -- and only some arenas dig, so it would have been wrong on three of five.
         if (box.minY < floor - 1) {
             fill(level, (int) box.minX, (int) box.minY, (int) box.minZ, (int) box.maxX, floor - 2,
                     (int) box.maxZ, Blocks.STONE.defaultBlockState());
@@ -627,9 +519,6 @@ public final class GlyphidArena {
             for (int z = Math.min(z0, z1); z <= Math.max(z0, z1); z++) {
                 for (int y = minY; y <= maxY; y++) {
                     pos.set(x, y, z);
-                    // No neighbour or shape updates: an arena is written in one go and nothing in it is
-                    // waiting to hear about its neighbours, so paying vanilla's propagation twenty thousand
-                    // times over would be the whole cost of the command.
                     level.setBlock(pos, state, Block.UPDATE_CLIENTS | Block.UPDATE_KNOWN_SHAPE);
                 }
             }

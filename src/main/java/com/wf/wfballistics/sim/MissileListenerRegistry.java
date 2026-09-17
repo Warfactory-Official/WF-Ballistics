@@ -23,39 +23,14 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/**
- * Per-dimension registry of things that want a chance to engage a passing missile. Two kinds of listener:
- *
- * <ul>
- *   <li><b>Block listeners</b> (turret batteries, CIWS, the debug block) are keyed by {@link BlockPos} and kept
- *       as persistent records ({@link SavedData}). They survive chunk unload and a full server restart, so a
- *       missile crossing an unmanned base's defenses is still seen. When a missile closes on such a listener
- *       whose chunk is unloaded, {@link #tickWakeups} force-loads the block (ticking) so the real block entity
- *       wakes, tracks, and fires; the ticket is dropped once the threat clears.</li>
- *   <li><b>Entity listeners</b> (in-world interceptor missiles) are keyed by {@link UUID} and held transiently as
- *       live references, purged when they go invalid. They are never force-loaded (they self-load or offload).</li>
- * </ul>
- */
+/** Per-dimension registry of things that want a chance to engage a passing missile. */
 public final class MissileListenerRegistry extends SavedData {
     public static final String NAME = "wfballistics_missile_listeners";
 
-    // How long after a missile was last seen within a block listener's range the wakeup ticket is held, so a
-    // brief gap between threat reports doesn't unload-and-reload the turret repeatedly.
     private static final long THREAT_TTL_TICKS = 60L;
-    // Extra reach beyond the raw detection range at which a threat starts waking the block, giving the block
-    // entity a couple of ticks to load and start tracking before the missile is in firing range.
     private static final double WAKE_MARGIN = MissileSimConfig.LISTENER_SPAWN_MARGIN;
 
-    /**
-     * Registered on the mod bus by {@code WFServerEvents.ModBusEvents#onRegisterTicketControllers}. A
-     * controller must be registered before any {@code forceChunk} call or that call throws
-     * {@link IllegalArgumentException}.
-     *
-     * <p>The validation callback covers what {@link #tickWakeups} cannot. That reconciles against
-     * {@code blockRecords}, so it can only release a ticket whose listener it still knows about; a ticket
-     * whose record was dropped while the server was down would never be released by anything. NeoForge also
-     * ignores controllers with a null callback entirely, reinstating their saved tickets untouched.
-     */
+    /** Registered on the mod bus by {@code WFServerEvents.ModBusEvents#onRegisterTicketControllers}. */
     public static final TicketController CHUNK_TICKET = new TicketController(
             ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "missile_listener"),
             WFChunkValidation::validateTickets);
@@ -64,8 +39,6 @@ public final class MissileListenerRegistry extends SavedData {
     private final Map<UUID, IMissileListener> entityListeners = new HashMap<>();
     // BlockPos of block listeners we currently hold a wakeup chunk ticket for (transient).
     private final Set<BlockPos> forced = new HashSet<>();
-    // On the first wakeup tick after (re)load, release any wakeup tickets left over from a previous session
-    // before re-deriving them from live threats, so a ticket can't leak across a restart.
     private boolean reconciled = false;
 
     public static MissileListenerRegistry get(ServerLevel level) {
@@ -105,10 +78,7 @@ public final class MissileListenerRegistry extends SavedData {
         return tag;
     }
 
-    /**
-     * Register or refresh a listener. A {@link BlockPos} key is a persistent block listener; any other key
-     * (a {@link UUID}) is a transient entity listener.
-     */
+    /** Register or refresh a listener. */
     public void register(Object key, IMissileListener listener) {
         if (key instanceof BlockPos pos) {
             Vec3 center = listener.listenerCenter();
@@ -135,8 +105,8 @@ public final class MissileListenerRegistry extends SavedData {
     }
 
     /**
-     * Detection view of every active listener (block records, never dropped on unload, plus valid entity
-     * listeners) as plain center/range pairs.
+     * Detection view of every active listener (block records, never dropped on unload, plus valid entity listeners)
+     * as plain center/range pairs.
      */
     public List<ListenerView> views() {
         List<ListenerView> out = new ArrayList<>();
@@ -156,9 +126,8 @@ public final class MissileListenerRegistry extends SavedData {
     }
 
     /**
-     * Note that a missile is at {@code threatPos} this tick: any block listener within range wakes (or stays
-     * awake) for {@link #THREAT_TTL_TICKS}. Cheap distance checks over the (small) record set; safe to call
-     * every tick from every missile.
+     * Note that a missile is at {@code threatPos} this tick: any block listener within range wakes (or stays awake)
+     * for {@link #THREAT_TTL_TICKS}.
      */
     public void noteThreat(Vec3 threatPos, long now) {
         if (blockRecords.isEmpty()) {
@@ -172,10 +141,7 @@ public final class MissileListenerRegistry extends SavedData {
         }
     }
 
-    /**
-     * Hold a ticking chunk ticket on every block listener with a live threat, and release the rest. Also
-     * self-heals records whose block is gone. Runs once per dimension per tick.
-     */
+    /** Hold a ticking chunk ticket on every block listener with a live threat, and release the rest. */
     public void tickWakeups(ServerLevel level, long now) {
         if (!reconciled) {
             for (BlockRecord r : blockRecords.values()) {

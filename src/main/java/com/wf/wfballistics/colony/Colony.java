@@ -7,16 +7,7 @@ import net.minecraft.world.level.ChunkPos;
 
 import java.util.UUID;
 
-/**
- * A nest, as data. Simulates whether or not its chunk is loaded, and scales with distance from world spawn.
- *
- * <p>{@link #population} grows on its own and pays for attacks; {@link #aggression} accrues from nearby
- * industry and decides whether to attack. Separate on purpose: it is what makes a colony build up and then
- * strike rather than trickle.
- *
- * <p>{@link #y} is {@link #Y_UNRESOLVED} until the nest materialises, since a colony founded in an unloaded
- * chunk cannot know its ground height.
- */
+/** A nest, as data. */
 public final class Colony {
 
     public static final int Y_UNRESOLVED = Integer.MIN_VALUE;
@@ -32,24 +23,13 @@ public final class Colony {
     public int expansionCooldown;
     /** Whether the nest's blocks have been placed in the world yet. */
     public boolean built;
-    /**
-     * Egg chambers still standing, and so the colony's life: at zero it is removed. Set by {@link GlyphidNest}
-     * from what it laid out, decremented as a player digs them out.
-     */
+    /** Egg chambers still standing, and so the colony's life: at zero it is removed. */
     public int spawners;
-    /**
-     * Defenders standing in the world as bodies rather than as numbers. {@link #room()} holds growth back by
-     * this many, so a hatched bug is the same bug in another form rather than a second one. Recounted from the
-     * world each tick of a loaded nest, so it cannot drift.
-     */
+    /** Defenders standing in the world as bodies rather than as numbers. */
     public int garrison;
-    /** Extra mounds grown onto this colony. A count, not positions — {@link NestCells} derives the rest. */
+    /** Extra mounds grown onto this colony. A count, not positions: {@link NestCells} derives the rest. */
     public int buds;
-    /**
-     * The ground height each budded mound was laid at, in the order they were grown. Stored because the
-     * heightmap answers with the mound itself once it is stamped, and doubles as the count of cells that have
-     * blocks in the world (shorter than {@link #buds} until their chunks load).
-     */
+    /** The ground height each budded mound was laid at, in the order they were grown. */
     public final IntArrayList budHeights = new IntArrayList();
 
     /**
@@ -71,7 +51,7 @@ public final class Colony {
 
     /**
      * @return the tier a colony founded at this distance from spawn would have, or -1 inside the safe
-     * radius where none may exist.
+     *      radius where none may exist.
      */
     public static int tierAtDistance(double distance) {
         int safe = ColonyConfig.safeRadius();
@@ -97,7 +77,7 @@ public final class Colony {
 
     /**
      * @return the population cap less the bodies already standing, so a garrison and a population cannot both
-     * be full — that would be the same bugs counted twice.
+     *      be full: that would be the same bugs counted twice.
      */
     public double room() {
         return Math.max(0.0, populationCap() - garrison);
@@ -105,7 +85,7 @@ public final class Colony {
 
     /**
      * @return the most defenders this nest will hold. Garrison bugs are retained rather than despawned, so
-     * without a ceiling a nest visited often enough would grow one without bound.
+     *      without a ceiling a nest visited often enough would grow one without bound.
      */
     public int garrisonCap() {
         return ColonyConfig.garrisonPerChamber() * spawners;
@@ -128,7 +108,7 @@ public final class Colony {
 
     /**
      * @return how far the whole cluster reaches: the outermost cell plus its own mound. What anything asking
-     * "does this colony own that block" wants.
+     *      "does this colony own that block" wants.
      */
     public int footprintRadius() {
         return nestRadius() + NestCells.extent(this);
@@ -136,7 +116,7 @@ public final class Colony {
 
     /**
      * @return how many mounds this colony may grow onto itself. Rises with tier, so a frontier hive sprawls
-     * while a starting one stays a single dome.
+     *      while a starting one stays a single dome.
      */
     public int budCap() {
         return NestCells.cap(tier);
@@ -198,8 +178,6 @@ public final class Colony {
         colony.aggression = tag.getDouble("aggro");
         colony.expansionCooldown = tag.getInt("cooldown");
         colony.built = tag.getBoolean("built");
-        // Both absent on older saves, and both read back as zero -- the right answer for a colony that has
-        // never had blocks, and for one that has never budded.
         colony.spawners = tag.getInt("spawners");
         colony.garrison = tag.getInt("garrison");
         colony.buds = tag.getInt("buds");

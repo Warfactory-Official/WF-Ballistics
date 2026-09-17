@@ -6,27 +6,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 
-/**
- * One shared answer to "which way from here", for every glyphid walking to the same place. Three hundred
- * converging glyphids were three hundred A* searches over the same terrain — 212 µs and 4843 block reads
- * each. A breadth-first flood outward from the destination pays for it once, after which a navigation
- * decision is an array index and eight comparisons.
- *
- * <p>Usable before it is finished: the flood solves the columns nearest the destination first, which are the
- * ones a converging swarm is in, and a glyphid in an unfilled column falls back to pathfinding.
- *
- * <p>Floors are sampled by the flood rather than up front, so a field around a walled base costs the inside
- * of the wall and stops. No field value means no route, which is the cue the digging already reads.
- *
- * <p>Not thread-safe: built and read on the world thread. Dense arrays and no block reads at lookup time, so
- * moving the build to a worker later is a scheduling change.
- */
+/** One shared answer to "which way from here", for every glyphid walking to the same place. */
 public final class GlyphidFlowField {
 
-    /**
-     * Columns from the centre to the edge. 48 covers the last 96 blocks, where a swarm has converged enough
-     * for its searches to be duplicates; further out the routes genuinely differ.
-     */
+    /** Columns from the centre to the edge. */
     public static final int RADIUS = 48;
     public static final int SIZE = RADIUS * 2 + 1;
     private static final int COLUMNS = SIZE * SIZE;
@@ -35,28 +18,13 @@ public final class GlyphidFlowField {
     private static final int VERTICAL_REACH = 12;
     /** Clearance a glyphid needs to stand somewhere. The tallest caste is 1.5 blocks, so two. */
     private static final int CLEARANCE = 2;
-    /**
-     * Biggest rise between neighbouring columns that still counts as connected. Eight, not the one block a
-     * walker could step, because glyphids climb: on a walled compound, pathfinding got 237 of 300 inside by
-     * going over the wall while a walk-only field sent 91 the long way to the gap.
-     *
-     * <p>Charged as one step, which is a small lie -- but a weighted flood's honest weight is still far below
-     * the cost of walking around the building.
-     */
+    /** Biggest rise between neighbouring columns that still counts as connected. */
     private static final int CLIMB_UP = 8;
     /** Biggest drop that still counts as connected. A route that will not go downhill goes round the hill. */
     private static final int DROP = 8;
-    /**
-     * Gaps probed for a bridgeable crossing per field. The flood turns down hundreds of columns; this caps
-     * what is spent looking at the ones it turned down for having no floor at all. A probe is at most
-     * {@link GlyphidBridge#MAX_SPAN} columns, against the thousands the flood itself samples.
-     */
+    /** Gaps probed for a bridgeable crossing per field. */
     private static final int MAX_SITES = 16;
-    /**
-     * Gaps probed per field. Higher than {@link #MAX_SITES} because most probes never happen: once the
-     * candidate set is full, a gap further from the destination than the worst one held is turned away on
-     * two multiplies, before any block is read.
-     */
+    /** Gaps probed per field. */
     private static final int MAX_PROBES = 256;
     /** How far the far bank may sit above or below the near one. A deck is flat, so the two banks must be. */
     private static final int MAX_BANK_STEP = 1;
@@ -79,15 +47,7 @@ public final class GlyphidFlowField {
     private boolean complete;
     /** Gaps looked at so far, capped by {@link #MAX_SITES}. */
     private int sitesProbed;
-    /**
-     * Crossings the probe approved, best first, handed over when the flood finishes.
-     *
-     * <p>Not proposed as they are found. A flood is breadth-first over Chebyshev distance, so every column
-     * along one face of its diamond is reached on the same step and the order inside that step is whatever
-     * the queue happened to hold — the first gap it touches is as likely to be sixteen blocks off the swarm's
-     * line as on it. Ranking by how far the bank is from the destination in a straight line picks the
-     * crossing the swarm will actually walk into, and costs one multiply.
-     */
+    /** Crossings the probe approved, best first, handed over when the flood finishes. */
     private Candidate[] candidates;
     private int candidateCount;
     /** Rank of the worst candidate held, so a gap that cannot displace it is turned away before the probe. */
@@ -113,8 +73,6 @@ public final class GlyphidFlowField {
             frontier.enqueue(origin);
             filled = 1;
         } else {
-            // A destination nobody can stand on, usually inside a machine. The flood has nowhere to start,
-            // so every glyphid falls back to pathfinding.
             complete = true;
         }
     }
@@ -139,10 +97,7 @@ public final class GlyphidFlowField {
         return filled;
     }
 
-    /**
-     * Spend up to {@code budget} columns of flood. Returns the number actually expanded, which is zero once
-     * the field is complete.
-     */
+    /** Spend up to {@code budget} columns of flood. */
     public int build(ServerLevel level, int budget) {
         int spent = 0;
         while (spent < budget && !frontier.isEmpty()) {
@@ -198,9 +153,9 @@ public final class GlyphidFlowField {
     }
 
     /**
-     * The height a glyphid would stand at in this column, searched outward from the destination plane rather
-     * than down from the sky — a column under an overhang has two floors, and the one level with its
-     * neighbours is the one that matters.
+     * The height a glyphid would stand at in this column, searched outward from the destination plane rather than
+     * down from the sky: a column under an overhang has two floors, and the one level with its neighbours is the
+     * one that matters.
      */
     private int sampleFloor(ServerLevel level, int blockX, int blockZ, int cell) {
         int y = findFloor(level, blockX, blockZ);
@@ -226,13 +181,8 @@ public final class GlyphidFlowField {
     }
 
     /**
-     * Look at a column the flood turned down for having nothing to stand on, and if the swarm could carry
-     * itself across, hand the crossing to {@link GlyphidBridges}.
-     *
-     * <p>This is what makes finding a bridge site cost nothing: the expensive half — establishing that a
-     * converging swarm wants to go this way and cannot — is a byproduct of a flood that was going to run
-     * anyway. What is left is a walk of at most {@link GlyphidBridge#MAX_SPAN} columns looking for the far
-     * bank, capped at {@link #MAX_SITES} per field.
+     * Look at a column the flood turned down for having nothing to stand on, and if the swarm could carry itself
+     * across, hand the crossing to {@link GlyphidBridges}.
      */
     private void considerGap(ServerLevel level, int cx, int cz, int here, int dx, int dz) {
         // Cardinals only: a diagonal deck is a line of anchors meeting at their corners, which is not a floor.
@@ -243,8 +193,6 @@ public final class GlyphidFlowField {
         int bankZ = centreZ + cz - RADIUS;
         long rank = rank(bankX, bankZ);
         if (candidateCount >= MAX_SITES && rank >= worstRank) {
-            // Further from the destination than everything already held, so it could not survive the sort.
-            // Turned away here rather than after the probe, which is what makes a large probe budget cheap.
             return;
         }
         sitesProbed++;
@@ -256,8 +204,6 @@ public final class GlyphidFlowField {
             int z = bankZ + dz * step;
             int floorY = findFloor(level, x, z);
             if (floorY != NO_FLOOR) {
-                // Ground again. Worth spanning only if it is level enough with the near bank for a flat deck;
-                // a wall or the far face of a pit is a different problem, and not one a bridge solves.
                 if (step >= 2 && Math.abs(floorY - here) <= MAX_BANK_STEP) {
                     remember(bankX, bankZ, here, dx, dz, step, x, z);
                 }
@@ -269,10 +215,7 @@ public final class GlyphidFlowField {
         }
     }
 
-    /**
-     * Remember an approved crossing, keeping the {@link #MAX_SITES} nearest the destination. Held rather than
-     * proposed so the whole flood has been seen before any of them is chosen; see {@link #candidates}.
-     */
+    /** Remember an approved crossing, keeping the {@link #MAX_SITES} nearest the destination. */
     private void remember(int bankX, int bankZ, int deckY, int dx, int dz, int landingStep, int landingX,
                           int landingZ) {
         GlyphidBridge.Slot[] slots = new GlyphidBridge.Slot[landingStep - 1];
@@ -330,8 +273,8 @@ public final class GlyphidFlowField {
     }
 
     /**
-     * Whether a span column has room for an anchor and for whatever walks over it: one cell of body below the
-     * deck and {@link #CLEARANCE} above, which is what {@link #standable} asks of real ground.
+     * Whether a span column has room for an anchor and for whatever walks over it: one cell of body below the deck
+     * and {@link #CLEARANCE} above, which is what {@link #standable} asks of real ground.
      */
     private static boolean clearForDeck(ServerLevel level, BlockPos.MutableBlockPos pos, int x, int deckY,
                                         int z) {
@@ -344,10 +287,7 @@ public final class GlyphidFlowField {
         return true;
     }
 
-    /**
-     * Write a finished deck in as ordinary floor. After this the flood walks the span like terrain and every
-     * glyphid reading the field is routed over it without one of them knowing there is a bridge there.
-     */
+    /** Write a finished deck in as ordinary floor. */
     void stampDeck(int blockX, int blockZ, int deckY) {
         int cell = index(blockX, blockZ);
         if (cell >= 0) {
@@ -372,7 +312,7 @@ public final class GlyphidFlowField {
 
     /**
      * @return the centre of the neighbouring column a glyphid at this position should walk into, or null if
-     * this position is off the field, in an unreached column, or already at the destination.
+     *      this position is off the field, in an unreached column, or already at the destination.
      */
     public double[] step(double x, double y, double z) {
         int cell = index(Math.floor(x), Math.floor(z));

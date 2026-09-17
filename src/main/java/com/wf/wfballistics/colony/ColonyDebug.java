@@ -19,12 +19,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
-/**
- * Inspection and control for the colony simulation.
- *
- * <p>Load-bearing rather than a nicety: the simulation's whole point is running where nobody is watching, so
- * without a way to interrogate it there is no telling a tuning problem from a bug.
- */
+/** Inspection and control for the colony simulation. */
 public final class ColonyDebug {
 
     /** Lines a swarm report will print before it just gives totals. */
@@ -51,10 +46,7 @@ public final class ColonyDebug {
         return registry.colonies().size();
     }
 
-    /**
-     * Read the evolution scalar, and what it has unlocked. Worth more than the bare number: the number only
-     * matters through the caste table.
-     */
+    /** Read the evolution scalar, and what it has unlocked. */
     public static int evolution(CommandSourceStack source) {
         reportEvolution(source, ColonyRegistry.get(source.getLevel()));
         return 1;
@@ -122,12 +114,7 @@ public final class ColonyDebug {
         return registry.warbands().size();
     }
 
-    /**
-     * Report how the loaded swarm has divided itself up.
-     *
-     * <p>The split is the whole mechanic and it is invisible from outside: four squads walking to four
-     * different places look exactly like one swarm milling about until you know what each of them was told.
-     */
+    /** Report how the loaded swarm has divided itself up. */
     public static int squads(CommandSourceStack source) {
         var swarm = GlyphidTracker.glyphids(source.getLevel());
         if (swarm.isEmpty()) {
@@ -168,8 +155,8 @@ public final class ColonyDebug {
     }
 
     /**
-     * Found a colony where the caller is standing, so the simulation can be seeded without waiting for
-     * worldgen to place one.
+     * Found a colony where the caller is standing, so the simulation can be seeded without waiting for worldgen to
+     * place one.
      */
     public static int found(CommandSourceStack source) {
         ServerLevel level = source.getLevel();
@@ -188,12 +175,8 @@ public final class ColonyDebug {
     }
 
     /**
-     * Build the nearest colony's nest here and now, rather than waiting for a scout to settle one or for its
-     * chunk to load.
-     *
-     * <p>Reports what landed against what is owed, because that split is the whole of {@link PendingChunkEdits}
-     * and it is invisible otherwise: a mound half in an unloaded chunk looks like a mound that failed to
-     * build.
+     * Build the nearest colony's nest here and now, rather than waiting for a scout to settle one or for its chunk
+     * to load.
      */
     public static int nest(CommandSourceStack source) {
         ServerLevel level = source.getLevel();
@@ -207,8 +190,6 @@ public final class ColonyDebug {
             return 0;
         }
         if (!colony.hasResolvedY()) {
-            // Load the chunk first: Level.getHeight does not, and for an unloaded column it answers with the
-            // bottom of the world. Loading also fires ChunkEvent.Load, which is why `built` is re-read below.
             level.getChunk(colony.x >> 4, colony.z >> 4);
             if (!colony.hasResolvedY()) {
                 colony.y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, colony.x, colony.z);
@@ -250,13 +231,7 @@ public final class ColonyDebug {
         return colonies;
     }
 
-    /**
-     * Report what every materialised glyphid thinks it is doing.
-     *
-     * <p>A swarm that arrives and then mills around looks identical from outside to one that arrives and
-     * marches, and the difference is whether it has a path. Without this the only way to tell them apart is
-     * to rebuild the mod with a print statement in it.
-     */
+    /** Report what every materialised glyphid thinks it is doing. */
     public static int bugs(CommandSourceStack source) {
         ServerLevel level = source.getLevel();
         var swarm = GlyphidTracker.glyphids(level);
@@ -301,8 +276,8 @@ public final class ColonyDebug {
     }
 
     /**
-     * Send a warband from the nearest colony at the caller, so an attack can be watched without waiting for
-     * one to be provoked and then to walk several thousand blocks.
+     * Send a warband from the nearest colony at the caller, so an attack can be watched without waiting for one to
+     * be provoked and then to walk several thousand blocks.
      */
     public static int dispatch(CommandSourceStack source, int count, boolean flying) {
         ServerLevel level = source.getLevel();
@@ -324,12 +299,7 @@ public final class ColonyDebug {
         return count;
     }
 
-    /**
-     * Materialise the nearest warband on the spot, ignoring the per-tick budget.
-     *
-     * <p>Reports what was placed against what is still owed, which is the invariant that matters: bodies
-     * that could not be placed stay in the record rather than being lost.
-     */
+    /** Materialise the nearest warband on the spot, ignoring the per-tick budget. */
     public static int materialise(CommandSourceStack source, int count) {
         ServerLevel level = source.getLevel();
         ColonyRegistry registry = ColonyRegistry.get(level);
@@ -361,13 +331,7 @@ public final class ColonyDebug {
 
     // --- what is around the player, and what is inside one nest ---
 
-    /**
-     * Everything within a radius of the caller: nests, what each is doing, and warbands on their way in.
-     *
-     * <p>The one command that answers "why have I never seen a hive". Colonies are records first and blocks
-     * second, so a nest that exists can still be a thousand blocks away in a chunk nobody has loaded, and the
-     * only difference between that and a world with no colonies at all is this list.
-     */
+    /** Everything within a radius of the caller: nests, what each is doing, and warbands on their way in. */
     public static int nearby(CommandSourceStack source, int radius) {
         ServerLevel level = source.getLevel();
         ColonyRegistry registry = ColonyRegistry.get(level);
@@ -429,18 +393,11 @@ public final class ColonyDebug {
         }
         return String.format(Locale.ROOT,
                 "  Nothing yet. Nests are seeded one per %d-block cell at %.0f%% chance, and only when the"
-                        + " chunk holding the site is loaded -- so walk, do not wait.",
+                        + " chunk holding the site is loaded, so walk, do not wait.",
                 ColonyConfig.naturalSpacing(), 100.0 * ColonyConfig.naturalChance());
     }
 
-    /**
-     * The nearest colony's whole state, and what it is about to do.
-     *
-     * <p>Reports the derived numbers rather than only the stored ones — seconds to the next strike, seconds to
-     * a full population, whether growth is capped by the cap or by the garrison — because the stored ones are
-     * individually meaningless. "aggression 46" says nothing; "46 of 100, gaining 0.9/s from 45 industry
-     * nearby, so a warband of 16 in about a minute" is the state of the colony.
-     */
+    /** The nearest colony's whole state, and what it is about to do. */
     public static int inspect(CommandSourceStack source) {
         ServerLevel level = source.getLevel();
         ColonyRegistry registry = ColonyRegistry.get(level);
@@ -518,8 +475,8 @@ public final class ColonyDebug {
     }
 
     /**
-     * What a mound laid right now would be made of, which is not what the mounds already standing are made
-     * of — the crust is baked in when each cell is laid and never revisited.
+     * What a mound laid right now would be made of, which is not what the mounds already standing are made of: the
+     * crust is baked in when each cell is laid and never revisited.
      */
     private static String crustNote(float evolution, int radius) {
         int depth = GlyphidNest.crustDepth(evolution, radius);
@@ -597,10 +554,7 @@ public final class ColonyDebug {
         return 1;
     }
 
-    /**
-     * Run one expansion attempt on the nearest colony now, and say what it did or what stopped it. The note
-     * comes back from {@link ColonyManager.Expansion} rather than being guessed from the config here.
-     */
+    /** Run one expansion attempt on the nearest colony now, and say what it did or what stopped it. */
     public static int expand(CommandSourceStack source) {
         ServerLevel level = source.getLevel();
         ColonyRegistry registry = ColonyRegistry.get(level);
@@ -625,14 +579,7 @@ public final class ColonyDebug {
         return result.kind() == ColonyManager.Expansion.Kind.NOTHING ? 0 : 1;
     }
 
-    /**
-     * Force the local half of expansion, skipping the roll that usually decides between the two.
-     *
-     * <p>Worth its own command because the two kinds of expansion produce completely different things and
-     * {@code colony expand} will not reliably give you the one you want to look at: at the default budChance
-     * a bud is a coin flip, and a colony with cells to spare in a crowded region buds every time regardless.
-     * This one is for watching a cluster take shape.
-     */
+    /** Force the local half of expansion, skipping the roll that usually decides between the two. */
     public static int bud(CommandSourceStack source, int count) {
         ServerLevel level = source.getLevel();
         ColonyRegistry registry = ColonyRegistry.get(level);
@@ -673,7 +620,7 @@ public final class ColonyDebug {
         return added;
     }
 
-    /** Remove the nearest colony's record. Its mound is left standing — the blocks are not the colony. */
+    /** Remove the nearest colony's record. Its mound is left standing: the blocks are not the colony. */
     public static int raze(CommandSourceStack source) {
         ColonyRegistry registry = ColonyRegistry.get(source.getLevel());
         Colony colony = registry.nearest(source.getPosition().x, source.getPosition().z);

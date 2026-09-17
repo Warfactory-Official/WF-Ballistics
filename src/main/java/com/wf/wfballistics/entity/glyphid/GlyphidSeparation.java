@@ -11,36 +11,14 @@ import net.minecraft.server.level.ServerLevel;
 import java.util.List;
 import java.util.Set;
 
-/**
- * Keeps a swarm spread out, without asking the world what is nearby.
- *
- * <p>Vanilla push is suppressed ({@link EntityGlyphid#pushEntities}) because it was the only measured cost
- * that grew faster than the swarm: 1.8% of the tick at a hundred, 15.5% at three hundred. The cost was the
- * broadphase, not the push — a per-entity inflated-box query walking entity sections every tick. So the push
- * stays and the query goes: one uniform grid per level tick from {@link GlyphidTracker}, each bug compared
- * against the nine cells around it. Each pair is visited once and pushed both ways, so the result is
- * symmetric.
- *
- * <p>Not collision: an impulse is added to the velocity {@code move()} will spend, and a pair still
- * overlapping at the end of the tick simply pushes again.
- *
- * <p>Both tiers go in one grid. They walk the same flow field to the same column, so separating only the
- * entities would give a spread front rank followed by two hundred records in one block.
- */
+/** Keeps a swarm spread out, without asking the world what is nearby. */
 public final class GlyphidSeparation {
 
     /** Grid pitch. Sized to the widest pair (a behemoth is 2.5), so nine cells hold everything that matters. */
     private static final double CELL = 3.0;
     /** Fraction of touching distance a pair holds. Below 1, so a column can still funnel through a doorway. */
     private static final double SPACING = 0.8;
-    /**
-     * Hardest push one glyphid takes in a tick, summed over every neighbour. Comparable to a walk (~0.2
-     * blocks a tick) on purpose: collision is off, so a push weaker than the inward drive only slows the
-     * compression — at a fifth of a walk the pile still closed to 0.59 blocks a bug.
-     *
-     * <p>Clamped per glyphid rather than per pair, which is what makes a number this large safe: only the sum
-     * can tell six pushes one way from six pushing outward from a ring.
-     */
+    /** Hardest push one glyphid takes in a tick, summed over every neighbour. */
     private static final double MAX_PUSH = 0.15;
     /** Most neighbours compared per tick. A bug in a pile has dozens; the nearest few are the ones on it. */
     private static final int MAX_NEIGHBOURS = 6;
@@ -69,7 +47,7 @@ public final class GlyphidSeparation {
 
     /**
      * @return {@code {mean nearest-neighbour distance, closest pair, how many are inside half a body width
-     * of another}}. Diagnostic only.
+     *      of another}}. Diagnostic only.
      */
     public static double[] density(ServerLevel level) {
         Set<EntityGlyphid> bodies = GlyphidTracker.glyphids(level);
@@ -101,9 +79,8 @@ public final class GlyphidSeparation {
     }
 
     /**
-     * The swarm as parallel arrays in a uniform grid — arrays rather than a map of lists, since the point of
-     * dropping the entity query is to touch memory in order. Each cell is a linked list threaded through
-     * {@link #next} from a head in {@link #heads}, so the allocation is fixed however the swarm is spread.
+     * The swarm as parallel arrays in a uniform grid: arrays rather than a map of lists, since the point of
+     * dropping the entity query is to touch memory in order.
      */
     private static final class Grid {
 
@@ -115,11 +92,7 @@ public final class GlyphidSeparation {
         private final double[] z;
         private final double[] width;
         private final int[] next;
-        /**
-         * Impulse accumulated this tick, applied once at the end so the clamp sees the sum. A bug in the
-         * middle of a ring should go nowhere, which is only true if opposing pushes are added before the
-         * limit.
-         */
+        /** Impulse accumulated this tick, applied once at the end so the clamp sees the sum. */
         private final double[] dvx;
         private final double[] dvz;
         private final Long2IntOpenHashMap heads;
@@ -212,9 +185,6 @@ public final class GlyphidSeparation {
 
             double dist = Math.sqrt(distSq);
             if (dist < 1.0E-4) {
-                // Exactly stacked, as a materialised warband starts. Any direction will do so long as the
-                // two disagree, so it comes off the id -- a random source would re-pick and leave them
-                // shivering.
                 double angle = bugs[i].carrierId() * 2.399963;
                 dx = Math.cos(angle);
                 dz = Math.sin(angle);
@@ -232,11 +202,7 @@ public final class GlyphidSeparation {
             return true;
         }
 
-        /**
-         * Spend the accumulated impulses, clamped. A chewing glyphid is exempt — shoving it off the block it
-         * committed to throws the banked progress away — but it still pushes, so the queue behind spreads
-         * along the wall rather than stacking.
-         */
+        /** Spend the accumulated impulses, clamped. */
         void apply() {
             for (int i = 0; i < count; i++) {
                 double magnitudeSq = dvx[i] * dvx[i] + dvz[i] * dvz[i];
@@ -252,7 +218,7 @@ public final class GlyphidSeparation {
 
         /**
          * @return squared distance to the nearest other glyphid, or {@link Double#MAX_VALUE} if there is
-         * none in the nine cells around this one.
+         *      none in the nine cells around this one.
          */
         double nearestSq(int i) {
             int cellX = (int) Math.floor(x[i] / CELL);

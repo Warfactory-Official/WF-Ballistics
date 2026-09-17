@@ -3,6 +3,7 @@ package com.wf.wfballistics.warhead;
 import com.wf.wfballistics.WFBallistics;
 import com.wf.wfballistics.aef.ExplosionAEF;
 import com.wf.wfballistics.aef.nuke.MiniNuke;
+import com.wf.wfballistics.aef.standard.BlockAllocatorShapedCharge;
 import com.wf.wfballistics.aef.standard.BlockAllocatorStandard;
 import com.wf.wfballistics.aef.standard.BlockProcessorStandard;
 import com.wf.wfballistics.aef.standard.EntityProcessorCross;
@@ -51,10 +52,7 @@ public final class WarheadRegistry {
 
     /**
      * Shaped charge (HEAT): fires a tight jet along the carrier's impact heading ({@link WarheadCarrier#angle()}),
-     * drilling a deep, narrow shaft through hardened cover with only a shallow crater at the surface. On a
-     * top-attack dive the heading points down-and-in, so it behaves as a downward penetrator; a shallow-angle
-     * strike drone instead punches sideways. Only blocks/entities in that forward cone are hit: see
-     * {@link com.wf.wfballistics.aef.standard.BlockAllocatorShapedCharge}.
+     * drilling a deep, narrow shaft through hardened cover with only a shallow crater at the surface.
      */
     public static final Detonation SHAPED_CHARGE = (source, pos) -> {
         Level level = source.level();
@@ -62,7 +60,8 @@ public final class WarheadRegistry {
             return;
         }
         new ExplosionAEF(level, pos.x, pos.y, pos.z, SHAPED_CHARGE_SIZE)
-                .makeShapedCharge(source.angle())
+                .makeShapedCharge(source.angle(), source.blastHalfAngleDeg(),
+                        BlockAllocatorShapedCharge.DEFAULT_JET_POWER)
                 .igniterFaction(source.igniterFactionId())
                 .explode();
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
@@ -98,6 +97,11 @@ public final class WarheadRegistry {
     private static final Map<ResourceLocation, Detonation> WARHEADS = new LinkedHashMap<>();
     private static final Map<ResourceLocation, InterceptDetonation> INTERCEPTS = new LinkedHashMap<>();
     private static final Map<ResourceLocation, Float> BLAST_SIZE = new LinkedHashMap<>();
+    /**
+     * Peak damage to a person standing on the charge, for warheads that know it outright rather than having it
+     * inferred from a blast size.
+     */
+    private static final Map<ResourceLocation, Integer> PEAK_DAMAGE = new LinkedHashMap<>();
 
     static {
         register(DEFAULT_ID, STANDARD, STANDARD_INTERCEPT);
@@ -107,6 +111,7 @@ public final class WarheadRegistry {
         register(RecursiveFrag.ID, RecursiveFrag::detonate);
         register(GasWarhead.ID, GasWarhead::detonate);
         register(FireWarhead.ID, FireWarhead::detonate);
+        register(TorpedoWarhead.ID, TorpedoWarhead::detonate);
         register(FireCluster.ID, FireCluster::detonate);
         register(rl("interceptor"), INTERCEPTOR, INTERCEPTOR::detonate);
         register(rl("inert"), INERT);
@@ -168,7 +173,16 @@ public final class WarheadRegistry {
         return BLAST_SIZE.getOrDefault(id, 0f);
     }
 
+    /** Records what {@code id} does to a person at the centre of it. */
+    public static void declarePeakDamage(ResourceLocation id, int damage) {
+        PEAK_DAMAGE.put(id, damage);
+    }
+
     public static int peakEntityDamage(ResourceLocation id) {
+        Integer declared = PEAK_DAMAGE.get(id);
+        if (declared != null) {
+            return declared;
+        }
         float size = blastSize(id);
         return size <= 0f ? 0 : (int) (8.0f * size + 1.0f);
     }

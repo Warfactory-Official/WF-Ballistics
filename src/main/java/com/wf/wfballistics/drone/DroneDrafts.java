@@ -5,16 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.function.UnaryOperator;
 
-/**
- * The program each player is part-way through writing at the command line.
- *
- * <p>A scratchpad, deliberately. {@code /wfballistics drone program} adds one step per invocation, and the
- * steps have to accumulate somewhere between commands; this is that somewhere. It is server-side, per player,
- * and not saved: a half-written program is not worth carrying across a restart, and the drone pad is where a
- * program that <em>should</em> outlive the session belongs, because a pad keeps its own.
- *
- * <p>World-thread only, like everything else the command layer touches.
- */
+/** The program each player is part-way through writing at the command line. */
 public final class DroneDrafts {
 
     private static final Map<UUID, DroneProgram> BY_PLAYER = new HashMap<>();
@@ -27,8 +18,7 @@ public final class DroneDrafts {
     }
 
     /**
-     * Rewrite a player's draft. {@link DroneProgram} is immutable, so editing is "read it, transform it, put
-     * it back" rather than mutating in place.
+     * Rewrite a player's draft.
      *
      * @return the new draft
      */

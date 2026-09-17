@@ -3,10 +3,7 @@ package com.wf.wfballistics.drone.ai;
 import com.wf.wfballistics.api.WFEventType;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * A world change the brain decided on but is not allowed to perform itself. Actions are inert data; the
- * carrier applies them on the world thread (see {@code DroneCarrier#apply}).
- */
+/** A world change the brain decided on but is not allowed to perform itself. */
 public sealed interface DroneAction {
 
     /**
@@ -16,12 +13,19 @@ public sealed interface DroneAction {
     }
 
     /**
-     * Pickle the explosive payload. It inherits the drone's velocity, so the release point already accounts
-     * for how far it will travel while falling.
+     * Pickle the explosive payload.
      *
      * @param aim the point the release was solved for, for telemetry
      */
     record DropPayload(Vec3 aim) implements DroneAction {
+    }
+
+    /**
+     * Put one mine out of the rack down.
+     *
+     * @param aim where this one was meant to land, for telemetry
+     */
+    record LayMine(Vec3 aim) implements DroneAction {
     }
 
     /**
@@ -43,51 +47,29 @@ public sealed interface DroneAction {
     }
 
     /**
-     * This staging waypoint has been reached; move on to the next one, or to the real destination if that
-     * was the last. How a dogleg route is walked.
+     * This staging waypoint has been reached; move on to the next one, or to the real destination if that was the
+     * last.
      */
     record AdvanceLeg() implements DroneAction {
     }
 
-    /**
-     * This step of the program is done; move on to the next one and take its destination. The queue's
-     * counterpart to {@link AdvanceLeg}, one level up: a leg is a corner of the route to one place, a task is
-     * a whole place with something to do when you get there.
-     */
+    /** This step of the program is done; move on to the next one and take its destination. */
     record AdvanceTask() implements DroneAction {
     }
 
-    /**
-     * Abandon everything still queued. What a battery abort leaves behind, so a drone sent home early does
-     * not pick the rest of its program back up on the way past.
-     */
+    /** Abandon everything still queued. */
     record AbortProgram(String reason) implements DroneAction {
     }
 
-    /**
-     * The drone is on station over the block it claimed and has stopped moving: do the work.
-     *
-     * <p>Carries the position it believes it is over, which the world thread checks against the claim it
-     * actually holds. Those can disagree, a claim can lapse while the drone is settling, and placing a
-     * block at a position nobody asked for is much worse than doing nothing.
-     */
+    /** The drone is on station over the block it claimed and has stopped moving: do the work. */
     record FinishWork(net.minecraft.core.BlockPos at) implements DroneAction {
     }
 
-    /**
-     * The drone is on station over its supply station: move items, whichever way this job moves them.
-     *
-     * <p>Deliberately without a direction. The world thread knows whether this is a construction loading up
-     * or a demolition handing over, and encoding that here would mean a worker thread deciding it from a
-     * snapshot that could be a tick out of date.
-     */
+    /** The drone is on station over its supply station: move items, whichever way this job moves them. */
     record ExchangeSupplies() implements DroneAction {
     }
 
-    /**
-     * Append an entry to this drone's telemetry timeline. Ignored on a classified mission, which keeps no
-     * timeline at all.
-     */
+    /** Append an entry to this drone's telemetry timeline. */
     record Log(WFEventType type, String detail) implements DroneAction {
     }
 }

@@ -22,25 +22,12 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * A cargo crate: falling after release, or sitting on the ground waiting to be opened. Its contents are a
- * real inventory, so a delivery actually moves items from one place to another.
- *
- * <p>There is deliberately no third case for "being carried". A crate under a drone used to be one of
- * these, positioned onto its carrier every tick, and it never quite kept up: the two entities' movement
- * reached the client on separate schedules and the crate juddered along behind. A drone now holds the cargo
- * as items and draws the crate itself, and one of these is created only at the moment the load becomes
- * independent of the drone: released, shot down, or spilled out of a wreck.
- */
+/** A cargo crate: falling after release, or sitting on the ground waiting to be opened. */
 public class CrateEntity extends Entity {
 
     public static final int ROWS = 3;
     public static final int SLOTS = ROWS * 9;
-    /**
-     * Edge length in blocks. One number for the hitbox, the cube the renderer draws, and the space a drone
-     * leaves for it in its grippers: a crate that changed size when it was released would give away that
-     * the carried one was never really there.
-     */
+    /** Edge length in blocks. */
     public static final float SIZE = 0.9f;
 
     private static final double GRAVITY = 0.04;
@@ -75,11 +62,7 @@ public class CrateEntity extends Entity {
         this.move(MoverType.SELF, this.getDeltaMovement());
     }
 
-    /**
-     * Start falling. Called the tick the crate is spawned out of a drone's grippers: it is moved over the
-     * aim point but keeps whatever height it was let go at, so it falls from the drone rather than
-     * appearing on the ground under it.
-     */
+    /** Start falling. */
     public void release(Vec3 at) {
         this.setPos(at.x, Math.max(at.y, this.getY()), at.z);
         this.setDeltaMovement(this.getDeltaMovement().x * 0.2, 0.0, this.getDeltaMovement().z * 0.2);
@@ -94,10 +77,7 @@ public class CrateEntity extends Entity {
         return this.items.stream().allMatch(ItemStack::isEmpty);
     }
 
-    /**
-     * Cargo only, without the entity around it. Used to carry contents across an offload to the drone sim,
-     * where the crate entity itself stops existing.
-     */
+    /** Cargo only, without the entity around it. */
     public CompoundTag saveCargo() {
         CompoundTag tag = new CompoundTag();
         ContainerHelper.saveAllItems(tag, this.items, this.registryAccess());

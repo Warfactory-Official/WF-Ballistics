@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
-
 public final class GlyphidBridges {
 
     /** Bridges a level may have at once. A swarm converges on one route, so it wants very few. */
@@ -29,19 +28,13 @@ public final class GlyphidBridges {
     private static final double RECRUIT_HEIGHT = 3.0;
 
     private static final Map<ResourceKey<Level>, List<GlyphidBridge>> BY_LEVEL = new HashMap<>();
-    /**
-     * Bridges standing across every level. Read on the movement hot path by every glyphid in the world, so it
-     * is a plain static rather than a map lookup: no bridges is the overwhelmingly common case.
-     */
+    /** Bridges standing across every level. */
     private static int live;
 
     private GlyphidBridges() {
     }
 
-    /**
-     * Take a site the flood turned up. Silently ignored if this level is already at its limit or already has
-     * a bridge off the same bank, since a second one there would be the same crossing built twice.
-     */
+    /** Take a site the flood turned up. */
     static void propose(ServerLevel level, int bankX, int bankZ, int deckY, int landingX, int landingZ,
                         GlyphidBridge.Slot[] slots) {
         List<GlyphidBridge> bridges = BY_LEVEL.computeIfAbsent(level.dimension(), k -> new ArrayList<>());
@@ -62,7 +55,6 @@ public final class GlyphidBridges {
         live++;
     }
 
-
     public static boolean recruit(ServerLevel level, EntityGlyphid glyphid) {
         if (live == 0 || !SwarmBench.bridges) {
             return false;
@@ -80,8 +72,6 @@ public final class GlyphidBridges {
             if (Math.abs(glyphid.getY() - bridge.deckY) > RECRUIT_HEIGHT) {
                 continue;
             }
-            // Either end will do until the first anchor sits down, since a flood finds the crossing from the
-            // side the swarm is not on.
             if (bridge.distanceToEndSq(glyphid.getX(), glyphid.getZ())
                     > RECRUIT_RADIUS * RECRUIT_RADIUS) {
                 continue;
@@ -105,10 +95,7 @@ public final class GlyphidBridges {
         }
     }
 
-    /**
-     * Let go of a slot this glyphid was holding, along with every slot beyond it. Called when an anchor dies,
-     * is removed, or gives up walking out to its slot.
-     */
+    /** Let go of a slot this glyphid was holding, along with every slot beyond it. */
     public static void release(ServerLevel level, EntityGlyphid glyphid) {
         GlyphidBridge bridge = glyphid.bridge();
         if (bridge == null) {
@@ -127,7 +114,6 @@ public final class GlyphidBridges {
             GlyphidFlowFields.invalidate(level, new BlockPos(bridge.bankX, bridge.deckY, bridge.bankZ));
         }
     }
-
 
     public static List<VoxelShape> deckShapes(Level level, AABB box) {
         if (live == 0 || !(level instanceof ServerLevel server)) {
@@ -159,12 +145,7 @@ public final class GlyphidBridges {
         return shapes == null ? List.of() : shapes;
     }
 
-    /**
-     * Write every finished deck into a field being built, as ordinary floor.
-     *
-     * <p>This is the whole of "crossing is free": after this the flood walks the span like terrain, and every
-     * glyphid reading the field is routed over it without one of them knowing why.
-     */
+    /** Write every finished deck into a field being built, as ordinary floor. */
     static void stampInto(ServerLevel level, GlyphidFlowField field) {
         if (live == 0) {
             return;

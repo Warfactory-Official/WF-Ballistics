@@ -20,15 +20,7 @@ import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * Ordnance dropped by a glyphid on the wing.
- *
- * <p>Two payloads on one entity, chosen by {@link #setExplosive}: corrosive acid, or an actual blast for the
- * castes that get there. They differ only in the last few lines.
- *
- * <p>A {@link ThrowableProjectile} rather than a falling entity, so it sweeps its path each tick and cannot
- * tunnel through the roof it was aimed at.
- */
+/** Ordnance dropped by a glyphid on the wing. */
 public class EntityGlyphidBomb extends ThrowableProjectile {
 
     private static final EntityDataAccessor<Boolean> DW_EXPLOSIVE =
@@ -60,11 +52,7 @@ public class EntityGlyphidBomb extends ThrowableProjectile {
         entityData.set(DW_EXPLOSIVE, explosive);
     }
 
-    /**
-     * Heavier than a snowball so a bomb dropped from cruise altitude falls rather than drifting. Public
-     * because the ground castes lob these on a ballistic arc and have to solve for the same number the bomb
-     * will actually fall at.
-     */
+    /** Heavier than a snowball so a bomb dropped from cruise altitude falls rather than drifting. */
     public static final double GRAVITY = 0.06;
 
     @Override
@@ -92,9 +80,6 @@ public class EntityGlyphidBomb extends ThrowableProjectile {
         if (level().isClientSide) {
             return;
         }
-        // The contact point, not the bomb's position. A bomb released from cruise altitude covers several
-        // blocks per tick, so where it *was* when the hit resolved can be well above what it hit -- which puts
-        // the pool in the air over the target instead of on it.
         Vec3 at = result.getLocation();
         if (isExplosive()) {
             detonate(at);
@@ -112,8 +97,8 @@ public class EntityGlyphidBomb extends ThrowableProjectile {
     }
 
     /**
-     * The heavier payload, run through the same explosion framework as everything else that goes off in this
-     * mod rather than through vanilla's.
+     * The heavier payload, run through the same explosion framework as everything else that goes off in this mod
+     * rather than through vanilla's.
      */
     private void detonate(Vec3 at) {
         int size = WFConfig.GLYPHID_BOMB_BLAST.get();

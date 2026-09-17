@@ -16,16 +16,7 @@ import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
-/**
- * Per-dimension store of the glyphids that are records rather than entities. Data only: the decisions live in
- * {@link SimGlyphidManager}.
- *
- * <p>Persisted, because a marching swarm is mostly records and a shutdown that dropped them would delete an
- * attack in transit without saying so. Vanilla saves entities; this saves what replaced them.
- *
- * <p>Also the gate on the off-thread pass: {@link SimGlyphidPass} owns this list for a level tick, and
- * {@link #view()} joins before handing it over, so the invariant holds by construction rather than by rule.
- */
+/** Per-dimension store of the glyphids that are records rather than entities. */
 public final class SimGlyphidRegistry extends SavedData {
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -86,17 +77,12 @@ public final class SimGlyphidRegistry extends SavedData {
         pass = running;
     }
 
-    /**
-     * Wait for the pass, if there is one. Called from every route into the list rather than one point in the
-     * tick, because an explosion reaches records from the entity tick and a command from outside it entirely.
-     */
+    /** Wait for the pass, if there is one. */
     public void await() {
         Future<?> running = pass;
         if (running == null) {
             return;
         }
-        // A worker waiting on its own pass is a deadlocked server. Nothing does today; this makes whatever
-        // is added later fail loudly on the first tick instead.
         WorldThread.assertOn("waiting for the glyphid sim pass");
         long start = System.nanoTime();
         try {
@@ -104,8 +90,6 @@ public final class SimGlyphidRegistry extends SavedData {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException e) {
-            // Records keep last tick's positions and the next pass carries on. Logged rather than rethrown:
-            // a swarm that stops walking is a bug report, a server that stops is an outage.
             LOGGER.error("[wfballistics] the glyphid sim pass failed", e.getCause());
         } finally {
             pass = null;

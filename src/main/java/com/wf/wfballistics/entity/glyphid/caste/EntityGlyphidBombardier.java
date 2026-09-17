@@ -13,13 +13,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Artillery. Lobs a volley of acid over whatever is between it and its target.
- *
- * <p>The reason the caste matters is that it does not need line of sight and it does not need to close.
- * A wall stops a grunt and merely relocates a bombardier, so a defended position has to answer the swarm's
- * reach rather than only its front rank.
- */
+/** Artillery. */
 public class EntityGlyphidBombardier extends EntityGlyphid {
 
     /** Ticks between volleys. Offset by one so the volley never lands on the same tick as the tracking sample. */
@@ -27,14 +21,11 @@ public class EntityGlyphidBombardier extends EntityGlyphid {
     /** Beyond this, shoot over rather than at: the high solution clears cover, the flat one is faster. */
     protected static final double LOFT_RANGE = 20.0;
     /**
-     * Do not bother below this: a target this close is the melee goal's problem, and the arc would drop the
-     * volley on the bombardier's own back.
+     * Do not bother below this: a target this close is the melee goal's problem, and the arc would drop the volley
+     * on the bombardier's own back.
      */
     protected static final double MIN_RANGE = 3.0;
-    /**
-     * How far ahead of a moving target to aim, per solution. The lofted shot hangs in the air for longer, so
-     * it needs the longer lead.
-     */
+    /** How far ahead of a moving target to aim, per solution. */
     protected static final int LEAD_FLAT = 20;
     protected static final int LEAD_LOFT = 60;
 
@@ -83,8 +74,8 @@ public class EntityGlyphidBombardier extends EntityGlyphid {
     }
 
     /**
-     * Solve once, then throw the whole salvo down the same heading with a widening spread — so a volley
-     * covers an area rather than stacking every bomb on one block.
+     * Solve once, then throw the whole salvo down the same heading with a widening spread, so a volley covers an
+     * area rather than stacking every bomb on one block.
      */
     protected void volley(LivingEntity target) {
         boolean loft = distanceTo(target) > LOFT_RANGE;

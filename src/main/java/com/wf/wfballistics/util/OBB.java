@@ -7,18 +7,7 @@ import org.joml.Math;
 
 import java.util.Optional;
 
-/**
- * Oriented bounding box. Ported from SuperbWarfare's {@code com.atsuishio.superbwarfare.tools.OBB},
- * which is itself based on <a href="https://github.com/AnECanSaiTin/HitboxAPI">HitboxAPI</a>.
- *
- * <p>A box defined by a world-space {@code center}, per-axis half-lengths {@code extents}, and a
- * {@code rotation}. Used to give elongated entities (missiles) an accurate, orientation-aware hitbox
- * instead of the coarse vanilla AABB.
- *
- * <p>Not a record, despite reading like one: it caches its world axes (see {@link #getAxes}), and its
- * components are mutated in place by {@link #setCenter} and friends rather than replaced. The accessors are
- * named as a record's would be because it used to be one.
- */
+/** Oriented bounding box. */
 public final class OBB {
 
     private final Vector3d center;
@@ -26,17 +15,7 @@ public final class OBB {
     private final Quaterniond rotation;
     private final Part part;
 
-    /**
-     * The box's three local axes in world space, derived from {@link #rotation}.
-     *
-     * <p>Rebuilt only when the rotation actually differs from the one they were built from, which is what
-     * makes them worth caching: a single swept collision asks for these once per block in the swept volume,
-     * and the rotation does not change once per tick, let alone once per block.
-     *
-     * <p>Keyed on the quaternion's components rather than a dirty flag on purpose. {@link #move} hands the
-     * new box the <em>same</em> rotation object, so a flag set on one box would not be seen by the copies
-     * sharing its rotation; comparing the values cannot miss that.
-     */
+    /** The box's three local axes in world space, derived from {@link #rotation}. */
     private Vector3d[] axes;
     private double axesX = Double.NaN;
     private double axesY;
@@ -44,10 +23,10 @@ public final class OBB {
     private double axesW;
 
     /**
-     * @param center   center of the box in world space
-     * @param extents  half-length along each local axis
+     * @param center center of the box in world space
+     * @param extents half-length along each local axis
      * @param rotation orientation of the box
-     * @param part     which sub-part of the entity this box represents
+     * @param part which sub-part of the entity this box represents
      */
     public OBB(Vector3d center, Vector3d extents, Quaterniond rotation, Part part) {
         this.center = center;
@@ -89,8 +68,6 @@ public final class OBB {
         Vector3d obbCenter = obb.center();
         Vector3d[] obbAxes = obb.getAxes();
         Vector3d obbHalfExtents = obb.extents();
-        // Straight off the box's bounds. This runs once per block in a missile's swept volume, so the two
-        // vectors the centre and half-extents used to be built into are worth not building.
         return Intersectiond.testObOb(
                 obbCenter.x, obbCenter.y, obbCenter.z,
                 obbAxes[0].x, obbAxes[0].y, obbAxes[0].z,
@@ -302,14 +279,9 @@ public final class OBB {
      */
     /**
      * @return the box's three local axes in world space.
-     *
-     * <p><b>Shared and mutable</b>: the array and its vectors belong to this box and are reused on the next
-     * call. Read them, don't keep or modify them.
      */
     public Vector3d[] getAxes() {
         if (axes == null) {
-            // Allocated on demand, not in the constructor: move() mints a short-lived box per collision
-            // substep and plenty of those are never asked for their axes at all.
             axes = new Vector3d[]{new Vector3d(), new Vector3d(), new Vector3d()};
         }
         if (rotation.x != axesX || rotation.y != axesY || rotation.z != axesZ || rotation.w != axesW) {
@@ -325,8 +297,8 @@ public final class OBB {
     }
 
     /**
-     * Clips the segment {@code pFrom -> pTo} against the box, returning the entry point (world space)
-     * if the segment intersects the box. Uses the slab algorithm in the box's local frame.
+     * Clips the segment {@code pFrom -> pTo} against the box, returning the entry point (world space) if the
+     * segment intersects the box.
      */
     public Optional<Vector3d> clip(Vector3d pFrom, Vector3d pTo) {
         // Local basis vectors of the box (world-space directions).

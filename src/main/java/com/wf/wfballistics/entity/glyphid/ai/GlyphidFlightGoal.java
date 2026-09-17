@@ -10,13 +10,7 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.EnumSet;
 
-/**
- * Flies a winged glyphid to where its orders point, and puts it back on the ground to fight. Replaces
- * {@link GlyphidBrainGoal}'s walk rather than layering on it: a glyphid in the air does no pathfinding, which
- * is the largest single cost in a marching swarm, so wings make a warband cheaper.
- *
- * <p>It lands to fight — melee, digging and the task system all assume something standing on a surface.
- */
+/** Flies a winged glyphid to where its orders point, and puts it back on the ground to fight. */
 public class GlyphidFlightGoal extends Goal {
 
     /** Closer than this to the destination and it is not worth taking off for. */
@@ -51,9 +45,6 @@ public class GlyphidFlightGoal extends Goal {
         if (!glyphid.canFly() || nearTarget()) {
             return false;
         }
-        // Once up, it stays up until it is over the destination -- the take-off range is a threshold for
-        // starting, not for continuing, or a glyphid would land the moment it got within sight and walk the
-        // rest.
         return glyphid.getCurrentTask() == GlyphidTasks.TASK_FOLLOW && !glyphid.isAtDestination();
     }
 
@@ -79,9 +70,6 @@ public class GlyphidFlightGoal extends Goal {
         Vec3 destination = new Vec3(glyphid.taskX + 0.5, glyphid.taskY, glyphid.taskZ + 0.5);
         double horizontal = destinationDistance();
 
-        // Once over the spot the descent is committed to, rather than being re-decided against the current
-        // altitude every tick: mixing "hold cruise height" with "come down" leaves a glyphid bouncing between
-        // the two a couple of blocks above the ground, never landing and never leaving.
         boolean landing = horizontal < GlyphidFlight.ARRIVAL_RANGE;
         glyphid.setFlightTarget(destination, landing);
 

@@ -2,6 +2,7 @@ package com.wf.wfballistics.drone.sim;
 
 import com.wf.wfballistics.drone.DroneEntity;
 import com.wf.wfballistics.drone.DroneModels;
+import com.wf.wfballistics.drone.MineLoad;
 import com.wf.wfballistics.drone.DroneProgram;
 import com.wf.wfballistics.drone.DroneState;
 import com.wf.wfballistics.drone.PowerProfile;
@@ -26,26 +27,14 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * A drone flying over unloaded terrain: the same idea as {@code SimMissile}, but it keeps running the real
- * AI. Because {@link DroneSnapshot} can be built from this just as well as from a {@link DroneEntity}, an
- * offloaded drone is planned by the same brain and reaches its destination on the same schedule: there is
- * no second, simplified route model to keep in sync.
- *
- * <p>What it drops is the expensive half of being an entity: chunk tickets, collision, and client tracking.
- * It holds the altitude it had when it offloaded ({@link #simY}), since there is no terrain to measure
- * against out there.
- */
+/** A drone flying over unloaded terrain: the same idea as {@code SimMissile}, but it keeps running the real AI. */
 public final class SimDrone implements DroneCarrier {
 
     public UUID id;
     public Vec3 pos = Vec3.ZERO;
     public Vec3 velocity = Vec3.ZERO;
     public float yaw;
-    /**
-     * The airframe's lean and throttle. Carried out here too, because the sim runs the same flight model as a
-     * real drone and the physics has to pick up next tick where it left off.
-     */
+    /** The airframe's lean and throttle. */
     public FlightAttitude attitude = FlightAttitude.LEVEL;
     public DroneState state = DroneState.TRANSIT;
     public int stateTicks;
@@ -54,41 +43,30 @@ public final class SimDrone implements DroneCarrier {
     public Vec3 exfil = Vec3.ZERO;
     public double charge;
     public double capacity;
-    /**
-     * The altitude held while offloaded. Stands in for a terrain sample, exactly as {@code SimMissile.simY}
-     * does.
-     */
+    /** The altitude held while offloaded. */
     public double simY;
     public long squadId;
     public boolean leader;
     /**
-     * The queued mission steps, carried across the off-world boundary intact so a drone that offloads
-     * mid-program picks up exactly where it left off when it comes back.
+     * The queued mission steps, carried across the off-world boundary intact so a drone that offloads mid-program
+     * picks up exactly where it left off when it comes back.
      */
     public DroneProgram program = DroneProgram.EMPTY;
     public ResourceLocation formationId = Formations.DEFAULT;
     public double formationSpacing = Formation.DEFAULT_SPACING;
     public ResourceLocation coordinationId = CoordinationModels.DEFAULT;
     public int squadSize = 1;
-    /**
-     * The work job this drone was on when it offloaded.
-     *
-     * <p>Carried rather than dropped, and it has to be: an offloaded drone still holds a claim on a real
-     * queue, and coming back without the assignment would leave that claim to time out: costing the
-     * order an attempt for a journey that went perfectly well. The sim cannot <em>do</em> the work, but
-     * it never has to: WORK and SUPPLY are not offloadable states, so a drone only ever offloads on the
-     * leg between one block and the next.
-     */
+    /** The work job this drone was on when it offloaded. */
     @Nullable
     public com.wf.wfballistics.work.WorkAssignment assignment;
     public double cruiseSpeed = DroneEntity.DEFAULT_CRUISE_SPEED;
     public double cruiseAltitude = DroneEntity.DEFAULT_CRUISE_ALTITUDE;
     public double climbRate = DroneEntity.DEFAULT_CLIMB_RATE;
     public ResourceLocation modelId = DroneModels.DEFAULT;
-    /**
-     * The slung crate's saved contents, or null if the drone flew empty. The crate entity itself is
-     * discarded on offload and rebuilt on onload, so its cargo has to ride along here.
-     */
+    /** The camera head bolted on, or null for none. */
+    @Nullable
+    public com.wf.wfballistics.drone.cam.CameraSpec camera;
+    /** The slung crate's saved contents, or null if the drone flew empty. */
     @Nullable
     public CompoundTag cargo;
     /**
@@ -96,6 +74,8 @@ public final class SimDrone implements DroneCarrier {
      */
     @Nullable
     public ResourceLocation payloadId;
+    /** The mine rack, carried whole so an off-world minelayer comes back with exactly the rack it left with. */
+    public MineLoad mines;
     public double releaseSpeed = DroneEntity.DEFAULT_RELEASE_SPEED;
     public long lastGameTime;
 
@@ -124,8 +104,10 @@ public final class SimDrone implements DroneCarrier {
         sd.cruiseAltitude = drone.getCruiseAltitude();
         sd.climbRate = drone.getClimbRate();
         sd.modelId = drone.getModelId();
+        sd.camera = drone.cameraSpec();
         sd.cargo = cargo;
         sd.payloadId = drone.getPayloadId();
+        sd.mines = drone.getMines();
         sd.releaseSpeed = drone.getReleaseSpeed();
         sd.lastGameTime = drone.level().getGameTime();
         return sd;
@@ -138,6 +120,7 @@ public final class SimDrone implements DroneCarrier {
         DroneEntity drone = new DroneEntity(level, spawnPos);
         drone.setUUID(this.id);
         drone.setModelId(this.modelId);
+        drone.setCameraSpec(this.camera);
         drone.setDestination(this.destination);
         drone.setExfil(this.exfil);
         drone.setCruiseSpeed(this.cruiseSpeed);
@@ -151,6 +134,7 @@ public final class SimDrone implements DroneCarrier {
         drone.setAssignment(this.assignment);
         drone.setProgram(this.program);
         drone.setPayload(this.payloadId);
+        drone.setMines(this.mines);
         drone.setReleaseSpeed(this.releaseSpeed);
         drone.setState(this.state);
         drone.setHeadingRadians(this.yaw);
@@ -207,9 +191,10 @@ public final class SimDrone implements DroneCarrier {
         double groundY = this.simY - this.cruiseAltitude;
         double destGroundY = this.destination != null ? this.destination.y : groundY;
         return new DroneSnapshot(this.id, true, this.pos, this.velocity, this.yaw,
-                this.attitude, Airframe.QUADCOPTER, DroneNav.NONE, this.state, this.stateTicks,
+                this.attitude, DroneModels.airframe(this.modelId), DroneNav.NONE, this.state,
+                this.stateTicks,
                 this.destination, null, this.program, this.exfil,
-                this.cargo != null, this.payloadId != null, false, true, List.of(),
+                this.cargo != null, this.payloadId != null, this.mines, false, true, List.of(),
                 this.charge, this.capacity, PowerProfile.DEFAULT,
                 this.cruiseSpeed, this.cruiseAltitude, this.climbRate, this.releaseSpeed,
                 groundY, destGroundY, this.squadId, this.leader, this.squadSize, this.assignment,
@@ -250,7 +235,7 @@ public final class SimDrone implements DroneCarrier {
         this.pos = this.pos.add(velocity);
         this.simY = this.pos.y;
         this.stateTicks++;
-        boolean loaded = this.cargo != null || this.payloadId != null;
+        boolean loaded = this.cargo != null || this.payloadId != null || this.mines != null;
         this.charge = Math.max(0.0, this.charge - PowerProfile.DEFAULT.drain(this.state,
                 this.attitude.throttle(), PowerProfile.DEFAULT.massFactor(loaded),
                 velocity.horizontalDistance()));
@@ -288,8 +273,12 @@ public final class SimDrone implements DroneCarrier {
         tag.putDouble("CruiseAltitude", cruiseAltitude);
         tag.putDouble("ClimbRate", climbRate);
         tag.putString("ModelId", modelId.toString());
+        tag.putByte("Camera", DroneEntity.cameraFitByte(camera));
         if (cargo != null) {
             tag.put("Cargo", cargo);
+        }
+        if (mines != null) {
+            tag.put("Mines", mines.save());
         }
         if (payloadId != null) {
             tag.putString("Payload", payloadId.toString());
@@ -338,11 +327,15 @@ public final class SimDrone implements DroneCarrier {
         sd.cruiseAltitude = tag.getDouble("CruiseAltitude");
         sd.climbRate = tag.getDouble("ClimbRate");
         sd.modelId = DroneModels.parse(tag.getString("ModelId"));
+        sd.camera = tag.contains("Camera") ? DroneEntity.cameraFitOf(tag.getByte("Camera")) : null;
         if (tag.contains("Cargo")) {
             sd.cargo = tag.getCompound("Cargo");
         }
         if (tag.contains("Payload")) {
             sd.payloadId = WarheadRegistry.parse(tag.getString("Payload"));
+        }
+        if (tag.contains("Mines")) {
+            sd.mines = MineLoad.load(tag.getCompound("Mines"));
         }
         sd.releaseSpeed = tag.contains("ReleaseSpeed")
                 ? tag.getDouble("ReleaseSpeed") : DroneEntity.DEFAULT_RELEASE_SPEED;

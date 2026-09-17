@@ -12,10 +12,7 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 
-/**
- * The cargo crate: a textured cube, falling or sitting on the ground. A crate being carried is not drawn
- * here at all: the drone holding it draws it as part of its own model (see {@code DroneVisual}).
- */
+/** The cargo crate: a textured cube, falling or sitting on the ground. */
 public class CrateRenderer extends EntityRenderer<CrateEntity> {
 
     private static final ResourceLocation TEXTURE =

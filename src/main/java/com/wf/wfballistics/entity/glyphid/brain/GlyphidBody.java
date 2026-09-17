@@ -28,8 +28,7 @@ import org.jetbrains.annotations.Nullable;
 
 /**
  * The half of a glyphid's AI that touches the world: reading it into a {@link GlyphidSnapshot} and carrying a
- * {@link GlyphidPlan} back out. Everything here is a world read or write; decisions belong in
- * {@link GlyphidBrain}, and that split is what lets a record run the same behaviour.
+ * {@link GlyphidPlan} back out.
  */
 public final class GlyphidBody {
 
@@ -39,11 +38,7 @@ public final class GlyphidBody {
     private GlyphidBody() {
     }
 
-    /**
-     * Read the world into a snapshot. Two samples are gated rather than taken every tick, since a swarm makes
-     * anything per-glyphid-per-tick expensive: melee reach only when the bite cooldown is about to expire,
-     * and the destination's height only when a repath could be due.
-     */
+    /** Read the world into a snapshot. */
     public static GlyphidSnapshot snapshot(EntityGlyphid glyphid) {
         GlyphidMind mind = glyphid.mind();
 
@@ -99,11 +94,7 @@ public final class GlyphidBody {
                 flowStep(glyphid, target));
     }
 
-    /**
-     * Ask the shared field which way, for a glyphid that is marching. Marching only: a field is built to one
-     * fixed destination, and a moving target would invalidate it every few seconds — the charge already
-     * answers melee. Sampled every tick, at an index and eight comparisons against a 212 µs search.
-     */
+    /** Ask the shared field which way, for a glyphid that is marching. */
     private static @Nullable Vec3 flowStep(EntityGlyphid glyphid, @Nullable LivingEntity target) {
         if (target != null || glyphid.getCurrentTask() != GlyphidTasks.TASK_FOLLOW || glyphid.isAirborne()
                 || glyphid.mind().chewing || !(glyphid.level() instanceof ServerLevel level)) {
@@ -119,8 +110,6 @@ public final class GlyphidBody {
 
     public static void apply(EntityGlyphid glyphid, GlyphidPlan plan) {
         GlyphidMind mind = glyphid.mind();
-        // Any tick that is not a chew should show no cracks. Here rather than at each of the five ways to
-        // stop chewing.
         if (plan.move() != GlyphidPlan.Move.CHEW) {
             clearCracks(glyphid, mind);
         }
@@ -147,8 +136,6 @@ public final class GlyphidBody {
             }
             case CHEW -> chew(glyphid, mind, plan);
             case FLOW -> {
-                // No search and no path: the field said which column, and stepping up, jumping and turning
-                // are the move control's job already.
                 if (!glyphid.getNavigation().isDone()) {
                     glyphid.getNavigation().stop();
                 }
@@ -172,10 +159,7 @@ public final class GlyphidBody {
         }
     }
 
-    /**
-     * Age the patience and start chewing if it has run out. Only on ticks the brain decided something, or the
-     * backoff would age to its limit within a second of walking.
-     */
+    /** Age the patience and start chewing if it has run out. */
     private static void settle(EntityGlyphid glyphid, GlyphidMind mind, GlyphidPlan plan, boolean accepted) {
         if (plan.elapsed() <= 0) {
             return;
@@ -187,8 +171,7 @@ public final class GlyphidBody {
     }
 
     /**
-     * Search to the hop the brain picked and start walking it. Charged to melee or the march by hand, since
-     * the two answer to different fixes and there is only one goal left to wrap.
+     * Search to the hop the brain picked and start walking it.
      *
      * @return true if a path was found and accepted
      */
@@ -226,19 +209,7 @@ public final class GlyphidBody {
         }
     }
 
-    /**
-     * Look for the block in the way and commit to eating it, if this caste's jaws are up to the material.
-     * A swarm slowed by terrain rather than stopped by it is the point — but obsidian still stops a grunt.
-     *
-     * <p>Overhead when the destination is above this glyphid's head, ahead otherwise, and never both. The
-     * question is which obstruction is <em>in the way</em>, not which is nearer, and the two took two runs
-     * each to get right. A glyphid stopped under a lip can eat the shaft beside it all day and still not be
-     * able to go up, because the thing stopping it was never the shaft — diggers did exactly that, biting
-     * sideways for five minutes with the overhang untouched. And a glyphid at the foot of a wall with the
-     * objective on top of it should climb, not bite: falling back to the wall ahead had them tunnel into the
-     * base of the tower until they had eaten away the face they were climbing, and then stand under their
-     * own canopy with nothing left to climb.
-     */
+    /** Look for the block in the way and commit to eating it, if this caste's jaws are up to the material. */
     private static boolean pickBlockToChew(EntityGlyphid glyphid, Vec3 destination) {
         if (!glyphid.canDig()) {
             return false;
@@ -278,25 +249,7 @@ public final class GlyphidBody {
         return edible(glyphid, obstruction) ? obstruction : null;
     }
 
-    /**
-     * The block capping a climb, or null if nothing is.
-     *
-     * <p>A lip — a tower whose top is wider than its shaft — is the standard build for keeping spiders off a
-     * roof, and it works on a glyphid for the same reason: the climb is a vertical shove against whatever the
-     * body is already touching, and an overhang is not something to touch. The ray above can never see it,
-     * since an overhang is by definition the case where there is nothing ahead.
-     *
-     * <p>So the answer is the jaws, and the material decides whether they are enough. A grunt's ceiling is 10
-     * and obsidian is 50, so a grunt opens a stone lip and never an obsidian one; a digger's is 60 and opens
-     * both. Which leaves the anti-spider build working exactly as long as it is built out of something the
-     * swarm in front of it cannot eat — a question about who turned up rather than about the shape.
-     *
-     * <p>Three conditions, and all three are load-bearing. Pressed against something, or a glyphid standing
-     * in the open under a tree eats the tree. Somewhere above its own head to get to, or one wedged in a
-     * two-block corridor chews out through the roof rather than walking down it. And reached only from
-     * {@link GlyphidBrain#resolve}, which is to say after {@link GlyphidBrain#STUCK_TICKS} of getting
-     * nowhere: a swarm flowing up a wall is not stuck and never asks.
-     */
+    /** The block capping a climb, or null if nothing is. */
     private static @Nullable BlockPos overhang(EntityGlyphid glyphid, Vec3 destination) {
         if (!glyphid.isBesideClimbableBlock() || destination.y <= glyphid.getBoundingBox().maxY) {
             return null;
@@ -307,11 +260,7 @@ public final class GlyphidBody {
         return edible(glyphid, above) ? above : null;
     }
 
-    /**
-     * The next block of the doorway being opened, or null once it is wide enough to fit through. One chewed
-     * block is a one-block hole and a glyphid is wider, so a breach is the block walked into, the one above,
-     * and their neighbours along the wall — widening across the face, since that is the thin axis.
-     */
+    /** The next block of the doorway being opened, or null once it is wide enough to fit through. */
     private static @Nullable BlockPos widenBreach(EntityGlyphid glyphid, Vec3 destination) {
         GlyphidMind mind = glyphid.mind();
         BlockPos origin = new BlockPos(mind.breachX, mind.breachY, mind.breachZ);
@@ -343,18 +292,7 @@ public final class GlyphidBody {
         return null;
     }
 
-    /**
-     * The next block of a hole in a ceiling, or null once the hole is big enough to climb through.
-     *
-     * <p>Widened across the glyphid's own footprint rather than along the wall, because a hole overhead has
-     * to admit the whole body and a grunt is 1.4 blocks wide. The horizontal rule above opens a doorway three
-     * blocks along the face and one block deep, which is fine for walking through a wall and useless
-     * overhead: measured, a swarm of diggers chewed the overhang of a tower open and not one of them ever
-     * got above it, because a one-block slot is narrower than the thing trying to fit through it.
-     *
-     * <p>Its own footprint and no wider. A ring of nine would be eight more blocks of obsidian per glyphid
-     * for a hole nothing needs.
-     */
+    /** The next block of a hole in a ceiling, or null once the hole is big enough to climb through. */
     private static @Nullable BlockPos widenCeiling(EntityGlyphid glyphid, BlockPos origin) {
         AABB box = glyphid.getBoundingBox();
         for (int x = Mth.floor(box.minX); x <= Mth.floor(box.maxX); x++) {
@@ -397,14 +335,12 @@ public final class GlyphidBody {
         if (mind.chewProgress >= ticks) {
             clearCracks(glyphid, mind);
             mind.stopChewing();
-            // Drops nothing, but emits the break particles and sound -- the point of not setting air.
+            // Drops nothing, but emits the break particles and sound: the point of not setting air.
             level.destroyBlock(pos, false, glyphid);
             if (level instanceof ServerLevel server) {
                 // A hole in a wall is a new route the field was flooded without.
                 GlyphidFlowFields.invalidate(server, pos);
             }
-            // Straight on to the next block rather than re-earning sixty ticks of stuck between each one.
-            // Deeper first, then widening; when neither finds anything the way is open.
             Vec3 destination = plan.destination();
             if (destination != null && !pickBlockToChew(glyphid, destination)) {
                 BlockPos next = widenBreach(glyphid, destination);

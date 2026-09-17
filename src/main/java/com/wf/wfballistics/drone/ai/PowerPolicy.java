@@ -6,31 +6,18 @@ import com.wf.wfballistics.drone.flight.Airframe;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Turns remaining charge into a decision. This is what makes the battery more than a timer: before any state
- * handler runs, the brain asks whether the drone can still afford what it is doing, and if not, picks the
- * best remaining option.
- *
- * <p>Every check keeps {@link #LANDING_RESERVE} back so a drone that commits to something always has enough
- * left to set itself down under control instead of dropping out of the sky.
- *
- * <p>Pure arithmetic on a {@link DroneSnapshot}, so it runs off-thread with the rest of the planning.
- */
+/** Turns remaining charge into a decision. */
 public final class PowerPolicy {
 
     /**
      * Charge never spent on cruising: the allowance for a controlled descent and touchdown.
      */
     public static final double LANDING_RESERVE = 120.0;
-    /**
-     * Hovering allowance for stopping over the drop, settling, and releasing the crate. Matches
-     * {@code Tuning.SETTLE_TIMEOUT}, which is the longest a drone will spend trying to get steady, so the
-     * budget covers the worst case rather than the typical one.
-     */
+    /** Hovering allowance for stopping over the drop, settling, and releasing the crate. */
     public static final int DELIVERY_HOVER_TICKS = 100;
     /**
-     * Charge a loitering drone keeps back on top of the run home and the landing reserve, so it breaks
-     * station with something in hand rather than at the exact moment the sums stop working.
+     * Charge a loitering drone keeps back on top of the run home and the landing reserve, so it breaks station with
+     * something in hand rather than at the exact moment the sums stop working.
      */
     public static final double STATION_MARGIN = 90.0;
 
@@ -61,12 +48,6 @@ public final class PowerPolicy {
 
     /**
      * @return true if the drone can afford to stay on station a little longer.
-     *
-     * <p>This is what "watch it until you are in the red" actually means, and it is deliberately stricter
-     * than {@link #canReach}: a drone that leaves the moment it can only just get home leaves with nothing
-     * spare for a headwind, a detour round a hill, or the turn itself. {@link #STATION_MARGIN} is that
-     * spare, and it is why an open-ended loiter ends with the drone landing at the exfil point rather than
-     * short of it.
      */
     public static boolean canHoldStation(DroneSnapshot self) {
         double home = self.power().costToTravel(self.airframe(), self.horizontalDistanceTo(self.exfil()),
@@ -75,8 +56,8 @@ public final class PowerPolicy {
     }
 
     /**
-     * Outbound with a crate: deliver if the delivery is still affordable, otherwise turn back while there is
-     * enough charge to make the exfil point, otherwise put down where we are.
+     * Outbound with a crate: deliver if the delivery is still affordable, otherwise turn back while there is enough
+     * charge to make the exfil point, otherwise put down where we are.
      */
     private static DroneState transitOverride(DroneSnapshot self) {
         if (canDeliver(self)) {
@@ -103,7 +84,7 @@ public final class PowerPolicy {
 
     /**
      * @return true if, after delivering, the drone could still fly home. False means a one-way trip: it
-     * delivers and parks at the destination.
+     *      delivers and parks at the destination.
      */
     public static boolean canReturnAfterDelivery(DroneSnapshot self) {
         double home = self.destination().distanceTo(self.exfil());
@@ -119,8 +100,8 @@ public final class PowerPolicy {
     }
 
     /**
-     * Pre-flight check for the dispatcher: can a drone with {@code charge} fly this mission at all? A drone
-     * that cannot even reach the destination is never launched.
+     * Pre-flight check for the dispatcher: can a drone with {@code charge} fly this mission at all? A drone that
+     * cannot even reach the destination is never launched.
      *
      * @return the shortfall in charge units, or 0 when the mission is affordable
      */
@@ -143,7 +124,7 @@ public final class PowerPolicy {
 
     /**
      * @param outbound distance out, staging waypoints included
-     * @param back     distance home, staging waypoints included
+     * @param back distance home, staging waypoints included
      */
     public static boolean canRoundTripForRoute(double charge, PowerProfile power, Airframe frame, double speed,
                                                double outbound, double back, boolean hasCargo) {

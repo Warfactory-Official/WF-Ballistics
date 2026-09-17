@@ -9,12 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Registry of named {@link MissileDamageResponse}s, keyed by {@link ResourceLocation}. Mirrors
- * {@link com.wf.wfballistics.warhead.WarheadRegistry}: a missile stores the id (so the choice round-trips through
- * NBT) and resolves the lambda here at load / hit time. Addons register their own during mod construction with
- * {@link #register}; the built-ins below are always available.
- */
+/** Registry of named {@link MissileDamageResponse}s, keyed by {@link ResourceLocation}. */
 public final class MissileDamageRegistry {
 
     /** Pass-through: the missile takes damage exactly as dealt (vanilla behaviour, the default). */

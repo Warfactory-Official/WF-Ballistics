@@ -4,11 +4,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Where the mounds of one colony sit relative to each other: a hex lattice of cells, rotated by an angle
- * drawn from the colony's id, spaced so neighbouring domes just overlap.
- *
- * <p>Every position is a pure function of {@code (colony, index)}, so a cluster is stored as a count rather
- * than as a list of positions and is laid out identically on every load.
+ * Where the mounds of one colony sit relative to each other: a hex lattice of cells, rotated by an angle drawn from
+ * the colony's id, spaced so neighbouring domes just overlap.
  */
 public final class NestCells {
 
@@ -18,7 +15,7 @@ public final class NestCells {
     };
 
     /**
-     * One mound's centre column. No y: height is sampled from the terrain when the blocks are stamped.
+     * One mound's centre column.
      *
      * @param index which cell this is, 0 being the colony's original mound
      */
@@ -37,7 +34,7 @@ public final class NestCells {
 
     /**
      * @return how far apart neighbouring mounds of this colony sit. One block closer than two domes need to
-     * stand clear, so they intersect at the rim and the cluster reads as one organism with lobes.
+     *      stand clear, so they intersect at the rim and the cluster reads as one organism with lobes.
      */
     public static int spacing(Colony colony) {
         return Math.max(2, 2 * colony.nestRadius() - 1);
@@ -82,7 +79,7 @@ public final class NestCells {
 
     /**
      * @return how far the outermost cell centre is from the colony's own. Walked rather than read off
-     * {@code ring * spacing}, which rounding understates by up to a block — enough to orphan a far chamber.
+     *      {@code ring * spacing}, which rounding understates by up to a block, enough to orphan a far chamber.
      */
     public static int extent(Colony colony) {
         int furthest = 0;

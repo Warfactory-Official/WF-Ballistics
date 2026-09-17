@@ -1,12 +1,6 @@
 package com.wf.wfballistics.industry;
 
-/**
- * A detected base: a connected group of occupied region cells, with the combined provocation inside it.
- *
- * <p>The colony simulation aims warbands at these. The centre is weighted by value rather than being the
- * geometric middle, so an attack heads for the dirty end of a sprawling base instead of the middle of an
- * empty courtyard between two wings of it.
- */
+/** A detected base: a connected group of occupied region cells, with the combined provocation inside it. */
 public record IndustryCluster(int centerX, int centerZ,
                               int minX, int minZ, int maxX, int maxZ,
                               int value, int cellCount) {

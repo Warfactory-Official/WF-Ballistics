@@ -1,58 +1,45 @@
 package com.wf.wfballistics.client.model;
 
+import com.mojang.logging.LogUtils;
+import com.wf.gemrender.asset.GemRenderModels;
+import com.wf.gemrender.asset.ModelCache;
+import com.wf.gemrender.gltf.AnimationDrive;
+import com.wf.gemrender.gltf.GemRenderGltfModel;
+import com.wf.gemrender.gltf.GltfAnimation;
+import com.wf.gemrender.texture.VariantUv;
 import com.wf.wfballistics.WFBallistics;
+import com.wf.wfballistics.entity.glyphid.EntityGlyphid;
 import com.wf.wfballistics.entity.glyphid.GlyphidCaste;
 import dev.engine_room.flywheel.api.material.DepthTest;
 import dev.engine_room.flywheel.api.material.Material;
 import dev.engine_room.flywheel.api.material.WriteMask;
-import dev.engine_room.flywheel.api.model.Mesh;
-import dev.engine_room.flywheel.api.model.Model;
 import dev.engine_room.flywheel.lib.material.CutoutShaders;
 import dev.engine_room.flywheel.lib.material.SimpleMaterial;
-import dev.engine_room.flywheel.lib.model.SingleMeshModel;
-import dev.engine_room.flywheel.lib.util.RendererReloadCache;
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
+import org.slf4j.Logger;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
-/**
- * The one glyphid mesh, dressed for a caste.
- *
- * <p>Every caste is the same animal at a different size in a different skin — which is what the swarm is
- * meant to read as, and what makes it cheap: nine castes are nine textures over one set of nineteen meshes,
- * and flywheel pools mesh uploads by identity, so the geometry reaches the GPU once no matter how many
- * castes are on screen.
- *
- * <p>The part list is longer than the mesh list because the six legs are two meshes drawn three times each.
- * Those three share a {@link Model}, so they share an instancer and go out in one draw.
- */
+/** The one glyphid rig, wearing every caste at once. */
 public final class GlyphidModel {
 
-    public static final ResourceLocation MESH =
-            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "raw_models/glyphid.obj");
-
-    /**
-     * Which mesh each part slot draws, indexed by the slot constants in {@link GlyphidPoses}.
-     */
-    private static final String[] PART_MESH = {
-            "Body", "ArmorFront", "ArmorLeft", "ArmorRight",
-            "JawTop", "JawLeft", "JawRight",
-            "ArmLeftUpper", "ArmLeftMid", "ArmLeftLower", "ArmLeftArmor",
-            "ArmRightUpper", "ArmRightMid", "ArmRightLower", "ArmRightArmor",
-            "LegLeftUpper", "LegLeftLower", "LegLeftUpper", "LegLeftLower", "LegLeftUpper", "LegLeftLower",
-            "LegRightUpper", "LegRightLower", "LegRightUpper", "LegRightLower", "LegRightUpper",
-            "LegRightLower"};
+    private static final Logger LOGGER = LogUtils.getLogger();
 
     /**
      * The mould the infested subtype is drawn in, over whatever skin the caste already wears.
      */
     private static final ResourceLocation INFESTATION = texture("glyphid_infestation");
 
+    /** The stitched sheet the castes are tiled into. A name, not a file: nothing reads it. */
+    private static final ResourceLocation ATLAS =
+            ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "atlas/glyphid");
+
     /**
-     * Drawn at depth-equal with no depth write, which is how vanilla lays a decal over a mob: the overlay is
-     * the same mesh under the same transform, so its fragments land at exactly the depth the body's did and
-     * neither blending nor sorting has anything to decide.
+     * Drawn at depth-equal with no depth write, which is how vanilla lays a decal over a mob: the overlay is the
+     * same rig under the same pose, so its fragments land at exactly the depth the body's did and neither blending
+     * nor sorting has anything to decide.
      */
     private static final Material INFESTED_MATERIAL = SimpleMaterial.builder()
             .texture(INFESTATION)
@@ -62,54 +49,141 @@ public final class GlyphidModel {
             .mipmap(false)
             .build();
 
-    private static final RendererReloadCache<ResourceLocation, Model[]> PARTS =
-            new RendererReloadCache<>(GlyphidModel::build);
+    /** Every caste's texture in ordinal order, which is the order the sheet is tiled in. */
+    private static final List<ResourceLocation> CASTES = castes();
+
+    /** The swarm: one rig, one sheet, a tile per caste in {@link GlyphidCaste} order. */
+    private static final Entry BODY = new Entry("body", CASTES, skinMaterial(CASTES.get(0)));
+
+    /** The infestation overlay. */
+    private static final Entry INFESTED = new Entry("infested", List.of(INFESTATION), INFESTED_MATERIAL);
 
     private GlyphidModel() {
     }
 
     /**
-     * @return one model per part slot, or an empty array if the mesh could not be read
+     * Declare the handles up front, so the rigs are built when resources finish loading rather than by whichever
+     * visual happens to want one first, which would be an obj parse on a flywheel task thread, mid-frame.
      */
-    public static Model[] parts(GlyphidCaste caste) {
-        return PARTS.get(caste.skin());
+    public static void init() {
+        body();
+        infested();
     }
 
-    public static Model[] infested() {
-        return PARTS.get(INFESTATION);
+    /**
+     * A caste's model together with everything the visual needs to pose it: the two drives that turn gameplay
+     * quantities into clip-local time, and the armour clips indexed by the bits they answer to.
+     *
+     * @param armor one clip per combination of plates still attached; null at
+     *      {@link EntityGlyphid#FULL_ARMOR}, which is the common case and needs no layer at all
+     */
+    public record Skin(GemRenderGltfModel model, AnimationDrive walk, AnimationDrive bite,
+                       GltfAnimation[] armor) {
+
+        /** @return the armour layer for these bits, or null when the animal has all its plates */
+        @Nullable
+        public GltfAnimation armor(byte bits) {
+            int index = bits & EntityGlyphid.FULL_ARMOR;
+            return index >= armor.length ? null : armor[index];
+        }
+
+        /** Which tile of the sheet this caste wears, for {@code instance.variant(...)}. */
+        public VariantUv variant(GlyphidCaste caste) {
+            return model.variant(caste.ordinal());
+        }
+    }
+
+    /**
+     * @return the rig every glyphid is drawn from, or null while the mesh has yet to load or has failed
+     */
+    @Nullable
+    public static Skin body() {
+        return BODY.get();
+    }
+
+    /**
+     * @return the infestation overlay, or null if it could not be built. Posed from the body's palette
+     *      rather than its own, so nothing here needs to know how a glyphid moves.
+     */
+    @Nullable
+    public static Skin infested() {
+        return INFESTED.get();
+    }
+
+    private static List<ResourceLocation> castes() {
+        List<ResourceLocation> skins = new ArrayList<>(GlyphidCaste.VALUES.length);
+        for (GlyphidCaste caste : GlyphidCaste.VALUES) {
+            skins.add(caste.skin());
+        }
+        return List.copyOf(skins);
     }
 
     private static ResourceLocation texture(String name) {
         return ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "textures/entity/" + name + ".png");
     }
 
-    private static Model[] build(ResourceLocation texture) {
-        Map<String, Mesh> meshes = ObjMeshes.of(MESH);
-        if (meshes.isEmpty()) {
-            return new Model[0];
-        }
-        Material material = texture.equals(INFESTATION) ? INFESTED_MATERIAL : SimpleMaterial.builder()
+    private static Material skinMaterial(ResourceLocation texture) {
+        return SimpleMaterial.builder()
                 .texture(texture)
-                // An 80x71 entity skin, not an atlas sprite: there are no mip levels to sample. Culled,
-                // because every triangle in the mesh winds with the normal it declares.
                 .mipmap(false)
                 .build();
+    }
 
-        // Keyed by mesh rather than by part so the three left legs end up sharing one model, and with it one
-        // instancer and one draw.
-        Map<String, Model> byMesh = new HashMap<>();
-        Model[] parts = new Model[GlyphidPoses.PART_COUNT];
-        for (int i = 0; i < parts.length; i++) {
-            String name = PART_MESH[i];
-            Model model = byMesh.computeIfAbsent(name, n -> {
-                Mesh mesh = meshes.get(n);
-                return mesh == null ? null : new SingleMeshModel(mesh, material);
-            });
-            if (model == null) {
-                return new Model[0];
-            }
-            parts[i] = model;
+    /** One rig's handle plus the {@link Skin} derived from whatever is currently behind it. */
+    private static final class Entry {
+
+        private final ModelCache.Handle<GemRenderGltfModel> handle;
+
+        /**
+         * Volatile rather than synchronised: flywheel asks for this from several visual threads at once, and two of
+         * them racing to build the same Skin costs one wasted derivation and nothing else.
+         */
+        private volatile Skin skin;
+
+        private Entry(String name, List<ResourceLocation> skins, Material material) {
+            String rig = "glyphid/" + name;
+            this.handle = GemRenderModels.built(
+                    ResourceLocation.fromNamespaceAndPath(WFBallistics.MODID, "rig/" + rig),
+                    id -> build(rig, skins, material));
         }
-        return parts;
+
+        /** Builds the rig, and falls back to the first skin alone if the sheet will not stitch. */
+        private static GemRenderGltfModel build(String rig, List<ResourceLocation> skins,
+                                                Material material) throws Exception {
+            try {
+                return GlyphidRig.build(rig, material, ATLAS, skins);
+            } catch (IllegalArgumentException e) {
+                LOGGER.error("Could not stitch the {} glyphid skins into one sheet, so every "
+                        + "caste will wear {}. All of them have to be the same size.", skins.size(),
+                        skins.get(0), e);
+                return GlyphidRig.build(rig, material, null, List.of());
+            }
+        }
+
+        @Nullable
+        private Skin get() {
+            GemRenderGltfModel model = handle.get();
+            if (model == null) {
+                return null;
+            }
+
+            Skin current = skin;
+            if (current != null && current.model() == model) {
+                return current;
+            }
+
+            GltfAnimation[] armor = new GltfAnimation[EntityGlyphid.FULL_ARMOR + 1];
+            for (int bits = 0; bits < EntityGlyphid.FULL_ARMOR; bits++) {
+                armor[bits] = model.animation(GlyphidRig.armour(bits));
+            }
+
+            current = new Skin(model,
+                    AnimationDrive.cyclic(model.animation(GlyphidRig.WALK), (float) (Math.PI * 2.0)),
+                    // The attack animation already arrives as 0 to 1, which is exactly the clip.
+                    AnimationDrive.ranged(model.animation(GlyphidRig.BITE), 0.0f, 1.0f),
+                    armor);
+            skin = current;
+            return current;
+        }
     }
 }

@@ -1,0 +1,10 @@
+{
+  "replace": false,
+  "values": [
+    "minecraft:deepslate",
+    "minecraft:tuff",
+    "minecraft:calcite",
+    "minecraft:smooth_basalt",
+    { "id": "#c:marble", "required": false }
+  ]
+}

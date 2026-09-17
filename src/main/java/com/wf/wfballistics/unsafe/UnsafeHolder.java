@@ -4,15 +4,7 @@ import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
 
-/**
- * Direct-memory access helper backing the Torex renderer's fast vertex path.
- *
- * <p>The original NTM port wrapped {@code jdk.internal.misc.Unsafe} via MethodHandles (with a javac plugin
- * to swallow the checked exceptions). This is backed by {@code sun.misc.Unsafe} instead, which exposes every
- * operation the renderer and the {@code BufferBuilder} mixin actually use (absolute-address
- * {@code putFloat}/{@code putInt}, {@code getLong(Object, long)}, and the field/array offset queries) with
- * identical runtime behaviour and no compiler-plugin requirement.
- */
+/** Direct-memory access helper backing the Torex renderer's fast vertex path. */
 public final class UnsafeHolder {
     public static final Unsafe U = getUnsafe();
     public static final long IA_BASE = U.arrayBaseOffset(int[].class);

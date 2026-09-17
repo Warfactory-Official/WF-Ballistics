@@ -53,17 +53,14 @@ public final class ColonyConfig {
     }
 
     /**
-     * No colony may exist within this many blocks of world spawn: the starting area stays quiet, which is
-     * what makes moving outward a decision rather than a formality.
+     * No colony may exist within this many blocks of world spawn: the starting area stays quiet, which is what
+     * makes moving outward a decision rather than a formality.
      */
     public static int safeRadius() {
         return safeRadius;
     }
 
-    /**
-     * Distance from spawn at which colonies reach {@link #maxTier()}. Between the safe radius and here,
-     * strength ramps linearly.
-     */
+    /** Distance from spawn at which colonies reach {@link #maxTier()}. */
     public static int fullStrengthDistance() {
         return fullStrengthDistance;
     }
@@ -113,7 +110,7 @@ public final class ColonyConfig {
 
     /**
      * Share of expansions that grow the colony in place rather than found one further out, when it can afford
-     * either. Not a hard split: an outpost with nowhere to go falls back to budding regardless.
+     * either.
      */
     public static double budChance() {
         return budChance;
@@ -138,10 +135,7 @@ public final class ColonyConfig {
         return budCapPerTier;
     }
 
-    /**
-     * Evolution at which colonies start laying reinforced flesh. Above it the crust deepens, until a fully
-     * evolved world builds mounds reinforced all the way through.
-     */
+    /** Evolution at which colonies start laying reinforced flesh. */
     public static double reinforcedEvolution() {
         return reinforcedEvolution;
     }
@@ -188,10 +182,7 @@ public final class ColonyConfig {
         return garrisonPerChamber;
     }
 
-    /**
-     * Side of the grid cell {@link ColonySeeder} places natural nests on, and so how far apart hives are. One
-     * cell holds at most one. Zero turns natural seeding off.
-     */
+    /** Side of the grid cell {@link ColonySeeder} places natural nests on, and so how far apart hives are. */
     public static int naturalSpacing() {
         return naturalSpacing;
     }
@@ -212,8 +203,8 @@ public final class ColonyConfig {
     }
 
     /**
-     * Chance per tier that a warband is on the wing, so wings are a frontier thing: at the default a tier-0
-     * nest never fields them and a tier-4 one usually does.
+     * Chance per tier that a warband is on the wing, so wings are a frontier thing: at the default a tier-0 nest
+     * never fields them and a tier-4 one usually does.
      */
     public static double flyingChance(int tier) {
         return Math.min(1.0, flyingChancePerTier * tier);
@@ -224,15 +215,12 @@ public final class ColonyConfig {
         return flyingSpeedFactor;
     }
 
-    /**
-     * Share of the remaining gap closed per {@link Evolution#INTERVAL} by time alone. The default is roughly
-     * half-evolved after fifty hours of an untouched world.
-     */
+    /** Share of the remaining gap closed per {@link Evolution#INTERVAL} by time alone. */
     public static double evolutionTimeFactor() {
         return evolutionTimeFactor;
     }
 
-    /** The same, per point of standing industry -- the term that ties evolution to what was built. */
+    /** The same, per point of standing industry: the term that ties evolution to what was built. */
     public static double evolutionPressureFactor() {
         return evolutionPressureFactor;
     }

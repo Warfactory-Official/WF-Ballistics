@@ -15,12 +15,8 @@ import net.minecraft.world.level.lighting.LevelLightEngine;
 import net.minecraft.world.level.material.FluidState;
 import org.jetbrains.annotations.Nullable;
 
-
 public class WorldInAJar implements BlockAndTintGetter {
 
-    // Debris takes no light from the world it was chipped out of: a block dug from deep underground carries
-    // zero light and would bake in pitch black. Every face uses full sky exposure instead, so the render-time
-    // lightmap (time of day) is the only thing that shades it.
     private static final int BAKED_SKY_LIGHT = 15;
     private static final int BAKED_BLOCK_LIGHT = 0;
     public final int sizeX;
@@ -90,7 +86,6 @@ public class WorldInAJar implements BlockAndTintGetter {
                 || !getBlockState(x, y, z + 1).isAir() || !getBlockState(x, y, z - 1).isAir();
     }
 
-
     @Override
     public BlockState getBlockState(BlockPos pos) {
         return getBlockState(pos.getX(), pos.getY(), pos.getZ());
@@ -116,7 +111,6 @@ public class WorldInAJar implements BlockAndTintGetter {
     public int getMinBuildHeight() {
         return 0;
     }
-
 
     @Override
     public float getShade(Direction direction, boolean shade) {

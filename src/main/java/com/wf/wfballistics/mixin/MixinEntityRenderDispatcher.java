@@ -11,16 +11,10 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
-/**
- * Draws OBB hitbox wireframes alongside the vanilla AABB box when debug hitboxes are shown (F3+B).
- * Ported from SuperbWarfare's {@code EntityRenderDispatcherMixin} (the SW-specific mine-hitbox toggle
- * is dropped).
- */
+/** Draws OBB hitbox wireframes alongside the vanilla AABB box when debug hitboxes are shown (F3+B). */
 @Mixin(EntityRenderDispatcher.class)
 public class MixinEntityRenderDispatcher {
 
-    // 1.21: renderHitbox gained red/green/blue/alpha float params (the 4th float, named `red` in Mojmap, is
-    // the partialTick in the main render path).
     @Inject(method = "renderHitbox(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;Lnet/minecraft/world/entity/Entity;FFFF)V",
             at = @At("RETURN"))
     private static void wfballistics$renderHitbox(PoseStack pMatrixStack, VertexConsumer pBuffer, Entity pEntity,

@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-
 public final class SimMissile {
     public UUID id;
     public Vec3 pos;
@@ -33,8 +32,6 @@ public final class SimMissile {
     public double maxTurnRate = 0.0;
     public ResourceLocation modelId = MissileModels.defaultId();
     public ResourceLocation detonationId = WarheadRegistry.defaultId();
-    // Flight-audio config, carried so an offloaded missile keeps its custom loop + tuning across the round-trip
-    // (previously dropped, so an offloaded gas drone lost its moped loop) and so the sim can broadcast it.
     public ResourceLocation flightSoundId = null; // null = the default missile_flight loop
     public double flightSoundRange = MissileEntity.DEFAULT_FLIGHT_SOUND_RANGE;
     public float flightSoundBasePitch = 1.0f;
@@ -58,7 +55,8 @@ public final class SimMissile {
     public int fuelCapacity = MissileEntity.DEFAULT_FUEL_TICKS;
     public double acceleration = MissileEntity.DEFAULT_ACCELERATION;
     public double deceleration = MissileEntity.DEFAULT_DECELERATION;
-    public boolean stealth = false;
+    /** Radar cross-section against a reference of 1.0; see {@link MissileEntity#getRcs}. */
+    public float rcs = 1.0f;
     public float evasion = 0.0f;
     public boolean commander = false;
     public Vec3 formationOffset = Vec3.ZERO;
@@ -74,7 +72,7 @@ public final class SimMissile {
         sm.id = m.getUUID();
         sm.pos = m.position();
         sm.target = m.getTarget();
-        sm.simY = Math.max(m.getY(), MissileSimConfig.SIM_ALTITUDE_FLOOR);
+        sm.simY = m.getY();
         sm.speed = m.getCruiseSpeed();
         sm.lastGameTime = m.level().getGameTime();
         sm.cruiseMode = m.getCruiseMode();
@@ -103,7 +101,7 @@ public final class SimMissile {
         sm.fuelCapacity = m.getFuelCapacity();
         sm.acceleration = m.getAcceleration();
         sm.deceleration = m.getDeceleration();
-        sm.stealth = m.isStealth();
+        sm.rcs = m.getRcs();
         sm.evasion = m.getEvasion();
         sm.commander = m.isCommander();
         sm.attackApproachDir = m.getAttackApproachDir();
@@ -198,7 +196,9 @@ public final class SimMissile {
         if (tag.contains("Deceleration")) {
             sm.deceleration = tag.getDouble("Deceleration");
         }
-        sm.stealth = tag.getBoolean("Stealth");
+        // Records saved before the cross-section conversion carry a boolean; read it as the equivalent.
+        sm.rcs = tag.contains("Rcs") ? tag.getFloat("Rcs")
+                : (tag.getBoolean("Stealth") ? MissileSimConfig.STEALTH_RCS : 1.0f);
         if (tag.contains("Evasion")) {
             sm.evasion = tag.getFloat("Evasion");
         }
@@ -258,13 +258,11 @@ public final class SimMissile {
                 .fuel(this.fuelType, this.fuel) // preserve remaining fuel across the offload/respawn
                 .acceleration(this.acceleration)
                 .deceleration(this.deceleration)
-                .stealth(this.stealth)
+                .rcs(this.rcs)
                 .evasion(this.evasion)
                 .startInCruise()
                 .startArmed(); // a simulated missile has already flown clear of its launcher
 
-        // A simulated interceptor rematerializes as a real interceptor entity, resuming its LOCK on the
-        // target so the in-world closest-approach roll (MissileEntity.tryIntercept) finishes the kill.
         if (this.role == Role.INTERCEPTOR && this.interceptTarget != null) {
             b.interceptor(true).lockTarget(this.interceptTarget).interceptChance(this.interceptChance);
         }
@@ -338,7 +336,7 @@ public final class SimMissile {
         tag.putInt("FuelCapacity", fuelCapacity);
         tag.putDouble("Acceleration", acceleration);
         tag.putDouble("Deceleration", deceleration);
-        tag.putBoolean("Stealth", stealth);
+        tag.putFloat("Rcs", rcs);
         tag.putFloat("Evasion", evasion);
         tag.putBoolean("Commander", commander);
         putVec(tag, "FormationOffset", formationOffset);

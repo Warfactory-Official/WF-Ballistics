@@ -21,6 +21,9 @@ public final class FlightStageRegistry {
         register(Phase.CRUISE, LoiterStage.of("loiter_recon", 64.0, 600));
         register(Phase.ATTACK, AttackStage.INSTANCE);
         register(Phase.ATTACK, VerticalDiveStage.INSTANCE);
+        register(Phase.ASCEND, TorpedoEntryStage.INSTANCE);
+        register(Phase.CRUISE, SubmergedRunStage.INSTANCE);
+        register(Phase.ATTACK, TorpedoTerminalStage.INSTANCE);
         register(Phase.ASCEND, InterceptStage.INSTANCE);
         register(Phase.CRUISE, InterceptStage.INSTANCE);
         register(Phase.ATTACK, InterceptStage.INSTANCE);

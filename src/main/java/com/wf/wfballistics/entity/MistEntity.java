@@ -24,34 +24,17 @@ import net.minecraft.world.phys.AABB;
 
 import java.util.List;
 
-/**
- * A stationary cloud of fluid hanging in the air: gas, spray or vapour. The cloud is "imbued" with a Forge
- * {@link Fluid}; what it does to entities standing in it is looked up from {@link MistEffects} (a fluid →
- * behaviour registry that also honours fluid tags), so the entity itself carries no per-fluid logic.
- *
- * <p>The cloud is invisible server-side and renders nothing: its only presence is a dense puff of tinted
- * particles spawned each tick on the client (see {@link MistClientFX}).
- *
- * <p>Spawn one with {@link #spawn}: it runs a quick wall check ({@link #fitToBounds}) and shrinks the cloud
- * so it doesn't bleed through nearby walls.
- *
- * <p>Size is stored as a horizontal <em>radius</em> plus a height; the bounding box is the cloud's area of
- * effect and the particle volume.
- */
+/** A stationary cloud of fluid hanging in the air: gas, spray or vapour. */
 public class MistEntity extends Entity {
 
     private static final EntityDataAccessor<Float> RADIUS = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> HEIGHT = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<String> FLUID = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.STRING);
-    // Box mode (see spawnBox / GasCloud): when BOX_X > 0 the cloud is an exact cuboid whose min corner is the
-    // entity position, instead of a radius/height puff. Used by the volumetric gas fill so cells hug walls.
     private static final EntityDataAccessor<Float> BOX_X = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> BOX_Y = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> BOX_Z = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
 
     private int maxAge = 150;
-    // Server-side effect throttle: entities in the cloud are processed every N ticks (>=1). A knob for
-    // many-celled volumetric clouds; see GasCloud (kept at 1 there so effect timing is unchanged).
     private int effectInterval = 1;
 
     public MistEntity(EntityType<? extends MistEntity> type, Level level) {
@@ -63,8 +46,8 @@ public class MistEntity extends Entity {
     /**
      * Creates, fits and spawns a mist cloud.
      *
-     * @param radius   intended horizontal radius (shrunk by the wall check)
-     * @param height   vertical extent, growing up from {@code y}
+     * @param radius intended horizontal radius (shrunk by the wall check)
+     * @param height vertical extent, growing up from {@code y}
      * @param duration lifetime in ticks
      */
     public static MistEntity spawn(Level level, Fluid fluid, double x, double y, double z,
@@ -80,9 +63,8 @@ public class MistEntity extends Entity {
     }
 
     /**
-     * Spawns a single box-mode gas cell: an exact cuboid whose min corner is {@code (minX, minY, minZ)} and
-     * whose extents are {@code (sizeX, sizeY, sizeZ)} blocks. The bounds are taken as given (already
-     * wall-checked by {@link com.wf.wfballistics.entity.mist.GasCloud}), so no {@link #fitToBounds} pass.
+     * Spawns a single box-mode gas cell: an exact cuboid whose min corner is {@code (minX, minY, minZ)} and whose
+     * extents are {@code (sizeX, sizeY, sizeZ)} blocks.
      *
      * @param effectInterval process entities in this cell every N ticks (>=1) to bound cost across a cloud
      */
@@ -155,8 +137,6 @@ public class MistEntity extends Entity {
             MistEffect effect = MistEffects.get(getFluid());
             if (effect == null) return;
 
-            // Throttle the (potentially many-celled) cloud's entity processing; the short-duration mob
-            // effects the agents apply comfortably outlast a few skipped ticks.
             if (this.tickCount % this.effectInterval == 0) {
                 double intensity = 1.0 - (double) this.tickCount / maxAge;
                 effect.areaTick(this, intensity);
@@ -172,11 +152,7 @@ public class MistEntity extends Entity {
         }
     }
 
-    /**
-     * Shrinks the cloud's radius so it doesn't poke through walls. Steps outward along each horizontal axis
-     * from the cloud's centre and clamps the radius to the nearest solid block. Cheap by design, four short
-     * ray walks, and meant to be run once at spawn.
-     */
+    /** Shrinks the cloud's radius so it doesn't poke through walls. */
     public void fitToBounds() {
         float requested = getRadius();
         double cx = getX();

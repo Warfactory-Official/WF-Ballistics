@@ -24,16 +24,6 @@ import java.util.function.Predicate;
 /**
  * Routes projectile entity hit-testing through {@link OBB}s for any {@link OBBEntity} (missiles), so a
  * bullet/missile hits the oriented box that wraps the model rather than the coarse vanilla AABB.
- *
- * <p>Ported from SuperbWarfare's {@code ProjectileUtilMixin} (SW's hit particles/sounds and per-part hit
- * tracking are dropped). Instead of SW's extra spatial query, this iterates the small per-level
- * {@link OBBEntityTracker} set and early-outs entirely when the level has no OBB entities.
- *
- * <p>The OBB is the sole authority for hitting a missile. The HEAD injections resolve a precise OBB hit;
- * if none is found they do nothing, and the {@code getEntities} redirect below drops OBB entities from
- * vanilla's fallback scan so a projectile can never hit the missile's coarse enclosing AABB. That AABB is
- * left purely for rendering, frustum culling, broadphase and F3+B. Non-OBB entities are untouched, so
- * vanilla AABB hit-testing runs unchanged for everything else.
  */
 @Mixin(ProjectileUtil.class)
 public class MixinProjectileUtil {
@@ -120,11 +110,8 @@ public class MixinProjectileUtil {
     }
 
     /**
-     * Vanilla's fallback loop (run when the HEAD injections above found no OBB hit) clips each candidate's
-     * {@link Entity#getBoundingBox()}. For a rotated missile that AABB is the fat enclosing box of the OBB,
-     * so a ray grazing an empty corner would register a bogus AABB hit. Dropping OBB entities from this scan
-     * leaves the OBB as the only way to hit them; the enclosing AABB stays for rendering/culling/broadphase.
-     * Guarded by {@link OBBEntityTracker#hasAny} so it's a no-op in levels with no missiles.
+     * Vanilla's fallback loop (run when the HEAD injections above found no OBB hit) clips each candidate's {@link
+     * Entity#getBoundingBox()}.
      */
     @Redirect(method = {
             "getEntityHitResult(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;F)Lnet/minecraft/world/phys/EntityHitResult;",

@@ -25,14 +25,8 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Splits a swarm into squads of roughly equal strength and gives each one something different to do, so a
- * swarm is several problems at once rather than one.
- *
- * <p>Equal by <em>power</em>, not count, or every behemoth ends up in one half: a greedy
- * longest-processing-time partition, strongest first onto whichever squad is weakest.
- *
- * <p>Stateless — recomputed every {@link #REFORM_INTERVAL} ticks from what is standing there rather than
- * maintained as a roster. The input is sorted deterministically, so an unchanged roster splits the same way.
+ * Splits a swarm into squads of roughly equal strength and gives each one something different to do, so a swarm is
+ * several problems at once rather than one.
  */
 public final class GlyphidSquads {
 
@@ -48,10 +42,7 @@ public final class GlyphidSquads {
     private static final double BREACH_REACH = 48.0;
     /** How far apart two machine objectives must be to be different parts of a base: about a room. */
     private static final double MACHINE_SEPARATION = 24.0;
-    /**
-     * Size of the cell that decides two glyphids came from the same place, as a power of two. 64 blocks holds
-     * one nest and its spill, while keeping two colonies at the same base separate.
-     */
+    /** Size of the cell that decides two glyphids came from the same place, as a power of two. */
     private static final int HOME_CELL_BITS = 6;
 
     private GlyphidSquads() {
@@ -75,8 +66,6 @@ public final class GlyphidSquads {
 
     private static void split(ServerLevel level, Set<EntityGlyphid> swarm) {
 
-        // Grouped by where they came from, not where they are: two warbands that happen to have met are not
-        // one swarm, and clustering by position to work that out costs more than the split.
         Map<Long, List<EntityGlyphid>> hosts = new HashMap<>();
         for (EntityGlyphid bug : swarm) {
             if (!splits(bug)) {
@@ -96,28 +85,20 @@ public final class GlyphidSquads {
         return hostSize >= MIN_PER_SQUAD * 2;
     }
 
-    /**
-     * Whether this glyphid takes part in the split at all. A scout is off founding nests and a glyphid that
-     * has never ticked has no home cell to be grouped by.
-     */
+    /** Whether this glyphid takes part in the split at all. */
     public static boolean splits(EntityGlyphid bug) {
         return bug.hasHome && !bug.isScoutType();
     }
 
     /**
-     * Which group of warbands this glyphid belongs to: where it came from, quantised, since a warband spreads
-     * as it lands and the exact block would give forty hosts of one.
-     *
-     * <p>Public so a census can group a swarm the same way the splitter does. Two copies of this arithmetic
-     * would let a report disagree with the thing it is reporting on.
+     * Which group of warbands this glyphid belongs to: where it came from, quantised, since a warband spreads as it
+     * lands and the exact block would give forty hosts of one.
      */
     public static long homeCell(EntityGlyphid bug) {
         return ((long) (bug.homeX >> HOME_CELL_BITS) << 32) ^ (bug.homeZ >> HOME_CELL_BITS) & 0xFFFFFFFFL;
     }
 
     private static void assign(ServerLevel level, List<EntityGlyphid> members) {
-        // Median, not mean: a split swarm walks two ways at once and the mean lands in the empty ground
-        // between them. The median sits inside the larger group, where glyphids actually are.
         double centreX = median(members, EntityGlyphid::getX);
         double centreY = median(members, EntityGlyphid::getY);
         double centreZ = median(members, EntityGlyphid::getZ);
@@ -167,10 +148,7 @@ public final class GlyphidSquads {
         }
     }
 
-    /**
-     * What is worth splitting up over, best first. Players before machines, since a defender who is shooting
-     * is the more urgent problem, and the rally point last so the list is never empty.
-     */
+    /** What is worth splitting up over, best first. */
     private static List<GlyphidObjective> discover(ServerLevel level, List<EntityGlyphid> members,
                                                    double centreX, double centreY, double centreZ) {
         List<GlyphidObjective> out = new ArrayList<>();
@@ -206,9 +184,8 @@ public final class GlyphidSquads {
     }
 
     /**
-     * Where a squad with nothing better to do goes: one rule read at three times, being whatever this glyphid
-     * was doing before any squad touched it. The fallback to where it came down matters — it is the only
-     * position a split cannot have overwritten, and without it an early-assigned swarm walks to nowhere.
+     * Where a squad with nothing better to do goes: one rule read at three times, being whatever this glyphid was
+     * doing before any squad touched it.
      */
     private static GlyphidObjective rallyOf(EntityGlyphid bug) {
         if (bug.hasRally) {
@@ -220,13 +197,8 @@ public final class GlyphidSquads {
     }
 
     /**
-     * What there is to wreck, best first: the block-precise machine where the base is loaded, the cluster
-     * centre where it is not. The centre only has to point the walk, and the objective sharpens on arrival.
-     *
-     * <p>The cluster is not a precondition for the precise lookup — a centre in 512-block cells can sit
-     * hundreds of blocks from its own machines, and gating on it threw away a base the swarm stood inside.
-     *
-     * <p>Up to two, {@link #MACHINE_SEPARATION} apart: two squads on one machine hall is one objective.
+     * What there is to wreck, best first: the block-precise machine where the base is loaded, the cluster centre
+     * where it is not.
      */
     private static void addMachines(ServerLevel level, List<GlyphidObjective> out,
                                     double centreX, double centreZ) {
@@ -249,16 +221,7 @@ public final class GlyphidSquads {
         out.add(GlyphidObjective.machines(base.centerX(), y, base.centerZ()));
     }
 
-    /**
-     * The first wall between the swarm and where it wants to be, or null if the way is open enough.
-     *
-     * <p>Two filters, since almost any ray across terrain hits something: the ray must strike a side face
-     * rather than a top, and the block above must be solid. Together that means "vertical and two tall",
-     * which a step or a slope fails — and getting it wrong sends a squad to chew a hillside.
-     *
-     * <p>Distance is deliberately not filtered. Requiring the hit to be a few blocks out discarded the very
-     * case this exists for: a swarm already pressed against the wall it needs to open.
-     */
+    /** The first wall between the swarm and where it wants to be, or null if the way is open enough. */
     private static @Nullable BlockPos obstruction(ServerLevel level, double x, double y, double z,
                                                   GlyphidObjective towards) {
         Vec3 from = new Vec3(x, y + 1.5, z);

@@ -9,20 +9,15 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Registry of {@link CoordinationModel}s, keyed by id in the same shape as {@code Formations}: add an
- * architecture by implementing the interface and calling {@link #register}.
- *
- * <p>The default is {@link VirtualStructure}, and that is a change of behaviour rather than a change of
- * spelling: see its javadoc for why a computed reference holds a formation that a measured one cannot.
- * {@link LeaderFollower} remains registered and is what an older world loads as, so nothing already in
- * flight changes underneath itself.
+ * Registry of {@link CoordinationModel}s, keyed by id in the same shape as {@code Formations}: add an architecture
+ * by implementing the interface and calling {@link #register}.
  */
 public final class CoordinationModels {
 
     public static final ResourceLocation DEFAULT = rl(VirtualStructure.INSTANCE.id());
     /**
-     * What a squad saved before coordination models existed is read back as: the architecture it was
-     * actually flying.
+     * What a squad saved before coordination models existed is read back as: the architecture it was actually
+     * flying.
      */
     public static final ResourceLocation LEGACY = rl(LeaderFollower.INSTANCE.id());
 

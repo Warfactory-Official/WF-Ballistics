@@ -2,6 +2,7 @@ package com.wf.wfballistics.drone.ai;
 
 import com.wf.wfballistics.api.WFEventType;
 import com.wf.wfballistics.drone.DroneState;
+import com.wf.wfballistics.drone.RotorDamage;
 import com.wf.wfballistics.drone.WorldThread;
 import com.wf.wfballistics.drone.ai.coord.CoordinationModel;
 import com.wf.wfballistics.drone.ai.coord.SquadAnchor;
@@ -21,33 +22,13 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Decides what a squad does next. This is the whole off-thread half of the drone AI: it reads
- * {@link DroneSnapshot}s and returns {@link DronePlan}s, and it is the only place allowed to make those
- * decisions.
- *
- * <p>Each drone is decided in four layers, outermost first: battery, then formation, then its state's own
- * handler, then physics. The first three answer "where do I want to be going"; the last answers "what can
- * this airframe actually do about that", and its answer is the one that gets flown.
- *
- * <p><b>Runs on a worker thread.</b> Everything it can see is a value type, so there is nothing here that
- * could reach into the level: including the terrain, which arrives pre-condensed as a
- * {@code TerrainField}. Keep it that way: see {@link DroneSnapshot}.
- */
+/** Decides what a squad does next. */
 public final class DroneBrain {
 
     private DroneBrain() {
     }
 
-    /**
-     * Plan a whole squad in one go. One job holds every member's snapshot, so members can be placed against
-     * one another with no cross-thread reads.
-     *
-     * <p>The squad's {@link CoordinationModel} settles the reference frame first, and the shape of what
-     * happens next is its decision rather than this method's. The leader is still planned before anybody
-     * else, because a model that references the leader wants the decision it has just made rather than the
-     * state it was in a tick ago, and a model that does not reference it simply ignores the chance.
-     */
+    /** Plan a whole squad in one go. */
     public static SquadPlan planSquad(SquadView squad) {
         WorldThread.assertOff("squad planning");
         CoordinationModel model = squad.coordination();
@@ -131,7 +112,7 @@ public final class DroneBrain {
         } else {
             velocity = desired;
             attitude = flying == DroneState.DOWNED
-                    ? routed.attitude().tumble(Tuning.DOWNED_TUMBLE, Tuning.DOWNED_TUMBLE_LIMIT)
+                    ? tumble(routed)
                     : routed.attitude().relax(Tuning.UNPOWERED_LEVELLING);
         }
 
@@ -139,20 +120,34 @@ public final class DroneBrain {
         return DronePlan.of(routed, velocity, attitude, yaw, next, actions);
     }
 
+    /** How a wreck rolls on the way down. */
+    private static FlightAttitude tumble(DroneSnapshot self) {
+        if (self.altitudeAboveGround() <= Tuning.LAND_CONTACT) {
+            return self.attitude();
+        }
+        RotorDamage rotors = self.rotors();
+        double asymmetry = rotors.asymmetry();
+        if (!rotors.damaged() || asymmetry < 1.0E-3) {
+            return self.attitude().tumble(Tuning.DOWNED_TUMBLE, Tuning.DOWNED_TUMBLE_LIMIT);
+        }
+        double sin = Math.sin(self.yaw());
+        double cos = Math.cos(self.yaw());
+        double x = rotors.leanX() * cos + rotors.leanZ() * sin;
+        double z = rotors.leanZ() * cos - rotors.leanX() * sin;
+        double limit = Tuning.DOWNED_TUMBLE_LIMIT * asymmetry;
+        return self.attitude().tumbleToward(x, z, Tuning.DOWNED_TUMBLE, limit);
+    }
+
     /**
      * @return which way the drone should be facing at the end of this tick.
-     *
-     * <p>Normally that is wherever it is travelling. The two exceptions are the parts of a flight that are
-     * going somewhere without moving yet, the climb-out and the form-up, where the horizontal velocity is
-     * made almost entirely of squadmates shoving past, and a heading taken from it points wherever the last
-     * shove came from. Since the formation frame is built on the leader's heading, that is not a cosmetic
-     * problem: the flight assembles facing a direction nobody chose and then swings the whole formation
-     * round the moment it departs. Pointing at the destination costs nothing, because that is where it is
-     * going.
      */
     private static float heading(DroneSnapshot self, DroneState flying, Vec3 velocity) {
         if (flying == DroneState.DOWNED) {
-            return Steering.wrap(self.yaw() + Tuning.DOWNED_SPIN);
+            if (self.altitudeAboveGround() <= Tuning.LAND_CONTACT) {
+                return self.yaw();
+            }
+            float spin = self.rotors().damaged() ? self.rotors().spin() : Tuning.DOWNED_SPIN;
+            return Steering.wrap(self.yaw() + spin);
         }
         Vec3 outbound = self.outbound();
         if ((flying == DroneState.TAKEOFF || flying == DroneState.MUSTER) && outbound != null) {
@@ -163,13 +158,6 @@ public final class DroneBrain {
 
     /**
      * Search for a route over the terrain.
-     *
-     * <p><b>Deliberately not part of {@link #think}.</b> An A* over a few thousand cells takes orders of
-     * magnitude longer than deciding a tick of flight does, and the scheduler will not re-dispatch a squad
-     * whose job is still running, so folding the search into the steering job means every drone in that
-     * squad misses its plan for as long as the search takes and coasts instead. The visible result is a
-     * flight that stutters every time it replans. Run as its own job, the search takes as long as it likes
-     * while the steering keeps landing every tick, and the route is adopted whenever it turns up.
      *
      * @return the route, or null if there was nothing to plan
      */
@@ -197,24 +185,6 @@ public final class DroneBrain {
 
     /**
      * @return the state an escorting follower should adopt from its leader, or null to stay as it is.
-     *
-     * <p>A follower pinned to its slot never reaches its own waypoints, so while escorting it takes the
-     * leader's state rather than waiting on arrivals that will never happen. That is the rule, and it has
-     * exactly one exception.
-     *
-     * <p><b>A climb-out is not inherited.</b> A follower already at altitude that is handed its leader's
-     * {@link DroneState#TAKEOFF} drops out of {@link DroneState#MUSTER}; {@code TakeoffHandler} then sees a
-     * drone that has finished climbing and a flight that is not ready, and sends it straight back to MUSTER;
-     * and the two hand it to each other for as long as the leader is still climbing. Every hop is a
-     * {@code DroneEntity#setState}, which puts {@code stateTicks} back to zero — and {@code MUSTER_TIMEOUT} is
-     * counted in {@code stateTicks}, so the one bound on the whole form-up cannot accumulate while that is
-     * going on. A flight in this cycle waits not for sixty seconds but for ever.
-     *
-     * <p>It needs the leader to be the last one up, which sounds unreachable for a squad that launches its
-     * leader first and is not: the leader is the drone carrying the crate, so it is the heaviest and slowest
-     * climber in the flight, and the launch gap the pad offers can be set to 0, which puts the whole squad in
-     * the air at once. Nothing is lost by declining it — the follower is already where a climb-out would have
-     * taken it.
      */
     @Nullable
     public static DroneState inherited(DroneState leaderState, DroneState own) {
@@ -226,29 +196,17 @@ public final class DroneBrain {
 
     /**
      * @return true if this drone's flying is the formation's to decide rather than its own handler's.
-     *
-     * <p>Public because it is a real part of the contract and not an implementation detail: several
-     * behaviours are defined by <em>not</em> being flown in formation (an attack run, a climb-out, a
-     * construction sortie) and each of those is a decision worth being able to assert on.
      */
     public static boolean escorts(DroneSnapshot self, SquadView squad) {
         return !squad.isLeader(self) && self.state().powered() && self.hasMission()
-                && self.state() != DroneState.PAYLOAD_RUN
+                && !self.state().flownIndividually()
                 && self.state() != DroneState.TAKEOFF
                 && self.assignment() == null;
     }
 
     /**
      * @return true if this drone's flying is the {@link CoordinationModel}'s to decide this tick, rather
-     * than its own handler's.
-     *
-     * <p>A follower on escort always is. The leader is too, but only under a model that keeps its reference
-     * somewhere other than the leader, {@link CoordinationModel#stationsLeader()}, because a drone cannot
-     * station-keep on itself, and asking it to would be a controller whose reference moves whenever its
-     * output does.
-     *
-     * <p>An attack run is nobody's: every drone needs its own release solution, since each is offset from
-     * the others and reaches its own lead point at its own moment.
+     *      than its own handler's.
      */
     private static boolean stationed(DroneSnapshot self, SquadView squad, CoordinationModel model,
                                      @Nullable SquadAnchor anchor, boolean escorting, DroneState flying) {
@@ -259,21 +217,11 @@ public final class DroneBrain {
             return true;
         }
         return squad.isLeader(self) && model.stationsLeader() && flying.powered() && self.hasMission()
-                && flying != DroneState.PAYLOAD_RUN;
+                && !flying.flownIndividually();
     }
 
     /**
      * @return true if anyone in this squad is flying formation on its leader.
-     *
-     * <p>Only consulted for a model whose reference <em>is</em> the leader. For those, letting the drones
-     * stationed on it shove it about is a loop with gain: the push moves the leader, every slot in the squad
-     * moves with it, the followers chase the slots and push again. The squad still keeps itself apart: the
-     * followers do all of the avoiding, which is the right way round, since the leader is the one flying the
-     * mission and they are the ones with somewhere else to be.
-     *
-     * <p>A model that references a computed point has nothing here to protect: the frame is virtual, so
-     * nothing can shove it, and the leader is free to avoid its squadmates like anybody else. Neither has a
-     * squad with nobody in formation: an attack run being the case that matters.
      */
     private static boolean anchors(SquadView squad) {
         for (DroneSnapshot member : squad.slots()) {
@@ -295,7 +243,7 @@ public final class DroneBrain {
 
     /**
      * @return what a drone should do when its plan didn't arrive in time: hold the last velocity, bleeding
-     * it off so a stalled planner degrades into a hover rather than a runaway.
+     *      it off so a stalled planner degrades into a hover rather than a runaway.
      */
     public static Vec3 coast(@Nullable Vec3 lastVelocity) {
         return lastVelocity == null ? Vec3.ZERO : lastVelocity.scale(0.85);

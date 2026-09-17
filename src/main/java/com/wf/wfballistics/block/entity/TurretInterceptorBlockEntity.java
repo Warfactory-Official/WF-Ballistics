@@ -2,8 +2,20 @@ package com.wf.wfballistics.block.entity;
 
 import com.wf.wfballistics.MissileEntity;
 import com.wf.wfballistics.compat.WarforgeCompat;
+import com.wf.wfballistics.drone.DroneEntity;
+import com.wf.wfballistics.entity.InterceptTarget;
 import com.wf.wfballistics.item.MissilePreset;
 import com.wf.wfballistics.item.MissilePresetRegistry;
+import com.wf.wfballistics.recon.ContactClass;
+import com.wf.wfballistics.recon.ReconBound;
+import com.wf.wfballistics.recon.ReconNet;
+import com.wf.wfballistics.recon.ReconNetwork;
+import com.wf.wfballistics.recon.ReconOwners;
+import com.wf.wfballistics.recon.SensorSpec;
+import com.wf.wfballistics.recon.fc.FireControl;
+import com.wf.wfballistics.recon.track.IffState;
+import com.wf.wfballistics.recon.track.Track;
+import com.wf.wfballistics.recon.track.TrackQuality;
 import com.wf.wfballistics.sim.IMissileListener;
 import com.wf.wfballistics.sim.MissileListenerRegistry;
 import com.wf.wfballistics.sim.MissileSimConfig;
@@ -17,23 +29,22 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 
-public abstract class TurretInterceptorBlockEntity extends BlockEntity implements IMissileListener {
+public abstract class TurretInterceptorBlockEntity extends BlockEntity implements IMissileListener, ReconBound {
 
-    /**
-     * Acquisition radius (blocks) for hostile missiles. Large enough to engage missiles during their cruise
-     * (including high-altitude cruisers passing overhead), not only in their terminal dive.
-     */
+    /** Acquisition radius (blocks) for hostile missiles. */
     public static final double RANGE = 200.0;
+    /** Contact classes this battery will spend an interceptor on. */
+    private static final java.util.Set<ContactClass> ENGAGED_CLASSES =
+            java.util.EnumSet.of(ContactClass.MISSILE, ContactClass.DRONE);
     /**
      * Listener radius: larger than RANGE so simulated missiles materialize before entering engagement range.
      */
@@ -50,17 +61,22 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
      * Radius (blocks) within which players are warned of an incoming missile.
      */
     public static final double WARN_RADIUS = 160.0;
+    /** Ticks a battery holds its claim on a track after launching. */
+    public static final int CLAIM_TICKS = 120;
+    /** Widest track error this battery will launch on. */
+    public static final double MAX_TRACK_ERROR = 32.0;
+    /** Sweep interval. */
+    private static final int SWEEP_TICKS = 4;
 
     // The interceptor preset this battery fires.
     private final ResourceLocation presetId;
     // Stable per-battery identity, stamped onto every interceptor it fires (its "control id").
     private UUID controlId;
     private int cooldown = 0;
-    // WarForge faction claiming this battery's land (its "team"), refreshed periodically. Missiles of the same
-    // or an allied faction are treated as friendly, so a base's defenses don't engage its own faction's
-    // missiles regardless of which launcher fired them.
     private UUID cachedTeamId = null;
     private int teamRefresh = 0;
+    @Nullable
+    private UUID bound = null;
     private int warnCooldown = 0;
     // Ammo (only used when MissileSimConfig.BATTERY_MAGAZINE > 0). -1 = not yet initialised to a full magazine.
     private int ammo = -1;
@@ -89,9 +105,11 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
 
         // Refresh our faction (the one claiming this chunk) occasionally rather than every tick.
         if (--this.teamRefresh <= 0) {
-            this.cachedTeamId = WarforgeCompat.factionClaiming(sl, this.worldPosition);
+            this.resolve(sl);
             this.teamRefresh = 100;
         }
+        ReconNet.registerSensor(sl, this.worldPosition,
+                SensorSpec.surveillanceRadar(this.netId(), RANGE).withMast(2.0).withSweep(SWEEP_TICKS));
         if (this.warnCooldown > 0) {
             this.warnCooldown--;
         }
@@ -102,17 +120,27 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
             return;
         }
 
+        if (this.outOfAmmo()) {
+            return;
+        }
         Vec3 muzzle = Vec3.atCenterOf(this.worldPosition).add(0.0, 2.0, 0.0);
-        MissileEntity target = this.acquireTarget(sl, muzzle);
-        if (target == null || this.outOfAmmo()) {
+        Engagement engagement = this.acquire(sl, muzzle);
+        if (engagement == null) {
             return;
         }
         if (this.warnCooldown <= 0) {
             this.warnNearby(sl);
             this.warnCooldown = WARN_INTERVAL;
         }
-        this.launch(sl, muzzle, target);
+        this.launch(sl, muzzle, engagement.target());
+        engagement.net().claim(engagement.track().id(), this.sensorId(), sl.getGameTime(), CLAIM_TICKS);
         this.cooldown = FIRE_INTERVAL;
+    }
+
+    /**
+     * A track this battery is prepared to shoot at, and the missile behind it.
+     */
+    private record Engagement(ReconNetwork net, Track track, InterceptTarget target) {
     }
 
     /**
@@ -153,60 +181,94 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
         return MissileSimConfig.BATTERY_MAGAZINE > 0 && this.ammo == 0;
     }
 
-    /**
-     * Nearest live, hostile missile of this battery's target class within RANGE, or null.
-     */
-    private MissileEntity acquireTarget(ServerLevel sl, Vec3 muzzle) {
-        AABB box = new AABB(this.worldPosition).inflate(RANGE);
-        List<MissileEntity> nearby = sl.getEntitiesOfClass(MissileEntity.class, box, MissileEntity::isAlive);
-        // Don't launch at a missile another interceptor is already committed to: saves interceptors and
-        // spreads coverage across incoming threats.
-        Set<UUID> claimed = MissileEntity.claimedTargets(nearby, Integer.MAX_VALUE);
-        MissileEntity best = null;
-        double bestSq = RANGE * RANGE;
-        for (MissileEntity m : nearby) {
-            if (m.isRemoved() || !this.isEngageable(m) || claimed.contains(m.getUUID())) {
-                continue;
-            }
-            double dsq = m.getBoundingBox().getCenter().distanceToSqr(muzzle);
-            // Stealth missiles are only detectable at short range and with a per-scan chance (see detectableAt).
-            if (!m.detectableAt(dsq, sl.random)) {
-                continue;
-            }
-            if (dsq <= bestSq) {
-                bestSq = dsq;
-                best = m;
-            }
+    /** The closest confirmed missile contact this battery may engage, resolved to something it can lock onto. */
+    private Engagement acquire(ServerLevel sl, Vec3 muzzle) {
+        ReconNetwork net = ReconNet.existing(sl, this.netId());
+        if (net == null) {
+            return null;
         }
-        return best;
+        long now = sl.getGameTime();
+        long self = this.sensorId();
+        Track track = net.picture().nearest(muzzle.x, muzzle.y, muzzle.z, RANGE,
+                t -> ENGAGED_CLASSES.contains(t.guess())
+                        && t.quality().atLeast(TrackQuality.CONFIRMED)
+                        && t.iff() != IffState.FRIENDLY
+                        && !net.claimedByOther(t.id(), self, now));
+        if (track == null) {
+            return null;
+        }
+        Class<? extends Entity> type = track.guess() == ContactClass.DRONE ? DroneEntity.class : MissileEntity.class;
+        Entity resolved = FireControl.resolve(sl, type, track, MAX_TRACK_ERROR,
+                e -> e instanceof InterceptTarget t && this.isEngageable(t));
+        return resolved == null ? null : new Engagement(net, track, (InterceptTarget) resolved);
     }
 
     /**
-     * Engageable = a hostile missile that isn't itself an interceptor. Speed is not a filter (every battery
-     * tries every threat it can see); stealth is handled separately by the range/chance detection roll.
+     * Work out whose battery this is: the binding if it has one, and otherwise whoever claims the ground under it.
      */
-    private boolean isEngageable(MissileEntity m) {
-        return !m.isInterceptor() && this.isHostile(m);
+    private void resolve(ServerLevel sl) {
+        this.cachedTeamId = this.bound != null ? this.bound
+                : ReconOwners.owningAt(sl, this.worldPosition);
     }
 
     /**
-     * Hostile = not our own missile (shared control id) and not a friendly WarForge faction's missile (same /
-     * allied / truced faction as the land this battery sits on). Without WarForge, falls back to control id.
+     * @return which network this battery feeds, and the transponder code it reads as friendly.
      */
-    private boolean isHostile(MissileEntity m) {
-        UUID mc = m.getControlId();
+    @Override
+    public long netId() {
+        return ReconNet.netId(this.cachedTeamId);
+    }
+
+    @Nullable
+    @Override
+    public UUID boundNet() {
+        return this.bound;
+    }
+
+    @Override
+    public void bindNet(@Nullable UUID id) {
+        ServerLevel sl = this.level instanceof ServerLevel s ? s : null;
+        if (sl != null) {
+            ReconNet.unregisterSensor(sl, this.worldPosition, this.netId());
+        }
+        this.bound = id;
+        this.setChanged();
+        if (sl != null) {
+            this.resolve(sl);
+        }
+    }
+
+    /**
+     * @return this battery's identity on the claim board. Its position, because that is what the network keys
+     *      its sensor by and what survives the block entity being reloaded.
+     */
+    private long sensorId() {
+        return this.worldPosition.asLong();
+    }
+
+    /** Engageable = a hostile target still worth a shot. */
+    private boolean isEngageable(InterceptTarget t) {
+        return t.interceptEngageable() && this.isHostile(t);
+    }
+
+    /**
+     * Hostile = not ours (shared control id) and not a friendly WarForge faction's (same / allied / truced faction
+     * as the land this battery sits on).
+     */
+    private boolean isHostile(InterceptTarget t) {
+        UUID mc = t.interceptControlId();
         if (mc != null && mc.equals(this.controlId())) {
             return false;
         }
-        return !WarforgeCompat.areFactionsFriendly(this.cachedTeamId, m.getTeamId());
+        return !WarforgeCompat.areFactionsFriendly(this.cachedTeamId, t.interceptTeamId());
     }
 
-    private void launch(ServerLevel sl, Vec3 muzzle, MissileEntity target) {
+    private void launch(ServerLevel sl, Vec3 muzzle, InterceptTarget target) {
         MissilePreset preset = MissilePresetRegistry.get(this.presetId);
         MissileEntity m = preset.build(sl, muzzle);
         m.setControlId(this.controlId());
         m.setTeamId(this.cachedTeamId);
-        m.setInterceptLock(target.getUUID());
+        m.setInterceptLock(target.interceptEntity().getUUID());
         m.moveTo(muzzle.x, muzzle.y, muzzle.z, 0.0f, 0.0f);
         sl.addFreshEntity(m);
         if (MissileSimConfig.BATTERY_MAGAZINE > 0 && this.ammo > 0) {
@@ -222,6 +284,9 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
             tag.putUUID("ControlId", this.controlId);
         }
         tag.putInt("Ammo", this.ammo);
+        if (this.bound != null) {
+            tag.putUUID("BoundNet", this.bound);
+        }
     }
 
     @Override
@@ -233,6 +298,7 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
         if (tag.contains("Ammo")) {
             this.ammo = tag.getInt("Ammo");
         }
+        this.bound = tag.hasUUID("BoundNet") ? tag.getUUID("BoundNet") : null;
     }
 
     @Override
@@ -254,6 +320,7 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
     public void setRemoved() {
         if (this.level instanceof ServerLevel sl) {
             MissileListenerRegistry.get(sl).deregister(this.worldPosition);
+            ReconNet.unregisterSensor(sl, this.worldPosition, this.netId());
         }
         super.setRemoved();
     }

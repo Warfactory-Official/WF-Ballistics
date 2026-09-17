@@ -17,15 +17,6 @@ import java.util.List;
 /**
  * Over a station, exchanging cargo with it: loading building materials, or handing over what a demolition
  * recovered.
- *
- * <p>Descends to the same height a delivery does and settles the same way, but never lets go of a crate:
- * the transfer is item-for-item into the station's own container, so nothing is ever left on the ground for
- * somebody to walk off with. That is the difference between this and {@link DeliverHandler}, and it is why
- * they are not the same handler.
- *
- * <p>Which way the items move is the job's business, not this one's. The world thread knows whether it is
- * running a construction or a demolition; from up here both are "sit still over the station until the
- * assignment changes".
  */
 public final class SupplyHandler implements DroneStateHandler {
 

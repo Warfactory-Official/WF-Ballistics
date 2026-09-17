@@ -4,20 +4,10 @@ import com.wf.wfballistics.drone.flight.Airframe;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * What a winged glyphid can do in the air. Runs on the drone's
- * {@link com.wf.wfballistics.drone.flight.Multirotor} model, which banks into turns rather than sliding
- * sideways — the same way an insect flies. Only the {@link Airframe} differs.
- *
- * <p>A flying glyphid does no pathfinding at all, which is 44% of a marching swarm's tick, so wings make one
- * cheaper rather than dearer.
- */
+/** What a winged glyphid can do in the air. */
 public final class GlyphidFlight {
 
-    /**
-     * Tops out near 0.68 blocks/tick, seven times walking speed. Solved from the model, not declared: see
-     * {@link Airframe#topSpeed}. Leans harder, drags more and descends faster than it climbs.
-     */
+    /** Tops out near 0.68 blocks/tick, seven times walking speed. */
     public static final Airframe WINGS = new Airframe(
             0.08, 2.0, Math.toRadians(50.0), 0.18,
             0.100, 0.060, 0.70, 0.25,
@@ -32,16 +22,10 @@ public final class GlyphidFlight {
     /** How far ahead the terrain is sampled: about twenty ticks at cruise, which is what the climb needs. */
     public static final int LOOKAHEAD = 16;
 
-    /**
-     * How many points along the path are sampled, beyond the one underfoot. More than one because "here" plus
-     * "sixteen ahead" leaves a blind spot in the middle, which is exactly where a ridge crest sits.
-     */
+    /** How many points along the path are sampled, beyond the one underfoot. */
     public static final int LOOKAHEAD_SAMPLES = 4;
 
-    /**
-     * Gain on the altitude error. Deliberately gentle -- the vertical axis only has the margin between hover
-     * and full throttle to work with, so a stiff gain spends the flight bouncing between them.
-     */
+    /** Gain on the altitude error. */
     private static final double ALTITUDE_GAIN = 0.08;
 
     /** Within this of the destination a glyphid stops flying at it and starts landing on it. */
@@ -53,12 +37,12 @@ public final class GlyphidFlight {
     /**
      * The velocity the flight model should be asked for.
      *
-     * @param position    where the glyphid is
-     * @param target      where it is going; only the horizontal part is steered to, since the altitude is
-     *                    decided by terrain rather than by the destination
+     * @param position where the glyphid is
+     * @param target where it is going; only the horizontal part is steered to, since the altitude is
+     *      decided by terrain rather than by the destination
      * @param floorHeight the highest ground under and ahead of it, which is what it holds {@link #CLEARANCE}
-     *                    above
-     * @param cruise      speed to ask for, blocks/tick
+     *      above
+     * @param cruise speed to ask for, blocks/tick
      */
     public static Vec3 desiredVelocity(Vec3 position, Vec3 target, int floorHeight, double cruise) {
         double dx = target.x - position.x;

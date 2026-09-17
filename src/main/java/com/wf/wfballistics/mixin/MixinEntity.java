@@ -26,18 +26,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/**
- * Breaks {@code Entity#move} into its parts for {@link SwarmProfiler}.
- *
- * <p>Movement is the swarm's largest single cost and the one that cannot be moved off the server thread, so
- * "movement is 45%" is where the useful question starts rather than ends. Vanilla's move is three different
- * things wearing one name: a collision sweep that runs several times over when a mob steps up, an entity
- * overlap query whose cost grows with how packed the swarm is, and a walk of every block the hitbox touches.
- * They point at completely different fixes, so they are measured apart.
- *
- * <p>Scoped to glyphids and gated on {@link SwarmProfiler#enabled()} before the {@code instanceof}, so with
- * profiling off this costs every entity in the game one static boolean read per call site.
- */
+/** Breaks {@code Entity#move} into its parts for {@link SwarmProfiler}. */
 @Mixin(Entity.class)
 public abstract class MixinEntity {
 
@@ -51,30 +40,7 @@ public abstract class MixinEntity {
     @Unique
     private long wfballistics$scanStart;
 
-    /**
-     * Names the block a glyphid is standing on without sweeping for it.
-     *
-     * <p>{@code checkSupportingBlock} runs once per move and is the largest single named cost in the swarm
-     * tick: 1.949 ms of 15.392 at 2000 marching bodies, effectively all of it inside
-     * {@code findSupportingBlock}, which builds a {@code BlockCollisions} iterator over a box a millionth of
-     * a block tall and walks every cell the hitbox overlaps, reading a block state and intersecting a shape
-     * for each. It then keeps whichever candidate is nearest {@code entity.position()}.
-     *
-     * <p>The sweep is unnecessary whenever the column under the entity's own centre holds a full collision
-     * cube, because that block is then guaranteed to be the answer:
-     * <ul>
-     *   <li>it is a candidate — a full cube spans the whole cell, so it meets the flattened box wherever
-     *       inside the cell the feet are;</li>
-     *   <li>it is the nearest one — every other candidate lies in a different column, and the entity's centre
-     *       is inside this one, so no other column's centre can be closer in x or z. Only one layer of cells
-     *       can contribute at all, so the y term is shared and cancels.</li>
-     * </ul>
-     *
-     * <p>Exactly vanilla's answer, ties included. The one case where a neighbour ties on distance is an entity
-     * standing on an exact block boundary, and vanilla breaks that tie toward the greater {@link BlockPos} —
-     * which is this one, since the tie is always with the column below in x or z. Anything else (a slab, a
-     * ledge the bug is half off, an empty column) fails the full-cube test and falls through to the sweep.
-     */
+    /** Names the block a glyphid is standing on without sweeping for it. */
     @Inject(method = "checkSupportingBlock", at = @At("HEAD"), cancellable = true)
     private void wfballistics$supportUnderfoot(boolean onGround, @Nullable Vec3 movement, CallbackInfo ci) {
         if (!onGround || !((Object) this instanceof EntityGlyphid)) {
@@ -117,11 +83,6 @@ public abstract class MixinEntity {
     private List<VoxelShape> wfballistics$entityCollisions(Level level, Entity entity, AABB box,
                                                           Operation<List<VoxelShape>> original) {
         if (!((Object) this instanceof EntityGlyphid)) {
-            // Everything that is not a glyphid keeps vanilla's answer, with any bridge deck added to it.
-            // An anchored glyphid also reports canBeCollidedWith, which is the proper way to be standable —
-            // but a pig will not rest on a hovering boat in this dev runtime either, so that path cannot be
-            // shown to work here and the deck does not rely on it. Free when no bridge is standing: the
-            // deck lookup is a static int read that returns an empty list.
             List<VoxelShape> shapes = original.call(level, entity, box);
             List<VoxelShape> deck = GlyphidBridges.deckShapes(level, box);
             if (deck.isEmpty()) {
@@ -136,9 +97,6 @@ public abstract class MixinEntity {
             return both;
         }
         if (SwarmBench.skipEntityCollisions) {
-            // Glyphids do not collide with each other, with one exception: the ones holding still to make a
-            // floor out of themselves. Answered from the bridge's own record of where its anchors sat rather
-            // than by reinstating the entity query this branch exists to avoid.
             return GlyphidBridges.deckShapes(level, box);
         }
         if (!SwarmProfiler.enabled()) {
@@ -151,9 +109,8 @@ public abstract class MixinEntity {
     }
 
     /**
-     * The tail of {@code move}: a lazy stream over every block state the hitbox overlaps, asking whether the
-     * entity is standing in fire. Timed from the stream's construction to the terminal {@code noneMatch},
-     * because the construction is lazy and does no work on its own.
+     * The tail of {@code move}: a lazy stream over every block state the hitbox overlaps, asking whether the entity
+     * is standing in fire.
      */
     @Inject(method = "move", at = @At(value = "INVOKE", shift = At.Shift.BEFORE,
             target = "Lnet/minecraft/world/level/Level;getBlockStatesIfLoaded"

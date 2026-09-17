@@ -1,10 +1,6 @@
 package com.wf.wfballistics.entity.glyphid;
 
-/**
- * The orders a glyphid can be under. Plain ints rather than an enum because the current task is a synched
- * and saved field and is compared against the type of a {@link GlyphidWaypoint}, which carries the same
- * numbering.
- */
+/** The orders a glyphid can be under. */
 public final class GlyphidTasks {
 
     public static final int TASK_IDLE = 0;

@@ -10,21 +10,19 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 
 /**
- * The whole squad as one worker job sees it. Because a squad is planned by a single job that owns every
- * member's snapshot, followers can be placed relative to the leader with no locking and no cross-thread
- * reads: this is the reason jobs are submitted per squad rather than per drone.
+ * The whole squad as one worker job sees it.
  *
- * @param slots          members in a stable order; index 0 is the leader's slot when it is present
- * @param spacing        how far apart this squad flies its slots, from the leader's mission. Held on the
- *                       squad rather than on each member because a formation with two opinions about its own
- *                       size is not a formation: every slot has to be measured off the same number
+ * @param slots members in a stable order; index 0 is the leader's slot when it is present
+ * @param spacing how far apart this squad flies its slots, from the leader's mission. Held on the
+ *      squad rather than on each member because a formation with two opinions about its own
+ *      size is not a formation: every slot has to be measured off the same number
  * @param coordinationId which architecture the squad holds its shape with. The shape and the architecture are
- *                       separate choices: a wedge is a wedge whether it is measured off the leader or off a
- *                       computed point, and only the second decides how well it is held
- * @param anchor         the reference frame this squad was flying at the end of last tick, or null if it has
- *                       none yet. The one piece of squad state that persists between ticks, and it is passed
- *                       in and handed back rather than stored anywhere a worker could reach: see
- *                       {@link CoordinationModel}
+ *      separate choices: a wedge is a wedge whether it is measured off the leader or off a
+ *      computed point, and only the second decides how well it is held
+ * @param anchor the reference frame this squad was flying at the end of last tick, or null if it has
+ *      none yet. The one piece of squad state that persists between ticks, and it is passed
+ *      in and handed back rather than stored anywhere a worker could reach: see
+ *      {@link CoordinationModel}
  */
 public record SquadView(long squadId, @Nullable ResourceLocation formationId, double spacing,
                         @Nullable ResourceLocation coordinationId, @Nullable SquadAnchor anchor,
@@ -36,7 +34,7 @@ public record SquadView(long squadId, @Nullable ResourceLocation formationId, do
 
     /**
      * @return the architecture this squad coordinates with, falling back to the default for an unknown or
-     * missing id exactly as {@code Formations} does for a shape.
+     *      missing id exactly as {@code Formations} does for a shape.
      */
     public CoordinationModel coordination() {
         return CoordinationModels.get(coordinationId);
@@ -44,7 +42,7 @@ public record SquadView(long squadId, @Nullable ResourceLocation formationId, do
 
     /**
      * @return this view with a different remembered frame, for handing last tick's anchor to a fresh
-     * snapshot of the same squad.
+     *      snapshot of the same squad.
      */
     public SquadView withAnchor(@Nullable SquadAnchor anchor) {
         return new SquadView(squadId, formationId, spacing, coordinationId, anchor, leader, slots);

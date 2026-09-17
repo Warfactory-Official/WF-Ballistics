@@ -6,18 +6,15 @@ import org.jetbrains.annotations.Nullable;
 /**
  * What {@link GlyphidBrain} decided one glyphid should do this tick, as data.
  *
- * <p>Applying it is the only step that touches the world, so a plan can be produced anywhere and carried to
- * wherever the body happens to be.
- *
- * @param move       how to move, if at all
- * @param hopX       for {@link Move#PATH}: the waypoint to search to, not the destination — see
- *                   {@link GlyphidBrain#HOP}
- * @param sampleY    true when {@link #hopY} is a guess the applier should replace with a real heightmap read
+ * @param move how to move, if at all
+ * @param hopX for {@link Move#PATH}: the waypoint to search to, not the destination; see
+ *      {@link GlyphidBrain#HOP}
+ * @param sampleY true when {@link #hopY} is a guess the applier should replace with a real heightmap read
  * @param destination for {@link Move#CHARGE} and {@link Move#CHEW}: what to steer at or eat toward
- * @param lookAt     what to point the head at, or null to leave it alone
- * @param nextTask   a task to switch into, or {@link #KEEP_TASK}
- * @param elapsed    ticks this decision covered, handed back to {@link GlyphidBrain#resolve}
- * @param moved      blocks covered since the last decision, on the same errand
+ * @param lookAt what to point the head at, or null to leave it alone
+ * @param nextTask a task to switch into, or {@link #KEEP_TASK}
+ * @param elapsed ticks this decision covered, handed back to {@link GlyphidBrain#resolve}
+ * @param moved blocks covered since the last decision, on the same errand
  */
 public record GlyphidPlan(
         Move move,
