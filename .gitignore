@@ -14,7 +14,8 @@ out
 .idea
 
 # gradle
-build
+# Anchored: a bare 'build' also matches the source package src/main/java/com/wf/wflib/build.
+/build
 .gradle
 
 # other
