@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/cube_bottom_top",
+  "textures": {
+    "top": "wflib:block/mining_tnt_top_armed",
+    "bottom": "wflib:block/mining_tnt_bottom_armed",
+    "side": "wflib:block/mining_tnt_side_armed"
+  }
+}

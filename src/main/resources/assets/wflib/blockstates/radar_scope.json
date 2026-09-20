@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "wflib:block/radar_scope" },
+    "facing=east":  { "model": "wflib:block/radar_scope", "y":  90 },
+    "facing=south": { "model": "wflib:block/radar_scope", "y": 180 },
+    "facing=west":  { "model": "wflib:block/radar_scope", "y": 270 }
+  }
+}

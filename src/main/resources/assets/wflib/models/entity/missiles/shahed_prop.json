@@ -1,0 +1,10 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:raw_models/missiles/shahed_prop.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wflib:models/missiles/shahedtxt2",
+    "particle": "wflib:models/missiles/shahedtxt2"
+  }
+}

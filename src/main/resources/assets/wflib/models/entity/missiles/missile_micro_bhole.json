@@ -1,0 +1,10 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:raw_models/missiles/missile_micro.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wflib:models/missiles/missile_micro_bhole",
+    "particle": "wflib:models/missiles/missile_micro_bhole"
+  }
+}

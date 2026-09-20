@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "wflib:block/missile_dispenser"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.wf.wflib.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "plugin": "com.wf.wflib.mixin.WFMixinPlugin",
+  "mixins": [
+    "MixinEntity",
+    "MixinLevelChunk",
+    "MixinLivingEntity",
+    "MixinMob",
+    "MixinPathNavigation",
+    "MixinPathTypeCache",
+    "MixinPathNavigationRegion",
+    "MixinWalkNodeEvaluator",
+    "MixinProjectileUtil",
+    "AccessorChunkMap",
+    "AccessorLivingEntity",
+    "MixinChunkMapTrackedEntity",
+    "gt.MixinNotifiableEnergyContainer"
+  ],
+  "client": [
+    "MixinEntityRenderDispatcher",
+    "MixinLevelRenderer",
+    "MixinLevelRendererFeed",
+    "MixinViewArea",
+    "MixinClientChunkCache",
+    "MixinParticleEngine",
+    "MixinRenderSectionSort"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

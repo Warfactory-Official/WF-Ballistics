@@ -1,0 +1,10 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:models/effect/bone_torso.obj",
+  "flip_v": true,
+  "textures": {
+    "bone": "wflib:particle/skeleton",
+    "particle": "wflib:particle/skeleton"
+  }
+}

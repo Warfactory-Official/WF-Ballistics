@@ -1,0 +1,219 @@
+{
+  "weapon.nuclear_explosion": {
+    "sounds": [
+      {
+        "name": "wflib:weapon/nuclear_explosion",
+        "stream": true
+      }
+    ]
+  },
+  "weapon.fire.disintegration": {
+    "sounds": [
+      "wflib:weapon/fire/disintegration"
+    ]
+  },
+  "weapon.explosion_small_near": {
+    "sounds": [
+      "wflib:weapon/explosion_small_near1",
+      "wflib:weapon/explosion_small_near2",
+      "wflib:weapon/explosion_small_near3"
+    ]
+  },
+  "weapon.explosion_small_far": {
+    "sounds": [
+      "wflib:weapon/explosion_small_far1",
+      "wflib:weapon/explosion_small_far2"
+    ]
+  },
+  "weapon.explosion_large_near": {
+    "sounds": [
+      "wflib:weapon/explosion_large_near"
+    ]
+  },
+  "weapon.explosion_large_far": {
+    "sounds": [
+      "wflib:weapon/explosion_large_far"
+    ]
+  },
+  "weapon.sonic_boom": {
+    "sounds": [
+      "wflib:weapon/sonic_boom"
+    ]
+  },
+  "weapon.missile_flight": {
+    "sounds": [
+      {
+        "name": "wflib:weapon/missile_flight",
+        "stream": false
+      }
+    ]
+  },
+  "drone.rotor_loop": {
+    "subtitle": "subtitles.wflib.drone.rotor_loop",
+    "sounds": [
+      {
+        "name": "wflib:drone/rotor_loop",
+        "stream": false,
+        "attenuation_distance": 64
+      }
+    ]
+  },
+  "door.transition_seal_open": {
+    "sounds": [
+      "wflib:door/transition_seal_open"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.alarm6": {
+    "sounds": [
+      "wflib:door/alarm6"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.garage_move": {
+    "sounds": [
+      "wflib:door/garage_move"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.garage_stop": {
+    "sounds": [
+      "wflib:door/garage_stop"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.lever1": {
+    "sounds": [
+      "wflib:door/lever1"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.doorslide_opened1": {
+    "sounds": [
+      "wflib:door/doorslide_opened1"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.doorslide_opening1": {
+    "sounds": [
+      "wflib:door/doorslide_opening1"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.doorshut_1": {
+    "sounds": [
+      "wflib:door/doorshut_1"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.sliding_door_opened": {
+    "sounds": [
+      "wflib:door/sliding_door_opened"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.sliding_door_opening": {
+    "sounds": [
+      "wflib:door/sliding_door_opening"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.sliding_door_shut": {
+    "sounds": [
+      "wflib:door/sliding_door_shut"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.doormove2": {
+    "sounds": [
+      "wflib:door/doormove2"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.metal_stop1": {
+    "sounds": [
+      "wflib:door/metal_stop1"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.wgh_start": {
+    "sounds": [
+      "wflib:door/wgh_start"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.wgh_stop": {
+    "sounds": [
+      "wflib:door/wgh_stop"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.door_wgh_big_start": {
+    "sounds": [
+      "wflib:door/door_wgh_big_start"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.door_wgh_big_stop": {
+    "sounds": [
+      "wflib:door/door_wgh_big_stop"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.motor_start": {
+    "sounds": [
+      "wflib:door/motor_start"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.motor_stop": {
+    "sounds": [
+      "wflib:door/motor_stop"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.vault_scrape": {
+    "sounds": [
+      "wflib:door/vault_scrape"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "door.vault_thud": {
+    "sounds": [
+      "wflib:door/vault_thud"
+    ],
+    "subtitle": "subtitles.wflib.door"
+  },
+  "mining_charge_blast": {
+    "category": "blocks",
+    "subtitle": "subtitles.wflib.mining_charge_blast",
+    "sounds": [
+      "wflib:mining_charge/blast_1",
+      "wflib:mining_charge/blast_2",
+      "wflib:mining_charge/blast_3",
+      "wflib:mining_charge/blast_4"
+    ]
+  },
+  "mining_charge_blast_distant": {
+    "category": "blocks",
+    "subtitle": "subtitles.wflib.mining_charge_blast",
+    "sounds": [
+      "wflib:mining_charge/blast_distant_1",
+      "wflib:mining_charge/blast_distant_2"
+    ]
+  },
+  "detonator_arm": {
+    "category": "blocks",
+    "subtitle": "subtitles.wflib.detonator_arm",
+    "sounds": [
+      "wflib:detonator/arm"
+    ]
+  },
+  "detonator_detonate": {
+    "category": "players",
+    "subtitle": "subtitles.wflib.detonator_detonate",
+    "sounds": [
+      "wflib:detonator/detonate"
+    ]
+  }
+}

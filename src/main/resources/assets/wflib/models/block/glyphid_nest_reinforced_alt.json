@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:block/cube_all",
+  "textures": {
+    "all": "wflib:block/glyphid_nest_reinforced_alt"
+  }
+}

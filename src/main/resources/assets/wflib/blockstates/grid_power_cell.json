@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "wflib:block/grid_power_cell"
+    }
+  }
+}

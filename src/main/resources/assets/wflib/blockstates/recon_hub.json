@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "wflib:block/recon_hub"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+package com.wf.wflib.menu;
+
+import com.wf.wflib.WFLib;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.world.inventory.MenuType;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.common.extensions.IMenuTypeExtension;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
+
+public class ModMenus {
+    public static final DeferredRegister<MenuType<?>> MENUS =
+            DeferredRegister.create(Registries.MENU, WFLib.MODID);
+
+    public static void register(IEventBus bus) {
+        MENUS.register(bus);
+    }
+
+    public static final DeferredHolder<MenuType<?>, MenuType<MissileDispenserMenu>> MISSILE_DISPENSER =
+            MENUS.register("missile_dispenser", () -> IMenuTypeExtension.create(MissileDispenserMenu::new));
+
+    public static final DeferredHolder<MenuType<?>, MenuType<DronePadMenu>> DRONE_PAD =
+            MENUS.register("drone_pad", () -> IMenuTypeExtension.create(DronePadMenu::new));
+
+
+}

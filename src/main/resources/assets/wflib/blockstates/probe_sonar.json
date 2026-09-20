@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "online=false,waterlogged=false": {
+      "model": "wflib:block/probe_sonar"
+    },
+    "online=false,waterlogged=true": {
+      "model": "wflib:block/probe_sonar"
+    },
+    "online=true,waterlogged=false": {
+      "model": "wflib:block/probe_sonar_online"
+    },
+    "online=true,waterlogged=true": {
+      "model": "wflib:block/probe_sonar_online"
+    }
+  }
+}

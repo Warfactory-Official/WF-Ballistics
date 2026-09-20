@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "online=false": {
+      "model": "wflib:block/probe_radar"
+    },
+    "online=true": {
+      "model": "wflib:block/probe_radar_online"
+    }
+  }
+}

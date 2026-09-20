@@ -1,0 +1,10 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:raw_models/missiles/missilethermo.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wflib:models/missiles/v2_rocket",
+    "particle": "wflib:models/missiles/v2_rocket"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "alerting=false": {
+      "model": "wflib:block/radar_surveillance"
+    },
+    "alerting=true": {
+      "model": "wflib:block/radar_surveillance_alerting"
+    }
+  }
+}

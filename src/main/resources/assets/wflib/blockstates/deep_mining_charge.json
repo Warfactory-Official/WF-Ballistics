@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "armed=false": { "model": "wflib:block/deep_mining_charge" },
+    "armed=true": { "model": "wflib:block/deep_mining_charge_armed" }
+  }
+}

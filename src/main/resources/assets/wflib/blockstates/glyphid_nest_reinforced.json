@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "": [
+      { "model": "wflib:block/glyphid_nest_reinforced" },
+      { "model": "wflib:block/glyphid_nest_reinforced_alt" }
+    ]
+  }
+}
