@@ -66,6 +66,15 @@ versionRange = "*"
 ordering = "AFTER"
 side = "BOTH"
 
+# Optional integration: Immersive Railroading. Everything under com.wf.wflib.rail is inert without it -
+# no config file, no ticking, no registration. Ordered AFTER so IR's own registries exist first.
+[[dependencies.wflib]]
+modId = "immersiverailroading"
+type = "optional"
+versionRange = "*"
+ordering = "AFTER"
+side = "BOTH"
+
 # Optional integration: WarForge faction friend-or-foe + claim-aware explosions.
 [[dependencies.wflib]]
 modId = "warforge"

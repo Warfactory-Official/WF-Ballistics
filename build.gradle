@@ -177,6 +177,13 @@ neoForge {
                 systemProperty 'wflib.probeInputTrace', 'true'
             }
 
+            // -PrailForce turns the Immersive Railroading package on without IR installed. Only the parts
+            // that name no IR type can run under it - today that is the whole excavator - and it exists
+            // because otherwise nothing in that package can be exercised at all on this machine.
+            if (project.hasProperty('railForce')) {
+                systemProperty 'wflib.railForce', 'true'
+            }
+
             if (project.hasProperty('accel')) {
                 systemProperty 'acceleratedrecoiling.backend', project.property('accel')
             }
@@ -317,6 +324,14 @@ dependencies {
         localRuntime "com.lowdragmc.ldlib2:ldlib2-neoforge-${minecraft_version}:${ldlib2_version}:all"
     }
 
+    // --- Unit tests -------------------------------------------------------------------------
+    //     The armour core (com.wf.wflib.armor) is deliberately free of Minecraft types, so it
+    //     tests under plain JUnit with no FML bootstrap. Keep it that way: the arithmetic is the part
+    //     worth pinning, and a bootstrapped harness is an order of magnitude slower to run.
+    testImplementation platform("org.junit:junit-bom:${junit_version}")
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
     // --- Other compile-only integrations (disabled until their 1.21.1 coordinates are confirmed) ---
     // TODO(port): Registrate 1.21.1
     // compileOnly("com.tterrag.registrate:Registrate:MC1.21.1-<ver>") { transitive = false }
@@ -373,5 +388,19 @@ idea {
     module {
         downloadSources = true
         downloadJavadoc = true
+    }
+}
+
+// The armour core tests need nothing but JUnit. The excavator's section codec needs Minecraft's NBT and
+// SimpleBitStorage classes - plain data types that need no bootstrapped game, so handing the test source set
+// main's compile classpath is enough and still keeps the suite a pure unit test.
+sourceSets.test.compileClasspath += sourceSets.main.compileClasspath
+sourceSets.test.runtimeClasspath += sourceSets.main.runtimeClasspath
+
+tasks.named('test', Test).configure {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat = 'full'
     }
 }

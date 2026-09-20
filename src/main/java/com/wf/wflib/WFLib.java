@@ -52,6 +52,8 @@ public class WFLib {
         modContainer.registerConfig(
                 ModConfig.Type.CLIENT, com.wf.wflib.probe.client.ProbeConfig.SPEC,
                 "wflib-probe.toml");
+        // Registers nothing at all unless Immersive Railroading is installed.
+        com.wf.wflib.rail.RailFeatures.init(modContainer);
     }
 
     /** Probes take FE from any side. */
