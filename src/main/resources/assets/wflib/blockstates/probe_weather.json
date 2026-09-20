@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "online=false": {
+      "model": "wflib:block/probe_weather"
+    },
+    "online=true": {
+      "model": "wflib:block/probe_weather_online"
+    }
+  }
+}

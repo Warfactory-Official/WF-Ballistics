@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [ { "type": "minecraft:item", "name": "wflib:camera_monitor" } ],
+      "conditions": [
+        { "condition": "minecraft:survives_explosion" },
+        {
+          "condition": "minecraft:block_state_property",
+          "block": "wflib:camera_monitor",
+          "properties": { "part_x": "0", "part_y": "0" }
+        }
+      ]
+    }
+  ]
+}

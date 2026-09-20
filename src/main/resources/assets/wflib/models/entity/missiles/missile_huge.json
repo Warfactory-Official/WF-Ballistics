@@ -1,0 +1,11 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:raw_models/missiles/icbm.obj",
+  "flip_v": true,
+  "automatic_culling": false,
+  "textures": {
+    "missile_texture": "wflib:models/missiles/icbm",
+    "particle": "wflib:models/missiles/icbm"
+  }
+}

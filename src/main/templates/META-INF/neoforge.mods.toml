@@ -1,4 +1,4 @@
-# WF Ballistics: NeoForge mod metadata.
+# WFLib: NeoForge mod metadata.
 # The dollar-brace tokens below are expanded by the generateModMetadata task in build.gradle from gradle.properties.
 modLoader = "javafml"
 loaderVersion = "${loader_version_range}"
@@ -6,7 +6,7 @@ license = "${mod_license}"
 issueTrackerURL = "https://github.com/Warfactory-Official/WF-Ballistics/issues"
 
 [[mods]]
-modId = "wfballistics"
+modId = "wflib"
 version = "${mod_version}"
 displayName = "${mod_name}"
 authors = "${mod_authors}"
@@ -14,10 +14,10 @@ description = '''${mod_description}'''
 
 # Mixin configs are declared to FML here on NeoForge (no MANIFEST MixinConfigs attribute).
 [[mixins]]
-config = "wfballistics.mixins.json"
+config = "wflib.mixins.json"
 
 # --- Required: NeoForge ---
-[[dependencies.wfballistics]]
+[[dependencies.wflib]]
 modId = "neoforge"
 type = "required"
 versionRange = "${neo_version_range}"
@@ -25,7 +25,7 @@ ordering = "NONE"
 side = "BOTH"
 
 # --- Required: Minecraft ---
-[[dependencies.wfballistics]]
+[[dependencies.wflib]]
 modId = "minecraft"
 type = "required"
 versionRange = "${minecraft_version_range}"
@@ -33,7 +33,7 @@ ordering = "NONE"
 side = "BOTH"
 
 # --- Required: Flywheel (instanced rendering) ---
-[[dependencies.wfballistics]]
+[[dependencies.wflib]]
 modId = "flywheel"
 type = "required"
 versionRange = "${flywheel_version_range}"
@@ -42,7 +42,7 @@ side = "CLIENT"
 
 # --- Required: GemRender (rigged models on Flywheel) ---
 # Every animated entity is drawn through it. Client only: the server never builds a rig.
-[[dependencies.wfballistics]]
+[[dependencies.wflib]]
 modId = "gemrender"
 type = "required"
 versionRange = "*"
@@ -51,7 +51,7 @@ side = "CLIENT"
 
 # Optional integration: when Superb Warfare is present, WF missiles are folded into its
 # superbwarfare:destroyable_projectile tag so its missiles, anti-air and radar can lock onto them.
-[[dependencies.wfballistics]]
+[[dependencies.wflib]]
 modId = "superbwarfare"
 type = "optional"
 versionRange = "*"
@@ -59,7 +59,7 @@ ordering = "AFTER"
 side = "BOTH"
 
 # Optional integration: the EMP warhead drains and disables GregTech machines.
-[[dependencies.wfballistics]]
+[[dependencies.wflib]]
 modId = "gtceu"
 type = "optional"
 versionRange = "*"
@@ -67,7 +67,7 @@ ordering = "AFTER"
 side = "BOTH"
 
 # Optional integration: WarForge faction friend-or-foe + claim-aware explosions.
-[[dependencies.wfballistics]]
+[[dependencies.wflib]]
 modId = "warforge"
 type = "optional"
 versionRange = "*"

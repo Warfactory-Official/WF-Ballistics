@@ -1,0 +1,21 @@
+{
+  "__comment": "Cargo crate as a bakeable model, so a drone can draw the crate it is carrying as part of its own flywheel instance instead of chasing a second entity. Centred on the origin (unlike a block model) because the drone positions it by its payload mount, and 0.9 blocks a side to match the CrateEntity hitbox so it neither grows nor shrinks when it is actually released.",
+  "textures": {
+    "crate": "wflib:block/crate",
+    "particle": "wflib:block/crate"
+  },
+  "elements": [
+    {
+      "from": [-7.2, -7.2, -7.2],
+      "to": [7.2, 7.2, 7.2],
+      "faces": {
+        "north": {"uv": [0, 0, 16, 16], "texture": "#crate"},
+        "south": {"uv": [0, 0, 16, 16], "texture": "#crate"},
+        "east":  {"uv": [0, 0, 16, 16], "texture": "#crate"},
+        "west":  {"uv": [0, 0, 16, 16], "texture": "#crate"},
+        "up":    {"uv": [0, 0, 16, 16], "texture": "#crate"},
+        "down":  {"uv": [0, 0, 16, 16], "texture": "#crate"}
+      }
+    }
+  ]
+}

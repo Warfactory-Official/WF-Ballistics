@@ -1,0 +1,10 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:raw_models/missiles/missile_cluster_part.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wflib:models/missiles/missile_cluster_part",
+    "particle": "wflib:models/missiles/missile_cluster_part"
+  }
+}

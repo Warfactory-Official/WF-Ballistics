@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "online=false": {
+      "model": "wflib:block/probe_thermal"
+    },
+    "online=true": {
+      "model": "wflib:block/probe_thermal_online"
+    }
+  }
+}

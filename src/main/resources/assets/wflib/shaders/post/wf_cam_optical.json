@@ -1,0 +1,19 @@
+{
+    "targets": [ "wf_a" ],
+    "passes": [
+        {
+            "name": "wflib:wf_macroblock",
+            "intarget": "minecraft:main",
+            "outtarget": "wf_a"
+        },
+        {
+            "name": "wflib:wf_video",
+            "intarget": "wf_a",
+            "outtarget": "minecraft:main",
+            "uniforms": [
+                { "name": "Saturation", "values": [ 0.72 ] },
+                { "name": "NoiseFloor", "values": [ 0.02 ] }
+            ]
+        }
+    ]
+}

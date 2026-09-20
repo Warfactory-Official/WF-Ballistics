@@ -1,0 +1,63 @@
+package com.wf.wflib.fire;
+
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.neoforged.neoforge.common.util.INBTSerializable;
+
+/** Per-entity custom-fire state: how many ticks of burning remain and which {@link FireType} is active. */
+public class WFFireData implements INBTSerializable<CompoundTag> {
+
+    private int ticks;
+    private FireType type = FireType.NORMAL;
+
+    /** Sets the entity alight, or refreshes an existing burn. */
+    public void ignite(FireType type, int ticks) {
+        if (!isBurning() || type.ordinal() > this.type.ordinal()) {
+            this.type = type;
+        }
+        if (ticks > this.ticks) {
+            this.ticks = ticks;
+        }
+    }
+
+    public boolean isBurning() {
+        return ticks > 0;
+    }
+
+    public int getTicks() {
+        return ticks;
+    }
+
+    public FireType getType() {
+        return type;
+    }
+
+    /**
+     * Advances the burn by one tick. Call once per entity tick on the server.
+     */
+    public void tick() {
+        if (ticks > 0 && --ticks <= 0) {
+            type = FireType.NORMAL;
+        }
+    }
+
+    public void clear() {
+        ticks = 0;
+        type = FireType.NORMAL;
+    }
+
+    @Override
+    public CompoundTag serializeNBT(HolderLookup.Provider provider) {
+        CompoundTag tag = new CompoundTag();
+        tag.putInt("ticks", ticks);
+        tag.putByte("type", (byte) type.ordinal());
+        return tag;
+    }
+
+    @Override
+    public void deserializeNBT(HolderLookup.Provider provider, CompoundTag nbt) {
+        ticks = nbt.getInt("ticks");
+        FireType[] types = FireType.values();
+        type = types[Math.floorMod(nbt.getByte("type"), types.length)];
+    }
+}

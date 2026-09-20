@@ -1,0 +1,11 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:raw_models/missiles/missile_abm.obj",
+  "flip_v": true,
+  "automatic_culling": false,
+  "textures": {
+    "missile_texture": "wflib:models/missiles/abm_missile",
+    "particle": "wflib:models/missiles/abm_missile"
+  }
+}

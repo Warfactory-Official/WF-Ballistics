@@ -1,0 +1,10 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:raw_models/missiles/shahedjarty_prop.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wflib:models/missiles/shahedtxtjarty",
+    "particle": "wflib:models/missiles/shahedtxtjarty"
+  }
+}

@@ -1,6 +1,6 @@
 # Designing and Balancing Missiles
 
-A practical, detailed guide to building your own missiles in WF-Ballistics: what every knob does, how the
+A practical, detailed guide to building your own missiles in WFLib: what every knob does, how the
 knobs interact, and how to reach a specific role (fast striker, terrain-hugging cruise, loitering drone,
 stealthy infiltrator, interceptor) without breaking the balance.
 
@@ -429,7 +429,7 @@ checks those assertions are armed by tripping them on purpose, and `drone thread
 searches have actually been running on:
 
 ```
-> wfballistics drone threads
+> wflib drone threads
 Planner pool: 6 worker(s)   assertions armed
 This command is on the world thread: true (Server thread)
 2 terrain search(es), last on 'ForkJoinPool-3-worker-1' in 1.3ms (worst 1.3ms)
@@ -682,14 +682,14 @@ is what makes following a drone worth doing.
 ### Commands
 
 ```
-/wfballistics station code               # this pad's code, and how many stations it accepts from
-/wfballistics station allow <code>       # accept handshakes from that station
-/wfballistics station revoke <code>
-/wfballistics station send <code>        # dispatch this pad's cargo by handshake
-/wfballistics station list               # operator: every registered station
-/wfballistics exchange list              # operator: live and recent exchanges
-/wfballistics exchange cancel <id>
-/wfballistics exchange purge             # cancel everything live
+/wflib station code               # this pad's code, and how many stations it accepts from
+/wflib station allow <code>       # accept handshakes from that station
+/wflib station revoke <code>
+/wflib station send <code>        # dispatch this pad's cargo by handshake
+/wflib station list               # operator: every registered station
+/wflib exchange list              # operator: live and recent exchanges
+/wflib exchange cancel <id>
+/wflib exchange purge             # cancel everything live
 ```
 
 ## 11. States
@@ -819,8 +819,8 @@ The mine is not steered at anything. It is let go with the drone's velocity on i
 way down (`MineEntity#scatter`), which is the whole reason the release geometry is worth solving.
 
 ```
-/wfballistics drone minelay <x y z> [drones] [mine] [mines per drone] [spacing]
-/wfballistics drone program minelay <x y z>    # ... then `program launch <n> <formation> <mine>`
+/wflib drone minelay <x y z> [drones] [mine] [mines per drone] [spacing]
+/wflib drone program minelay <x y z>    # ... then `program launch <n> <formation> <mine>`
 ```
 
 or set the drone pad's mission kind to **Minelay (rack)** and fill in *Mines* and *Lay gap*.
@@ -1079,7 +1079,7 @@ so this is a rule the mine already had, applied to the one moment it was missing
 is not the same thing as defusing: defusing is slow, failable and ends with the mine picked up and gone;
 this is the mine simply never having started. Both end at `SAFE`, and arming is the way out of either.
 
-**Some mines can be disarmed, and what disarms them is an item tag.** `wfballistics:defuser`; shipping
+**Some mines can be disarmed, and what disarms them is an item tag.** `wflib:defuser`; shipping
 `#minecraft:shovels` and `minecraft:shears`, because cutting the wire is the other half of how this is
 actually done. A pack that ships a proper mine-clearing tool adds it to the tag and every `DefuseMethod.TOOL`
 mine accepts it, with no preset touched and no code changed. The tag is the *filter* and `defuseMethod` is
@@ -1146,11 +1146,11 @@ would start pulling the mine apart instead of wiring it up. The detonator never 
 `MineEntity` never mentions the detonator; the next detonatable entity gets all of this by implementing the
 interface and nothing else.
 
-**Commands.** `/wfballistics debug mine lay <preset> <pos> [yaw] [armed|safe]` puts one mine down built
+**Commands.** `/wflib debug mine lay <preset> <pos> [yaw] [armed|safe]` puts one mine down built
 from its preset (beside `debug scatter`, and note it is under `debug`: the info form is
-`/wfballistics debug mine`), and `/wfballistics demolition fire <targets>` sets off detonatable entities
+`/wflib debug mine`), and `/wflib demolition fire <targets>` sets off detonatable entities
 without a detonator.
-Both exist for tests and map-making, and the first exists for a specific reason: `summon wfballistics:mine`
+Both exist for tests and map-making, and the first exists for a specific reason: `summon wflib:mine`
 makes a bare entity carrying the tags typed at it and **class defaults for everything else** (including a
 360° arc), so a summoned rack sows a full circle however the preset is written. A probe built on one would
 be asserting against its own NBT. `mine lay` builds what `MinePresetRegistry` builds, which is the only way
@@ -1174,7 +1174,7 @@ flips the charge to its armed texture, and the wiring lives on the detonator sta
 its own field. Nothing else sets one off, not fire, not flint and steel, not redstone.
 
 **It removes rock and nothing else.** What counts as rock is the block tag
-`wfballistics:natural_blast_breakable` (plus `deep_blast_breakable` and `deep_ores` behind the tier gate),
+`wflib:natural_blast_breakable` (plus `deep_blast_breakable` and `deep_ores` behind the tier gate),
 so a pack decides it. A player's wall inside the radius survives; the stone beside it does not. A charge
 also **casts shadows**: anything it cannot break shields everything behind it, resolved with an integer
 voxel walk cached per position for the whole blast. And it keeps the drops, fortune-mined for ores and
@@ -1184,7 +1184,7 @@ stops. A radius-3 charge through stone leaves six item entities, not a hundred a
 Charges chain: one inside another's radius goes off too.
 
 ```
-/wfballistics demolition detonate <x y z>    # fire a placed charge with no detonator (tests, map-making)
+/wflib demolition detonate <x y z>    # fire a placed charge with no detonator (tests, map-making)
 ```
 
 ### The blast has to be visible from further than 32 blocks
@@ -1413,7 +1413,7 @@ drones in the air, and the flight already up is *waiting* on it: if a reload los
 made it would hold over the pad until the muster timeout and then fly the mission short-handed. So the whole
 mission rides along, including the dispatch-time fields (the drawn-once dogleg, the exchange it belongs to)
 because a drone that comes up after a restart has to fly the same route as the one that came up before it.
-`/wfballistics drone list` reports how many are still to launch, so "still launching" can be told from "lost
+`/wflib drone list` reports how many are still to launch, so "still launching" can be told from "lost
 three of them".
 
 ### MUSTER
@@ -1538,17 +1538,17 @@ still remembers.
 ## 15. Flying one
 
 ```
-/wfballistics drone dispatch <x> <y> <z> [count] [formation] [spacing]   # cargo run, with a crate
-/wfballistics drone strike  <x> <y> <z> [count] [warhead]     # attack run, one warhead each
-/wfballistics drone list                                       # live + [SIM] drones, state, battery, load
-/wfballistics drone pad <padPos> <x> <y> <z> [count] [formation] [spacing]
+/wflib drone dispatch <x> <y> <z> [count] [formation] [spacing]   # cargo run, with a crate
+/wflib drone strike  <x> <y> <z> [count] [warhead]     # attack run, one warhead each
+/wflib drone list                                       # live + [SIM] drones, state, battery, load
+/wflib drone pad <padPos> <x> <y> <z> [count] [formation] [spacing]
 
-/wfballistics drone program moveto|deliver|collect|strike <x> <y> <z>
-/wfballistics drone program loiter <x> <y> <z> [radius] [seconds]   # 0 radius = hold, 0 seconds = until low
-/wfballistics drone program hold <x> <y> <z> [seconds]
-/wfballistics drone program exfil
-/wfballistics drone program list | remove <n> | clear
-/wfballistics drone program launch [count] [formation] [warhead] [spacing]
+/wflib drone program moveto|deliver|collect|strike <x> <y> <z>
+/wflib drone program loiter <x> <y> <z> [radius] [seconds]   # 0 radius = hold, 0 seconds = until low
+/wflib drone program hold <x> <y> <z> [seconds]
+/wflib drone program exfil
+/wflib drone program list | remove <n> | clear
+/wflib drone program launch [count] [formation] [warhead] [spacing]
 ```
 
 Program steps accumulate in a per-player draft (`DroneDrafts`, in memory, not saved) because a single command
@@ -1585,14 +1585,14 @@ Change a number and the verdict updates as you type.
 ## 15b. Testing commands
 
 ```
-/wfballistics drone selftest            # assert the decision layer; prints pass/fail
-/wfballistics drone scenario <name>     # delivery | strike | squad | lowbattery | downed | longrange | terrain
-/wfballistics drone threads             # which thread the A* is running on, and what it costs
-/wfballistics station code              # station codes, allow-lists and handshakes: see 10d
-/wfballistics drone sim <on|off>        # off keeps drones real for a whole mission
-/wfballistics drone recall              # turn every drone around, wherever it is
-/wfballistics drone clear               # delete drones, crates and off-world records
-/wfballistics drone telemetry           # the nearest drone's event timeline
+/wflib drone selftest            # assert the decision layer; prints pass/fail
+/wflib drone scenario <name>     # delivery | strike | squad | lowbattery | downed | longrange | terrain
+/wflib drone threads             # which thread the A* is running on, and what it costs
+/wflib station code              # station codes, allow-lists and handshakes: see 10d
+/wflib drone sim <on|off>        # off keeps drones real for a whole mission
+/wflib drone recall              # turn every drone around, wherever it is
+/wflib drone clear               # delete drones, crates and off-world records
+/wflib drone telemetry           # the nearest drone's event timeline
 ```
 
 `selftest` is the one to run after changing tuning values or handlers. Everything the AI decides is a
@@ -1617,7 +1617,7 @@ whole mission.
 
 ## 16. Testing a drone design
 
-- `wfballistics drone list` is the workhorse: state, altitude, distance to destination and exfil, battery,
+- `wflib drone list` is the workhorse: state, altitude, distance to destination and exfil, battery,
   whether it is carrying, and whether it is currently `[SIM]`. The flight columns on the end are what to watch
   when something looks wrong:
 
@@ -1646,7 +1646,7 @@ whole mission.
 # Construction and Salvage
 
 *Foundations only.* Everything below exists, is tested and is drivable from commands. **Nothing flies it
-yet**: no drone state consumes a work queue. `/wfballistics build` produces a real, persistent job that
+yet**: no drone state consumes a work queue. `/wflib build` produces a real, persistent job that
 sits there until something is written to work it. That split is deliberate: the queue's rules are the part
 worth getting wrong cheaply.
 
@@ -1667,7 +1667,7 @@ Whether "nothing" should mean *clear what is already there* is a property of the
 is no flag for it: a build that needs cleared ground is a salvage job over the volume followed by a
 construction job. Two jobs that already exist beats a mode inside one.
 
-Blueprints live in `<world>/wfballistics/blueprints/`. **Operator-placed only, and that is a boundary rather
+Blueprints live in `<world>/wflib/blueprints/`. **Operator-placed only, and that is a boundary rather
 than a convenience**: nothing here is reachable from a packet handler, and no path lets a client add a file
 or name one outside the folder. A blueprint is an arbitrary file the server parses and then allocates memory
 proportional to. The caps are for an operator's own mistyped export: 8 MiB on disk before anything is opened,
@@ -1867,17 +1867,17 @@ willing to receive it from you) so a supplier that only hands materials out cann
 ## 21. Driving it
 
 ```
-/wfballistics blueprint                     list what is in the folder
-/wfballistics blueprint <name>              size, block count, bill, and any caveats
-/wfballistics blueprint reload              drop the cache after editing a file
-/wfballistics build <name> [at <pos>]       queue a construction job (default: where you stand)
-/wfballistics salvage <from> <to>           queue a demolition over a volume
-/wfballistics job                           list jobs, with progress and how many are blocked
-/wfballistics job <id-prefix>               detail, including the queue's frontier
-/wfballistics job cancel <id-prefix>        call one off
-/wfballistics station role                  what the pad you are standing at will do
-/wfballistics station role set <kind>       provider | station
-/wfballistics station role on|off <role>    one flag at a time
+/wflib blueprint                     list what is in the folder
+/wflib blueprint <name>              size, block count, bill, and any caveats
+/wflib blueprint reload              drop the cache after editing a file
+/wflib build <name> [at <pos>]       queue a construction job (default: where you stand)
+/wflib salvage <from> <to>           queue a demolition over a volume
+/wflib job                           list jobs, with progress and how many are blocked
+/wflib job <id-prefix>               detail, including the queue's frontier
+/wflib job cancel <id-prefix>        call one off
+/wflib station role                  what the pad you are standing at will do
+/wflib station role set <kind>       provider | station
+/wflib station role on|off <role>    one flag at a time
 ```
 
 Blueprints load with or without their extension, and job ids match on a prefix because the list prints
@@ -1885,7 +1885,7 @@ prefixes and nobody is retyping thirty-six characters.
 
 ## 22. Testing the foundations
 
-`/wfballistics drone selftest` runs 26 checks for this on top of the flight suite: **254 total**. They are
+`/wflib drone selftest` runs 26 checks for this on top of the flight suite: **254 total**. They are
 pure functions of their inputs: the format readers take a tag rather than a file, and the queue has never
 heard of a world.
 
@@ -2030,9 +2030,9 @@ poisons the class for the rest of the process.
 ## 25. Running a build
 
 ```
-/wfballistics build <name> [at <pos>]     queue the job (refused outright on bad ground)
-/wfballistics job work <id-prefix> [n]    put n drones from the nearest pad onto it
-/wfballistics job <id-prefix>             progress, blocked count, suspension reason
+/wflib build <name> [at <pos>]     queue the job (refused outright on bad ground)
+/wflib job work <id-prefix> [n]    put n drones from the nearest pad onto it
+/wflib job <id-prefix>             progress, blocked count, suspension reason
 ```
 
 The drones fly out as an ordinary squad, which is what gets them staggered launch, terrain following and
@@ -2162,7 +2162,7 @@ from its cargo hold: put shells in the hold, and every shot after that flies tha
 carries that shell's warhead. The gun's own laying, cooldown, recoil and ammunition all stay on that side:
 only the projectile is substituted, exactly as for a racked missile.
 
-The integration lives in that mod (`org.ywzj.vehicle.compat.wfballistics`), so nothing here depends on it.
+The integration lives in that mod (`org.ywzj.vehicle.compat.wflib`), so nothing here depends on it.
 Its side of the story, including which guns accept shells, is in that project's
 `docs/vehicle-pack-format.md`, section 11.
 
@@ -2196,7 +2196,7 @@ round-trip.
 Two of them were checked by mutation: replacing the swept corridor with a sample of its last tenth (a
 naive per-tick test) fails the wall and the penetration tests and nothing else.
 
-The cross-mod half is tested from the other side: `./gradlew runGameTestServer -PwithBallistics` in
+The cross-mod half is tested from the other side: `./gradlew runGameTestServer -PwithWFLib` in
 ywzj_vehicle loads this mod into its test server and fires a shell out of a tank gun.
 
 Everything remains **headless**. The rendering (shells draw through `MissileVisual`, the item through
@@ -2218,7 +2218,7 @@ key cut to a door's own lock opens that one. A blast door a passer-by can push i
 
 | | |
 | --- | --- |
-| Package | `com.wf.wfballistics.door` (`door/client` for everything that draws) |
+| Package | `com.wf.wflib.door` (`door/client` for everything that draws) |
 | Table | `DoorType`: fifteen entries, one per door |
 | Blocks | one `DoorBlock` class, told which door it is by a constructor argument |
 | Rendering | `DoorVisual`, a Flywheel `BlockEntityVisualizer` over GemRender |
@@ -2362,11 +2362,11 @@ model, a bar, a row, a column, or a lambda that draws whatever it likes**.
 
 | | |
 | --- | --- |
-| Package | `com.wf.wfballistics.probe` (`probe/client` for everything that draws) |
+| Package | `com.wf.wflib.probe` (`probe/client` for everything that draws) |
 | Elements | `ProbeElement` (a sealed set, plus `Custom` as the escape hatch |
 | Panel | `ProbeInfo`) a title and a column of elements, appended to by every provider |
 | Registration | `ProbeRegistry` |
-| Settings | `wfballistics-probe.toml`: position, scale, whether models draw, refresh rate |
+| Settings | `wflib-probe.toml`: position, scale, whether models draw, refresh rate |
 
 ## 39. The elements
 
@@ -2905,7 +2905,7 @@ layer alone would black out the screen.
 ## 57. What is verified
 
 A lake at y=180, 79x79 with a stone rim at its own level so it is still, a spectator camera 34 blocks
-back and 8 up, and `/wfballistics swarm 4` fired across it. The same camera, the same command, the same
+back and 8 up, and `/wflib swarm 4` fired across it. The same camera, the same command, the same
 1920x1080 framebuffer, before and after:
 
 - **before**: the lake is *gone*. The whole surface, out to its far edge, replaced by the stone bed at
@@ -2945,7 +2945,7 @@ GemRender's stock particle shader can express none of that, and the reason is on
 blending where black is the same as nothing. That ramp draws a fire. It cannot draw smoke, because smoke
 that is fading is not smoke that is getting darker.
 
-So the exhaust gets its own pair, `wfballistics:instance/exhaust.vert` and a matching cull shader, and
+So the exhaust gets its own pair, `wflib:instance/exhaust.vert` and a matching cull shader, and
 two style fields are reinterpreted the way {@code ash} and {@code flame} already reinterpret theirs:
 
 | field | stock meaning | here |
@@ -3226,7 +3226,7 @@ Foam is one shader and two styles, which is the split the physics makes:
 
 ## 70. Settling is what lays foam flat
 
-`wfballistics:instance/foam.vert` reads `cool(floor, span)` as two durations in seconds, as `wake.vert`
+`wflib:instance/foam.vert` reads `cool(floor, span)` as two durations in seconds, as `wake.vert`
 and `exhaust.vert` do, and uses them for one ramp that drives three things at once: the colour runs from
 white froth to the sea's own tint (bubbles scatter every wavelength, so foam does not darken, it thins),
 the alpha comes down, and **the quad lies down**. A settled billboard has its world-vertical extent cut to
@@ -3265,7 +3265,7 @@ came down, so the cloud holds its opacity for more of its life instead of fading
 ## 72. What is verified
 
 A dev-client run, Flywheel indirect backend, Fancy graphics, in a hand-built tank 47 blocks across and 10
-deep at y=190-199, driven by a new `/wfballistics boom [small|standard|large]` that fires
+deep at y=190-199, driven by a new `/wflib boom [small|standard|large]` that fires
 `ExplosionCreator` at the command's position so a blast can be looked at without flying something into it.
 
 - **Submerged (y=195, five blocks down).** A white column with a froth collar at its foot, no fireball,
@@ -3275,7 +3275,7 @@ deep at y=190-199, driven by a new `/wfballistics boom [small|standard|large]` t
 - **On land (`large`, over terrain).** The smoke column is still standing and still rising nine seconds
   after the blast, where the old one was gone in four.
 - The foam vertex and cull shaders compile and link under the indirect backend
-  (`wfballistics_instance_foam`, `culling/wfballistics_instance_cull_foam`).
+  (`wflib_instance_foam`, `culling/wflib_instance_cull_foam`).
 
 The plume was tuned twice. The first pass was too small; the second put the fastest droplets ninety blocks
 up and out of the frame, which is the bug the peak-height derivation in §69 exists to prevent.
@@ -3384,7 +3384,7 @@ bench world is superflat plains and has no sea in it, so the probe builds one: a
 exactly at the waterline, because a cell straddling a taller wall reports the wall top as its surface and
 every path over it then reads as leaving the water.
 
-The pure half is in `/wfballistics recon selftest` and runs with no world at all: both laws, the passive
+The pure half is in `/wflib recon selftest` and runs with no world at all: both laws, the passive
 error radius landing near its own range, the constant ranging on a ping, the echo floor finding a silent
 hull, the coating halving one range and not the other, a set refusing its own ping while hearing somebody
 else's, and the seabed walk stopping at a shoal and not at a seabed.

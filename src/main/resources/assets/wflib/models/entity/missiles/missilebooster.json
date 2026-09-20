@@ -1,0 +1,10 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:raw_models/missiles/missilebooster.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wflib:models/missiles/missilebooster",
+    "particle": "wflib:models/missiles/missilebooster"
+  }
+}

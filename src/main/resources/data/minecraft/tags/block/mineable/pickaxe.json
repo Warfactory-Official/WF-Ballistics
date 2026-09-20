@@ -1,8 +1,8 @@
 {
   "replace": false,
   "values": [
-    "wfballistics:glyphid_nest_reinforced",
-    "wfballistics:mining_charge",
-    "wfballistics:deep_mining_charge"
+    "wflib:glyphid_nest_reinforced",
+    "wflib:mining_charge",
+    "wflib:deep_mining_charge"
   ]
 }

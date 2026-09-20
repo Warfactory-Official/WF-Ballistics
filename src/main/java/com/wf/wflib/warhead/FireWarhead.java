@@ -1,0 +1,41 @@
+package com.wf.wflib.warhead;
+
+import com.wf.wflib.WFLib;
+import com.wf.wflib.aef.ExplosionAEF;
+import com.wf.wflib.aef.standard.*;
+import com.wf.wflib.fire.FireType;
+import com.wf.wflib.fire.FireUtil;
+import com.wf.wflib.fx.ExplosionCreator;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
+
+public final class FireWarhead {
+
+    public static final ResourceLocation ID = ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "fire");
+
+    private static final float BLAST_RADIUS = 8F;
+    private static final int BLAST_RESOLUTION = 24;
+    private static final float BURN_TICKS = 200F;
+
+    private FireWarhead() {
+    }
+
+    public static void detonate(WarheadCarrier source, Vec3 pos) {
+        Level level = source.level();
+        if (level.isClientSide) {
+            return;
+        }
+        var xnt = new ExplosionAEF(level, pos.x, pos.y, pos.z, BLAST_RADIUS);
+        xnt.setBlockAllocator(new BlockAllocatorStandard(BLAST_RESOLUTION));
+        xnt.setBlockProcessor(new BlockProcessorStandard().setNoDrop().withBlockEffect(new BlockMutatorFire()));
+        xnt.setEntityProcessor(new EntityProcessorCross()
+                .withRangeMod(2F)
+                .withDamageMod(new CustomDamageHandlerAmat(BURN_TICKS)));
+        xnt.setPlayerProcessor(new PlayerProcessorStandard());
+        xnt.igniterFaction(source.igniterFactionId());
+        xnt.explode();
+        ExplosionCreator.composeEffectStandard(level, pos.x, pos.y, pos.z);
+        FireUtil.spawn(level, pos, 10, 1.2f, 15 * 20 * 20, FireType.NORMAL);
+    }
+}

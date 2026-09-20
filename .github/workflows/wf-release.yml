@@ -33,14 +33,14 @@ jobs:
       - name: Stage jar
         run: |
           SRC=$(find build/libs -maxdepth 1 -name '*-all.jar' | head -1)
-          cp "$SRC" wfballistics.jar
+          cp "$SRC" wflib.jar
 
       - name: Publish wf release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete wf --yes --cleanup-tag || true
-          gh release create wf wfballistics.jar \
+          gh release create wf wflib.jar \
             --title "WF rolling release" \
             --notes "Rolling pack release. Triggered by wf tag." \
             --latest

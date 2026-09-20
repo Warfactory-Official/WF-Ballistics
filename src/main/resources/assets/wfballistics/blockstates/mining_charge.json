@@ -1,6 +1,0 @@
-{
-  "variants": {
-    "armed=false": { "model": "wfballistics:block/mining_charge" },
-    "armed=true": { "model": "wfballistics:block/mining_charge_armed" }
-  }
-}

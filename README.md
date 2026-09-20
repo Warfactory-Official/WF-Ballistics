@@ -1,8 +1,8 @@
-# WF Ballistics
+# WFLib
 
 A guided-missile and area-effect explosion library for **Minecraft 1.20.1 / Forge**.
 
-WF Ballistics provides a fully server-simulated missile entity - with an oriented hitbox, phased
+WFLib provides a fully server-simulated missile entity - with an oriented hitbox, phased
 flight (ascent → cruise → attack), fuel, warheads, and active interception - plus a pluggable
 explosion framework and the client-side instanced rendering to draw it all. It ships a playable set
 of missiles, launchers, and point-defense turrets, but it is built as a **library**: nearly every
@@ -56,7 +56,7 @@ behaviour is registered through a small registry and is meant to be extended by 
 ## Project layout
 
 ```
-com.wf.wfballistics
+com.wf.wflib
 ├── MissileEntity              guided-missile entity: flight, fuel, interception, detonation
 ├── MissileModels / MissileVisual / ModModels    Flywheel instanced OBJ rendering
 ├── flight/                    FlightStage + FlightStageRegistry + FlightProfile (per-phase behaviour)
@@ -75,7 +75,7 @@ com.wf.wfballistics
 └── mixin/ · network/ · client/   engine hooks, packets, client-only rendering/particles
 ```
 
-Everything is wired up from `WFBallistics` (the `@Mod` entry point) and its registries.
+Everything is wired up from `WFLib` (the `@Mod` entry point) and its registries.
 
 ---
 
@@ -174,7 +174,7 @@ It is off by default: a plain dev run is the "WarForge absent" path the compat l
 
 ### Depending on it
 
-WF Ballistics publishes with `maven-publish` to `mcmodsrepo/`. In development, add the deobfuscated jar as
+WFLib publishes with `maven-publish` to `mcmodsrepo/`. In development, add the deobfuscated jar as
 a dependency and register your warheads/stages/presets from your mod's constructor. Because the registries
 are keyed by `ResourceLocation` and persisted on the entity, content you add is automatically restored on
 load and selectable in the missile emitter GUI.

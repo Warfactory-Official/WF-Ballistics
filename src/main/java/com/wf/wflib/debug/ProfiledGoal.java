@@ -1,0 +1,88 @@
+package com.wf.wflib.debug;
+
+import net.minecraft.world.entity.ai.goal.Goal;
+
+import java.util.EnumSet;
+
+/** Wraps a goal so that any pathfinding it triggers is charged to it by name. */
+public final class ProfiledGoal extends Goal {
+
+    private final Goal delegate;
+    private final SwarmProfiler.Phase bucket;
+
+    public ProfiledGoal(Goal delegate, SwarmProfiler.Phase bucket) {
+        this.delegate = delegate;
+        this.bucket = bucket;
+        setFlags(delegate.getFlags());
+    }
+
+    @Override
+    public void setFlags(EnumSet<Flag> flagSet) {
+        super.setFlags(flagSet);
+    }
+
+    @Override
+    public boolean canUse() {
+        if (!SwarmProfiler.enabled()) {
+            return delegate.canUse();
+        }
+        SwarmProfiler.Phase previous = SwarmProfiler.enterCaller(bucket);
+        try {
+            return delegate.canUse();
+        } finally {
+            SwarmProfiler.exitCaller(previous);
+        }
+    }
+
+    @Override
+    public boolean canContinueToUse() {
+        if (!SwarmProfiler.enabled()) {
+            return delegate.canContinueToUse();
+        }
+        SwarmProfiler.Phase previous = SwarmProfiler.enterCaller(bucket);
+        try {
+            return delegate.canContinueToUse();
+        } finally {
+            SwarmProfiler.exitCaller(previous);
+        }
+    }
+
+    @Override
+    public void tick() {
+        if (!SwarmProfiler.enabled()) {
+            delegate.tick();
+            return;
+        }
+        SwarmProfiler.Phase previous = SwarmProfiler.enterCaller(bucket);
+        try {
+            delegate.tick();
+        } finally {
+            SwarmProfiler.exitCaller(previous);
+        }
+    }
+
+    @Override
+    public void start() {
+        delegate.start();
+    }
+
+    @Override
+    public void stop() {
+        delegate.stop();
+    }
+
+    @Override
+    public boolean isInterruptable() {
+        return delegate.isInterruptable();
+    }
+
+    @Override
+    public boolean requiresUpdateEveryTick() {
+        return delegate.requiresUpdateEveryTick();
+    }
+
+    @Override
+    public String toString() {
+        return delegate.toString();
+    }
+}

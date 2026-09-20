@@ -68,4 +68,4 @@ jobs:
           make_latest: false
           generate_release_notes: true
           fail_on_unmatched_files: true
-          files: build/libs/wfballistics-${{ steps.version.outputs.version }}-all.jar
+          files: build/libs/wflib-${{ steps.version.outputs.version }}-all.jar

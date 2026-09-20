@@ -1,0 +1,169 @@
+package com.wf.wflib.entity;
+
+import com.wf.wflib.ModEntities;
+import com.wf.wflib.warhead.BombletWarhead;
+import com.wf.wflib.warhead.WarheadCarrier;
+import com.wf.wflib.warhead.WarheadRegistry;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.entity.projectile.ProjectileUtil;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.network.syncher.SynchedEntityData;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.api.distmarker.OnlyIn;
+
+/**
+ * A bomblet: a small, tumbling orange fragment flung out by a fragmentation warhead (see {@link
+ * com.wf.wflib.util.FragmentationUtil}).
+ */
+public class BombletEntity extends Projectile implements WarheadCarrier {
+
+    // Ticks an airborne bomblet flies before self-detonating, so a cluster still goes off over a gap/void.
+    public static final int DEFAULT_FUSE = 60;
+    private static final double GRAVITY = 0.05;
+    private static final double DRAG = 0.99;
+
+    private ResourceLocation detonationId = BombletWarhead.ID;
+    private WarheadRegistry.Detonation detonation = BombletWarhead.STANDARD;
+    private int maxFuse = DEFAULT_FUSE;
+    // Guards against re-entrant detonation (the blast can hurt/hit this bomblet before discard() runs).
+    private boolean detonated = false;
+
+    public BombletEntity(EntityType<? extends BombletEntity> type, Level level) {
+        super(type, level);
+    }
+
+    /**
+     * @param velocity initial launch vector (blocks/tick); gravity and drag take over from here
+     * @param detonation warhead fired on impact / fuse-out
+     * @param detonationId registered id for that warhead so it persists across save/load
+     * @param fuse ticks before self-detonation (<= 0 disables the fuse)
+     */
+    public BombletEntity(Level level, Vec3 pos, Vec3 velocity, WarheadRegistry.Detonation detonation, ResourceLocation detonationId, int fuse) {
+        this(ModEntities.BOMBLET.get(), level);
+        this.setPos(pos.x, pos.y, pos.z);
+        this.setDeltaMovement(velocity);
+        this.detonation = detonation != null ? detonation : BombletWarhead.STANDARD;
+        this.detonationId = detonationId != null ? detonationId : BombletWarhead.ID;
+        this.maxFuse = fuse;
+
+        // Cosmetic heading so the entity's yaw/pitch match its travel (the cube tumbles in the renderer).
+        double horizontal = velocity.horizontalDistance();
+        this.setYRot((float) (Mth.atan2(velocity.x, velocity.z) * (180.0 / Math.PI)));
+        this.setXRot((float) (Mth.atan2(velocity.y, horizontal) * (180.0 / Math.PI)));
+        this.yRotO = this.getYRot();
+        this.xRotO = this.getXRot();
+    }
+
+    @Override
+    public int getFragmentCount() {
+        return 0;
+    }
+
+    @Override
+    public Vec3 angle() {
+        // Travel direction at detonation: the jet axis for a directional warhead. Falls back to straight down.
+        Vec3 v = this.getDeltaMovement();
+        return v.lengthSqr() < 1.0e-8 ? new Vec3(0.0, -1.0, 0.0) : v.normalize();
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+
+        if (this.level().isClientSide || this.detonated) {
+            return;
+        }
+
+        // Fuse: airborne self-destruct so a cluster always goes off, even with nothing beneath it.
+        if (this.maxFuse > 0 && this.tickCount >= this.maxFuse) {
+            this.detonate(this.position());
+            return;
+        }
+
+        HitResult hit = ProjectileUtil.getHitResultOnMoveVector(this, this::canHitEntity);
+        if (hit.getType() != HitResult.Type.MISS) {
+            this.onHit(hit);
+            if (this.isRemoved()) {
+                return;
+            }
+        }
+
+        Vec3 motion = this.getDeltaMovement();
+        double nx = this.getX() + motion.x;
+        double ny = this.getY() + motion.y;
+        double nz = this.getZ() + motion.z;
+
+        this.setDeltaMovement(motion.scale(DRAG));
+        if (!this.isNoGravity()) {
+            this.setDeltaMovement(this.getDeltaMovement().subtract(0.0, GRAVITY, 0.0));
+        }
+        this.setPos(nx, ny, nz);
+    }
+
+    @Override
+    protected void onHit(HitResult result) {
+        super.onHit(result);
+        if (!this.level().isClientSide) {
+            this.detonate(result.getLocation());
+        }
+    }
+
+    @Override
+    protected boolean canHitEntity(Entity entity) {
+        if (entity instanceof BombletEntity || entity == this.getOwner()) {
+            return false;
+        }
+        return super.canHitEntity(entity);
+    }
+
+    /**
+     * Fires the configured warhead at {@code pos} and removes the bomblet.
+     */
+    private void detonate(Vec3 pos) {
+        if (this.detonated) {
+            return;
+        }
+        this.detonated = true; // set before the blast: it can hit/hurt this bomblet before discard() runs
+        this.detonation.detonate(this, pos);
+        this.discard();
+    }
+
+    @Override
+    @OnlyIn(Dist.CLIENT)
+    public boolean shouldRenderAtSqrDistance(double distance) {
+        return true;
+    }
+
+    @Override
+    protected void defineSynchedData(SynchedEntityData.Builder builder) {
+    }
+
+    @Override
+    protected void addAdditionalSaveData(CompoundTag tag) {
+        super.addAdditionalSaveData(tag);
+        tag.putString("Detonation", this.detonationId.toString());
+        tag.putInt("MaxFuse", this.maxFuse);
+        tag.putBoolean("Detonated", this.detonated);
+    }
+
+    @Override
+    protected void readAdditionalSaveData(CompoundTag tag) {
+        super.readAdditionalSaveData(tag);
+        if (tag.contains("Detonation")) {
+            ResourceLocation parsed = ResourceLocation.tryParse(tag.getString("Detonation"));
+            this.detonationId = parsed != null ? parsed : BombletWarhead.ID;
+            this.detonation = WarheadRegistry.get(this.detonationId, BombletWarhead.STANDARD);
+        }
+        if (tag.contains("MaxFuse")) {
+            this.maxFuse = tag.getInt("MaxFuse");
+        }
+        this.detonated = tag.getBoolean("Detonated");
+    }
+}

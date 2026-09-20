@@ -1,0 +1,11 @@
+{
+  "loader": "neoforge:obj",
+  "emissive_ambient": false,
+  "model": "wflib:raw_models/missile_stealth.obj",
+  "flip_v": true,
+  "textures": {
+    "missile_texture": "wflib:block/missile_stealth",
+    "particle": "wflib:block/missile_stealth",
+    "all": "wflib:block/missile_stealth"
+  }
+}

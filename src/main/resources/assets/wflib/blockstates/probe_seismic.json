@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "online=false": {
+      "model": "wflib:block/probe_seismic"
+    },
+    "online=true": {
+      "model": "wflib:block/probe_seismic_online"
+    }
+  }
+}

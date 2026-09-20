@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "wflib:mining_charge",
+    "wflib:deep_mining_charge"
+  ]
+}
