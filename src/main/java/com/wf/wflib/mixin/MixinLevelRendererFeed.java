@@ -5,6 +5,7 @@ import com.wf.wflib.client.cam.FeedGraphs;
 import com.wf.wflib.client.cam.FeedPass;
 import com.wf.wflib.client.cam.FeedRenderState;
 import com.wf.wflib.client.cam.FeedViewArea;
+import com.wf.wflib.stream.client.DetachedView;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
@@ -12,12 +13,14 @@ import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.renderer.SectionOcclusionGraph;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
@@ -194,24 +197,35 @@ public abstract class MixinLevelRendererFeed implements FeedRenderState {
         FeedViewArea.dirtyAll(sectionX, sectionY, sectionZ, reRenderOnMainThread);
     }
 
+    @Unique
+    private Vec3 wfGridOrigin;
+
+    /** Grid origin: feed pass camera, else remote operator's host, else the player. */
+    @Inject(method = "setupRender", at = @At("HEAD"))
+    private void wfResolveGridOrigin(CallbackInfo ci) {
+        Vec3 origin = FeedPass.origin();
+        if (origin == null) {
+            Entity host = DetachedView.host();
+            origin = host == null ? null : host.position();
+        }
+        this.wfGridOrigin = origin;
+    }
+
     @Redirect(method = "setupRender",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;getX()D"))
-    private double wfCamGridOriginX(LocalPlayer player) {
-        Vec3 origin = FeedPass.origin();
-        return origin == null ? player.getX() : origin.x;
+    private double wfGridOriginX(LocalPlayer player) {
+        return this.wfGridOrigin == null ? player.getX() : this.wfGridOrigin.x;
     }
 
     @Redirect(method = "setupRender",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;getY()D"))
-    private double wfCamGridOriginY(LocalPlayer player) {
-        Vec3 origin = FeedPass.origin();
-        return origin == null ? player.getY() : origin.y;
+    private double wfGridOriginY(LocalPlayer player) {
+        return this.wfGridOrigin == null ? player.getY() : this.wfGridOrigin.y;
     }
 
     @Redirect(method = "setupRender",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/client/player/LocalPlayer;getZ()D"))
-    private double wfCamGridOriginZ(LocalPlayer player) {
-        Vec3 origin = FeedPass.origin();
-        return origin == null ? player.getZ() : origin.z;
+    private double wfGridOriginZ(LocalPlayer player) {
+        return this.wfGridOrigin == null ? player.getZ() : this.wfGridOrigin.z;
     }
 }

@@ -19,9 +19,9 @@ public final class AscentStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        double speed = missile.getAscentSpeed();
+        double speed = missile.flight().getAscentSpeed();
         double climbTo = ctx.safeAltitude();
-        double climbHeight = Math.max(1.0, climbTo - missile.getLaunchY());
+        double climbHeight = Math.max(1.0, climbTo - missile.flight().getLaunchY());
         double band = Math.min(climbHeight, Math.max(MIN_PITCHOVER_BAND, climbHeight * PITCHOVER_FRACTION));
         double remaining = climbTo - missile.getY();
         double lean = 1.0 - Mth.clamp(remaining / band, 0.0, 1.0);

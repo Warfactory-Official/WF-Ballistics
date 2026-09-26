@@ -9,26 +9,37 @@ import org.jetbrains.annotations.Nullable;
  *
  * @param arg a number the handler is given back, so one id can cover a family (which skin, which
  *      side, which channel), without an id per member
- * @param note why it is unavailable, shown beside a disabled row; null when enabled
+ * @param note shown after the label; on a disabled row, why it is unavailable
+ * @param ticks how long the action takes, for the row's readout only; the server's
+ *      {@link ProbeActions.TimedEntity#ticks} decides. 0 = instant
  */
 public record ProbeAction(ResourceLocation id, int arg, Component label, @Nullable ProbeElement icon,
-                          boolean enabled, @Nullable Component note) {
+                          boolean enabled, @Nullable Component note, int ticks) {
 
     public static ProbeAction of(ResourceLocation id, Component label) {
-        return new ProbeAction(id, 0, label, null, true, null);
+        return new ProbeAction(id, 0, label, null, true, null, 0);
     }
 
     public static ProbeAction of(ResourceLocation id, int arg, Component label) {
-        return new ProbeAction(id, arg, label, null, true, null);
+        return new ProbeAction(id, arg, label, null, true, null, 0);
     }
 
     public ProbeAction withIcon(ProbeElement element) {
-        return new ProbeAction(id, arg, label, element, enabled, note);
+        return new ProbeAction(id, arg, label, element, enabled, note, ticks);
     }
 
     /** Shown, but greyed and not performable. Say why: a row that is simply missing teaches nothing. */
     public ProbeAction unavailable(Component why) {
-        return new ProbeAction(id, arg, label, icon, false, why);
+        return new ProbeAction(id, arg, label, icon, false, why, ticks);
+    }
+
+    /** Performable, with a remark after the label (a cost, a side effect). */
+    public ProbeAction noted(Component remark) {
+        return new ProbeAction(id, arg, label, icon, enabled, remark, ticks);
+    }
+
+    public ProbeAction timed(int ticks) {
+        return new ProbeAction(id, arg, label, icon, enabled, note, ticks);
     }
 
     /** Whether this row is the same action as {@code other}, ignoring how it currently reads. */

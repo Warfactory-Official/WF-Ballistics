@@ -4,12 +4,16 @@ import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.platform.GlStateManager;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.particle.Particle;
+import net.minecraft.client.particle.ParticleRenderType;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -28,10 +32,12 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.joml.Matrix4f;
+import org.joml.Matrix4fStack;
 import org.lwjgl.opengl.GL30;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Queue;
 
 /** Which pixels of a feed are a warm body. */
 final class CameraHeatMask {
@@ -90,8 +96,9 @@ final class CameraHeatMask {
         mc.getEntityRenderDispatcher().setRenderShadow(false);
         try {
             for (Entity entity : mc.level.entitiesForRendering()) {
-                if (entity == camera.getEntity()
-                        || !mc.getEntityRenderDispatcher().shouldRender(entity, frustum, eye.x, eye.y, eye.z)) {
+                if (entity == camera.getEntity() && !camera.isDetached()
+                        || !mc.getEntityRenderDispatcher().shouldRender(entity, frustum, eye.x, eye.y, eye.z)
+                        && !entity.hasIndirectPassenger(mc.player)) {
                     continue;
                 }
                 double x = Mth.lerp((double) partialTick, entity.xOld, entity.getX());
@@ -103,6 +110,7 @@ final class CameraHeatMask {
                         yaw, partialTick, pose, buffers, LightTexture.FULL_BRIGHT);
             }
             buffers.endBatch();
+            obscure(mc, camera, frustum, frustumMatrix, partialTick);
         } finally {
             mc.getEntityRenderDispatcher().setRenderShadow(true);
             RenderSystem.polygonOffset(0.0f, 0.0f);
@@ -111,6 +119,50 @@ final class CameraHeatMask {
             feed.bindWrite(true);
         }
         return true;
+    }
+
+    private static void obscure(Minecraft mc, Camera camera, Frustum frustum, Matrix4f frustumMatrix,
+                                float partialTick) {
+        Queue<Particle> queue = mc.particleEngine.particles.get(ParticleRenderType.PARTICLE_SHEET_TRANSLUCENT);
+        if (queue == null) {
+            return;
+        }
+        BufferBuilder builder = null;
+        for (Particle particle : queue) {
+            if (!(particle instanceof ThermalObscurant) || !frustum.isVisible(particle.getRenderBoundingBox(partialTick))) {
+                continue;
+            }
+            if (builder == null) {
+                builder = ParticleRenderType.PARTICLE_SHEET_TRANSLUCENT.begin(Tesselator.getInstance(), mc.getTextureManager());
+            }
+            particle.render(builder, camera, partialTick);
+        }
+        MeshData mesh = builder == null ? null : builder.build();
+        if (mesh == null) {
+            return;
+        }
+        // Particle vertices are camera-relative, unrotated: the view rotation rides the model-view.
+        Matrix4fStack modelView = RenderSystem.getModelViewStack();
+        modelView.pushMatrix();
+        modelView.mul(frustumMatrix);
+        RenderSystem.applyModelViewMatrix();
+        mc.gameRenderer.lightTexture().turnOnLightLayer();
+        RenderSystem.setShader(GameRenderer::getParticleShader);
+        // Entity render types' clearRenderState left depth test off.
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthFunc(GL30.GL_LEQUAL);
+        RenderSystem.depthMask(false);
+        RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA,
+                GlStateManager.SourceFactor.ZERO, GlStateManager.DestFactor.ONE_MINUS_SRC_ALPHA);
+        try {
+            BufferUploader.drawWithShader(mesh);
+        } finally {
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.disableBlend();
+            mc.gameRenderer.lightTexture().turnOffLightLayer();
+            modelView.popMatrix();
+            RenderSystem.applyModelViewMatrix();
+        }
     }
 
     /** Is this block transparent to the eye and opaque to a thermal sensor? */
@@ -133,7 +185,7 @@ final class CameraHeatMask {
         for (int i = 0; i < OCCLUDERS.size(); i++) {
             box(builder, matrix, OCCLUDERS.get(i), eye);
         }
-        com.mojang.blaze3d.vertex.BufferUploader.drawWithShader(builder.buildOrThrow());
+        BufferUploader.drawWithShader(builder.buildOrThrow());
         RenderSystem.colorMask(true, true, true, true);
         RenderSystem.depthMask(false);
     }

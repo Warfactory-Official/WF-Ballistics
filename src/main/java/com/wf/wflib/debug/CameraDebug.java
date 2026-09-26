@@ -54,7 +54,7 @@ public final class CameraDebug {
                 chunkEncodes == 0 ? 0.0 : (double) chunkDeliveries / chunkEncodes)), false);
         source.sendSuccess(() -> Component.literal(String.format(Locale.ROOT,
                 "  %d chunk(s) streamed to %d viewer(s)",
-                CameraChunkStream.streamedChunks(), CameraChunkStream.streamingViewers())), false);
+                com.wf.wflib.stream.ChunkStreams.claimCount(), CameraChunkStream.streamingViewers())), false);
         return 1;
     }
 
@@ -119,8 +119,8 @@ public final class CameraDebug {
         drone.setCameraSpec(CameraSpec.RECON);
         drone.battery().setCapacity(DroneBattery.DEFAULT_CAPACITY * 50.0);
         drone.battery().setCharge(DroneBattery.DEFAULT_CAPACITY * 50.0);
-        drone.setState(DroneState.SURVEIL);
-        drone.setDestination(at.add(0.0, 12.0, 0.0));
+        drone.flight().setState(DroneState.SURVEIL);
+        drone.route().setDestination(at.add(0.0, 12.0, 0.0));
         level.addFreshEntity(drone);
 
         int feedId = drone.getId();
@@ -156,7 +156,7 @@ public final class CameraDebug {
                     "  CAM-%04X  %s  %s  batt %3.0f%%  %.0f blk from you",
                     drone.getId() & 0xFFFF,
                     spec == null ? "no camera" : spec == CameraSpec.RECON ? "recon" : "standard",
-                    drone.getDroneState().name(),
+                    drone.flight().getDroneState().name(),
                     drone.battery().percent() * 100.0f,
                     Math.sqrt(drone.distanceToSqr(source.getPosition())))), false);
         }

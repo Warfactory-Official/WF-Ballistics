@@ -69,6 +69,21 @@ public final class CameraLink {
         return mode;
     }
 
+    /** Take control seeded from {@code yaw}/{@code pitch} rather than the last published gimbal. */
+    public static void open(int id, float seedYaw, float seedPitch) {
+        open(id);
+        yaw = seedYaw;
+        pitch = seedPitch;
+        zoom = 1.0f;
+    }
+
+    /** Set the order outright. */
+    public static void aim(float newYaw, float newPitch) {
+        yaw = newYaw;
+        pitch = Math.max(-90.0f, Math.min(90.0f, newPitch));
+        dirty = true;
+    }
+
     /** Pan. Pitch is clamped here as well as on the server, so the display does not show an angle it will never get. */
     public static void pan(double dYaw, double dPitch) {
         yaw = (float) (yaw + dYaw);

@@ -38,6 +38,20 @@ stage.guide()            desired velocity for this tick (direction + target spee
   -> move + collision    swept, non-tunneling hit check over the traversed segment
 ```
 
+Code: `MissileEntity` = body (model, OBB, synced look, allegiance, telemetry); state + behaviour in
+`com.wf.wflib.missile`, one NBT sub-tag each; tick order in `MissileTicker`.
+
+| component | owns |
+|---|---|
+| `MissileFlight` | target, phase, stages, cruise mode/medium, clearance, dive, turn limit |
+| `MissileMotor` | fuel, accel/decel, evasion sprint |
+| `MissileFuze` | warhead, arming, airburst, impact, `detonate` |
+| `MissileDamage` | health, shoot-down actions, spin-out, dud + defuse |
+| `MissileSwarm` | formation, saturation break, friendly avoidance |
+| `MissileInterceptor` | interceptor targeting, lead, kill roll |
+| `MissileSignature` | rcs, evasion |
+| `MissileSeeker` | designated target, TV operator + let-go lock |
+
 Two consequences worth internalizing:
 
 1. A stage returns a *target* speed. The missile does not instantly reach it. `acceleration` governs how fast
@@ -64,9 +78,9 @@ MissilePresetRegistry.register(
         .build());
 ```
 
-**MissileEntity.Builder (programmatic / one-off).** The full API a preset wraps. Use it when spawning a
+**`MissileBuilder` via `MissileEntity.builder` (programmatic / one-off).** The full API a preset wraps. Use it when spawning a
 missile from code (commands, dispensers, warheads that spawn child missiles). It exposes a few variables the
-preset does not, notably `ascentStage(...)` and `ascentSpeed(...)`.
+preset does not, notably `ascentSpeed(...)`.
 
 ```java
 MissileEntity m = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
@@ -109,6 +123,7 @@ The warhead is chosen by id so it survives save/load and offload-to-simulation. 
 ### Model (`model`)
 
 The visual airframe (`v2`, `strong`, `huge`, `atlas`, `shahed`, `stealth`, `abm`, `thermo`, `neon`, ...).
+Pylon-sized: `atgm` (1.63 x 0.18), `guided_rocket` (1.87 x 0.07); every other airframe is 4+ blocks long.
 The model is not only cosmetic: **turn rate defaults to `1.0 / model_length`**, so a longer model is less
 nimble unless you override `turnRate`. Match the model to the role (a stubby drone turns tighter than a long
 ballistic body).
@@ -185,7 +200,21 @@ The interception damage pool. CIWS fire and interceptor chip-damage whittle it; 
 - Toughness is an alternative to evasion: soak hits instead of dodging them. It does not cost fuel, but it does
   not help against a clean intercept roll, only against attrition (many grazes / CIWS).
 
-### Flight stages (`cruiseStage`, `attackStage`, and `ascentStage` on the entity builder)
+### Shot down (`downedAction`, `dudChance`)
+
+| action | behaviour |
+|---|---|
+| `FIZZLE` | intercept effect in mid-air |
+| `DETONATE` | full warhead in mid-air |
+| `CRASH` (default) | motor cut, ballistic fall, intercept effect on impact |
+| `POWER_LOSS` | as `CRASH`, heavy horizontal drag |
+| `SPIN_OUT` | guidance lost, motor burns 20 to 80 more ticks; turn rate random-walks (corkscrew, loop, dive), smoke + roll; then ballistic. Full warhead on impact, never mid-air |
+
+- `dudChance` (default 0.15, 0 disables): per downed ground impact of `CRASH` / `POWER_LOSS` / `SPIN_OUT`. Dud = missile at rest, nose 30% buried, live.
+- Dud: any explosion sets it off; other hits 25% each. Defuse: crouch + `#wflib:defuser` item, hold 100 ticks, 10% goes off. Defused = removed, no drop.
+- Picker: `downedAction(DownedActionPicker.weighted(...))` rolls the action per launch.
+
+### Flight stages (`ascentStage`, `cruiseStage`, `attackStage`)
 
 Swap the behavior of a phase. Registered options:
 
@@ -193,12 +222,14 @@ Swap the behavior of a phase. Registered options:
 |--------|-------------|--------------------------------------------------------------------------|
 | ASCEND | `ascent`    | default gravity-turn climb                                               |
 | ASCEND | `intercept` | vertical launch-clear then homing (interceptors)                         |
+| ASCEND | `air_launch`| rail/pylon drop: 8 ticks motor cold on launch velocity, then ATTACK; launch < 0.3 b/t => ATTACK at once. Launcher sets velocity + owner; no owner hit during ASCEND |
 | CRUISE | `cruise`    | default: fly to target holding altitude, hand off at 30 blocks           |
 | CRUISE | `loiter`    | fly to the area, orbit it (radius 24) for ~200 ticks, then dive          |
 | CRUISE | `intercept` | 3D homing on a moving target                                             |
 | ATTACK | `attack`    | default terminal dive (terminal speed ~14, bleeds horizontal over 30 blk)|
 | ATTACK | `dive`      | steep top-attack plunge (terminal ~18, bleeds over 12 blocks)            |
 | ATTACK | `intercept` | homing (interceptors)                                                    |
+| ATTACK | `direct`    | pure pursuit on the aim point, no terrain profile (TV / line-of-sight rounds) |
 
 The `loiter` cruise + `dive` attack combination is how you build a drone / loitering munition. Pair it with a
 `designatedTarget` (entity builder) and it orbits until the target is present, then pounces straight down.
@@ -242,6 +273,27 @@ An interceptor homes on another missile and resolves a kill by a probability rol
 - `interceptMode` NEAREST re-acquires the closest hostile each tick; LOCK homes one specific UUID.
 
 ---
+
+### Seeker and airframe physics (`seekerMode`, `proximity`, `impactDamage`, `threat`, `blast`, `drag`, `gLimit`)
+
+| `SeekerMode` | lock kept by | defeated by |
+|---|---|---|
+| `DESIGNATED` | designated entity / aim point | nothing |
+| `INFRARED` | LOS in `fov` cone | opaque blocks, `SightBlocker`; `SeekerDecoy` THERMAL |
+| `OPTICAL` | LOS in cone | opaque blocks, `SightBlocker` |
+| `SEMI_ACTIVE_RADAR` | launcher `TargetIlluminator` each tick | launcher losing track; decoy RADAR |
+| `ACTIVE_RADAR` | illuminator until `radarRange`, then own scan (rcs > 0, cone) | 60 ticks lockless => fizzle; decoy RADAR |
+| `BEAM_RIDING` | launcher `BeamSource`: aim 4 ticks ahead on the line | no beam => flies on |
+
+- Launcher = entity with UUID `controlId`, else owner. Lock => aim at the lead point. Emitting modes post `SeekerLockEvent` every 2 ticks.
+- Decoy seduction: one roll per decoy per missile, p = strength / (strength + lock signature in the band).
+- Seeker lock held => no sim offload. A missile never hits its launcher (`controlId` root vehicle).
+- `drag(k, glides)`: dv = -k v^2 per tick when burnt out; `glides` => guided until 1.0 b/t, then ballistic. Glide also
+  dv = -g * dir.y (g = 9.8/400): dive gains, climb loses (`GlideGameTest`).
+- `look(id)`: client draws `RoundRenderers.get(id)` instead of the airframe while its `hasLook()`; airframe `model` still
+  sizes the hitbox and turn agility.
+- `gLimit(a, ref)`: turn = a * min(1, v^2/ref^2) / v rad/tick, replaces `turnRate`.
+- `proximity(r)`: goes off within r of any hittable entity. `impactDamage` hits the struck entity before the warhead.
 
 ## 4. How it all fits together (the balance triangle)
 
@@ -347,6 +399,24 @@ Missiles fired far from any target or player **offload to a lightweight off-worl
 ticks of cruise, once they are more than 1000 blocks from the target and clear of any player/listener. The
 simulation advances them cheaply and rematerializes the real entity when it nears the target or a player. This
 is invisible to design: your missile's speed, fuel, and warhead all carry through and travel time matches.
+An offloaded missile carries its full entity NBT (`SimMissile.body`) and comes back from it; synthetic records
+(orbital drops, sim interceptors) have no body and are rebuilt from their fields.
+
+### 7a. Sim registry (`com.wf.wflib.sim`)
+
+Every off-world tier is a `SimKind` registered in `WFLib.commonSetup` (`SimKinds`); records per level in one
+SavedData `wflib_sims` (one sub-tag per persistent kind).
+
+| step | thread | when |
+|---|---|---|
+| `prepare` | tick | `LevelTickEvent.Pre`; world reads the pass needs |
+| `advance` | worker if `async()`, else inline | Pre, overlaps the vanilla level tick; no world/entity access |
+| `resolve` | tick | Post, slot `EARLY` (before drone AI) or `LATE` (after colony/squads) |
+
+- During a pass the list belongs to the worker: `SimTier.view()`/`remove` await it; `add` queues in an inbox
+  merged at the join.
+- Kinds: `wflib:missile` (async), `wflib:round` (transient; collision on the tick thread, §27), `wflib:drone` (AI stays in
+  `DroneAiScheduler`), `wflib:glyphid` (async unless `swarmbench simasync off`, LATE).
 
 **Coordinated swarms offload as one object.** A swarm launched with a commander (one missile flying the
 mission, the rest holding a wedge formation on it) will, once the whole formation is in cruise and clear,
@@ -462,6 +532,18 @@ The rules that keep this safe, in `drone/ai/`:
 locking and no cross-thread reads. Solo drones are a squad of one, so the planner has exactly one shape to
 handle.
 
+Code: `DroneEntity` = body (model, OBB, battery, camera, allegiance, telemetry, chunk tickets); state in
+`com.wf.wflib.drone`, one NBT sub-tag each:
+
+| component | owns |
+|---|---|
+| `DroneFlight` | state machine, attitude (synced), cruise envelope, move/contacts/ground clamp |
+| `DroneRoute` | destination, exfil, staging legs, egress dogleg, planned path |
+| `DroneOrders` | program, exchange, work assignment, surveillance contacts |
+| `DroneHold` | crate + hold, payload, mine rack (synced load) |
+| `DroneDamage` | health, rotor loss, shoot-down, break-up, crash |
+| `DroneSquadRole` | squad id, leader, formation, coordination, size |
+
 **One brain, two carriers.** `DroneCarrier` is implemented by both `DroneEntity` and `SimDrone`, and a
 snapshot is built the same way from either. An off-world drone therefore runs the *same* AI as a live one:
 there is no second, simplified route model to keep in sync (contrast `SimMissileManager.advance`, which
@@ -551,7 +633,7 @@ terrain, so three layers do, each catching what the one before it misses:
    means the drone starts climbing at the last moment it still can, so it crosses a ridge at ridge height
    instead of dragging itself over a whole valley at the height of the next mountain. Below that floor it
    climbs at up to `CLIMB_BOOST` times its normal rate and gives up ground speed to do it.
-3. **The hard floor** (`DroneEntity.clampAboveGround`). The first two are prediction; this is measurement.
+3. **The hard floor** (`DroneFlight.clampAboveGround`). The first two are prediction; this is measurement.
    Whatever they got wrong, the drone ends the tick on top of the terrain rather than inside it.
 
 Two things that are easy to get wrong here, both of which were:
@@ -580,7 +662,7 @@ handle it, outermost first:
   The radius is measured against the *hull*, not the formation, because the formation's spacing is now a
   per-mission setting and a radius pegged to it would make a loose flight avoid at long range for nothing.
   It exists for the moments formation cannot help: climbing out from one launch point, and attack runs.
-- **Hull contact** (`Contacts`, applied in `DroneEntity.resolveContacts`). Two hulls that end a tick inside
+- **Hull contact** (`Contacts`, applied in `DroneFlight.resolveContacts`). Two hulls that end a tick inside
   each other are pushed apart along the axis of least penetration, half the overlap from each side, capped
   per tick. **Position only**: it never touches velocity, and never blocks the movement on its way to being
   taken. Both of those were tried and both weld a squad to the sky: a quadcopter needs ~35 blocks to shed
@@ -1513,7 +1595,7 @@ one for the whole flight and price its battery against a waypoint the squad pass
 **Surveillance.** `loiter` puts the drone in `SURVEIL`, which is the one cruising state that does not route:
 it is not going anywhere, so it holds cruise altitude above whatever it happens to be over rather than
 following a planned path. A worker cannot see the player list, so contacts are sampled on the world thread
-(`DroneEntity#sweepForContacts`, `WATCH_RADIUS`) and arrive already named in the snapshot; the handler only
+(`DroneOrders#sweepForContacts`, `WATCH_RADIUS`) and arrive already named in the snapshot; the handler only
 decides they are worth writing down, as `SPOTTED` telemetry. The already-seen set lives on the entity, which
 is where `DroneStateHandler` says per-drone state belongs, and is cleared on leaving station.
 
@@ -2076,131 +2158,83 @@ Everything remains **headless**. Nothing in either pass has been run in a live g
 
 ## 27. What one is
 
-A shell. It leaves a barrel with a speed and a heading, and from then on the only things acting on it are
-drag and gravity: no guidance, no fuel, no target. That is the whole difference from a missile, and it is
-what makes the two worth having separately: a missile decides where it is going every tick, and a shell's
-entire flight is a function of four numbers.
+Unguided round (bullet, shell, bomb) with no entity: `round/Rounds`, one struct-of-arrays batch per level, a transient
+`SimKind` resolved in Post (`EARLY`). Rockets (§29a) and missiles stay entities (targetable).
 
-```java
-pos += v;  v *= decay;  v.y -= gravity;
-```
-
-Those four numbers (muzzle speed, drag, gravity, fuse life) are the contract. A closed-form solver inverts
-that recurrence to find the elevation that puts a round on a point, so the entity integrates in exactly that
-order and rounds `decay` through a float the way the solver does. Reorder it and every firing solution
-quietly stops landing where it says.
-
-**Motion is one step per tick; collision is swept in substeps.** Those are different things and only the
-first is the contract. A round doing twenty blocks a tick has crossed a wall entirely between one tick's
-position and the next, so what that single step passed through is tested with
-`SweptCollision.sweep`: the same path and the same tuning every projectile in this mod uses
-(`MissileSimConfig.COLLISION_MAX_SUBSTEP_DIST`, `COLLISION_MAX_SUBSTEPS`). Substepping the *motion*
-instead would be the wrong fix: it would change the trajectory the solver was promised.
-
-The payload is a `WarheadRegistry` entry, the same interface a missile, a mine and a bomblet all use, so
-anything you can put on a missile you can put on a shell.
+- Contract: `pos += v; v = v * decay - g`, `decay = (double) (1f - drag)`; water state from the pre-move position.
+  ywzj's closed-form solver inverts exactly this.
+- Collision per tick: one block clip over the segment through **loaded chunks only** (unloaded = air, never a
+  sync load); entities by `PreciseHitbox`, else AABB + 0.3. The shooter's whole ride stack is never hit.
+- Strike: `ProjectileStrikeEvent` with `projectile() == null`, `key()` = round key; damage through
+  `RoundDamageSource`, a `StrikeContext` (threat, travel, key). Armour/hit code reads `StrikeContext.of(source)`.
+- Wire: one `RoundPacket` per player per tick (spawns grouped by preset, end keys); audience 1024 blocks, whole
+  level for chunk-loading rounds. Client (`round/client`) flies the same recurrence without collision; tracer
+  streaks (`TracerRenderer`), rigged models (`RoundsVisual`, one Flywheel effect per level).
+- Foreign look: `RoundRenderers.register(id, RoundRenderer)` (client) precedes the glTF model: rounds and rockets by
+  preset id, missiles by `look`. Per-round client `tick`/`ended` hooks (sounds).
 
 ## 28. The knobs
 
-Everything about a round is a field on its `KineticPreset`.
+`KineticPreset`:
 
 | Group | Fields | Notes |
 | --- | --- | --- |
-| Identity | `id`, `model`, `warhead` | the only required three |
-| Flight | `speed`, `drag`, `gravity`, `life` | blocks/tick, fraction per tick, blocks/tick², ticks |
-| | `water(drag, gravityFactor)` | what it does when it goes in |
-| | `dispersion` | degrees the round adds to the gun's own spread |
-| Terminal | `mass`, `impactDamage` | a direct hit is ½mv² unless a flat figure is set |
-| | `penetration(blocks, resistance)` | cover it drills before the warhead goes off |
-| | `airburst(height)` | burst this far above whatever is under it |
-| | `proximity(radius)` | burst when something comes this close |
-| | `fragments`, `blastHalfAngle` | passed to the warhead |
-| | `passesThroughEntities()` | for solid shot: hurt it and keep going |
-| Behaviour | `alwaysInWorld()` | never leave the world (section 29) |
+| Identity | `id`, `model`, `warhead` | model null = tracer only, no item art |
+| Flight | `speed`, `drag`, `gravity`, `life` | blocks/tick, fraction/tick, blocks/tick^2, ticks |
+| | `water(drag, gravityFactor)` | |
+| | `dispersion` | degrees added to the gun's spread |
+| Terminal | `mass`, `impactDamage` | direct hit = 0.05 m v^2 unless flat |
+| | `headshot(multiplier)` | living target hit within eye height +- 0.25 |
+| | `penetration(blocks, resistance)` | re-swept after each drilled block within the tick |
+| | `airburst(height)` | ray down of height + one tick's travel |
+| | `proximity(radius)` | |
+| | `fragments`, `blastHalfAngle`, `blast(size, breaksBlocks)` | to the warhead; blast credited to the shooter |
+| | `passesThroughEntities()` | hurt and keep going |
+| Behaviour | `noChunkLoading()` | lost at unloaded ground (bullets) |
+| | `tracer(rgb)` | streak colour; 0 = none |
 | | `stackSize` | |
+| | `quadraticDrag(k)` | `decay = 1 - drag - k\|v\|` (clamped 0); client flies the same |
+| Ground fuze | `fuseDelay(ticks)`, `burrow(hardness)` | block contact => rest (v = 0, resynced), dig down while budget >= destroy speed (min 0.1), then fuse |
+| | `noEntityContact()` | entities never swept (bombs) |
+| Rocket only | `motor(accel, ticks)`, `durability` | blocks/tick^2 along the nose; health vs air defence (8) |
 
-Two of these are worth a note.
+## 29. Ground
 
-**Penetration is re-swept within the tick.** A round at twelve blocks a tick crosses a whole wall in one
-step, so drilling a block and then continuing the move would spend one block of penetration on the entire
-wall. The rest of the corridor is swept again after each drill instead, bounded by what the round can get
-through.
+Segment end in an unloaded chunk: chunk-loading round below the build limit => ticket for that chunk, waits in place
+(life refunded) until it loads; else lost. Above the build limit nothing is checked. Transient: not saved.
 
-**An airburst fuse looks a tick ahead.** It is checked once a tick against a ray straight down, and that ray
-is a tick's travel longer than the fuse height, otherwise a fast round steps from above the fuse to under
-the ground and craters. The ray is why the fuse measures what is *under* the round rather than the surface
-height of the column: a shell fused for eight bursts eight blocks over the floor of the pit it was fired
-into, not eight blocks over the roof of the bunker beside it.
+## 29a. Rockets
 
-## 29. Leaving the world
+`round/RocketEntity`: a preset with a motor, flown as an entity so air defence can shoot it. `RocketEntity.fire(level,
+preset, from, direction, inaccuracy, carrier, shooter, faction, controlId)`.
 
-Above the build limit, still climbing, a shell has provably nothing left to hit on the way up. So it stops
-being an entity: `KineticSimManager` takes it as four numbers, and the tick its vertical velocity turns over
-it is put back. No chunk is loaded for it in between, no collision is run against it, and the cost of the
-whole ascent is one vector step per tick.
-
-The step is the same arithmetic the entity runs, in the same order, so the round comes back where the round
-that never left would have been: down to the last bit, which is what the gametest asserts. Two details make
-that true rather than nearly true:
-
-- The hand-off happens **after** the entity's move, and the simulator skips a round on the tick it received
-  it. Between the two of them the round is advanced exactly once per tick.
-- The round remembers its own remaining life rather than counting `tickCount`, which resets on the fresh
-  entity the simulator builds.
-
-Coming back, the landing chunk is forced *ticking* and loaded synchronously before the entity is added. Both
-halves matter: a ticket only takes effect next tick, and an entity in a non-ticking chunk never falls.
-
-Rounds in flight are **not saved**. A shell's whole flight is seconds, and a restart losing one is a better
-trade than persisting a projectile whose owner may not survive the restart either. A shell that is in the
-world when the server stops saves like any other entity.
+- Step = rounds' (same sweep, strike, fuzes, warhead) + nose thrust while `age <= burnTicks` + quadratic drag. Nose fixed
+  while burning, then on velocity.
+- Ground: needs an entity-ticking chunk (not merely loaded); chunk-loading preset tickets its own and the next chunk.
+  `noSave`.
+- `InterceptTarget`: class `MISSILE` (recon `EntityTargetSource`, EMCON silent); `interceptDamage` past `durability` or
+  `interceptKill` => warhead functions where it is. `discard()` = no warhead (APS). CIWS/interceptor batteries resolve
+  any `InterceptTarget` entity, not only `MissileEntity`/`DroneEntity`.
+- Client: exhaust + launch hooks on the preset's `RoundRenderer`; none registered => not drawn.
 
 ## 30. Loading and firing one
 
-There is no gun in this mod. A shell is loaded into a vehicle cannon from **ywzj_vehicle**, which reloads
-from its cargo hold: put shells in the hold, and every shot after that flies that shell's ballistics and
-carries that shell's warhead. The gun's own laying, cooldown, recoil and ammunition all stay on that side:
-only the projectile is substituted, exactly as for a racked missile.
-
-The integration lives in that mod (`org.ywzj.vehicle.compat.wflib`), so nothing here depends on it.
-Its side of the story, including which guns accept shells, is in that project's
-`docs/vehicle-pack-format.md`, section 11.
-
-To fire one from your own code:
+Guns live in ywzj_vehicle (`org.ywzj.vehicle.compat.wflib`; its `docs/vehicle-pack-format.md` §11).
 
 ```java
-KineticShellEntity.fire(level, preset, muzzle, direction, inaccuracyDegrees, owner, factionId);
+long key = Rounds.fire(level, preset, muzzle, direction, inaccuracyDegrees, carrierVelocity, shooter, factionId);
+Rounds.position(level, key); Rounds.within(level, box); Rounds.destroy(level, key); // APS
 ```
 
-Registering your own round is the same shape as a missile preset, during mod construction, before items are
-frozen:
-
-```java
-KineticPresetRegistry.register(
-    KineticPreset.builder(rl("my_shell"), MissileModels.rl("micro"), WarheadRegistry.rl("standard"))
-        .speed(7.0).mass(25.0).airburst(6.0).fragments(24)
-        .build());
-```
-
-It becomes a carryable 3D item automatically. Presets are code and not a datapack for one reason: every
-preset becomes an item, and items are registered long before any datapack is read.
+Registering: `KineticPresetRegistry.register(KineticPreset.builder(...).build())` during mod construction => a
+carryable item. Vehicle weapons register model-less presets later (no item).
 
 ## 31. What is verified
 
-`./gradlew runGameTestServer`: twelve tests in `kinetic/gametest/`, the mod's first. They cover the arc
-against an independently written recurrence, the hand-off in both directions and both of its conditions,
-the simulator flying the same arc as a round that never left, contact and airburst fuses, penetration
-through a course of cover, a round fast enough to cross a wall in one tick failing to, and the save
-round-trip.
-
-Two of them were checked by mutation: replacing the swept corridor with a sample of its last tenth (a
-naive per-tick test) fails the wall and the penetration tests and nothing else.
-
-The cross-mod half is tested from the other side: `./gradlew runGameTestServer -PwithWFLib` in
-ywzj_vehicle loads this mod into its test server and fires a shell out of a tank gun.
-
-Everything remains **headless**. The rendering (shells draw through `MissileVisual`, the item through
-`MissileItemRenderer`) has not been looked at.
+`round/gametest/RoundGameTest`: arc vs an independent recurrence (through the build limit), chunk ticket on
+descent, bullet lost over unloaded ground, direct hit carries its `StrikeContext`, contact fuze, wall crossing,
+drilling, airburst, bomb burrow + fuse, resting, headshot. `RocketGameTest`: burn then coast, contact fuze, radar contact + kill past durability.
+Rendering: not yet looked at in a client.
 
 ---
 
@@ -2485,6 +2519,27 @@ else, so every handler re-decides whether it is allowed from the same conditions
 door handlers all still demand the key, which is what keeps the list a front end for what a key already
 does rather than a way around the rule that a door has no bare-handed path. The packet layer adds only
 what it can decide generically: an eight-block reach and one action per player per 100 ms.
+
+### Carried, not held
+
+Item gates read the inventory: `ctx.carrying(item | tag)`, `ctx.find(predicate)`; server side `ProbeInventory.find/count/take`. Order: main hand, off hand, rest. Doors: key and cut padlock count from anywhere. `ctx.holding` stays for looks (an outline while in hand), not for permission.
+
+### Timed actions
+
+```java
+ProbeActions.registerTimedEntity(ID, new ProbeActions.TimedEntity() {
+    public int ticks(ServerPlayer p, Entity e, int arg) { return canStart ? 200 : 0; } // 0 = refuse
+    public boolean holds(ServerPlayer p, Entity e, int arg) { return stillValid; }   // every tick
+    public boolean perform(ServerPlayer p, Entity e, int arg) { /* at the end */ }
+});
+info.action(ProbeAction.of(ID, arg, label).timed(200)); // row shows "(10s)"; server's ticks() decides
+```
+
+- One job per player (`ProbeJobs`); progress bar under the crosshair, reason on stop.
+- Stops: player hurt, target out of reach, target gone, `holds` false, G again, `ProbeJobs.cancelOn(target, reason)` (owner's call, e.g. when it is shot); horizontal drift > 0.75: block job = player's walk, entity job = player-target offset (both on one moving deck => no stop), blamed on whichever travelled further.
+- `perform` runs after the job is removed: it may start the next one.
+- `ProbeActions.performEntity(player, entity, id, arg)`: same path without a packet (commands, tests); `ProbeJobs.tickAll()` steps jobs by hand.
+- `ProbeAction.noted(remark)`: enabled row with a remark (a cost).
 
 ### A note on the modifier
 
@@ -3388,3 +3443,44 @@ The pure half is in `/wflib recon selftest` and runs with no world at all: both 
 error radius landing near its own range, the constant ranging on a ping, the echo floor finding a silent
 hull, the coating halving one range and not the other, a set refusing its own ping while hearing somebody
 else's, and the seabed walk stopping at a shoal and not at a seabed.
+
+# Part XXII: TV rounds
+
+## 79. Model
+
+- `seeker(CameraSpec)` on preset/builder => TV round; `wflib:tv` = `atgm` airframe, `shaped_charge`, 2.5 b/t, 0.12 rad/t, 600 t motor, `air_launch` -> `direct`, `CameraSpec.TV_SEEKER` (40 deg FOV, x4, 1200 blocks datalink, optical).
+- Operator = subscriber of the round's camera feed (`CameraNet`) passing `TvGuidance.entitled`: `controlId`/owner is the player or anything in their ride chain (vehicle seat, remote UAV); datalink `linkAt(distance) > CameraFeed.USABLE_LINK`.
+- Gimbal order (`CameraControlPacket` yaw/pitch) = line of sight flown: `velocity = sight * cruiseSpeed`, then the normal turn/thrust limits. Not during `ASCEND` (rail drop runs out first). Operated => designation cleared, never offloaded to sim.
+- Let go (unsubscribe, TTL, out of range, operator dead) => `MissileSeeker.release`: ray along the last sight, 512 blocks, cut at the first unloaded chunk. Entity => designated (homes); block => aim point; nothing => 512 on along the line. Flown by the preset's stages from there.
+- Connect ad hoc, any time in flight: `TvConnectPacket` -> newest entitled round in range -> `TvLinkPacket(id)`; round removed => `TvLinkPacket(id, lost)` to its subscribers.
+
+## 80. Client
+
+- Keys: `key.wflib.tv_link` (Y) connect / let go, `key.wflib.tv_view` (M) full view <-> picture-in-picture (top right, 34% width). Scroll = zoom.
+- `MixinMouseHandler` wraps `turnPlayer`'s `LocalPlayer.turn` at priority 1500: outermost over a vehicle mod's turret wrap. Linked => mouse pans `CameraLink`, look untouched.
+- Order clamped to 60 deg off the heading the client sees (`TvClient.GIMBAL_LIMIT`): no wind-up past the gimbal.
+- Feed pass: lens = tracked entity's frame pose + nose + 0.3 along the sight (`CameraTarget`), not the 5 Hz feed walk. Streamed terrain keeps the round tracked at any range. OSD `TV-xxxx`, motor bar `MTR`; burnt out != blind (`CameraFeed.GUIDED`).
+- Stale feed (> `CameraFeed.STALE_TICKS`) or lost => "SIGNAL LOST" card 20 ticks, link dropped.
+- Feed entity tracked to its subscribers at any range when the client holds its chunk (`CameraNet.watches` in `MixinChunkMapTrackedEntity`); vanilla stops at the view distance. Stream window centred on entity + velocity * 20 t (capped at half the radius), any entity feed (was drones only).
+- Any feed pass: `getMainRenderTarget()` = feed FBO (`MixinMinecraftFeedTarget`). Iris without a pack binds the main target inside `renderLevel`; before this every feed under Iris was blank sky.
+
+## 81. What is verified
+
+- `TvGuidanceGameTest` (6): gimbal = line of sight flown, let-go block lock, let-go entity lock, stranger refused + launcher offered, past datalink range flies the last sight line, `wflib:tv` preset wiring.
+
+# Part XXIII: Chunk streaming and remote bodies
+
+## 82. Two streamers, one store
+
+| streamer | who sees | view | tickets |
+|---|---|---|---|
+| `CameraChunkStream` | feed subscribers (monitor, receiver, TV link) | own `FeedViewArea` pass; player view untouched | FULL per chunk (distance 0), window led by velocity |
+| `DetachedBodyStream` | operator riding a `DetachedBodyHost` from afar | whole client moved: `SetChunkCacheCenter` on host, grid origin on host | region ticket radius r at host (ticks like a player); small ticket at the parked body |
+
+- Both = `StreamWindow` (owner identity in `ChunkStreams`, one `Encoder` per window per pass, release on leave).
+- Grid origin (`MixinLevelRendererFeed`, vanilla renderer only): feed pass camera > detached host > player. Sodium: no grid, no redirect.
+- Parked body (`DetachedBodies`, `MixinChunkMap`, `MixinChunkMapTrackedEntity`): view distance `bodyViewDistance`, player ticket off (`skipPlayer`) for `bodyTicketRadius`, body-side entities untracked except what it rides/carries; host root vehicle always tracked.
+- Host contract (`api.DetachedBodyHost`): anchor per operator, rider positioned at anchor, anchors synced to clients (render + `DetachedView`).
+- `HostWakeup`: last position per host (`wflib_host_wakeup` saved data, recorded on join/leave + every 40 t); `request(player, id, callback)` tickets the chunk until loaded and `tickCount > 1`.
+- Config `detachedBody.*`, `streamDebug.*` (common). Commands: `/wflib stream audit|status|sent|sleeping|debug|reset`; client `/wfstream audit|map`.
+- Verified: `mc-harness/scenarios/chunk_stream_audit.mjs` (server belief vs client held, feed + detached UAV).

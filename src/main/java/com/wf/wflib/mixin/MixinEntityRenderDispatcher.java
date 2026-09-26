@@ -19,9 +19,8 @@ public class MixinEntityRenderDispatcher {
             at = @At("RETURN"))
     private static void wflib$renderHitbox(PoseStack pMatrixStack, VertexConsumer pBuffer, Entity pEntity,
                                                   float pPartialTicks, float green, float blue, float alpha, CallbackInfo ci) {
-        if (pEntity instanceof OBBEntity obbEntity && !obbEntity.enableAABB()) {
-            OBBRenderer.render(pEntity, obbEntity.getOBBs(), pMatrixStack, pBuffer, 0, 1, 0, 1, pPartialTicks);
-            // Swept-collision debug overlay: corridor + substep body ghosts (see OBBRenderer#renderSweep).
+        if (pEntity instanceof OBBEntity obbEntity && obbEntity.drawsDebugOBBs() && !obbEntity.enableAABB()) {
+            OBBRenderer.render(pEntity, obbEntity.getOBBs(), pMatrixStack, pBuffer, 0, 1, 0, 1);
             OBBRenderer.renderSweep(pEntity, obbEntity.getOBBs(), pMatrixStack, pBuffer);
         }
     }

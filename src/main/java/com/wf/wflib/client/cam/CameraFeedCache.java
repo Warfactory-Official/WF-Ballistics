@@ -53,7 +53,7 @@ public final class CameraFeedCache {
         return FEEDS.get(feedId);
     }
 
-    /** Every feed this client has heard of, live or not. Used to decide which streamed chunks are ours. */
+    /** Every feed this client has heard of, live or not. */
     public static Collection<CameraFeed> feeds() {
         return FEEDS.values();
     }
@@ -133,7 +133,32 @@ public final class CameraFeedCache {
             return;
         }
         RenderSystem.assertOnRenderThread();
+        GlMarkers.push("wf feeds frame " + frame);
+        try {
+            renderFeeds(delta, FeedProbe.begin(frame));
+        } finally {
+            GlMarkers.pop();
+        }
+        FeedProbe.checkpoint(frame, "pre");
+    }
+
+    static long frame() {
+        return frame;
+    }
+
+    private static void renderFeeds(DeltaTracker delta, @Nullable FeedProbe.Mode forced) {
+        if (forced != null) {
+            GlMarkers.push("wf forced cull " + forced);
+            GlMarkers.pop();
+        }
+        if (forced == FeedProbe.Mode.EVICT) {
+            REQUESTS.clear();
+        }
         int evicted = evict();
+        if (forced == FeedProbe.Mode.SKIP) {
+            FeedAudit.handback(0, evicted);
+            return;
+        }
 
         int budget = WFClientConfig.CAMERA_BUDGET.get();
         long now = System.nanoTime();
@@ -200,10 +225,17 @@ public final class CameraFeedCache {
             Map.Entry<Integer, CameraTarget> entry = it.next();
             Request request = REQUESTS.get(entry.getKey());
             if (request == null || frame - request.frame > STALE_FRAMES) {
+                GlMarkers.push("wf feed " + entry.getKey() + " evict");
                 entry.getValue().close();
+                GlMarkers.pop();
                 it.remove();
                 closed++;
             }
+        }
+        if (closed > 0) {
+            // destroyBuffers -> unbindWrite binds FB 0; vanilla's frame clear then misses the main target
+            // => one frame drawn over the last one's colour and depth.
+            Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
         }
         REQUESTS.entrySet().removeIf(e -> frame - e.getValue().frame > STALE_FRAMES * 4L);
         FEEDS.entrySet().removeIf(e -> {
@@ -255,8 +287,6 @@ public final class CameraFeedCache {
         FeedMotion.clear();
         FeedAudit.reset();
         FeedGraphs.forgetAll();
-        // After FEEDS is empty, so nothing is judged still wanted on the way out.
-        FeedChunks.clear();
     }
 
     private static final class Request {

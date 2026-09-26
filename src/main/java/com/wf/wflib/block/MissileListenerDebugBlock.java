@@ -1,10 +1,10 @@
 package com.wf.wflib.block;
 
+import com.wf.wflib.sim.SimTier;
 import com.wf.wflib.block.entity.MissileListenerDebugBlockEntity;
 import com.wf.wflib.sim.SimMissile;
 import com.wf.wflib.sim.SimMissileManager;
 import com.mojang.serialization.MapCodec;
-import com.wf.wflib.sim.SimMissileRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -63,7 +63,7 @@ public class MissileListenerDebugBlock extends BaseEntityBlock {
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player,
                                                BlockHitResult hit) {
         if (!level.isClientSide && level instanceof ServerLevel sl) {
-            SimMissileRegistry reg = SimMissileRegistry.get(sl);
+            SimTier<SimMissile> reg = SimMissileManager.tier(sl);
             Vec3 center = Vec3.atCenterOf(pos);
             SimMissile nearest = null;
             double best = Double.MAX_VALUE;

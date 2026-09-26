@@ -66,7 +66,8 @@ final class CameraOsd {
         bracket(g, 6, OSD_H - 7, 1, -1, tint);
         bracket(g, OSD_W - 7, OSD_H - 7, -1, -1, tint);
 
-        g.drawString(mc.font, String.format(Locale.ROOT, "CAM-%04X  %s",
+        boolean guided = feed.kind() == CameraFeed.GUIDED;
+        g.drawString(mc.font, String.format(Locale.ROOT, guided ? "TV-%04X  %s" : "CAM-%04X  %s",
                 feed.feedId() & 0xFFFF, mode.name()), 10, 10, tint, false);
 
         long tod = Math.floorMod(mc.level == null ? 0L : mc.level.getDayTime(), 24000L);
@@ -75,7 +76,7 @@ final class CameraOsd {
         String clock = String.format(Locale.ROOT, "%02d:%02d", hh, mm);
         g.drawString(mc.font, clock, OSD_W - 10 - mc.font.width(clock), 10, tint, false);
 
-        boolean fixed = feed.feedId() < 0;
+        boolean fixed = feed.kind() == CameraFeed.FIXED;
         if (fixed) {
             g.drawString(mc.font, "MAINS", 10, OSD_H - 24, tint, false);
         } else {
@@ -90,14 +91,14 @@ final class CameraOsd {
         g.drawString(mc.font, gimbal, OSD_W - 10 - mc.font.width(gimbal), OSD_H - 24, tint, false);
 
         if (!fixed) {
-            battery(g, mc, feed, tint);
+            battery(g, mc, feed, tint, guided);
         }
         link(g, mc, feed);
         reticle(g, tint);
     }
 
-    /** Battery as a bar and a number. */
-    private static void battery(GuiGraphics g, Minecraft mc, CameraFeed feed, int tint) {
+    /** Battery (or a TV round's motor burn) as a bar and a number. */
+    private static void battery(GuiGraphics g, Minecraft mc, CameraFeed feed, int tint, boolean guided) {
         float charge = Math.max(0.0f, Math.min(1.0f, feed.battery()));
         int colour = charge < 0.10f ? RED : charge < 0.25f ? AMBER : tint;
         int x = 10;
@@ -108,7 +109,9 @@ final class CameraOsd {
         g.fill(x + 1, y + 1, x + 1 + (int) ((w - 2) * charge), y + 5, colour);
         g.drawString(mc.font, String.format(Locale.ROOT, "%3.0f%%", charge * 100.0f),
                 x + w + 4, y - 1, colour, false);
-        if (charge < 0.10f) {
+        if (guided) {
+            g.drawString(mc.font, "MTR", x + w + 26, y - 1, colour, false);
+        } else if (charge < 0.10f) {
             g.drawString(mc.font, "RTB", x + w + 26, y - 1, RED, false);
         }
     }

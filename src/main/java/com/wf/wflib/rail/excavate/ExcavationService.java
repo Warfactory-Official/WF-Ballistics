@@ -15,6 +15,7 @@ import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -30,7 +31,35 @@ public final class ExcavationService {
     private static ExecutorService pool;
 
     /** One chunk column of one carve request: the atomic unit of work and of abort. */
-    private record Column(CarveVolume volume, LightingPolicy lighting, ChunkPos pos) {
+    private record Column(CarvePlan plan, ChunkPos pos, Job job) {
+    }
+
+    /**
+     * One submitted carve, so a caller can be told when the whole of it has landed.
+     *
+     * <p>A column is the unit of work but not the unit anyone cares about: "the tunnel between these
+     * two points now exists" is a statement about every column of it, and the route's build record is
+     * written from that rather than from each column separately.</p>
+     */
+    private static final class Job {
+
+        private final java.util.function.IntConsumer onComplete;
+        private int outstanding;
+        /** Fluid cells this carve had to take out of the inside of the tunnel. */
+        private int fluid;
+
+        private Job(int columns, java.util.function.IntConsumer onComplete) {
+            this.outstanding = columns;
+            this.onComplete = onComplete;
+        }
+
+        /** Server thread. Lands one column, and runs the callback once the last one is in. */
+        private void settle(int fluidFound) {
+            this.fluid += fluidFound;
+            if (--this.outstanding == 0 && this.onComplete != null) {
+                this.onComplete.accept(this.fluid);
+            }
+        }
     }
 
     /** A chunk's stored tag and the moment it arrived, so the disk can be told apart from the backlog. */
@@ -104,25 +133,59 @@ public final class ExcavationService {
     // ---------------------------------------------------------------- submission
 
     /**
-     * Queue a volume for removal.
+     * Queue a volume for removal, unlined.
      *
      * @return how many chunk columns the volume touches
      */
     public int submit(ServerLevel level, CarveVolume volume, LightingPolicy lighting) {
+        return submit(level, CarvePlan.open(volume, lighting), null, null);
+    }
+
+    /** Queue a carve with no territory restriction. */
+    public int submit(ServerLevel level, CarvePlan plan, java.util.function.IntConsumer onComplete) {
+        return submit(level, plan, null, onComplete);
+    }
+
+    /**
+     * Queue a carve.
+     *
+     * @param allowedChunks packed {@link ChunkPos} longs the caller is permitted to change, or null for
+     *                      no restriction. <b>The last line of defence for territory:</b> a stored-chunk
+     *                      carve rewrites NBT off-thread and fires no block events, so nothing else in
+     *                      the game gets a chance to refuse it.
+     * @param onComplete run on the server thread once every column of this carve has landed, given how
+     *                   many fluid cells the carve had to remove from inside the tunnel; or null
+     * @return how many chunk columns were actually queued
+     */
+    public int submit(ServerLevel level, CarvePlan plan, java.util.Set<Long> allowedChunks,
+                      java.util.function.IntConsumer onComplete) {
         WorldThread.assertOn("submitting a carve");
-        BoundingBox box = volume.bounds();
+        BoundingBox box = plan.bounds();
         int minX = box.minX() >> 4;
         int maxX = box.maxX() >> 4;
         int minZ = box.minZ() >> 4;
         int maxZ = box.maxZ() >> 4;
-        int columns = 0;
+
+        List<ChunkPos> queue = new java.util.ArrayList<>();
         for (int cx = minX; cx <= maxX; cx++) {
             for (int cz = minZ; cz <= maxZ; cz++) {
-                this.pending.add(new Column(volume, lighting, new ChunkPos(cx, cz)));
-                columns++;
+                ChunkPos pos = new ChunkPos(cx, cz);
+                if (allowedChunks == null || allowedChunks.contains(pos.toLong())) {
+                    queue.add(pos);
+                }
             }
         }
-        return columns;
+        if (queue.isEmpty()) {
+            if (onComplete != null) {
+                onComplete.accept(0);
+            }
+            return 0;
+        }
+        Job job = new Job(queue.size(), onComplete);
+        for (ChunkPos pos : queue) {
+            this.pending.add(new Column(plan, pos, job));
+        }
+        return queue.size();
     }
 
     public CarveStats stats() {
@@ -142,7 +205,12 @@ public final class ExcavationService {
         return this.attended.size();
     }
 
-    /** Drop everything queued and revoke everything running. */
+    /**
+     * Drop everything queued and revoke everything running.
+     *
+     * <p>Completion callbacks of cancelled jobs deliberately never fire: a half-dug tunnel has not been
+     * built, and reporting it as built is worse than reporting nothing.</p>
+     */
     public void cancel() {
         this.pending.clear();
         this.attended.clear();
@@ -167,6 +235,9 @@ public final class ExcavationService {
             this.claims.release(done.claim());
             if (done.error() != null) {
                 LOGGER.warn("[wflib] carve of {} failed", done.column().pos(), done.error());
+                // Settle it anyway: a job that never completes never reports, and a tunnel with one
+                // bad column is still a tunnel whose other columns are done.
+                done.column().job().settle(0);
                 continue;
             }
             if (done.outcome() == null) {
@@ -181,6 +252,8 @@ public final class ExcavationService {
             }
             this.stats.recordStored(done.outcome().cellsCleared(), done.outcome().blockEntitiesRemoved(),
                     done.nanos());
+            this.stats.recordLined(done.outcome().cellsLined());
+            done.column().job().settle(0);
             if (!done.outcome().refusals().isEmpty()) {
                 this.stats.recordRefusals(done.outcome().refusals().size());
                 LOGGER.warn("[wflib] carve of {} left {} section(s) alone: {}", done.column().pos(),
@@ -199,14 +272,20 @@ public final class ExcavationService {
         while (it.hasNext() && budget > 0) {
             var entry = it.next();
             LoadedChunkCarver carver = entry.getValue();
-            int before = carver.broken();
+            int brokenBefore = carver.broken();
+            int placedBefore = carver.placed();
             boolean complete = carver.advance(level, budget, drop);
-            int spent = carver.broken() - before;
-            budget -= spent;
-            this.stats.recordAttended(spent);
+            int broke = carver.broken() - brokenBefore;
+            int placed = carver.placed() - placedBefore;
+            budget -= broke + placed;
+            this.stats.recordAttended(broke);
+            this.stats.recordLined(placed);
             if (complete) {
                 it.remove();
-                this.attendedColumns.remove(entry.getKey());
+                Column column = this.attendedColumns.remove(entry.getKey());
+                if (column != null) {
+                    column.job().settle(carver.dried());
+                }
             }
         }
     }
@@ -223,7 +302,7 @@ public final class ExcavationService {
             }
             if (!offThread || ClaimRegistry.isLoaded(level, column.pos())) {
                 this.pending.pollFirst();
-                this.attended.put(key, new LoadedChunkCarver(column.volume(), column.pos(), level));
+                this.attended.put(key, new LoadedChunkCarver(column.plan(), column.pos(), level));
                 this.attendedColumns.put(key, column);
                 continue;
             }
@@ -265,7 +344,7 @@ public final class ExcavationService {
         long begun = timing ? System.nanoTime() : 0L;
         CompoundTag tag = stored.get();
         StoredChunkCarver.Outcome outcome =
-                StoredChunkCarver.carve(tag, column.pos(), column.volume(), column.lighting());
+                StoredChunkCarver.carve(tag, column.pos(), column.plan());
         long carved = timing ? System.nanoTime() : 0L;
         if (!outcome.changed()) {
             if (timing) {

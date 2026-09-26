@@ -61,4 +61,39 @@ class CarveVolumeTest {
         assertFalse(cut.contains(-5, 10, -4));
         assertFalse(cut.contains(4, 15, 4));
     }
+
+    @org.junit.jupiter.api.Test
+    @org.junit.jupiter.api.DisplayName("a straight route on a diagonal gets a straight corridor")
+    void diagonalCorridorDoesNotZigzag() {
+        // Sampled every four blocks, the way TunnelBuilder walks a centreline. Snapping every one of
+        // these to the block grid turns the line into a staircase whose segments sit well off the true
+        // heading, and the section is swept along each segment in turn: the tunnel then wanders from
+        // side to side around track that runs straight down the middle, which from inside looks like a
+        // tunnel that is too narrow and has a course of wall missing down one side.
+        int parts = 25;
+        double[] xs = new double[parts + 1];
+        double[] zs = new double[parts + 1];
+        for (int i = 0; i <= parts; i++) {
+            xs[i] = 100.3 + 100.0 * i / parts;
+            zs[i] = 200.7 + 40.0 * i / parts;
+        }
+        CarveVolume.Corridor corridor = CarveVolume.corridor(xs, zs, 8, 0, 8);
+
+        double[] first = corridor.pointAt(0.0);
+        for (double s = 0.0; s <= corridor.length(); s += 3.0) {
+            double[] at = corridor.pointAt(s);
+            double turn = Math.toDegrees(Math.acos(Math.max(-1.0, Math.min(1.0,
+                    at[2] * first[2] + at[3] * first[3]))));
+            org.junit.jupiter.api.Assertions.assertTrue(turn < 1.0,
+                    "the corridor bends " + turn + " degrees at " + s + " on a straight route");
+        }
+        // And the surveyed line itself stays on the axis of its own tunnel, rather than being pushed
+        // against one wall wherever a vertex was rounded the other way.
+        for (int i = 1; i < parts; i++) {
+            CarveVolume.Corridor.Local local = corridor.localAt(xs[i], zs[i], 1.0);
+            org.junit.jupiter.api.Assertions.assertNotNull(local);
+            org.junit.jupiter.api.Assertions.assertTrue(Math.abs(local.offset()) < 0.1,
+                    "the route sits " + local.offset() + " blocks off the middle of its own tunnel");
+        }
+    }
 }

@@ -5,6 +5,7 @@ package com.wf.wflib.drone.cam;
  *
  * @param feedId the drone's entity id. Transient by design: a feed is a live thing, and a monitor that
  *      outlives its drone should say so rather than quietly bind to whatever reused the id
+ * @param kind {@link #DRONE}, {@link #FIXED} or {@link #GUIDED}; picks the OSD
  * @param yaw absolute gimbal heading in degrees, already clamped and slewed by the server
  * @param fov vertical field of view in degrees, after zoom
  * @param fovDeg the optic's field of view at 1x, and {@code maxZoom} how far it stops down. The pair is
@@ -21,10 +22,17 @@ package com.wf.wflib.drone.cam;
  *      picture degrading is the same event as the datalink degrading rather than a separate effect
  * @param gameTime the tick this state was sampled at; the client renders nothing older than a second or two
  */
-public record CameraFeed(int feedId, double x, double y, double z,
+public record CameraFeed(int feedId, byte kind, double x, double y, double z,
                          float yaw, float pitch, float fov, float fovDeg, float maxZoom, float slewRate,
                          byte mode, byte modeMask, float battery, float link,
                          float speed, float altitude, long gameTime) {
+
+    public static final byte DRONE = 0;
+    public static final byte FIXED = 1;
+    /** TV round: battery = fuel; burnt out != blind. */
+    public static final byte GUIDED = 2;
+    /** Link at or below => signal-loss card; a TV round stops obeying its operator. */
+    public static final float USABLE_LINK = 0.05f;
 
     /** Ticks a client keeps drawing a feed after the last update before declaring signal loss. */
     public static final int STALE_TICKS = 40;
@@ -43,6 +51,6 @@ public record CameraFeed(int feedId, double x, double y, double z,
      *      feedback dressed up as a feature: it looks like the mod is broken.
      */
     public boolean usable() {
-        return this.link > 0.05f && this.battery > 0.0f;
+        return this.link > USABLE_LINK && (this.battery > 0.0f || this.kind == GUIDED);
     }
 }

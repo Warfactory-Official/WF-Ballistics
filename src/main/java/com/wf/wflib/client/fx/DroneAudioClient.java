@@ -81,7 +81,7 @@ public final class DroneAudioClient {
                 continue;
             }
             if (ACTIVE.containsKey(drone)
-                    || !drone.getDroneState().powered()
+                    || !drone.flight().getDroneState().powered()
                     || drone.distanceToSqr(player) > START_RANGE_SQR) {
                 continue;
             }

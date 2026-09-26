@@ -27,6 +27,7 @@ class SectionNbtTest {
 
     private static final String STONE = "minecraft:stone";
     private static final String DIRT = "minecraft:dirt";
+    private static final String BRICKS = "minecraft:deepslate_bricks";
 
     // ------------------------------------------------------------------ helpers
 
@@ -218,6 +219,60 @@ class SectionNbtTest {
                     assertEquals(i % 16, after[i], "cell " + i + " survived the repack unchanged");
                 }
             }
+        }
+
+        @Test
+        @DisplayName("filling with a lining block appends it and repacks exactly as clearing does")
+        void fillAppendsTheLining() {
+            List<String> palette = new ArrayList<>();
+            for (int i = 0; i < 16; i++) {
+                palette.add("minecraft:block_" + i);
+            }
+            int[] cells = new int[SectionNbt.CELLS];
+            for (int i = 0; i < SectionNbt.CELLS; i++) {
+                cells[i] = i % 16;
+            }
+            CompoundTag section = section(palette, cells);
+
+            SectionNbt.Result result = SectionNbt.fill(section, bottomLayer(), BRICKS);
+
+            assertNull(result.refusal());
+            assertEquals(17, paletteNames(section).size());
+            assertEquals(BRICKS, paletteNames(section).get(16));
+
+            int[] after = decode(section);
+            for (int i = 0; i < SectionNbt.CELLS; i++) {
+                int y = (i >> 8) & 15;
+                assertEquals(y == 0 ? 16 : i % 16, after[i], "cell " + i);
+            }
+        }
+
+        @Test
+        @DisplayName("filling reuses an entry the palette already has rather than duplicating it")
+        void fillReusesAnEntry() {
+            int[] cells = new int[SectionNbt.CELLS];
+            CompoundTag section = section(List.of(STONE, BRICKS), cells);
+
+            SectionNbt.Result result = SectionNbt.fill(section, bottomLayer(), BRICKS);
+
+            assertEquals(2, paletteNames(section).size(), "no second bricks entry");
+            assertEquals(256, result.cleared(), "one layer");
+            for (int i = 0; i < SectionNbt.CELLS; i++) {
+                assertEquals(((i >> 8) & 15) == 0 ? 1 : 0, decode(section)[i]);
+            }
+        }
+
+        @Test
+        @DisplayName("a cell already the lining is not counted or rewritten")
+        void fillSkipsWhatIsAlreadyRight() {
+            int[] cells = new int[SectionNbt.CELLS];
+            java.util.Arrays.fill(cells, 1);
+            CompoundTag section = section(List.of(STONE, BRICKS), cells);
+
+            SectionNbt.Result result = SectionNbt.fill(section, everything(), BRICKS);
+
+            assertEquals(0, result.cleared());
+            assertFalse(result.rewritten());
         }
 
         @Test

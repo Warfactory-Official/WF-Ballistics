@@ -75,9 +75,30 @@ public final class SectionNbt {
      * @param section one entry of the chunk tag's {@code sections} list; mutated in place
      */
     public static Result clear(CompoundTag section, CellMask mask) {
+        return fill(section, mask, AIR);
+    }
+
+    /**
+     * Point every cell the mask selects at one block.
+     *
+     * <p>Only blocks with no state properties, which is what a tunnel lining is. A block that needs
+     * properties would have to carry them through the palette entry and match on them too, and nothing
+     * here needs that.</p>
+     *
+     * @param blockName a registry id such as {@code minecraft:deepslate_bricks}
+     */
+    public static Result fill(CompoundTag section, CellMask mask, String blockName) {
         if (!section.contains(BLOCK_STATES, Tag.TAG_COMPOUND)) {
-            // No block data stored: the section is air already.
-            return Result.NOTHING;
+            if (AIR.equals(blockName)) {
+                // No block data stored: the section is air already.
+                return Result.NOTHING;
+            }
+            // An all-air section still has to be able to take a lining.
+            CompoundTag states = new CompoundTag();
+            ListTag palette = new ListTag();
+            palette.add(entryFor(AIR));
+            states.put(PALETTE, palette);
+            section.put(BLOCK_STATES, states);
         }
         CompoundTag states = section.getCompound(BLOCK_STATES);
         ListTag palette = states.getList(PALETTE, Tag.TAG_COMPOUND);
@@ -88,7 +109,7 @@ public final class SectionNbt {
         boolean hasData = states.contains(DATA, Tag.TAG_LONG_ARRAY);
         if (!hasData) {
             return palette.size() == 1
-                    ? clearUniform(states, palette, mask)
+                    ? fillUniform(states, palette, mask, blockName)
                     : Result.refused("palette of " + palette.size() + " with no data array");
         }
 
@@ -101,7 +122,7 @@ public final class SectionNbt {
         }
 
         SimpleBitStorage storage = new SimpleBitStorage(bits, CELLS, data);
-        int air = indexOfAir(palette);
+        int target = indexOf(palette, blockName);
 
         int[] targets = new int[CELLS];
         int count = 0;
@@ -112,7 +133,7 @@ public final class SectionNbt {
                         continue;
                     }
                     int cell = index(x, y, z);
-                    if (air < 0 || storage.get(cell) != air) {
+                    if (target < 0 || storage.get(cell) != target) {
                         targets[count++] = cell;
                     }
                 }
@@ -122,34 +143,34 @@ public final class SectionNbt {
             return Result.NOTHING;
         }
 
-        if (air < 0) {
-            palette.add(airEntry());
-            air = palette.size() - 1;
+        if (target < 0) {
+            palette.add(entryFor(blockName));
+            target = palette.size() - 1;
         }
         int wideBits = bitsForPalette(palette.size());
         SimpleBitStorage out = wideBits == bits ? storage : widen(storage, wideBits);
         for (int i = 0; i < count; i++) {
-            out.set(targets[i], air);
+            out.set(targets[i], target);
         }
         states.put(DATA, new LongArrayTag(out.getRaw()));
         return new Result(count, true, null);
     }
 
-    /** A section stored as one repeated state: either already air, or expanded so some of it can become air. */
-    private static Result clearUniform(CompoundTag states, ListTag palette, CellMask mask) {
-        if (isAir(palette.getCompound(0))) {
+    /** A section stored as one repeated state: either already the target, or expanded so part of it can change. */
+    private static Result fillUniform(CompoundTag states, ListTag palette, CellMask mask, String blockName) {
+        if (is(palette.getCompound(0), blockName)) {
             return Result.NOTHING;
         }
         if (mask.coversAll()) {
             ListTag replacement = new ListTag();
-            replacement.add(airEntry());
+            replacement.add(entryFor(blockName));
             states.put(PALETTE, replacement);
             states.remove(DATA);
             return new Result(CELLS, true, null);
         }
 
         // Expand to a two-entry palette so the selected cells can differ from the rest.
-        palette.add(airEntry());
+        palette.add(entryFor(blockName));
         SimpleBitStorage storage = new SimpleBitStorage(4, CELLS);
         int cleared = 0;
         for (int y = 0; y < 16; y++) {
@@ -179,23 +200,29 @@ public final class SectionNbt {
         return to;
     }
 
-    private static int indexOfAir(ListTag palette) {
+    private static int indexOf(ListTag palette, String blockName) {
         for (int i = 0; i < palette.size(); i++) {
-            if (isAir(palette.getCompound(i))) {
+            if (is(palette.getCompound(i), blockName)) {
                 return i;
             }
         }
         return -1;
     }
 
-    /** Air carries no properties, so a {@code Properties} tag means this is some other block named air. */
-    private static boolean isAir(CompoundTag entry) {
-        return AIR.equals(entry.getString(NAME)) && !entry.contains(PROPERTIES, Tag.TAG_COMPOUND);
+    /**
+     * Whether a palette entry is this block in its default state.
+     *
+     * <p>A {@code Properties} tag means it is some other state of the same block, which must not be
+     * treated as already correct: {@code water[level=3]} is not {@code water}, and a lining that
+     * skipped it would leave a flowing cell in the middle of a wall.</p>
+     */
+    private static boolean is(CompoundTag entry, String blockName) {
+        return blockName.equals(entry.getString(NAME)) && !entry.contains(PROPERTIES, Tag.TAG_COMPOUND);
     }
 
-    private static CompoundTag airEntry() {
-        CompoundTag air = new CompoundTag();
-        air.putString(NAME, AIR);
-        return air;
+    private static CompoundTag entryFor(String blockName) {
+        CompoundTag entry = new CompoundTag();
+        entry.putString(NAME, blockName);
+        return entry;
     }
 }

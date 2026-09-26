@@ -10,6 +10,8 @@ import net.minecraft.world.level.Explosion;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
+import org.jetbrains.annotations.Nullable;
+
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -41,6 +43,8 @@ public class ExplosionAEF {
     private boolean bypassClaims = false;
     private UUID igniterFaction = null;
 
+    private static final ThreadLocal<ExplosionAEF> RUNNING = new ThreadLocal<>();
+
     public ExplosionAEF(Level level, double x, double y, double z, float size) {
         this(level, x, y, z, size, null);
     }
@@ -62,8 +66,31 @@ public class ExplosionAEF {
         this.compat = new Explosion(level, exploder, x, y, z, size, false, Explosion.BlockInteraction.DESTROY);
     }
 
+    /** The blast whose {@link #compat} this is, while its pipeline runs; null = vanilla or finished. */
+    @Nullable
+    public static ExplosionAEF running(Explosion compat) {
+        ExplosionAEF current = RUNNING.get();
+        return current != null && current.compat == compat ? current : null;
+    }
+
+    /** Whether the entity stage's blast shape (a shaped charge's cone) reaches {@code point}. */
+    public boolean inBlastShape(Vec3 point) {
+        return !(entityProcessor instanceof EntityProcessorCross cross)
+                || cross.withinShape(this, point.x, point.y, point.z, posX, posY, posZ);
+    }
+
     /** Runs the configured pipeline. */
     public void explode() {
+        ExplosionAEF outer = RUNNING.get();
+        RUNNING.set(this);
+        try {
+            run();
+        } finally {
+            RUNNING.set(outer);
+        }
+    }
+
+    private void run() {
         if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
             com.wf.wflib.recon.event.SeismicEvents.report(serverLevel, posX, posY, posZ, size);
         }

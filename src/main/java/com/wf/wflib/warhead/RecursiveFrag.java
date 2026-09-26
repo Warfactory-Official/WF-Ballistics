@@ -87,7 +87,7 @@ public final class RecursiveFrag {
         if (level.isClientSide) {
             return;
         }
-        if (source instanceof MissileEntity missile && missile.getSplitDepth() > 0) {
+        if (source instanceof MissileEntity missile && missile.swarm().getSplitDepth() > 0) {
             split(missile, pos);
         } else {
             leafBlast(level, pos, source.igniterFactionId());
@@ -98,13 +98,13 @@ public final class RecursiveFrag {
         Level level = parent.level();
         RandomSource rng = level.random;
 
-        int childDepth = parent.getSplitDepth() - 1;
+        int childDepth = parent.swarm().getSplitDepth() - 1;
         int count = Mth.clamp(parent.getFragmentCount(), MIN_CHILDREN, MAX_CHILDREN);
         float childOffset = splitAltitude(childDepth);
         double radius = scatterRadius(childDepth);
-        Vec3 target = parent.getTarget();
+        Vec3 target = parent.flight().getTarget();
 
-        long swarm = parent.getSwarmId();
+        long swarm = parent.swarm().getSwarmId();
         if (swarm == 0L) {
             swarm = SwarmManager.newId(level);
         }
@@ -121,7 +121,7 @@ public final class RecursiveFrag {
                 Mth.floor(target.x), Mth.floor(target.z));
         LOGGER.info("[SPLIT parent={} swarm={} depth={} -> {} children] splitPos=({},{},{}) parentTgt=({},{},{}) "
                         + "childOffset={} scatterR={} groundUnderTgt={} tgtAGL={}",
-                parent.getId(), swarm, parent.getSplitDepth(), count,
+                parent.getId(), swarm, parent.swarm().getSplitDepth(), count,
                 fmt(pos.x), fmt(pos.y), fmt(pos.z), fmt(target.x), fmt(target.y), fmt(target.z),
                 fmt(childOffset), fmt(radius), groundUnderParentTarget, fmt(target.y - groundUnderParentTarget));
 

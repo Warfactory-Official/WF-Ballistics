@@ -6,7 +6,7 @@ import com.wf.wflib.entity.glyphid.GlyphidTracker;
 import com.wf.wflib.entity.glyphid.nav.GlyphidBridges;
 import com.wf.wflib.entity.glyphid.nav.GlyphidFlowFields;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphid;
-import com.wf.wflib.entity.glyphid.sim.SimGlyphidRegistry;
+import com.wf.wflib.entity.glyphid.sim.SimGlyphidManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -427,7 +427,7 @@ public final class GlyphidArena {
                 reached++;
             }
         }
-        for (SimGlyphid sim : SimGlyphidRegistry.get(level).view()) {
+        for (SimGlyphid sim : SimGlyphidManager.tier(level).view()) {
             alive++;
             Vec3 at = new Vec3(sim.x, sim.y, sim.z);
             boolean in = layout.footprint().contains(at);

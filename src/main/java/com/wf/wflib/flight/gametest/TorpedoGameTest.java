@@ -1,5 +1,6 @@
 package com.wf.wflib.flight.gametest;
 
+import com.wf.wflib.util.ForcedChunks;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.item.MissilePreset;
@@ -48,7 +49,7 @@ public class TorpedoGameTest {
         for (MissilePreset preset : MissilePresetRegistry.all()) {
             boolean named = preset.id().getPath().startsWith("torpedo");
             MissileEntity missile = preset.build(helper.getLevel(), Vec3.ZERO);
-            boolean submerged = missile.getMedium() == MissileEntity.Medium.WATER;
+            boolean submerged = missile.flight().getMedium() == MissileEntity.Medium.WATER;
             missile.discard();
             if (named != submerged) {
                 helper.fail(preset.id() + " is " + (named ? "named a torpedo but travels in air"
@@ -150,7 +151,7 @@ public class TorpedoGameTest {
 
         MissileEntity torpedo = launch(level, tank, bed, "torpedo");
         helper.runAfterDelay(SETTLE_TICKS, () -> {
-            if (!torpedo.isAlive() || torpedo.getPhase() == MissileEntity.Phase.ASCEND) {
+            if (!torpedo.isAlive() || torpedo.flight().getPhase() == MissileEntity.Phase.ASCEND) {
                 force(level, tank, false);
                 helper.fail("the torpedo never reached its run, so there is nothing to broach");
                 return;
@@ -245,7 +246,7 @@ public class TorpedoGameTest {
         int cz = SectionPos.blockToSectionCoord(tank.getZ());
         for (int ox = -1; ox <= FORCED_CHUNK_RADIUS + 2; ox++) {
             for (int oz = -FORCED_CHUNK_RADIUS; oz <= FORCED_CHUNK_RADIUS; oz++) {
-                level.setChunkForced(cx + ox, cz + oz, forced);
+                ForcedChunks.set(level, cx + ox, cz + oz, forced);
             }
         }
     }

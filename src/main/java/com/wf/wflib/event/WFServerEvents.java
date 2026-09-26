@@ -1,5 +1,6 @@
 package com.wf.wflib.event;
 
+import com.wf.wflib.sim.SimTier;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -91,13 +92,12 @@ import com.wf.wflib.work.WorkJob;
 import com.wf.wflib.work.WorkRegistry;
 import com.wf.wflib.drone.sim.SimDrone;
 import com.wf.wflib.drone.sim.SimDroneManager;
-import com.wf.wflib.drone.sim.SimDroneRegistry;
 import com.wf.wflib.item.MissilePreset;
 import com.wf.wflib.item.MissilePresetRegistry;
 import com.wf.wflib.sim.MissileSimConfig;
-import com.wf.wflib.kinetic.KineticSimManager;
+import com.wf.wflib.sim.SimKind;
 import com.wf.wflib.sim.SimMissileManager;
-import com.wf.wflib.sim.SimMissileRegistry;
+import com.wf.wflib.sim.SimScheduler;
 import com.wf.wflib.swarm.SwarmManager;
 import com.wf.wflib.util.FragmentationUtil;
 import com.wf.wflib.warhead.WarheadRegistry;
@@ -109,7 +109,6 @@ import com.wf.wflib.entity.glyphid.GlyphidSeparation;
 import com.wf.wflib.entity.glyphid.nav.GlyphidBridges;
 import com.wf.wflib.entity.glyphid.nav.GlyphidFlowFields;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphidManager;
-import com.wf.wflib.entity.glyphid.sim.SimGlyphidPass;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphidTracking;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.UuidArgument;
@@ -166,21 +165,19 @@ public final class WFServerEvents {
         }
     }
 
-    /** Sets the glyphid sim tier walking before the world thread starts its own tick, so the two run at once. */
+    /** Sim passes start before the level tick, so async kinds run alongside it. */
     @SubscribeEvent
     public static void onLevelTickPre(LevelTickEvent.Pre event) {
         if (event.getLevel() instanceof ServerLevel level) {
-            SimGlyphidManager.beginTick(level);
+            SimScheduler.pre(level);
         }
     }
 
     @SubscribeEvent
     public static void onLevelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
-            SimMissileManager.tick(level);
-            KineticSimManager.tick(level);
+            SimScheduler.post(level, SimKind.Slot.EARLY);
             DroneLaunchQueue.tick(level);
-            SimDroneManager.tick(level);
             DroneAiScheduler.tick(level);
             // After the drones have moved, so a zone is judged on where everyone actually is this tick.
             ExchangeManager.tick(level);
@@ -190,7 +187,7 @@ public final class WFServerEvents {
             ColonyManager.tick(level);
             // After the colony tier, because it reassigns bugs the materialiser may have only just placed.
             GlyphidSquads.tick(level);
-            SimGlyphidManager.tick(level);
+            SimScheduler.post(level, SimKind.Slot.LATE);
             SimGlyphidTracking.tick(level);
             GlyphidSeparation.tick(level);
             GlyphidBridges.tick(level);
@@ -223,8 +220,20 @@ public final class WFServerEvents {
     /** Drops what a departing player was owed. */
     @SubscribeEvent
     public static void onPlayerLoggedOut(net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
-        com.wf.wflib.drone.cam.CameraChunkStream.forget(event.getEntity().getUUID());
+        if (event.getEntity() instanceof ServerPlayer player) {
+            com.wf.wflib.drone.cam.CameraChunkStream.forget(player);
+            com.wf.wflib.stream.ChunkStreams.drop(player);
+        }
         ReconMapService.forget(event.getEntity().getUUID());
+    }
+
+    /** Same-dimension respawn keeps the client level, so streamed chunks the old player held need forgetting. */
+    @SubscribeEvent
+    public static void onPlayerClone(net.neoforged.neoforge.event.entity.player.PlayerEvent.Clone event) {
+        if (event.getOriginal() instanceof ServerPlayer original) {
+            com.wf.wflib.drone.cam.CameraChunkStream.forget(original);
+            com.wf.wflib.stream.ChunkStreams.forgetAll(original);
+        }
     }
 
     /**
@@ -234,16 +243,18 @@ public final class WFServerEvents {
     @SubscribeEvent
     public static void onServerStarting(ServerStartingEvent event) {
         DroneAiScheduler.startup();
-        SimGlyphidPass.startup();
+        SimScheduler.startup();
     }
 
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
-        SimGlyphidPass.shutdown(event.getServer().getAllLevels());
+        SimScheduler.shutdown(event.getServer().getAllLevels());
         ReconNet.shutdown();
         com.wf.wflib.orbital.OrbitalNet.shutdown();
         ReconMapService.shutdown();
         com.wf.wflib.drone.cam.CameraNet.shutdown();
+        com.wf.wflib.stream.ChunkStreams.shutdown();
+        com.wf.wflib.colony.ColonyEvents.shutdown();
         com.wf.wflib.drone.DroneRecall.shutdown();
         HubIndex.shutdown();
         DecoyRegistry.shutdown();
@@ -258,6 +269,7 @@ public final class WFServerEvents {
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         event.getDispatcher().register(Commands.literal("wflib")
                 .requires(src -> src.hasPermission(2))
+                .then(com.wf.wflib.stream.StreamCommands.get())
                 .then(Commands.literal("interceptmode")
                         .executes(ctx -> {
                             ctx.getSource().sendSuccess(
@@ -1290,7 +1302,7 @@ public final class WFServerEvents {
                     return 0;
                 }
                 // Let it get airborne first, then knock it down, so the spin-in is actually visible.
-                spawned.drones().forEach(d -> d.setState(DroneState.TRANSIT));
+                spawned.drones().forEach(d -> d.flight().setState(DroneState.TRANSIT));
                 src.sendSuccess(() -> Component.literal(
                         "Launched 1 drone; it will be shot down in a few seconds"), false);
                 DOWNED_SCENARIO.add(spawned.drones().get(0).getUUID());
@@ -1332,7 +1344,7 @@ public final class WFServerEvents {
         downedScenarioDelay = 0;
         for (UUID id : new ArrayList<>(DOWNED_SCENARIO)) {
             if (level.getEntity(id) instanceof DroneEntity drone) {
-                drone.shootDown();
+                drone.damage().shootDown();
                 DOWNED_SCENARIO.remove(id);
             }
         }
@@ -1350,7 +1362,7 @@ public final class WFServerEvents {
             crate.discard();
             removed++;
         }
-        SimDroneRegistry registry = SimDroneRegistry.get(level);
+        SimTier<SimDrone> registry = SimDroneManager.tier(level);
         for (SimDrone sd : new ArrayList<>(registry.view())) {
             registry.remove(sd);
             removed++;
@@ -1365,15 +1377,15 @@ public final class WFServerEvents {
         Vec3 home = src.getPosition();
         int count = 0;
         for (DroneEntity drone : DroneTracker.drones(level)) {
-            if (!drone.getDroneState().powered()) {
+            if (!drone.flight().getDroneState().powered()) {
                 continue;
             }
-            drone.setExfil(home);
-            drone.setDestination(null);
-            drone.setState(DroneState.EXFIL);
+            drone.route().setExfil(home);
+            drone.route().setDestination(null);
+            drone.flight().setState(DroneState.EXFIL);
             count++;
         }
-        for (SimDrone sd : new ArrayList<>(SimDroneRegistry.get(level).view())) {
+        for (SimDrone sd : new ArrayList<>(SimDroneManager.tier(level).view())) {
             sd.exfil = home;
             sd.destination = null;
             sd.state = DroneState.EXFIL;
@@ -1413,7 +1425,7 @@ public final class WFServerEvents {
             return 0;
         }
         src.sendSuccess(() -> Component.literal(String.format("%s - %s, %.0f%% battery, %d events",
-                target.getUUID(), target.getDroneState(), target.battery().percent(), telemetry.total()))
+                target.getUUID(), target.flight().getDroneState(), target.battery().percent(), telemetry.total()))
                 .withStyle(ChatFormatting.GOLD), false);
         List<?> events = telemetry.events();
         for (int i = Math.max(0, events.size() - 20); i < events.size(); i++) {
@@ -2493,7 +2505,7 @@ public final class WFServerEvents {
 
     private static int listDrones(CommandSourceStack src) {
         Set<DroneEntity> drones = DroneTracker.drones(src.getLevel());
-        List<SimDrone> simulated = SimDroneRegistry.get(src.getLevel()).view();
+        List<SimDrone> simulated = SimDroneManager.tier(src.getLevel()).view();
         int queued = DroneLaunchQueue.get(src.getLevel()).pending();
         if (drones.isEmpty() && simulated.isEmpty() && queued == 0) {
             src.sendSuccess(() -> Component.literal("No drones in this dimension."), false);
@@ -2521,22 +2533,22 @@ public final class WFServerEvents {
         src.sendSuccess(() -> Component.literal(sorted.size() + " drone(s):").withStyle(ChatFormatting.GOLD), false);
         for (DroneEntity drone : sorted.subList(0, Math.min(sorted.size(), 30))) {
             Vec3 flat = drone.position().multiply(1, 0, 1);
-            String shownDest = drone.getDestination() == null ? "done"
-                    : (int) flat.distanceTo(drone.getDestination().multiply(1, 0, 1)) + "m";
-            DronePath path = drone.getPath();
-            String dest = drone.isClassified() ? "[CLSFD]" : shownDest;
+            String shownDest = drone.route().getDestination() == null ? "done"
+                    : (int) flat.distanceTo(drone.route().getDestination().multiply(1, 0, 1)) + "m";
+            DronePath path = drone.route().getPath();
+            String dest = drone.orders().isClassified() ? "[CLSFD]" : shownDest;
             String line = String.format(
                     "• %-11s y=%-4.0f dst %-6s exf %-5dm  %3.0f%% bat  %-8s spd%.2f thr%.2f tilt%2.0f° agl%-4.0f %s%s",
-                    drone.getDroneState(), drone.getY(), dest,
-                    (int) flat.distanceTo(drone.getExfil().multiply(1, 0, 1)),
-                    drone.battery().percent(), load(drone.hasCargo(), drone.getPayloadId(), drone.getMines()),
+                    drone.flight().getDroneState(), drone.getY(), dest,
+                    (int) flat.distanceTo(drone.route().getExfil().multiply(1, 0, 1)),
+                    drone.battery().percent(), load(drone.hold().hasCargo(), drone.hold().getPayloadId(), drone.hold().getMines()),
                     drone.getDeltaMovement().horizontalDistance(),
-                    drone.getAttitude().throttle(), Math.toDegrees(drone.getAttitude().tilt()),
+                    drone.flight().getAttitude().throttle(), Math.toDegrees(drone.flight().getAttitude().tilt()),
                     drone.getY() - TerrainSampler.groundY(src.getLevel(), drone.getX(), drone.getZ(), drone.getY()),
                     path == null ? "no route" : path.waypoints().size() + "wp" + (path.partial() ? "+" : ""),
                     drone.leader() ? "  [lead]" : "");
             src.sendSuccess(() -> Component.literal(line).withStyle(
-                    drone.getDroneState() == DroneState.DEPLETED ? ChatFormatting.RED : ChatFormatting.YELLOW), false);
+                    drone.flight().getDroneState() == DroneState.DEPLETED ? ChatFormatting.RED : ChatFormatting.YELLOW), false);
         }
         return sorted.size();
     }
@@ -2611,7 +2623,7 @@ public final class WFServerEvents {
             src.sendSuccess(() -> Component.literal("Launched interceptor locked on " + target), true);
             return 1;
         }
-        if (SimMissileRegistry.get(level).getById(target) != null) {
+        if (SimMissileManager.find(level, target) != null) {
             SimMissileManager.launchInterceptor(level, spawn, target, MissileSimConfig.DEFAULT_INTERCEPT_CHANCE);
             src.sendSuccess(() -> Component.literal("Launched simulated interceptor at " + target), true);
             return 1;
@@ -2638,15 +2650,15 @@ public final class WFServerEvents {
         int limit = Math.min(total, 30);
         for (int i = 0; i < limit; i++) {
             MissileEntity m = ms.get(i);
-            int fuelPct = m.getFuelCapacity() > 0 ? Math.round(100.0f * m.getFuel() / m.getFuelCapacity()) : 0;
+            int fuelPct = m.motor().getFuelCapacity() > 0 ? Math.round(100.0f * m.motor().getFuel() / m.motor().getFuelCapacity()) : 0;
             int dist = (int) Math.sqrt(player.distanceToSqr(m));
-            String tags = (m.isInterceptor() ? " [INT]" : "") + (m.isStealth() ? " [STEALTH]" : "")
-                    + (m.getEvasion() > 0.0f ? " [EVA " + Math.round(m.getEvasion() * 100) + "%]" : "");
+            String tags = (m.interceptor().isActive() ? " [INT]" : "") + (m.signature().isStealth() ? " [STEALTH]" : "")
+                    + (m.signature().getEvasion() > 0.0f ? " [EVA " + Math.round(m.signature().getEvasion() * 100) + "%]" : "");
             String uuid = m.getUUID().toString();
             String line = String.format("• %s  %dm  %s  spd %.1f  fuel %d%%%s  %s",
-                    m.getModelId().getPath(), dist, m.getPhase(), m.getCruiseSpeed(), fuelPct, tags, uuid);
-            ChatFormatting colour = m.isStealth() ? ChatFormatting.LIGHT_PURPLE
-                    : (m.isInterceptor() ? ChatFormatting.AQUA : ChatFormatting.YELLOW);
+                    m.getModelId().getPath(), dist, m.flight().getPhase(), m.flight().getCruiseSpeed(), fuelPct, tags, uuid);
+            ChatFormatting colour = m.signature().isStealth() ? ChatFormatting.LIGHT_PURPLE
+                    : (m.interceptor().isActive() ? ChatFormatting.AQUA : ChatFormatting.YELLOW);
             Component comp = Component.literal(line).withStyle(s -> s
                     .withColor(colour)
                     .withClickEvent(new ClickEvent(ClickEvent.Action.SUGGEST_COMMAND,
@@ -2720,7 +2732,7 @@ public final class WFServerEvents {
         ServerLevel level = player.serverLevel();
         if (level.getEntity(id) instanceof MissileEntity m) {
             WFLibAPI.openTelemetry(m);
-        } else if (SimMissileRegistry.get(level).getById(id) != null) {
+        } else if (SimMissileManager.find(level, id) != null) {
             WFLibAPI.openTelemetry(id, level.getGameTime());
         } else {
             src.sendFailure(Component.literal("No missile with UUID " + id + " in this dimension."));
@@ -2748,7 +2760,7 @@ public final class WFServerEvents {
         UUID myTeam = com.wf.wflib.compat.WarforgeCompat.factionOfPlayer(mine);
         AABB box = player.getBoundingBox().inflate(512.0);
         List<MissileEntity> ms = level.getEntitiesOfClass(MissileEntity.class, box,
-                m -> m.isAlive() && !m.isInterceptor()
+                m -> m.isAlive() && !m.interceptor().isActive()
                         && (mine.equals(m.getControlId()) || (myTeam != null && myTeam.equals(m.getTeamId()))));
         if (ms.isEmpty()) {
             src.sendFailure(Component.literal("No missile of yours nearby to re-task."));
@@ -2756,7 +2768,7 @@ public final class WFServerEvents {
         }
         ms.sort(Comparator.comparingDouble(player::distanceToSqr));
         MissileEntity m = ms.get(0);
-        m.setDesignatedTarget(aim.getUUID());
+        m.seeker().setDesignatedTarget(aim.getUUID());
         src.sendSuccess(() -> Component.literal("Re-tasked " + m.getModelId().getPath() + " onto "
                 + aim.getName().getString()), true);
         return 1;
@@ -2778,9 +2790,9 @@ public final class WFServerEvents {
             MissileEntity m = preset.build(level, target);
             m.setControlId(player.getUUID());
             m.setTeamId(team);
-            m.setSwarmId(swarmId);
+            m.swarm().setSwarmId(swarmId);
             if (i == 0) {
-                m.setCommander(true);
+                m.swarm().setCommander(true);
             }
             double side = (i % 2 == 0 ? 1.0 : -1.0) * ((double) (i + 1) / 2) * 2.0;
             Vec3 spawn = base.add(side, i * 0.4, 0.0);
@@ -2826,7 +2838,7 @@ public final class WFServerEvents {
         m.setControlId(player.getUUID());
         m.setTeamId(com.wf.wflib.recon.ReconOwners.owningEntity(player));
         if (lock != null) {
-            m.setInterceptLock(lock);
+            m.interceptor().setLock(lock);
         }
         m.moveTo(spawn.x, spawn.y, spawn.z, player.getYRot(), 0.0f);
         level.addFreshEntity(m);

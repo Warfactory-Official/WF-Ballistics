@@ -2,7 +2,7 @@ package com.wf.wflib.recon.source;
 
 import com.wf.wflib.entity.glyphid.EntityGlyphid;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphid;
-import com.wf.wflib.entity.glyphid.sim.SimGlyphidRegistry;
+import com.wf.wflib.entity.glyphid.sim.SimGlyphidManager;
 import com.wf.wflib.recon.ContactClass;
 import com.wf.wflib.recon.SourceIds;
 import com.wf.wflib.recon.TargetSink;
@@ -18,7 +18,7 @@ public final class SimGlyphidSource implements TargetSource {
 
     @Override
     public void collect(ServerLevel level, AABB volume, TargetSink sink) {
-        List<SimGlyphid> glyphids = SimGlyphidRegistry.get(level).view();
+        List<SimGlyphid> glyphids = SimGlyphidManager.tier(level).view();
         for (int i = 0; i < glyphids.size(); i++) {
             SimGlyphid glyphid = glyphids.get(i);
             if (!volume.contains(glyphid.x, glyphid.y, glyphid.z)) {

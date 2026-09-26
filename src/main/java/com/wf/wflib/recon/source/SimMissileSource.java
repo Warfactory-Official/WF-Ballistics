@@ -1,12 +1,12 @@
 package com.wf.wflib.recon.source;
 
+import com.wf.wflib.sim.SimMissileManager;
 import com.wf.wflib.recon.ContactClass;
 import com.wf.wflib.recon.SourceIds;
 import com.wf.wflib.recon.TargetSink;
 import com.wf.wflib.recon.TargetSource;
 import com.wf.wflib.recon.snapshot.TargetSnapshot;
 import com.wf.wflib.sim.SimMissile;
-import com.wf.wflib.sim.SimMissileRegistry;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -18,7 +18,7 @@ public final class SimMissileSource implements TargetSource {
 
     @Override
     public void collect(ServerLevel level, AABB volume, TargetSink sink) {
-        List<SimMissile> missiles = SimMissileRegistry.get(level).view();
+        List<SimMissile> missiles = SimMissileManager.tier(level).view();
         for (int i = 0; i < missiles.size(); i++) {
             SimMissile missile = missiles.get(i);
             Vec3 pos = missile.pos;

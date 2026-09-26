@@ -1,5 +1,6 @@
 package com.wf.wflib.debug;
 
+import com.wf.wflib.sim.SimTier;
 import com.wf.wflib.ModEntities;
 import com.wf.wflib.entity.glyphid.EntityGlyphid;
 import com.wf.wflib.entity.glyphid.GlyphidCaste;
@@ -8,8 +9,6 @@ import com.wf.wflib.entity.glyphid.GlyphidTasks;
 import com.wf.wflib.entity.glyphid.GlyphidTracker;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphid;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphidManager;
-import com.wf.wflib.entity.glyphid.sim.SimGlyphidPass;
-import com.wf.wflib.entity.glyphid.sim.SimGlyphidRegistry;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.core.SectionPos;
 import net.minecraft.network.chat.Component;
@@ -170,7 +169,7 @@ public final class SwarmBench {
         for (EntityGlyphid glyphid : doomed) {
             glyphid.discard();
         }
-        SimGlyphidRegistry registry = SimGlyphidRegistry.get(level);
+        SimTier<SimGlyphid> registry = SimGlyphidManager.tier(level);
         int records = registry.count();
         registry.view().clear();
         registry.setDirty();
@@ -323,7 +322,7 @@ public final class SwarmBench {
             bug.setCurrentTask(GlyphidTasks.TASK_FOLLOW, null);
             ordered++;
         }
-        for (SimGlyphid sim : SimGlyphidRegistry.get(level).view()) {
+        for (SimGlyphid sim : SimGlyphidManager.tier(level).view()) {
             sim.taskX = x;
             sim.taskY = y;
             sim.taskZ = z;
@@ -345,7 +344,7 @@ public final class SwarmBench {
 
     public static int simAsync(CommandSourceStack source, boolean on) {
         for (ServerLevel level : source.getServer().getAllLevels()) {
-            SimGlyphidRegistry.get(level).await();
+            SimGlyphidManager.tier(level).await();
         }
         simAsync = on;
         source.sendSuccess(() -> Component.literal("Glyphid sim pass runs "
@@ -357,7 +356,7 @@ public final class SwarmBench {
      * Where the sim pass ran, what it cost and how much of that the world thread waited out.
      */
     public static int simThread(CommandSourceStack source) {
-        for (String line : SimGlyphidPass.report(source.getLevel())) {
+        for (String line : SimGlyphidManager.report(source.getLevel())) {
             source.sendSuccess(() -> Component.literal(line), false);
         }
         return 1;
@@ -400,7 +399,7 @@ public final class SwarmBench {
         double minZ = Math.min(from.z, to.z);
         double maxZ = Math.max(from.z, to.z);
         int inside = 0;
-        for (SimGlyphid sim : SimGlyphidRegistry.get(source.getLevel()).view()) {
+        for (SimGlyphid sim : SimGlyphidManager.tier(source.getLevel()).view()) {
             if (sim.x >= minX && sim.x <= maxX && sim.y >= minY && sim.y <= maxY
                     && sim.z >= minZ && sim.z <= maxZ) {
                 inside++;

@@ -90,6 +90,33 @@ public final class DamageResistanceHandler {
      * @param source the hit being resolved, or null if only the category is known
      */
     public static float[] getDTDR(LivingEntity entity, String category, @Nullable DamageSource source) {
+        float[] innateDtDr = getInnateDTDR(entity, category, source);
+        float dt = innateDtDr[0];
+        float dr = innateDtDr[1];
+
+        for (ItemStack stack : entity.getArmorSlots()) {
+            ResistanceProfile profile = ARMOR.get(stack.getItem());
+            if (profile != null) {
+                Resistance r = profile.get(category);
+                dt += r.threshold;
+                dr += r.resistance;
+            }
+        }
+
+        return new float[]{dt, Math.min(dr, 1F)};
+    }
+
+    /**
+     * The entity's <em>own</em> resistance: what it is made of, plus whatever {@link DynamicResistance}
+     * says about this particular hit. Worn armour is deliberately not included.
+     *
+     * <p>Split out because the two halves belong to different owners now. Armour is resolved per
+     * equipment slot by {@code com.wf.wflib.armor.ArmorSystem}, which is what stops a helmet
+     * from protecting a shin; the loop below in {@link #getDTDR} sums every worn piece regardless of
+     * where the hit landed, which is exactly the behaviour being replaced. A glyphid's chitin, on the
+     * other hand, is not on any slot and has no better home than here.
+     */
+    public static float[] getInnateDTDR(LivingEntity entity, String category, @Nullable DamageSource source) {
         float dt = 0F;
         float dr = 0F;
 
@@ -104,15 +131,6 @@ public final class DamageResistanceHandler {
             Resistance r = innate.get(category);
             dt += r.threshold;
             dr += r.resistance;
-        }
-
-        for (ItemStack stack : entity.getArmorSlots()) {
-            ResistanceProfile profile = ARMOR.get(stack.getItem());
-            if (profile != null) {
-                Resistance r = profile.get(category);
-                dt += r.threshold;
-                dr += r.resistance;
-            }
         }
 
         return new float[]{dt, Math.min(dr, 1F)};

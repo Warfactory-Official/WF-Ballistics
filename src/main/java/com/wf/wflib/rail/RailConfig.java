@@ -17,6 +17,19 @@ public final class RailConfig {
     public static final ModConfigSpec.IntValue CLAIM_KEEPOUT;
     public static final ModConfigSpec.BooleanValue DROP_ATTENDED_BLOCKS;
     public static final ModConfigSpec.BooleanValue EXCAVATION_STATS;
+    public static final ModConfigSpec.ConfigValue<String> TUNNEL_LINING;
+    public static final ModConfigSpec.ConfigValue<String> TUNNEL_PROFILE;
+    public static final ModConfigSpec.BooleanValue TUNNEL_LIGHTING;
+    public static final ModConfigSpec.BooleanValue TUNNEL_TRACK;
+
+    // --- Track laying ---
+    public static final ModConfigSpec.IntValue TRACK_BOOST_SPACING;
+    public static final ModConfigSpec.DoubleValue BORE_TRAIN_SPEED;
+    public static final ModConfigSpec.ConfigValue<String> IR_TRACK;
+    public static final ModConfigSpec.DoubleValue IR_GAUGE;
+    public static final ModConfigSpec.IntValue SPOIL_CARS;
+    public static final ModConfigSpec.ConfigValue<String> TRACK_MATERIAL;
+    public static final ModConfigSpec.DoubleValue TURNOUT_LEAD;
 
     private RailConfig() {
     }
@@ -65,6 +78,82 @@ public final class RailConfig {
                         "thing that says what to make faster - the flush is 15x everything else put",
                         "together under sync-chunk-writes.")
                 .define("stats", true);
+
+        TUNNEL_LINING = b
+                .comment("Block a bored tunnel is lined with. The lining goes in before the bore is opened,",
+                        "which is what keeps an aquifer or a lava lake out, so it has to be something solid",
+                        "and full: a slab or a fence would leave the tunnel open to whatever it cut into.")
+                .define("tunnelLining", "minecraft:deepslate_bricks");
+
+        TUNNEL_PROFILE = b
+                .comment("Which drawn section /wfrail build uses when it is not told one. Sections live in",
+                        "config/wflib-rail-profiles as plain text you can edit or add to; '.' is tunnel,",
+                        "'#' is lining and 'L' is a torch.")
+                .define("tunnelProfile", "standard");
+
+        TUNNEL_LIGHTING = b
+                .comment("Whether to run the lighting pass. The section decides where its torches go and",
+                        "how far apart; this only decides whether they go in at all. Off leaves a sealed",
+                        "unlit tunnel, which mobs will spawn in within a minute.")
+                .define("tunnelLighting", true);
+
+        TUNNEL_TRACK = b
+                .comment("Whether a finished bore has track laid in it. The point of a tunnel on a rail",
+                        "route is the railway, and a tunnel with no rails in it is a corridor.")
+                .define("tunnelTrack", true);
+
+        b.pop();
+
+        b.comment("Laying track. With Immersive Railroading installed a route is built as real IR track:",
+                        "cubic curves in IR's own graph, which is what stock runs on. Without it, vanilla",
+                        "rail, which a minecart runs on and an IR locomotive does not.",
+                        "Where routes meet, /wfrail junctions builds the junction: two lines that cross",
+                        "share their crossing blocks, and a branch gets a real switch you can throw.")
+                .push("track");
+
+        TRACK_BOOST_SPACING = b
+                .comment("Blocks between powered rails, each with its own block of redstone buried under",
+                        "it. Zero lays plain rail throughout, which needs something else to push a cart.")
+                .defineInRange("boostSpacing", 8, 0, 64);
+
+        BORE_TRAIN_SPEED = b
+                .comment("How fast a bore train drives, in blocks per second. This is a machine you stand",
+                        "and watch, so the default is a pace you can walk alongside; the cost per block",
+                        "is the same however fast it goes.")
+                .defineInRange("boreTrainSpeed", 8.0, 0.5, 64.0);
+
+        IR_TRACK = b
+                .comment("Which Immersive Railroading track definition a machine builds. IR ships",
+                        "'default', 'concrete' and 'railsonly'; a pack may add more. An id this install",
+                        "does not have falls back to 'default' with a line in the log.")
+                .define("irTrack", "default");
+
+        IR_GAUGE = b
+                .comment("Track gauge in metres. 1.435 is standard gauge, which is what IR's stock is",
+                        "built to; narrow gauge stock will not run on it and vice versa, so this is a",
+                        "decision about the whole railway rather than about one tunnel.")
+                .defineInRange("irGauge", 1.435, 0.1, 10.0);
+
+        SPOIL_CARS = b
+                .comment("Most spoil cars a bore train will grow to. It starts with one and couples",
+                        "another on whenever the last is full, because a tunnel produces roughly a",
+                        "block of spoil per block cut and a fixed pair of cars throws most of a long",
+                        "one away. Past this it keeps digging and counts what it left behind.")
+                .defineInRange("spoilCars", 16, 1, 64);
+
+        TRACK_MATERIAL = b
+                .comment("What one block of track is paid for with, when a train is building against a",
+                        "depot. The tunnel's own lining block pays for the lining, so that one follows",
+                        "the section and is not set here; this is the rail itself. An id this install",
+                        "does not have falls back to minecraft:rail.")
+                .define("trackMaterial", "minecraft:rail");
+
+        TURNOUT_LEAD = b
+                .comment("How far along the branch a turnout's diverging curve runs, in blocks. This is",
+                        "the turnout's number in the railway sense: short is sharp and slow, long is",
+                        "shallow and fast, and it costs that much straight taken out of the main line.",
+                        "The curve always leaves tangent to the main line, whatever this is set to.")
+                .defineInRange("turnoutLead", 14.0, 4.0, 64.0);
 
         b.pop();
 

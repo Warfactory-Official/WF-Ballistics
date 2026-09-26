@@ -12,7 +12,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.*;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import org.joml.Vector3d;
 
 import java.util.List;
 import java.util.function.Predicate;
@@ -106,7 +105,7 @@ public final class SweptCollision {
             Vec3 off = sample.subtract(entityPos);
             for (OBB base : obbs) {
                 OBB moved = base.move(off);
-                AABB box = enclosingAABB(moved);
+                AABB box = moved.bounds();
                 int x0 = Mth.floor(box.minX), x1 = Mth.floor(box.maxX);
                 int y0 = Mth.floor(box.minY), y1 = Mth.floor(box.maxY);
                 int z0 = Mth.floor(box.minZ), z1 = Mth.floor(box.maxZ);
@@ -134,25 +133,6 @@ public final class SweptCollision {
             }
         }
         return null;
-    }
-
-    /**
-     * Axis-aligned box enclosing the oriented box (from its 8 world-space corners).
-     */
-    private static AABB enclosingAABB(OBB obb) {
-        Vector3d[] v = obb.getVertices();
-        double minX = v[0].x, minY = v[0].y, minZ = v[0].z;
-        double maxX = minX, maxY = minY, maxZ = minZ;
-        for (int i = 1; i < v.length; i++) {
-            Vector3d p = v[i];
-            if (p.x < minX) minX = p.x;
-            else if (p.x > maxX) maxX = p.x;
-            if (p.y < minY) minY = p.y;
-            else if (p.y > maxY) maxY = p.y;
-            if (p.z < minZ) minZ = p.z;
-            else if (p.z > maxZ) maxZ = p.z;
-        }
-        return new AABB(minX, minY, minZ, maxX, maxY, maxZ);
     }
 
     private static BlockHitResult miss(Vec3 at) {

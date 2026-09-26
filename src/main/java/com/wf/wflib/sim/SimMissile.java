@@ -1,5 +1,6 @@
 package com.wf.wflib.sim;
 
+import com.wf.wflib.missile.MissileBuilder;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.MissileModels;
 import com.wf.wflib.ModEntities;
@@ -12,6 +13,8 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
+
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -66,48 +69,54 @@ public final class SimMissile {
     public AttackProfile attackProfile = AttackProfile.SPEED;
     public double approachJoinCap = MissileEntity.DEFAULT_APPROACH_JOIN_CAP;
     public final List<SimMissile> swarmMembers = new ArrayList<>();
+    /** Entity NBT at offload; null = synthetic record (orbital drop, sim interceptor), built from the fields. */
+    @Nullable
+    public CompoundTag body;
+    /** Position before this tick's advance; transient. */
+    Vec3 prevPos;
 
     public static SimMissile fromEntity(MissileEntity m) {
         SimMissile sm = new SimMissile();
         sm.id = m.getUUID();
         sm.pos = m.position();
-        sm.target = m.getTarget();
+        sm.target = m.flight().getTarget();
         sm.simY = m.getY();
-        sm.speed = m.getCruiseSpeed();
+        sm.speed = m.flight().getCruiseSpeed();
         sm.lastGameTime = m.level().getGameTime();
-        sm.cruiseMode = m.getCruiseMode();
-        sm.cruiseAltitude = m.getCruiseAltitude();
-        sm.terrainClearance = m.getTerrainClearance();
-        sm.explosionOffset = m.getExplosionOffset();
-        sm.maxTurnRate = m.getMaxTurnRate();
+        sm.cruiseMode = m.flight().getCruiseMode();
+        sm.cruiseAltitude = m.flight().getCruiseAltitude();
+        sm.terrainClearance = m.flight().getTerrainClearance();
+        sm.explosionOffset = m.fuze().getExplosionOffset();
+        sm.maxTurnRate = m.flight().getMaxTurnRate();
         sm.modelId = m.getModelId();
-        sm.detonationId = m.getDetonationId();
+        sm.detonationId = m.fuze().getDetonationId();
         sm.flightSoundId = m.getFlightSoundId();
         sm.flightSoundRange = m.getFlightSoundRange();
         sm.flightSoundBasePitch = m.getFlightSoundBasePitch();
         sm.flightSoundSpeedPitch = m.getFlightSoundSpeedPitch();
-        sm.ascentStageId = m.getAscentStageId();
-        sm.cruiseStageId = m.getCruiseStageId();
-        sm.attackStageId = m.getAttackStageId();
+        sm.ascentStageId = m.flight().getAscentStageId();
+        sm.cruiseStageId = m.flight().getCruiseStageId();
+        sm.attackStageId = m.flight().getAttackStageId();
         sm.fragmentCount = m.getFragmentCount();
-        sm.impactPreloadRadius = m.getImpactPreloadRadius();
-        sm.splitDepth = m.getSplitDepth();
-        sm.swarmId = m.getSwarmId();
+        sm.impactPreloadRadius = m.fuze().getImpactPreloadRadius();
+        sm.splitDepth = m.swarm().getSplitDepth();
+        sm.swarmId = m.swarm().getSwarmId();
         sm.controlId = m.getControlId();
         sm.teamId = m.getTeamId();
-        sm.interceptChance = m.getInterceptChance();
-        sm.fuelType = m.getFuelType();
-        sm.fuel = m.getFuel();
-        sm.fuelCapacity = m.getFuelCapacity();
-        sm.acceleration = m.getAcceleration();
-        sm.deceleration = m.getDeceleration();
-        sm.rcs = m.getRcs();
-        sm.evasion = m.getEvasion();
-        sm.commander = m.isCommander();
-        sm.attackApproachDir = m.getAttackApproachDir();
-        sm.attackProfile = m.getAttackProfile();
-        sm.approachJoinCap = m.getApproachJoinCap();
+        sm.interceptChance = m.interceptor().getChance();
+        sm.fuelType = m.motor().getFuelType();
+        sm.fuel = m.motor().getFuel();
+        sm.fuelCapacity = m.motor().getFuelCapacity();
+        sm.acceleration = m.motor().getAcceleration();
+        sm.deceleration = m.motor().getDeceleration();
+        sm.rcs = m.signature().getRcs();
+        sm.evasion = m.signature().getEvasion();
+        sm.commander = m.swarm().isCommander();
+        sm.attackApproachDir = m.flight().getAttackApproachDir();
+        sm.attackProfile = m.flight().getAttackProfile();
+        sm.approachJoinCap = m.flight().getApproachJoinCap();
         sm.role = Role.NORMAL;
+        sm.body = m.saveWithoutId(new CompoundTag());
         return sm;
     }
 
@@ -213,6 +222,7 @@ public final class SimMissile {
         if (tag.contains("ApproachJoinCap")) {
             sm.approachJoinCap = tag.getDouble("ApproachJoinCap");
         }
+        sm.body = tag.contains("Body") ? tag.getCompound("Body") : null;
         if (tag.contains("SwarmMembers")) {
             ListTag memberList = tag.getList("SwarmMembers", Tag.TAG_COMPOUND);
             for (int i = 0; i < memberList.size(); i++) {
@@ -233,7 +243,14 @@ public final class SimMissile {
     }
 
     public MissileEntity toEntity(ServerLevel level, Vec3 spawnPos) {
-        MissileEntity.Builder b = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
+        if (this.body != null) {
+            MissileEntity m = new MissileEntity(ModEntities.STEALTH_MISSILE.get(), level);
+            m.load(this.body);
+            m.motor().setFuel(this.fuel);
+            m.moveTo(spawnPos.x, spawnPos.y, spawnPos.z, m.getYRot(), m.getXRot());
+            return m;
+        }
+        MissileBuilder b = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
                 .target(this.target);
         if (this.cruiseMode == MissileEntity.CruiseMode.HIGH_ALTITUDE) {
             b.highAltitude(this.cruiseAltitude);
@@ -346,6 +363,9 @@ public final class SimMissile {
         }
         tag.putString("AttackProfile", attackProfile.name());
         tag.putDouble("ApproachJoinCap", approachJoinCap);
+        if (body != null) {
+            tag.put("Body", body);
+        }
         if (!swarmMembers.isEmpty()) {
             ListTag memberList = new ListTag();
             for (SimMissile mem : swarmMembers) {

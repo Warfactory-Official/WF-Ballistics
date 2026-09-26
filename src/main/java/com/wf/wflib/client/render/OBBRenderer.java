@@ -13,8 +13,8 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
-import org.joml.Quaterniond;
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 import java.util.List;
 
@@ -25,45 +25,32 @@ public final class OBBRenderer {
     }
 
     public static void render(Entity entity, List<OBB> obbList, PoseStack poseStack, VertexConsumer buffer,
-                              float red, float green, float blue, float alpha, float partialTicks) {
-        Vec3 position = entity.position();
+                              float red, float green, float blue, float alpha) {
         float[] tint = swarmTint(entity);
-        float r = tint != null ? tint[0] : red;
-        float g = tint != null ? tint[1] : green;
-        float b = tint != null ? tint[2] : blue;
+        render(entity.position(), obbList, poseStack, buffer,
+                tint != null ? tint[0] : red, tint != null ? tint[1] : green, tint != null ? tint[2] : blue, alpha);
+    }
+
+    /** Boxes relative to {@code origin} (the pose stack's origin). */
+    public static void render(Vec3 origin, List<OBB> obbList, PoseStack poseStack, VertexConsumer buffer,
+                              float red, float green, float blue, float alpha) {
         for (OBB obb : obbList) {
-            org.joml.Vector3d center = obb.center();
-            org.joml.Vector3d halfExtents = obb.extents();
-            Quaterniond rotation = obb.rotation();
-            if (obb.part() == OBB.Part.INTERACTIVE) {
-                renderOBB(poseStack, buffer,
-                        center.x() - position.x(), center.y() - position.y(), center.z() - position.z(),
-                        rotation,
-                        halfExtents.x(), halfExtents.y(), halfExtents.z(),
-                        1f, 0.8f, 0f, 1f);
-            } else {
-                renderOBB(poseStack, buffer,
-                        center.x() - position.x(), center.y() - position.y(), center.z() - position.z(),
-                        rotation,
-                        halfExtents.x(), halfExtents.y(), halfExtents.z(),
-                        r, g, b, alpha);
-            }
+            Vector3f half = obb.extents();
+            renderOBB(poseStack, buffer,
+                    obb.centerX() - origin.x, obb.centerY() - origin.y, obb.centerZ() - origin.z,
+                    obb.rotation(), half.x, half.y, half.z, red, green, blue, alpha);
         }
     }
 
     public static void renderOBB(PoseStack poseStack, VertexConsumer buffer,
                                  double centerX, double centerY, double centerZ,
-                                 Quaterniond rotation,
+                                 Quaternionf rotation,
                                  double halfX, double halfY, double halfZ,
                                  float red, float green, float blue, float alpha) {
         poseStack.pushPose();
         poseStack.translate(centerX, centerY, centerZ);
-        poseStack.mulPose(new Quaternionf((float) rotation.x, (float) rotation.y, (float) rotation.z, (float) rotation.w));
-        LevelRenderer.renderLineBox(
-                poseStack,
-                buffer,
-                -halfX, -halfY, -halfZ,
-                halfX, halfY, halfZ,
+        poseStack.mulPose(rotation);
+        LevelRenderer.renderLineBox(poseStack, buffer, -halfX, -halfY, -halfZ, halfX, halfY, halfZ,
                 red, green, blue, alpha);
         poseStack.popPose();
     }
@@ -93,13 +80,9 @@ public final class OBBRenderer {
         float gg = tint != null ? tint[1] : 0.9f;
         float gb = tint != null ? tint[2] : 0.1f;
         for (OBB obb : obbList) {
-            if (obb.part() == OBB.Part.EMPTY) {
-                continue;
-            }
-            org.joml.Vector3d c = obb.center();
-            org.joml.Vector3d h = obb.extents();
-            Quaterniond rot = obb.rotation();
-            double cx = c.x - pos.x, cy = c.y - pos.y, cz = c.z - pos.z;
+            Vector3f h = obb.extents();
+            Quaternionf rot = obb.rotation();
+            double cx = obb.centerX() - pos.x, cy = obb.centerY() - pos.y, cz = obb.centerZ() - pos.z;
             for (int i = 1; i <= n; i++) {
                 double d = moveDist * i / (double) n;
                 renderOBB(poseStack, buffer,
@@ -118,7 +101,7 @@ public final class OBBRenderer {
         if (!(entity instanceof MissileEntity missile)) {
             return null;
         }
-        long id = missile.getSwarmId();
+        long id = missile.swarm().getSwarmId();
         if (id == 0L) {
             return null;
         }

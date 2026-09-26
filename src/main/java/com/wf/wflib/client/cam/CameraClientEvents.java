@@ -27,6 +27,7 @@ public final class CameraClientEvents {
     @SubscribeEvent
     public static void onRenderFramePost(RenderFrameEvent.Post event) {
         FeedAudit.frameEnd();
+        FeedProbe.checkpoint(CameraFeedCache.frame(), "post");
     }
 
     /** Close the fog in to the edge of the streamed bubble while a feed is being drawn. */
@@ -48,7 +49,6 @@ public final class CameraClientEvents {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         CameraLink.tick();
-        FeedChunks.tick();
     }
 
     /** Tell the server whether this client can draw terrain streamed for a drone. */
@@ -61,5 +61,6 @@ public final class CameraClientEvents {
     public static void onLoggedOut(ClientPlayerNetworkEvent.LoggingOut event) {
         CameraLink.close();
         CameraFeedCache.clear();
+        ScreenSensor.set(null, 1.0f);
     }
 }

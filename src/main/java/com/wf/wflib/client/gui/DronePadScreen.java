@@ -3,6 +3,7 @@ package com.wf.wflib.client.gui;
 import com.wf.wflib.block.entity.DronePadBlockEntity;
 import com.wf.wflib.drone.DroneBattery;
 import com.wf.wflib.drone.DroneEntity;
+import com.wf.wflib.drone.DroneFlight;
 import com.wf.wflib.drone.DroneMission;
 import com.wf.wflib.drone.MineLoad;
 import com.wf.wflib.item.MinePresetRegistry;
@@ -245,11 +246,11 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         countBox = makeBox(x, y, THIRD,
                 prev(countBox, seedMission != null ? Integer.toString(seedMission.count) : "1"), "Drones");
         speedBox = makeBox(x + THIRD + GAP, y, THIRD,
-                prev(speedBox, num(seedMission != null ? seedMission.cruiseSpeed : DroneEntity.DEFAULT_CRUISE_SPEED)),
+                prev(speedBox, num(seedMission != null ? seedMission.cruiseSpeed : DroneFlight.DEFAULT_CRUISE_SPEED)),
                 "Speed");
         altitudeBox = makeBox(x + 2 * (THIRD + GAP), y, THIRD,
                 prev(altitudeBox, num(seedMission != null
-                        ? seedMission.cruiseAltitude : DroneEntity.DEFAULT_CRUISE_ALTITUDE)), "Altitude");
+                        ? seedMission.cruiseAltitude : DroneFlight.DEFAULT_CRUISE_ALTITUDE)), "Altitude");
         y += BOX_H + ROW_GAP;
 
         y += LABEL_H;
@@ -257,7 +258,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
                 prev(batteryBox, num(seedMission != null ? seedMission.batteryCapacity : DroneBattery.DEFAULT_CAPACITY)),
                 "Battery");
         releaseBox = makeBox(x + THIRD + GAP, y, THIRD,
-                prev(releaseBox, num(seedMission != null ? seedMission.releaseSpeed : DroneEntity.DEFAULT_RELEASE_SPEED)),
+                prev(releaseBox, num(seedMission != null ? seedMission.releaseSpeed : DroneFlight.DEFAULT_RELEASE_SPEED)),
                 "Release");
         spacingBox = makeBox(x + 2 * (THIRD + GAP), y, THIRD,
                 prev(spacingBox, num(seedMission != null ? seedMission.formationSpacing : Formation.DEFAULT_SPACING)),
@@ -361,10 +362,10 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         m.count = Math.max(1, (int) Math.round(parseDouble(countBox.getValue(), 1.0)));
         m.formationId = FORMATIONS.get(Math.floorMod(formationIndex, FORMATIONS.size()));
         m.coordinationId = COORDINATION.get(Math.floorMod(coordinationIndex, COORDINATION.size()));
-        m.cruiseSpeed = parseDouble(speedBox.getValue(), DroneEntity.DEFAULT_CRUISE_SPEED);
-        m.cruiseAltitude = parseDouble(altitudeBox.getValue(), DroneEntity.DEFAULT_CRUISE_ALTITUDE);
+        m.cruiseSpeed = parseDouble(speedBox.getValue(), DroneFlight.DEFAULT_CRUISE_SPEED);
+        m.cruiseAltitude = parseDouble(altitudeBox.getValue(), DroneFlight.DEFAULT_CRUISE_ALTITUDE);
         m.batteryCapacity = parseDouble(batteryBox.getValue(), DroneBattery.DEFAULT_CAPACITY);
-        m.releaseSpeed = parseDouble(releaseBox.getValue(), DroneEntity.DEFAULT_RELEASE_SPEED);
+        m.releaseSpeed = parseDouble(releaseBox.getValue(), DroneFlight.DEFAULT_RELEASE_SPEED);
         m.formationSpacing = Formation.clampSpacing(
                 parseDouble(spacingBox.getValue(), Formation.DEFAULT_SPACING));
         m.launchInterval = DroneMission.clampInterval((int) Math.round(
@@ -404,7 +405,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         boolean roundTrip = m.canRoundTrip(origin, cargo);
 
         int ticks = (int) Math.round(range / Math.max(1.0E-3, m.cruiseSpeed)
-                + m.cruiseAltitude / DroneEntity.DEFAULT_CLIMB_RATE);
+                + m.cruiseAltitude / DroneFlight.DEFAULT_CLIMB_RATE);
         lines.add(Component.literal(programmed
                 ? String.format("%d step(s), %dm of route   ETA ~%.0fs   %d%% battery out",
                         m.program.tasks().size(), (int) range, ticks / 20.0, outPercent)

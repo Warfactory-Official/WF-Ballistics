@@ -73,12 +73,12 @@ public final class KineticPresetRegistry {
                 .speed(6.0).mass(20.0).build());
 
         register(KineticPreset.builder(rl("ap"), MissileModels.rl("micro"), WarheadRegistry.rl("inert"))
-                .speed(12.0).drag(0.005).mass(30.0).penetration(8, 100.0)
+                .speed(12.0).drag(0.005).mass(30.0).penetration(8, 100.0).armorPenetration(550.0)
                 .passesThroughEntities().build());
 
         // Shaped charge: a narrow jet along the impact heading, so it drills rather than craters.
         register(KineticPreset.builder(rl("heat"), MissileModels.rl("micro"), WarheadRegistry.rl("shaped_charge"))
-                .speed(8.0).mass(22.0).penetration(2, 60.0).blastHalfAngle(15.0).build());
+                .speed(8.0).mass(22.0).penetration(2, 60.0).blastHalfAngle(15.0).armorPenetration(450.0).build());
 
         // Airburst fragmentation: bursts short of the ground so the cone covers infantry in the open.
         register(KineticPreset.builder(rl("frag"), MissileModels.rl("micro"), WarheadRegistry.rl("fragmentation"))

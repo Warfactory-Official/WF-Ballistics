@@ -24,7 +24,6 @@ import com.wf.wflib.mine.MineEntity;
 import com.wf.wflib.item.MissilePreset;
 import com.wf.wflib.item.MissilePresetRegistry;
 import com.wf.wflib.menu.ModMenus;
-import com.wf.wflib.kinetic.KineticShellEntity;
 import dev.engine_room.flywheel.api.visual.EntityVisual;
 import dev.engine_room.flywheel.api.visualization.EntityVisualizer;
 import dev.engine_room.flywheel.api.visualization.VisualizationContext;
@@ -54,6 +53,8 @@ public class WFLibClient {
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.STEALTH_MISSILE.get(), MissileRenderer::new);
+        event.registerEntityRenderer(ModEntities.ROCKET.get(), com.wf.wflib.round.client.RocketClient::new);
+        // Drawn by its Flywheel visual; vanilla still needs a renderer or the dispatcher NPEs.
 
         // Bomblets are simple tumbling orange cubes (fragmentation payload).
         event.registerEntityRenderer(ModEntities.BOMBLET.get(),
@@ -159,20 +160,6 @@ public class WFLibClient {
 
             VisualizerRegistry.setVisualizer(ModEntities.STEALTH_MISSILE.get(), visualizer);
 
-            VisualizerRegistry.setVisualizer(ModEntities.KINETIC_SHELL.get(),
-                    new EntityVisualizer<KineticShellEntity>() {
-                        @Override
-                        public EntityVisual<? super KineticShellEntity> createVisual(VisualizationContext ctx,
-                                                                                     KineticShellEntity entity,
-                                                                                     float partialTick) {
-                            return new MissileVisual(ctx, entity);
-                        }
-
-                        @Override
-                        public boolean skipVanillaRender(KineticShellEntity entity) {
-                            return false;
-                        }
-                    });
 
             VisualizerRegistry.setVisualizer(ModEntities.MINE.get(), new EntityVisualizer<MineEntity>() {
                 @Override

@@ -1,6 +1,8 @@
 package com.wf.wflib.kinetic;
 
 import com.wf.wflib.MissileModels;
+import com.wf.wflib.api.ThreatKind;
+import org.jetbrains.annotations.Nullable;
 import com.wf.wflib.warhead.WarheadRegistry;
 import net.minecraft.resources.ResourceLocation;
 
@@ -28,15 +30,31 @@ public final class KineticPreset {
     private final float impactDamage;
     private final int penetration;
     private final float penetrationResistance;
+    private final float caliberMm;
+    private final float armorPenetrationMm;
 
     private final int fragmentCount;
     private final double airburstHeight;
     private final double proximityRadius;
     private final float blastHalfAngleDeg;
     private final boolean detonateOnEntity;
+    private final float blastSize;
+    private final boolean breaksBlocks;
 
-    private final boolean simulated;
+    @Nullable
+    private final ThreatKind threatKind;
+    private final boolean loadsChunks;
+    private final int tracerColor;
     private final int stackSize;
+
+    private final float motorAccel;
+    private final int burnTicks;
+    private final float quadraticDrag;
+    private final float durability;
+    private final float headshot;
+    private final int fuseDelay;
+    private final float burrow;
+    private final boolean entityContact;
 
     private KineticPreset(Builder b) {
         this.id = b.id;
@@ -53,13 +71,27 @@ public final class KineticPreset {
         this.impactDamage = b.impactDamage;
         this.penetration = b.penetration;
         this.penetrationResistance = b.penetrationResistance;
+        this.caliberMm = b.caliberMm;
+        this.armorPenetrationMm = b.armorPenetrationMm;
         this.fragmentCount = b.fragmentCount;
         this.airburstHeight = b.airburstHeight;
         this.proximityRadius = b.proximityRadius;
         this.blastHalfAngleDeg = b.blastHalfAngleDeg;
         this.detonateOnEntity = b.detonateOnEntity;
-        this.simulated = b.simulated;
+        this.blastSize = b.blastSize;
+        this.breaksBlocks = b.breaksBlocks;
+        this.threatKind = b.threatKind;
+        this.loadsChunks = b.loadsChunks;
+        this.tracerColor = b.tracerColor;
         this.stackSize = b.stackSize;
+        this.motorAccel = b.motorAccel;
+        this.burnTicks = b.burnTicks;
+        this.quadraticDrag = b.quadraticDrag;
+        this.durability = b.durability;
+        this.headshot = b.headshot;
+        this.fuseDelay = b.fuseDelay;
+        this.burrow = b.burrow;
+        this.entityContact = b.entityContact;
     }
 
     public static Builder builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
@@ -70,7 +102,8 @@ public final class KineticPreset {
         return id;
     }
 
-    /** A {@link MissileModels} id: the mesh the shell is drawn with, in the world and in the hand. */
+    /** A {@link MissileModels} id: the mesh drawn in flight and in the hand; null = tracer only (no item art). */
+    @Nullable
     public ResourceLocation modelId() {
         return modelId;
     }
@@ -143,6 +176,15 @@ public final class KineticPreset {
         return penetrationResistance;
     }
 
+    public float caliberMm() {
+        return caliberMm;
+    }
+
+    /** RHA defeated at normal incidence by a direct hit on vehicle armour; 0 = none. */
+    public float armorPenetrationMm() {
+        return armorPenetrationMm;
+    }
+
     /** Fragments thrown by a fragmentation warhead. */
     public int fragmentCount() {
         return fragmentCount;
@@ -168,13 +210,79 @@ public final class KineticPreset {
         return detonateOnEntity;
     }
 
-    /** Whether this round may leave the world while it is above the build limit and still climbing. */
-    public boolean simulated() {
-        return simulated;
+    /** Warhead blast size override (vanilla explosion power); {@code <= 0} = the warhead's own. */
+    public float blastSize() {
+        return blastSize;
+    }
+
+    /** False = the blast hurts entities only. */
+    public boolean breaksBlocks() {
+        return breaksBlocks;
+    }
+
+    /** Armour-model kind; null = derived from warhead and penetration. */
+    @Nullable
+    public ThreatKind threatKind() {
+        return threatKind;
+    }
+
+    /** Force-loads the chunk it descends into (artillery); false => lost at unloaded ground (bullets). */
+    public boolean loadsChunks() {
+        return loadsChunks;
+    }
+
+    /** 0xRRGGBB streak; 0 = none. */
+    public int tracerColor() {
+        return tracerColor;
     }
 
     public int stackSize() {
         return stackSize;
+    }
+
+    /** RocketEntity only: blocks/tick^2 along the nose while burning. */
+    public float motorAccel() {
+        return motorAccel;
+    }
+
+    /** RocketEntity only. */
+    public int burnTicks() {
+        return burnTicks;
+    }
+
+    /** {@code v -= k|v|v} per tick, on top of {@link #drag}. */
+    public float quadraticDrag() {
+        return quadraticDrag;
+    }
+
+    /** Per-tick velocity factor in air at {@code speed}: {@link #decay()} when there is no quadratic drag. */
+    public double decay(double speed) {
+        return quadraticDrag == 0.0f ? decay() : Math.max(decay() - quadraticDrag * speed, 0.0);
+    }
+
+    /** Direct-hit damage factor on a living target struck within 0.25 of its eye height. */
+    public float headshot() {
+        return headshot;
+    }
+
+    /** Block contact => rest this many ticks, then detonate; 0 = on contact. */
+    public int fuseDelay() {
+        return fuseDelay;
+    }
+
+    /** Resting: dig straight down, each block costing its destroy speed (min 0.1) from this budget, before the fuse runs. */
+    public float burrow() {
+        return burrow;
+    }
+
+    /** False = passes entities untouched (bombs). */
+    public boolean entityContact() {
+        return entityContact;
+    }
+
+    /** RocketEntity only: health against air defence. */
+    public float durability() {
+        return durability;
     }
 
     public static final class Builder {
@@ -195,19 +303,34 @@ public final class KineticPreset {
         private float impactDamage = 0.0f;
         private int penetration = 0;
         private float penetrationResistance = 30.0f;
+        private float caliberMm = 120.0f;
+        private float armorPenetrationMm = 0.0f;
 
         private int fragmentCount = 0;
         private double airburstHeight = 0.0;
         private double proximityRadius = 0.0;
         private float blastHalfAngleDeg = 22.5f;
         private boolean detonateOnEntity = true;
+        private float blastSize = 0.0f;
+        private boolean breaksBlocks = true;
 
-        private boolean simulated = true;
+        private ThreatKind threatKind;
+        private boolean loadsChunks = true;
+        private int tracerColor = 0;
         private int stackSize = 16;
+
+        private float motorAccel = 0.0f;
+        private int burnTicks = 0;
+        private float quadraticDrag = 0.0f;
+        private float durability = 8.0f;
+        private float headshot = 1.0f;
+        private int fuseDelay = 0;
+        private float burrow = 0.0f;
+        private boolean entityContact = true;
 
         private Builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
             this.id = id;
-            this.modelId = modelId != null ? modelId : MissileModels.DEFAULT;
+            this.modelId = modelId;
             this.warheadId = warheadId;
         }
 
@@ -261,6 +384,16 @@ public final class KineticPreset {
             return this;
         }
 
+        public Builder caliber(double mm) {
+            this.caliberMm = (float) mm;
+            return this;
+        }
+
+        public Builder armorPenetration(double mm) {
+            this.armorPenetrationMm = (float) mm;
+            return this;
+        }
+
         public Builder fragments(int count) {
             this.fragmentCount = count;
             return this;
@@ -289,14 +422,66 @@ public final class KineticPreset {
             return this;
         }
 
-        /** Keep this round in the world for its whole flight, however high it goes. */
-        public Builder alwaysInWorld() {
-            this.simulated = false;
+        /** Lost at unloaded ground instead of loading it. */
+        public Builder noChunkLoading() {
+            this.loadsChunks = false;
+            return this;
+        }
+
+        public Builder threat(ThreatKind kind) {
+            this.threatKind = kind;
+            return this;
+        }
+
+        public Builder tracer(int rgb) {
+            this.tracerColor = rgb;
             return this;
         }
 
         public Builder stackSize(int size) {
             this.stackSize = size;
+            return this;
+        }
+
+        public Builder blast(double size, boolean breaksBlocks) {
+            this.blastSize = (float) size;
+            this.breaksBlocks = breaksBlocks;
+            return this;
+        }
+
+        public Builder motor(double accel, int ticks) {
+            this.motorAccel = (float) accel;
+            this.burnTicks = ticks;
+            return this;
+        }
+
+        public Builder quadraticDrag(double k) {
+            this.quadraticDrag = (float) k;
+            return this;
+        }
+
+        public Builder headshot(double multiplier) {
+            this.headshot = (float) multiplier;
+            return this;
+        }
+
+        public Builder fuseDelay(int ticks) {
+            this.fuseDelay = ticks;
+            return this;
+        }
+
+        public Builder burrow(double hardness) {
+            this.burrow = (float) hardness;
+            return this;
+        }
+
+        public Builder noEntityContact() {
+            this.entityContact = false;
+            return this;
+        }
+
+        public Builder durability(double health) {
+            this.durability = (float) health;
             return this;
         }
 

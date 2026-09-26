@@ -2,6 +2,7 @@ package com.wf.wflib.door;
 
 import com.wf.wflib.WFLib;
 import com.wf.wflib.probe.ProbeActions;
+import com.wf.wflib.probe.ProbeInventory;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -83,28 +84,17 @@ public final class DoorProbeActions {
         return core != null && level.getBlockEntity(core) instanceof DoorBlockEntity door ? door : null;
     }
 
-    /** The key in either hand that works this door, or an empty stack. */
+    /** A carried key that works this door, or an empty stack. */
     public static ItemStack keyFor(Player player, @Nullable DoorBlockEntity door) {
         if (door == null) {
             return ItemStack.EMPTY;
         }
-        if (door.keyWorks(player.getMainHandItem())) {
-            return player.getMainHandItem();
-        }
-        if (door.keyWorks(player.getOffhandItem())) {
-            return player.getOffhandItem();
-        }
-        return ItemStack.EMPTY;
+        return ProbeInventory.find(player, door::keyWorks);
     }
 
-    /** A padlock that has been cut, in either hand. */
+    /** A carried padlock that has been cut. */
     public static ItemStack cutPadlock(Player player) {
-        for (ItemStack held : new ItemStack[] {player.getMainHandItem(), player.getOffhandItem()}) {
-            if (held.getItem() instanceof DoorLockItem && DoorKeyItem.pinsOf(held) != 0) {
-                return held;
-            }
-        }
-        return ItemStack.EMPTY;
+        return ProbeInventory.find(player, held -> held.getItem() instanceof DoorLockItem && DoorKeyItem.pinsOf(held) != 0);
     }
 
     private static DoorBlockEntity door(ServerLevel level, BlockPos pos, BlockState state) {

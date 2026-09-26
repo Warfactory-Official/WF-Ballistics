@@ -112,9 +112,16 @@ public final class ProbeSelection {
     /** Sends the selected action to the server, if there is one and it is available. */
     public static boolean activate() {
         ProbeAction action = current();
+        if (ProbeJobOverlay.running()) {
+            // Any action packet while busy stops the job server-side.
+            WFNetwork.sendToServer(new ProbeActionPacket(targetPos, targetEntity,
+                    action == null ? ProbeJobOverlay.STOP : action.id(), 0));
+            return true;
+        }
         if (action == null || !action.enabled()) {
             return false;
         }
+        ProbeJobOverlay.sent(action);
         WFNetwork.sendToServer(
                 new ProbeActionPacket(targetPos, targetEntity, action.id(), action.arg()));
         return true;

@@ -1,5 +1,6 @@
 package com.wf.wflib.block.entity;
 
+import com.wf.wflib.sim.SimTier;
 import com.wf.wflib.block.ModBlockEntities;
 import com.wf.wflib.drone.CrateEntity;
 import com.wf.wflib.drone.DroneEntity;
@@ -13,7 +14,7 @@ import com.wf.wflib.exchange.StationRegistry;
 import com.wf.wflib.drone.DroneState;
 import com.wf.wflib.drone.DroneTracker;
 import com.wf.wflib.drone.sim.SimDrone;
-import com.wf.wflib.drone.sim.SimDroneRegistry;
+import com.wf.wflib.drone.sim.SimDroneManager;
 
 import java.util.ArrayList;
 import net.minecraft.core.BlockPos;
@@ -103,7 +104,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
     private void rechargeParked(ServerLevel level, BlockPos pos) {
         Vec3 centre = Vec3.atCenterOf(pos.above());
         for (DroneEntity drone : DroneTracker.drones(level)) {
-            if (drone.getDroneState() != DroneState.IDLE) {
+            if (drone.flight().getDroneState() != DroneState.IDLE) {
                 continue;
             }
             if (drone.position().distanceToSqr(centre) <= PAD_RADIUS * PAD_RADIUS
@@ -275,15 +276,15 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         Vec3 home = Vec3.atCenterOf(this.worldPosition.above());
         int count = 0;
         for (DroneEntity drone : DroneTracker.drones(level)) {
-            if (!drone.getDroneState().powered()) {
+            if (!drone.flight().getDroneState().powered()) {
                 continue;
             }
-            drone.setExfil(home);
-            drone.setDestination(null);
-            drone.setState(DroneState.EXFIL);
+            drone.route().setExfil(home);
+            drone.route().setDestination(null);
+            drone.flight().setState(DroneState.EXFIL);
             count++;
         }
-        for (SimDrone sd : new ArrayList<>(SimDroneRegistry.get(level).view())) {
+        for (SimDrone sd : new ArrayList<>(SimDroneManager.tier(level).view())) {
             sd.exfil = home;
             sd.destination = null;
             sd.state = DroneState.EXFIL;
@@ -308,7 +309,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
             crate.discard();
             count++;
         }
-        SimDroneRegistry registry = SimDroneRegistry.get(level);
+        SimTier<SimDrone> registry = SimDroneManager.tier(level);
         for (SimDrone sd : new ArrayList<>(registry.view())) {
             registry.remove(sd);
             count++;

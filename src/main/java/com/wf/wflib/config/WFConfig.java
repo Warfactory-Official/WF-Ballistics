@@ -55,6 +55,15 @@ public final class WFConfig {
     // --- Industry tracking (glyphid aggression input) ---
     public static final ModConfigSpec.IntValue CAMERA_STREAM_RADIUS;
     public static final ModConfigSpec.IntValue CAMERA_STREAM_BUDGET;
+    public static final ModConfigSpec.IntValue DETACHED_STREAM_RADIUS;
+    public static final ModConfigSpec.IntValue DETACHED_CHUNKS_PER_TICK;
+    public static final ModConfigSpec.BooleanValue DETACHED_SUPPRESS_BODY_ENTITIES;
+    public static final ModConfigSpec.IntValue DETACHED_BODY_VIEW_DISTANCE;
+    public static final ModConfigSpec.IntValue DETACHED_BODY_TICKET_RADIUS;
+    public static final ModConfigSpec.IntValue WAKEUP_TIMEOUT;
+    public static final ModConfigSpec.IntValue WAKEUP_TICKET_RADIUS;
+    public static final ModConfigSpec.ConfigValue<java.util.List<? extends String>> STREAM_DEBUG;
+    public static final ModConfigSpec.IntValue STREAM_DEBUG_HEARTBEAT;
     public static final ModConfigSpec.IntValue CAMERA_MAX_CHANNELS;
 
     public static final ModConfigSpec.ConfigValue<List<? extends String>> INDUSTRY_MACHINES;
@@ -256,6 +265,45 @@ public final class WFConfig {
                         "sent on the next publish, nearest ring first, so a feed sharpens from the middle",
                         "outwards. Lower it if opening a feed briefly stutters other players on a busy server.")
                 .defineInRange("chunksPerPublish", 24, 1, 256);
+        b.pop();
+
+        b.comment("Remote operation: a player rides an entity from afar (a UAV) while their body stays parked.",
+                        "Their view is moved onto the entity and its terrain streamed to them.")
+                .push("detachedBody");
+        DETACHED_STREAM_RADIUS = b
+                .comment("Chunk radius streamed around the remotely operated entity, clamped to the server view distance.")
+                .defineInRange("streamRadius", 12, 2, 32);
+        DETACHED_CHUNKS_PER_TICK = b
+                .comment("Chunk packets sent to one operator per tick. Unbounded, taking control dumps the whole",
+                        "view square at once and stalls input for seconds.")
+                .defineInRange("maxChunksPerTick", 16, 1, 1024);
+        DETACHED_SUPPRESS_BODY_ENTITIES = b
+                .comment("Stop tracking entities around the parked body to its operator. Whatever the body rides or",
+                        "carries stays tracked; everything returns when control ends.")
+                .define("suppressBodyStream", true);
+        DETACHED_BODY_VIEW_DISTANCE = b
+                .comment("View distance of the parked body. Below 2 keeps the normal view distance.")
+                .defineInRange("bodyViewDistance", 2, -1, 32);
+        DETACHED_BODY_TICKET_RADIUS = b
+                .comment("Chunk radius loaded around the parked body instead of its player ticket. Chunks outside it",
+                        "stop ticking (mobs, redstone, farms) until control ends. Negative keeps the player ticket.")
+                .defineInRange("bodyTicketRadius", 2, -1, 8);
+        WAKEUP_TIMEOUT = b
+                .comment("Ticks to wait for a remotely operable entity in unloaded terrain to load on connect.")
+                .defineInRange("wakeupTimeout", 200, 20, 6000);
+        WAKEUP_TICKET_RADIUS = b
+                .comment("Chunk ticket radius while waking such an entity.")
+                .defineInRange("wakeupTicketRadius", 2, 1, 8);
+        b.pop();
+
+        b.push("streamDebug");
+        STREAM_DEBUG = b
+                .comment("Chunk streaming log categories: ALL, SESSION, TICKET, CHUNK, CENTER, WAKEUP, CLIENT, CACHE.",
+                        "Empty = off. `/wflib stream debug` overrides until `/wflib stream reset`.")
+                .defineListAllowEmpty("categories", java.util.List.of(), () -> "", o -> o instanceof String);
+        STREAM_DEBUG_HEARTBEAT = b
+                .comment("Ticks between debug heartbeat lines.")
+                .defineInRange("heartbeatTicks", 40, 1, 12000);
         b.pop();
 
         b.comment("Camera panels: the monitor block and the handheld receiver. Both hold a bounded list of",

@@ -12,6 +12,7 @@ import com.wf.wflib.probe.ProbeAction;
 import com.wf.wflib.probe.ProbeElement;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.probe.ProbeCapabilities;
+import com.wf.wflib.probe.ProbeContext;
 import com.wf.wflib.probe.ProbeInfo;
 import com.wf.wflib.probe.ProbeProvider;
 import net.minecraft.ChatFormatting;
@@ -45,8 +46,7 @@ public final class DoorProbe {
         BlockPos core = DoorFrame.findCore(ctx.level(), pos, block);
         DoorBlockEntity door = core != null
                 && ctx.level().getBlockEntity(core) instanceof DoorBlockEntity found ? found : null;
-        append(info, block.type(), door, ctx.mainHand(), ctx.offHand(),
-                DoorProbeData.powered(ctx.data()));
+        append(info, block.type(), door, ctx, DoorProbeData.powered(ctx.data()));
         if (door != null) {
             actions(info, ctx.player(), block.type(), door);
         }
@@ -106,8 +106,8 @@ public final class DoorProbe {
     }
 
     /** The readout. */
-    private static void append(ProbeInfo info, DoorType type, DoorBlockEntity door, ItemStack mainHand,
-                               ItemStack offHand, int powered) {
+    private static void append(ProbeInfo info, DoorType type, DoorBlockEntity door, ProbeContext ctx,
+                               int powered) {
         info.title(Component.translatable("block.wflib." + type.id()));
 
         ItemStack item = new ItemStack(ModDoors.DOOR_ITEMS.get(type).get());
@@ -133,8 +133,7 @@ public final class DoorProbe {
 
         if (door.locked()) {
             ItemStack key = new ItemStack(ModDoors.DOOR_KEY.get());
-            boolean opens = com.wf.wflib.door.DoorKeyItem.opens(mainHand, door.pins())
-                    || com.wf.wflib.door.DoorKeyItem.opens(offHand, door.pins());
+            boolean opens = !ctx.find(held -> com.wf.wflib.door.DoorKeyItem.opens(held, door.pins())).isEmpty();
             info.add(new ProbeElement.Row(List.of(
                     ProbeElement.Icon.of(key),
                     ProbeElement.Text.of(Component.translatable(opens

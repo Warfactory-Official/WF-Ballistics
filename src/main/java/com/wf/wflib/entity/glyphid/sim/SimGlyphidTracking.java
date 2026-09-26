@@ -29,7 +29,7 @@ public final class SimGlyphidTracking {
         if (players.isEmpty()) {
             return;
         }
-        List<SimGlyphid> all = SimGlyphidRegistry.get(level).view();
+        List<SimGlyphid> all = SimGlyphidManager.tier(level).view();
         double range = Math.min(MAX_RANGE, level.getServer().getPlayerList().getViewDistance() * 16.0);
         double limit = range * range;
 

@@ -26,5 +26,7 @@ public enum WFEventType {
     /**
      * A squad member took over after its leader was lost.
      */
-    PROMOTED
+    PROMOTED,
+    /** TV round: operator took over ("on") or let go (detail = what the seeker locked). */
+    OPERATOR
 }

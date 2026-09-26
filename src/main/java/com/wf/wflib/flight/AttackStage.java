@@ -32,11 +32,11 @@ public final class AttackStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        if (missile.isDiveCommitted()) {
+        if (missile.flight().isDiveCommitted()) {
             return holdHeading(missile, ctx, APPROACH_SPEED);
         }
         if (reachedAimDescending(missile, ctx)) {
-            missile.setDiveCommitted(true);
+            missile.flight().setDiveCommitted(true);
             return holdHeading(missile, ctx, APPROACH_SPEED);
         }
         return guideByProfile(missile, ctx);
@@ -45,8 +45,8 @@ public final class AttackStage implements FlightStage {
     /** Speed-preserving terminal guidance. */
     private static Vec3 guideByProfile(MissileEntity missile, FlightContext ctx) {
         double fullSpeed = terminalSpeed(missile);
-        double turnRate = missile.getMaxTurnRate();
-        double pref = missile.resolveDiveAngle(ctx);
+        double turnRate = missile.flight().getMaxTurnRate();
+        double pref = missile.flight().resolveDiveAngle(ctx);
         double h = ctx.position().y - ctx.target().y;
         double d = ctx.horizontalDist();
 
@@ -54,7 +54,7 @@ public final class AttackStage implements FlightStage {
             return pursueDiveLine(missile, ctx, pref, fullSpeed);
         }
 
-        AttackProfile profile = missile.getAttackProfile();
+        AttackProfile profile = missile.flight().getAttackProfile();
         if (profile == AttackProfile.LOFT) {
             Vec3 lofted = guideLoft(missile, ctx, pref, fullSpeed, h, d, fullSpeed / turnRate);
             if (lofted != null) {
@@ -62,7 +62,7 @@ public final class AttackStage implements FlightStage {
             }
         }
         if (profile == AttackProfile.BALANCED && !feasible(h, d, fullSpeed / turnRate, pref)) {
-            double floorSpeed = missile.getCruiseSpeed() * BALANCED_MIN_FRACTION;
+            double floorSpeed = missile.flight().getCruiseSpeed() * BALANCED_MIN_FRACTION;
             double speed = Mth.clamp(requiredSpeed(h, d, turnRate, pref), floorSpeed, fullSpeed);
             double angle = feasibleDiveAngle(h, d, speed / turnRate, pref);
             return pursueDiveLine(missile, ctx, angle, speed);
@@ -146,7 +146,7 @@ public final class AttackStage implements FlightStage {
      * ahead of interceptors and its evasion boost, which doubles this, is punchy).
      */
     public static double terminalSpeed(MissileEntity missile) {
-        return Math.max(missile.getCruiseSpeed(), APPROACH_SPEED);
+        return Math.max(missile.flight().getCruiseSpeed(), APPROACH_SPEED);
     }
 
     /** Pure-pursuit onto the dive line at {@code angleDeg}, flown at exactly {@code speed} (no shedding). */
@@ -157,7 +157,7 @@ public final class AttackStage implements FlightStage {
         Vec3 target = ctx.target();
         double hx = ctx.nx();
         double hz = ctx.nz();
-        Vec3 travel = missile.getAttackTravelDir();
+        Vec3 travel = missile.flight().getAttackTravelDir();
         if (travel != null) {
             hx = travel.x;
             hz = travel.z;
@@ -174,14 +174,14 @@ public final class AttackStage implements FlightStage {
 
     /** Shared terminal-dive guidance at the given approach speed (also used by {@link VerticalDiveStage}). */
     static Vec3 guideDive(MissileEntity missile, FlightContext ctx, double approachSpeed) {
-        if (missile.isDiveCommitted()) {
+        if (missile.flight().isDiveCommitted()) {
             return holdHeading(missile, ctx, approachSpeed);
         }
         if (reachedAimDescending(missile, ctx)) {
-            missile.setDiveCommitted(true);
+            missile.flight().setDiveCommitted(true);
             return holdHeading(missile, ctx, approachSpeed);
         }
-        return guideAngled(missile, ctx, missile.resolveDiveAngle(ctx), approachSpeed);
+        return guideAngled(missile, ctx, missile.flight().resolveDiveAngle(ctx), approachSpeed);
     }
 
     /** @return true once the missile is within {@link #COMMIT_RADIUS} of its aim point on a descending pass. */
@@ -198,9 +198,9 @@ public final class AttackStage implements FlightStage {
     private static Vec3 holdHeading(MissileEntity missile, FlightContext ctx, double approachSpeed) {
         Vec3 v = missile.getDeltaMovement();
         double len = v.length();
-        double speed = Math.max(missile.getCruiseSpeed(), approachSpeed);
+        double speed = Math.max(missile.flight().getCruiseSpeed(), approachSpeed);
         return len > 1.0E-4 ? v.scale(speed / len)
-                : guideAngled(missile, ctx, missile.resolveDiveAngle(ctx), approachSpeed);
+                : guideAngled(missile, ctx, missile.flight().resolveDiveAngle(ctx), approachSpeed);
     }
 
     static Vec3 guideAngled(MissileEntity missile, FlightContext ctx, double angleDeg, double minSpeed) {
@@ -210,7 +210,7 @@ public final class AttackStage implements FlightStage {
         Vec3 target = ctx.target();
         double hx = ctx.nx();
         double hz = ctx.nz();
-        Vec3 travel = missile.getAttackTravelDir();
+        Vec3 travel = missile.flight().getAttackTravelDir();
         if (travel != null) {
             hx = travel.x;
             hz = travel.z;
@@ -222,7 +222,7 @@ public final class AttackStage implements FlightStage {
         Vec3 carrot = target.add(dir.scale(carrotParam));
         Vec3 toCarrot = carrot.subtract(pos);
         double len = toCarrot.length();
-        double speed = turnLimitedSpeed(missile, toCarrot, len, Math.max(missile.getCruiseSpeed(), minSpeed));
+        double speed = turnLimitedSpeed(missile, toCarrot, len, Math.max(missile.flight().getCruiseSpeed(), minSpeed));
         return len < 1.0E-4 ? dir.scale(speed) : toCarrot.scale(speed / len);
     }
 
@@ -231,13 +231,13 @@ public final class AttackStage implements FlightStage {
      * for, so a run that has to swing onto the aim curves in instead of sailing past at full dive speed.
      */
     private static double turnLimitedSpeed(MissileEntity missile, Vec3 toCarrot, double len, double speed) {
-        double turnRate = missile.getMaxTurnRate();
+        double turnRate = missile.flight().getMaxTurnRate();
         Vec3 vel = missile.getDeltaMovement();
         double vel2 = vel.lengthSqr();
         if (turnRate <= 1.0E-4 || turnRate >= Math.PI || vel2 < 1.0E-8 || len < 1.0E-4) {
             return speed;
         }
-        double floor = missile.getCruiseSpeed() * TERMINAL_SPEED_FRACTION;
+        double floor = missile.flight().getCruiseSpeed() * TERMINAL_SPEED_FRACTION;
         double cosEta = Mth.clamp(vel.dot(toCarrot) / (Math.sqrt(vel2) * len), -1.0, 1.0);
         if (cosEta <= 0.0) {
             return floor;
@@ -247,7 +247,7 @@ public final class AttackStage implements FlightStage {
             return speed;
         }
         double turnSpeed = turnRate * (len / (2.0 * sinEta)) * TURN_SPEED_SAFETY;
-        double brakeSpeed = Math.sqrt(turnSpeed * turnSpeed + 2.0 * missile.getDeceleration() * len * cosEta);
+        double brakeSpeed = Math.sqrt(turnSpeed * turnSpeed + 2.0 * missile.motor().getDeceleration() * len * cosEta);
         return Mth.clamp(brakeSpeed, floor, speed);
     }
 

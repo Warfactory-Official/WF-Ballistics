@@ -2,46 +2,106 @@ package com.wf.wflib.sim;
 
 import com.mojang.logging.LogUtils;
 import com.wf.wflib.MissileEntity;
+import com.wf.wflib.WFLib;
 import com.wf.wflib.MissileModels;
 import com.wf.wflib.api.WFEventType;
 import com.wf.wflib.api.WFTelemetryService;
 import com.wf.wflib.chunk.DetonationChunkGuard;
 import com.wf.wflib.debug.MissileDebug;
 import com.wf.wflib.network.MissileFlightAudioPacket;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 import java.util.*;
 
 /**
- * Drives all off-world missiles for one level each server tick: advances their positions from gametime deltas,
- * resolves simulated interceptions, and respawns real entities when a missile nears its target or a listener.
+ * Off-world missiles. Advance (worker): positions from gametime deltas, fuel. Resolve (tick thread): listener
+ * bookkeeping, audio, fuel-out, interceptions, respawn near the target or a listener.
  */
-public final class SimMissileManager {
+public final class SimMissileManager implements SimKind<SimMissile> {
     private static final Logger LOGGER = LogUtils.getLogger();
+
+    public static final SimMissileManager KIND = new SimMissileManager();
 
     private SimMissileManager() {
     }
 
-    public static void tick(ServerLevel level) {
-        long now = level.getGameTime();
-        SimMissileRegistry reg = SimMissileRegistry.get(level);
-        List<SimMissile> all = new ArrayList<>(reg.view());
+    public static SimTier<SimMissile> tier(ServerLevel level) {
+        return SimWorld.get(level).tier(KIND);
+    }
 
+    @Nullable
+    public static SimMissile find(ServerLevel level, UUID id) {
+        return tier(level).find(sm -> sm.id.equals(id));
+    }
+
+    @Override
+    public ResourceLocation id() {
+        return ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "missile");
+    }
+
+    @Override
+    public CompoundTag save(SimMissile record) {
+        return record.save();
+    }
+
+    @Override
+    public SimMissile load(CompoundTag tag) {
+        return SimMissile.load(tag);
+    }
+
+    @Override
+    public boolean async() {
+        return true;
+    }
+
+    @Override
+    public void advance(SimTier<SimMissile> tier, long now) {
+        List<SimMissile> all = tier.passRecords();
+        Map<UUID, SimMissile> byId = new HashMap<>();
+        for (SimMissile sm : all) {
+            byId.put(sm.id, sm);
+        }
+        for (SimMissile sm : all) {
+            sm.prevPos = sm.pos;
+            long raw = now - sm.lastGameTime;
+            long dt = raw <= 0L ? 0L : Math.min(raw, MissileSimConfig.MAX_SIM_STEP);
+            sm.lastGameTime = now;
+            if (dt <= 0) {
+                continue;
+            }
+            advance(sm, dt, byId);
+            if (sm.role == SimMissile.Role.NORMAL) {
+                sm.fuel -= (int) dt;
+                if (!sm.swarmMembers.isEmpty()) {
+                    for (SimMissile mem : sm.swarmMembers) {
+                        mem.fuel -= (int) dt;
+                    }
+                    sm.swarmMembers.removeIf(mem -> mem.fuel <= 0);
+                }
+            }
+        }
+    }
+
+    @Override
+    public void resolve(ServerLevel level, SimTier<SimMissile> tier) {
+        long now = level.getGameTime();
+        List<SimMissile> all = new ArrayList<>(tier.view());
         MissileListenerRegistry listeners = MissileListenerRegistry.get(level);
         for (SimMissile sm : all) {
             listeners.noteThreat(sm.pos, now);
         }
         listeners.tickWakeups(level, now);
-
         DetonationChunkGuard.tick(level, now);
         MissileDebug.tickLatest(level, now);
-
         if (all.isEmpty()) {
             return;
         }
@@ -50,42 +110,23 @@ public final class SimMissileManager {
             byId.put(sm.id, sm);
         }
         Set<SimMissile> dead = new HashSet<>();
-        Map<SimMissile, Vec3> oldPos = new HashMap<>();
 
-        //1) Simulate
+        // 1) Fuel out, audio
         for (SimMissile sm : all) {
-            oldPos.put(sm, sm.pos);
-            long raw = now - sm.lastGameTime;
-            long dt = raw <= 0L ? 0L : Math.min(raw, MissileSimConfig.MAX_SIM_STEP);
-            sm.lastGameTime = now;
-            if (dt > 0) {
-                advance(sm, dt, byId);
-                if (sm.role == SimMissile.Role.NORMAL) {
-                    sm.fuel -= (int) dt;
-                    if (!sm.swarmMembers.isEmpty()) {
-                        for (SimMissile mem : sm.swarmMembers) {
-                            mem.fuel -= (int) dt;
-                        }
-                        sm.swarmMembers.removeIf(mem -> mem.fuel <= 0);
-                    }
-                    if (sm.fuel <= 0) {
-                        sm.fuel = 0;
-                        WFTelemetryService.record(sm.id, WFEventType.FUEL_OUT, now, sm.pos, true,
-                                "ballistic respawn");
-                        LOGGER.debug("[wflib] simulated missile {} ran out of fuel; respawning to crash near {}",
-                                sm.id, sm.pos);
-                        respawn(level, sm, sm.pos);
-                        dead.add(sm);
-                    }
-                }
-                if (!dead.contains(sm) && now % MissileFlightAudioPacket.UPDATE_INTERVAL == 0) {
-                    Vec3 vel = sm.pos.subtract(oldPos.get(sm)).scale(1.0 / dt);
-                    MissileFlightAudioPacket.broadcastSim(level, sm, vel);
-                }
+            Vec3 prev = sm.prevPos == null ? sm.pos : sm.prevPos;
+            if (sm.role == SimMissile.Role.NORMAL && sm.fuel <= 0) {
+                sm.fuel = 0;
+                WFTelemetryService.record(sm.id, WFEventType.FUEL_OUT, now, sm.pos, true, "ballistic respawn");
+                respawn(level, sm, sm.pos);
+                dead.add(sm);
+                continue;
+            }
+            if (now % MissileFlightAudioPacket.UPDATE_INTERVAL == 0 && sm.pos != prev) {
+                MissileFlightAudioPacket.broadcastSim(level, sm, sm.pos.subtract(prev));
             }
         }
 
-        // 2) Resolve interceptions
+        // 2) Interceptions
         for (SimMissile sm : all) {
             if (sm.role != SimMissile.Role.INTERCEPTOR || dead.contains(sm)) {
                 continue;
@@ -109,26 +150,21 @@ public final class SimMissileManager {
             }
             double dx = sm.target.x - sm.pos.x;
             double dz = sm.target.z - sm.pos.z;
-            double horizontalDist = Math.sqrt(dx * dx + dz * dz);
-            if (horizontalDist <= MissileSimConfig.DESTINATION_RANGE) {
+            if (Math.sqrt(dx * dx + dz * dz) <= MissileSimConfig.DESTINATION_RANGE) {
                 respawn(level, sm, sm.pos);
                 dead.add(sm);
                 continue;
             }
-            Vec3 spawnPos = firstListenerSpawnPos(level, oldPos.get(sm), sm.pos);
+            Vec3 spawnPos = firstListenerSpawnPos(level, sm.prevPos == null ? sm.pos : sm.prevPos, sm.pos);
             if (spawnPos != null) {
                 respawn(level, sm, spawnPos);
                 dead.add(sm);
             }
         }
-
-        // 4) Commit removals
-        if (!dead.isEmpty()) {
-            for (SimMissile sm : dead) {
-                reg.remove(sm);
-            }
+        for (SimMissile sm : dead) {
+            tier.remove(sm);
         }
-        reg.setDirty();
+        tier.setDirty();
     }
 
     private static void advance(SimMissile sm, long dt, Map<UUID, SimMissile> byId) {
@@ -264,10 +300,10 @@ public final class SimMissileManager {
             return;
         }
         SimMissile sm = SimMissile.fromEntity(missile);
-        SimMissileRegistry.get(level).add(sm);
+        tier(level).add(sm);
         missile.recordEvent(WFEventType.OFFLOAD, "to sim");
         LOGGER.debug("[wflib] missile {} offloaded to simulation at {}", sm.id, sm.pos);
-        missile.discard(); // triggers chunk release via MissileEntity#remove
+        missile.leaveWorld();
     }
 
     /**
@@ -286,14 +322,14 @@ public final class SimMissileManager {
             member.formationOffset = sub.position().subtract(cpos);
             lead.swarmMembers.add(member);
         }
-        SimMissileRegistry.get(level).add(lead);
+        tier(level).add(lead);
         commander.recordEvent(WFEventType.OFFLOAD, "swarm to sim");
         LOGGER.debug("[wflib] swarm {} ({} members) offloaded as one object at {}",
-                commander.getSwarmId(), lead.swarmMembers.size() + 1, lead.pos);
+                commander.swarm().getSwarmId(), lead.swarmMembers.size() + 1, lead.pos);
         for (MissileEntity sub : subordinates) {
-            sub.discard();
+            sub.leaveWorld();
         }
-        commander.discard();
+        commander.leaveWorld();
     }
 
     /** Lift a respawn point clear of the ground under it, and only ever upward. */
@@ -339,7 +375,7 @@ public final class SimMissileManager {
         sm.role = SimMissile.Role.INTERCEPTOR;
         sm.interceptTarget = targetId;
         sm.interceptChance = chance;
-        SimMissileRegistry.get(level).add(sm);
+        tier(level).add(sm);
         LOGGER.debug("[wflib] interceptor {} launched at target {}", sm.id, targetId);
     }
 }

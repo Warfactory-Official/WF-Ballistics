@@ -2,15 +2,10 @@ package com.wf.wflib.drone.cam;
 
 import com.wf.wflib.block.SecurityCameraBlock;
 import com.wf.wflib.config.WFConfig;
-import com.wf.wflib.drone.DroneEntity;
-import com.wf.wflib.mixin.AccessorChunkMap;
+import com.wf.wflib.stream.ChunkStreams;
+import com.wf.wflib.stream.StreamWindow;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.GlobalPos;
-import it.unimi.dsi.fastutil.longs.LongIterator;
-import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
-import net.minecraft.network.protocol.Packet;
-import net.minecraft.network.protocol.game.ClientboundForgetLevelChunkPacket;
-import net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -19,12 +14,13 @@ import net.minecraft.util.Unit;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.IdentityHashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -37,12 +33,13 @@ public final class CameraChunkStream {
     /** Residency for a chunk the camera needs to read. */
     private static final TicketType<Unit> CAMERA_TICKET =
             TicketType.create("wf_camera_feed", (a, b) -> 0, 100);
+    /** Window centre = entity + velocity * this, capped at half the radius. */
+    private static final double STREAM_LEAD_TICKS = 20.0;
     /** Ticks between re-stamping the ticket window when the drone has not changed chunk. */
     private static final int TICKET_REFRESH = 40;
 
-    private static final Map<UUID, Viewer> VIEWERS = new HashMap<>();
     private static final Set<UUID> CAPABLE = new HashSet<>();
-    private static final Map<ResourceKey<Level>, Map<Integer, Window>> WINDOWS = new HashMap<>();
+    private static final Map<ResourceKey<Level>, Map<Integer, StreamWindow>> WINDOWS = new HashMap<>();
 
     private static long chunkEncodes;
     private static long chunkDeliveries;
@@ -61,9 +58,13 @@ public final class CameraChunkStream {
         }
     }
 
-    public static void forget(UUID player) {
-        CAPABLE.remove(player);
-        VIEWERS.remove(player);
+    public static void forget(ServerPlayer player) {
+        CAPABLE.remove(player.getUUID());
+        for (Map<Integer, StreamWindow> windows : WINDOWS.values()) {
+            for (StreamWindow window : windows.values()) {
+                window.players().remove(player);
+            }
+        }
     }
 
     // --- the pass -------------------------------------------------------------------------------------
@@ -74,41 +75,39 @@ public final class CameraChunkStream {
      * @param audiences feed id to the players watching it, exactly as the video uses
      */
     public static void update(ServerLevel level, Map<Integer, List<ServerPlayer>> audiences) {
-        if (audiences.isEmpty() && VIEWERS.isEmpty()) {
+        Map<Integer, StreamWindow> windows = WINDOWS.computeIfAbsent(level.dimension(), key -> new HashMap<>());
+        if (audiences.isEmpty() && windows.isEmpty()) {
             return;
         }
         int radius = WFConfig.CAMERA_STREAM_RADIUS.get();
-        Map<Integer, Window> windows = WINDOWS.computeIfAbsent(level.dimension(), key -> new HashMap<>());
-        Map<Integer, LongOpenHashSet> streamed = new HashMap<>();
-        Set<ServerPlayer> changed = new HashSet<>();
-
+        long now = level.getGameTime();
+        Set<StreamWindow> live = Collections.newSetFromMap(new IdentityHashMap<>());
         if (radius > 0 && !audiences.isEmpty()) {
-            long now = level.getGameTime();
             int budget = Math.max(1, WFConfig.CAMERA_STREAM_BUDGET.get() / audiences.size());
             for (Map.Entry<Integer, List<ServerPlayer>> entry : audiences.entrySet()) {
-                int feedId = entry.getKey();
-                ChunkPos centre = centreOf(level, feedId);
+                ChunkPos centre = centreOf(level, entry.getKey());
                 if (centre == null) {
                     continue;
                 }
-                List<Recipient> recipients = recipients(level, feedId, entry.getValue());
-                if (recipients.isEmpty()) {
-                    continue;
-                }
-                Window window = windows.computeIfAbsent(feedId, id -> new Window());
-                if (window.centre != centre.toLong() || now - window.stampedAt >= TICKET_REFRESH) {
+                StreamWindow window = windows.computeIfAbsent(entry.getKey(), id -> new StreamWindow());
+                live.add(window);
+                if (window.restamp(centre, now, TICKET_REFRESH)) {
                     stampTickets(level, centre, radius);
-                    window.centre = centre.toLong();
-                    window.stampedAt = now;
                 }
-                streamed.put(feedId, stream(level, centre, radius, recipients, budget, changed));
+                // Built once, handed to everybody watching this feed.
+                ChunkStreams.Encoder encoder = new ChunkStreams.Encoder(level, budget);
+                List<ServerPlayer> capable = entry.getValue().stream()
+                        .filter(player -> CAPABLE.contains(player.getUUID())).toList();
+                chunkDeliveries += window.publish(level, centre, radius, capable, Integer.MAX_VALUE, encoder);
+                chunkEncodes += encoder.encodes();
             }
         }
-
-        windows.keySet().removeIf(feedId -> !audiences.containsKey(feedId));
-        trim(level, streamed, changed);
-        for (ServerPlayer player : changed) {
-            rescanEntities(level, player);
+        for (Iterator<StreamWindow> it = windows.values().iterator(); it.hasNext(); ) {
+            StreamWindow window = it.next();
+            if (!live.contains(window)) {
+                window.close();
+                it.remove();
+            }
         }
     }
 
@@ -131,155 +130,17 @@ public final class CameraChunkStream {
             return new ChunkPos(pos);
         }
         Entity entity = level.getEntity(feedId);
-        return entity instanceof DroneEntity drone && drone.isAlive() && drone.cameraSpec() != null
-                ? drone.chunkPosition() : null;
-    }
-
-    /**
-     * @return whether this entity is standing in terrain streamed to this player, and should therefore be
-     *      tracked to them however far away it is. Called from {@code MixinChunkMapTrackedEntity} for every
-     *      tracked entity against every player, so the empty case has to be (and is) two field reads.
-     */
-    public static boolean reveals(Entity entity, ServerPlayer player) {
-        if (VIEWERS.isEmpty()) {
-            return false;
+        if (entity == null || !entity.isAlive() || CameraNet.specOf(entity) == null) {
+            return null;
         }
-        Viewer viewer = VIEWERS.get(player.getUUID());
-        if (viewer == null || viewer.byFeed.isEmpty()) {
-            return false;
+        // Led by its own velocity: a TV round crosses a chunk every few ticks and would outrun a centred window.
+        int radius = WFConfig.CAMERA_STREAM_RADIUS.get();
+        Vec3 lead = entity.getDeltaMovement().scale(STREAM_LEAD_TICKS);
+        double cap = radius * 8.0;
+        if (lead.lengthSqr() > cap * cap) {
+            lead = lead.normalize().scale(cap);
         }
-        ChunkPos pos = entity.chunkPosition();
-        long key = ChunkPos.asLong(pos.x, pos.z);
-        for (LongOpenHashSet sent : viewer.byFeed.values()) {
-            if (sent.contains(key)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** Re-run every tracked entity's visibility decision for one observer. */
-    private static void rescanEntities(ServerLevel level, ServerPlayer player) {
-        for (Object tracked : ((AccessorChunkMap) level.getChunkSource().chunkMap).wfCamEntityMap().values()) {
-            ((FeedTracked) tracked).wfCamUpdatePlayer(player);
-        }
-    }
-
-    /**
-     * The observers of one feed that are worth streaming to, paired with what each already holds.
-     */
-    private static List<Recipient> recipients(ServerLevel level, int feedId, List<ServerPlayer> players) {
-        List<Recipient> out = new ArrayList<>(players.size());
-        for (ServerPlayer player : players) {
-            if (!CAPABLE.contains(player.getUUID()) || player.level() != level) {
-                continue;
-            }
-            Viewer viewer = VIEWERS.computeIfAbsent(player.getUUID(), id -> new Viewer(level.dimension()));
-            viewer.player = player;
-            if (viewer.dimension != level.dimension()) {
-                viewer.byFeed.clear();
-                viewer.dimension = level.dimension();
-            }
-            out.add(new Recipient(player, viewer.byFeed.computeIfAbsent(feedId, id -> new LongOpenHashSet())));
-        }
-        return out;
-    }
-
-    /**
-     * Send the window around {@code centre}, nearest ring first, to whoever is missing each chunk.
-     *
-     * @return every chunk in the window, whether or not it went out this pass: the caller trims against it
-     */
-    private static LongOpenHashSet stream(ServerLevel level, ChunkPos centre, int radius,
-                                          List<Recipient> recipients, int budget,
-                                          Set<ServerPlayer> changed) {
-        LongOpenHashSet window = new LongOpenHashSet();
-        List<Recipient> needed = new ArrayList<>(recipients.size());
-        int spent = 0;
-        for (int ring = 0; ring <= radius; ring++) {
-            for (int dx = -ring; dx <= ring; dx++) {
-                for (int dz = -ring; dz <= ring; dz++) {
-                    if (Math.max(Math.abs(dx), Math.abs(dz)) != ring) {
-                        continue;
-                    }
-                    int cx = centre.x + dx;
-                    int cz = centre.z + dz;
-                    long key = ChunkPos.asLong(cx, cz);
-                    window.add(key);
-
-                    needed.clear();
-                    for (Recipient recipient : recipients) {
-                        if (recipient.player.getChunkTrackingView().contains(cx, cz)) {
-                            if (recipient.sent.remove(key)) {
-                                changed.add(recipient.player);
-                            }
-                        } else if (!recipient.sent.contains(key)) {
-                            needed.add(recipient);
-                        }
-                    }
-                    if (needed.isEmpty() || spent >= budget) {
-                        continue;
-                    }
-                    LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
-                    if (chunk == null) {
-                        // The ticket was only just stamped; it will be here in a tick or two.
-                        continue;
-                    }
-
-                    // The one line this class exists for: built once, handed to everybody.
-                    Packet<?> packet = chunk.getAuxLightManager(chunk.getPos()).sendLightDataTo(
-                            new ClientboundLevelChunkWithLightPacket(chunk, level.getLightEngine(), null, null));
-                    chunkEncodes++;
-                    spent++;
-                    for (Recipient recipient : needed) {
-                        recipient.player.connection.send(packet);
-                        recipient.sent.add(key);
-                        changed.add(recipient.player);
-                        chunkDeliveries++;
-                    }
-                }
-            }
-        }
-        return window;
-    }
-
-    /** Take back everything no feed still wants. */
-    private static void trim(ServerLevel level, Map<Integer, LongOpenHashSet> streamed,
-                             Set<ServerPlayer> changed) {
-        for (Iterator<Map.Entry<UUID, Viewer>> it = VIEWERS.entrySet().iterator(); it.hasNext(); ) {
-            Map.Entry<UUID, Viewer> entry = it.next();
-            Viewer viewer = entry.getValue();
-            if (viewer.dimension != level.dimension()) {
-                continue;
-            }
-            ServerPlayer player = viewer.player;
-            if (player == null || player.isRemoved() || player.level() != level) {
-                it.remove();
-                continue;
-            }
-            LongOpenHashSet keep = new LongOpenHashSet();
-            for (Map.Entry<Integer, LongOpenHashSet> feed : viewer.byFeed.entrySet()) {
-                LongOpenHashSet window = streamed.get(feed.getKey());
-                if (window != null) {
-                    keep.addAll(window);
-                }
-            }
-            for (Map.Entry<Integer, LongOpenHashSet> feed : viewer.byFeed.entrySet()) {
-                for (LongIterator chunks = feed.getValue().iterator(); chunks.hasNext(); ) {
-                    long key = chunks.nextLong();
-                    if (keep.contains(key)) {
-                        continue;
-                    }
-                    player.connection.send(new ClientboundForgetLevelChunkPacket(new ChunkPos(key)));
-                    chunks.remove();
-                    changed.add(player);
-                }
-            }
-            viewer.byFeed.values().removeIf(LongOpenHashSet::isEmpty);
-            if (viewer.byFeed.isEmpty()) {
-                it.remove();
-            }
-        }
+        return new ChunkPos(BlockPos.containing(entity.position().add(lead)));
     }
 
     /** Keep the window loaded. */
@@ -305,17 +166,13 @@ public final class CameraChunkStream {
     }
 
     public static int streamingViewers() {
-        return VIEWERS.size();
-    }
-
-    public static int streamedChunks() {
-        int total = 0;
-        for (Viewer viewer : VIEWERS.values()) {
-            for (LongOpenHashSet set : viewer.byFeed.values()) {
-                total += set.size();
+        Set<ServerPlayer> players = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Map<Integer, StreamWindow> windows : WINDOWS.values()) {
+            for (StreamWindow window : windows.values()) {
+                players.addAll(window.players());
             }
         }
-        return total;
+        return players.size();
     }
 
     public static void resetCounters() {
@@ -324,31 +181,8 @@ public final class CameraChunkStream {
     }
 
     public static void shutdown() {
-        VIEWERS.clear();
         CAPABLE.clear();
         WINDOWS.clear();
         resetCounters();
-    }
-
-    // --- state ----------------------------------------------------------------------------------------
-
-    private record Recipient(ServerPlayer player, LongOpenHashSet sent) {
-    }
-
-    private static final class Viewer {
-        private final Map<Integer, LongOpenHashSet> byFeed = new HashMap<>();
-        private ResourceKey<Level> dimension;
-        /** Refreshed every pass this viewer is streamed to; see the comment in {@link #trim}. */
-        @Nullable
-        private ServerPlayer player;
-
-        Viewer(ResourceKey<Level> dimension) {
-            this.dimension = dimension;
-        }
-    }
-
-    private static final class Window {
-        private long centre = Long.MIN_VALUE;
-        private long stampedAt = Long.MIN_VALUE;
     }
 }

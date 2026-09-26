@@ -33,6 +33,7 @@ public record CameraFeedPacket(byte[] body) implements CustomPacketPayload {
         try {
             FriendlyByteBuf buf = new FriendlyByteBuf(raw);
             buf.writeVarInt(feed.feedId());
+            buf.writeByte(feed.kind());
             buf.writeDouble(feed.x());
             buf.writeDouble(feed.y());
             buf.writeDouble(feed.z());
@@ -63,7 +64,7 @@ public record CameraFeedPacket(byte[] body) implements CustomPacketPayload {
     public CameraFeed feed() {
         ByteBuf raw = Unpooled.wrappedBuffer(this.body);
         FriendlyByteBuf buf = new FriendlyByteBuf(raw);
-        return new CameraFeed(buf.readVarInt(),
+        return new CameraFeed(buf.readVarInt(), buf.readByte(),
                 buf.readDouble(), buf.readDouble(), buf.readDouble(),
                 buf.readFloat(), buf.readFloat(), buf.readFloat(),
                 buf.readFloat(), buf.readFloat(), buf.readFloat(),

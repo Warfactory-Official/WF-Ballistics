@@ -4,7 +4,7 @@ import com.wf.wflib.debug.SwarmBench;
 import com.wf.wflib.debug.SwarmProfiler;
 import com.wf.wflib.entity.glyphid.brain.GlyphidCarrier;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphid;
-import com.wf.wflib.entity.glyphid.sim.SimGlyphidRegistry;
+import com.wf.wflib.entity.glyphid.sim.SimGlyphidManager;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import net.minecraft.server.level.ServerLevel;
 
@@ -32,7 +32,7 @@ public final class GlyphidSeparation {
             return;
         }
         Set<EntityGlyphid> bodies = GlyphidTracker.glyphids(level);
-        List<SimGlyphid> records = SimGlyphidRegistry.get(level).view();
+        List<SimGlyphid> records = SimGlyphidManager.tier(level).view();
         if (bodies.size() + records.size() < 2) {
             return;
         }
@@ -51,7 +51,7 @@ public final class GlyphidSeparation {
      */
     public static double[] density(ServerLevel level) {
         Set<EntityGlyphid> bodies = GlyphidTracker.glyphids(level);
-        List<SimGlyphid> records = SimGlyphidRegistry.get(level).view();
+        List<SimGlyphid> records = SimGlyphidManager.tier(level).view();
         if (bodies.size() + records.size() < 2) {
             return new double[]{0.0, 0.0, 0.0};
         }

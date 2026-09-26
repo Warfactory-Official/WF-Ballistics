@@ -1,5 +1,7 @@
 package com.wf.wflib.block.entity;
 
+import com.wf.wflib.missile.MissileFlight;
+import com.wf.wflib.missile.MissileBuilder;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.MissileEntity.Phase;
 import com.wf.wflib.MissileModels;
@@ -179,9 +181,9 @@ public final class LaunchConfig {
                 ? new Vec3(attackApproachX, 0.0, attackApproachZ) : null;
         int fuel = fuelTicks > 0 ? fuelTicks
                 : ArrivalEstimator.fuelToReach(Vec3.atCenterOf(pos), target, speed,
-                MissileEntity.ascentSpeedFor(speed), cruiseAltitudeY, loiter, approachDir, approachJoinCap);
+                MissileFlight.ascentSpeedFor(speed), cruiseAltitudeY, loiter, approachDir, approachJoinCap);
 
-        MissileEntity.Builder builder = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
+        MissileBuilder builder = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
                 .target(target)
                 .model(model)
                 .detonation(warhead)

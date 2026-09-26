@@ -1,5 +1,7 @@
 package com.wf.wflib.entity.mist;
 
+import com.wf.wflib.armor.ArmorExposure;
+import com.wf.wflib.armor.ProtectionType;
 import com.wf.wflib.damage.WFDamage;
 import com.wf.wflib.damage.WFDamageTypes;
 import com.wf.wflib.entity.MistEntity;
@@ -9,9 +11,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.item.ItemStack;
 
 /** Mustard gas: a blistering agent that damages continuously for as long as a victim stands in it. */
 public class MustardGasMistEffect implements MistEffect {
@@ -20,11 +20,14 @@ public class MustardGasMistEffect implements MistEffect {
     private static final float DAMAGE = 4.0F;
     private static final int DAMAGE_INTERVAL = 10;
 
-    /** How often the agent eats a point of durability out of each armour piece. */
-    private static final int CORROSION_INTERVAL = 20;
-
-    private static final EquipmentSlot[] ARMOUR_SLOTS = {
-            EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
+    /**
+     * What the agent costs armour at full concentration, in condition points per exposure interval. The
+     * suit's own CHEMICAL tier is subtracted from it, so a suit rated above this stands in the cloud
+     * indefinitely, which is the entire reason to own a sealed one rather than a merely better one.
+     *
+     * <p>150 against an unsealed 600-durability garment is about a hundred seconds of standing in it.
+     */
+    private static final double EXPOSURE_TIER = 150.0D;
 
     /**
      * How often stale entries are swept out of {@link #lastAffected}, and how old an entry has to be to go.
@@ -59,14 +62,10 @@ public class MustardGasMistEffect implements MistEffect {
             WFDamage.hurtIgnoringIFrames(living, gasSource(mist), (float) (DAMAGE * intensity));
         }
 
-        if (now % CORROSION_INTERVAL == 0) {
-            for (EquipmentSlot slot : ARMOUR_SLOTS) {
-                ItemStack stack = living.getItemBySlot(slot);
-                if (!stack.isEmpty() && stack.isDamageableItem()) {
-                    stack.hurtAndBreak(1, living, slot);
-                }
-            }
-        }
+        // Armour wear is not this effect's business any more. It declares the contact and the armour
+        // system decides what that costs, which is what stops a hazmat suit and a leather cap from
+        // corroding at the same flat rate.
+        ArmorExposure.contact(living, ProtectionType.CHEMICAL, EXPOSURE_TIER * intensity);
     }
 
     /**

@@ -2,7 +2,6 @@ package com.wf.wflib.block.entity;
 
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.compat.WarforgeCompat;
-import com.wf.wflib.drone.DroneEntity;
 import com.wf.wflib.entity.InterceptTarget;
 import com.wf.wflib.item.MissilePreset;
 import com.wf.wflib.item.MissilePresetRegistry;
@@ -197,8 +196,7 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
         if (track == null) {
             return null;
         }
-        Class<? extends Entity> type = track.guess() == ContactClass.DRONE ? DroneEntity.class : MissileEntity.class;
-        Entity resolved = FireControl.resolve(sl, type, track, MAX_TRACK_ERROR,
+        Entity resolved = FireControl.resolve(sl, Entity.class, track, MAX_TRACK_ERROR,
                 e -> e instanceof InterceptTarget t && this.isEngageable(t));
         return resolved == null ? null : new Engagement(net, track, (InterceptTarget) resolved);
     }
@@ -268,7 +266,7 @@ public abstract class TurretInterceptorBlockEntity extends BlockEntity implement
         MissileEntity m = preset.build(sl, muzzle);
         m.setControlId(this.controlId());
         m.setTeamId(this.cachedTeamId);
-        m.setInterceptLock(target.interceptEntity().getUUID());
+        m.interceptor().setLock(target.interceptEntity().getUUID());
         m.moveTo(muzzle.x, muzzle.y, muzzle.z, 0.0f, 0.0f);
         sl.addFreshEntity(m);
         if (MissileSimConfig.BATTERY_MAGAZINE > 0 && this.ammo > 0) {

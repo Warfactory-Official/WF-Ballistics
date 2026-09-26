@@ -88,9 +88,8 @@ public class KineticShellItem extends Item implements ModelledItem {
         if (!preset.detonateOnEntity()) {
             tooltip.add(Component.literal("Passes through what it hits").withStyle(ChatFormatting.DARK_GRAY));
         }
-        if (!preset.simulated()) {
-            tooltip.add(Component.literal("Stays in the world for its whole flight")
-                    .withStyle(ChatFormatting.DARK_GRAY));
+        if (!preset.loadsChunks()) {
+            tooltip.add(Component.literal("Lost over unloaded ground").withStyle(ChatFormatting.DARK_GRAY));
         }
         super.appendHoverText(stack, context, tooltip, flag);
     }
