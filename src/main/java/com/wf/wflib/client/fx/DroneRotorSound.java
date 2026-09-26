@@ -63,11 +63,11 @@ public final class DroneRotorSound extends AbstractTickableSoundInstance {
      *      on, or 0 with the motors cut, which is what a depleted or shot-down drone falls under.
      */
     private float targetScale() {
-        if (!this.drone.getDroneState().powered()) {
+        if (!this.drone.flight().getDroneState().powered()) {
             return 0.0F;
         }
-        return (float) this.drone.airframe().rotorScale(this.drone.getThrottle(),
-                PowerProfile.DEFAULT.massFactor(this.drone.isLoaded()));
+        return (float) this.drone.airframe().rotorScale(this.drone.flight().getThrottle(),
+                PowerProfile.DEFAULT.massFactor(this.drone.hold().isLoaded()));
     }
 
     /**

@@ -1,7 +1,7 @@
 package com.wf.wflib.recon.source;
 
 import com.wf.wflib.drone.sim.SimDrone;
-import com.wf.wflib.drone.sim.SimDroneRegistry;
+import com.wf.wflib.drone.sim.SimDroneManager;
 import com.wf.wflib.recon.ContactClass;
 import com.wf.wflib.recon.EmconState;
 import com.wf.wflib.recon.SourceIds;
@@ -19,7 +19,7 @@ public final class SimDroneSource implements TargetSource {
 
     @Override
     public void collect(ServerLevel level, AABB volume, TargetSink sink) {
-        List<SimDrone> drones = SimDroneRegistry.get(level).view();
+        List<SimDrone> drones = SimDroneManager.tier(level).view();
         for (int i = 0; i < drones.size(); i++) {
             SimDrone drone = drones.get(i);
             Vec3 pos = drone.pos;

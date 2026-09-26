@@ -5,10 +5,12 @@ import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.logging.LogUtils;
+import com.wf.wflib.MissileEntity;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.config.WFClientConfig;
 import com.wf.wflib.drone.cam.CameraFeed;
 import com.wf.wflib.drone.cam.CameraMode;
+import com.wf.wflib.drone.cam.CameraSource;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.PostChain;
@@ -30,6 +32,8 @@ public final class CameraTarget implements AutoCloseable {
     private static final int[] STEPS = {320, 480, 640, 854, 1280, 1920};
     /** How far ahead of the drone's centre the lens sits, in blocks. */
     private static final double GIMBAL_BOOM = 1.5;
+    /** TV seeker lens ahead of the nose; behind it the round's own mesh fills the picture. */
+    private static final double SEEKER_CLEAR = 0.3;
 
     /** Link quality at which the picture starts to visibly suffer. */
     private static final float DEGRADE_ONSET = 0.75f;
@@ -131,6 +135,12 @@ public final class CameraTarget implements AutoCloseable {
         this.chainMode = null;
     }
 
+    /** @return the chain's {@code Degrade} for a link quality: 0 above {@link #DEGRADE_ONSET}, 1 near the drop. */
+    static float degrade(float link, CameraMode mode) {
+        float loss = Math.max(0.0f, (DEGRADE_ONSET - link) / DEGRADE_ONSET);
+        return Math.min(1.0f, loss * loss * mode.noiseMultiplier());
+    }
+
     // --- the pass -------------------------------------------------------------------------------------
 
     /** Draw the world from this feed's camera into this feed's framebuffer. */
@@ -146,6 +156,7 @@ public final class CameraTarget implements AutoCloseable {
         Matrix4f savedProjection = RenderSystem.getProjectionMatrix();
         VertexSorting savedSorting = RenderSystem.getVertexSorting();
 
+        GlMarkers.push("wf feed " + this.feedId + " render");
         try {
             Entity anchor = mc.level.getEntity(feed.feedId());
             float yaw = FeedGimbal.yaw(feed);
@@ -154,8 +165,16 @@ public final class CameraTarget implements AutoCloseable {
                     -Math.sin(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)),
                     -Math.sin(Math.toRadians(pitch)),
                     Math.cos(Math.toRadians(yaw)) * Math.cos(Math.toRadians(pitch)));
-            double boom = anchor == null ? GIMBAL_BOOM : Math.max(GIMBAL_BOOM, anchor.getBbWidth());
-            Vec3 lens = FeedMotion.position(feed).add(forward.scale(boom));
+            Vec3 lens;
+            if (anchor instanceof MissileEntity missile) {
+                // Tracked (streamed terrain tracks it at any range): per-frame pose, not the 5 Hz feed walk.
+                lens = missile.getPosition(partial)
+                        .add(CameraSource.Guided.heading(missile).scale(missile.noseForward()))
+                        .add(forward.scale(SEEKER_CLEAR));
+            } else {
+                double boom = anchor == null ? GIMBAL_BOOM : Math.max(GIMBAL_BOOM, anchor.getBbWidth());
+                lens = FeedMotion.position(feed).add(forward.scale(boom));
+            }
             this.camera.place(mc.level, anchor != null ? anchor : mc.player,
                     lens, yaw, pitch, partial);
 
@@ -173,7 +192,7 @@ public final class CameraTarget implements AutoCloseable {
 
             mc.getProfiler().push("wf_drone_camera");
             FeedPass.begin(lens, WFClientConfig.CAMERA_FEED_VIEW_DISTANCE.get(),
-                    feed.modeValue() == CameraMode.THERMAL);
+                    feed.modeValue() == CameraMode.THERMAL, this.target);
             try {
                 this.sections.install(mc.levelRenderer);
                 mc.levelRenderer.renderLevel(delta, false, this.camera, mc.gameRenderer,
@@ -189,9 +208,7 @@ public final class CameraTarget implements AutoCloseable {
             }
 
             if (this.chain != null) {
-                float loss = Math.max(0.0f, (DEGRADE_ONSET - feed.link()) / DEGRADE_ONSET);
-                float degrade = Math.min(1.0f, loss * loss * feed.modeValue().noiseMultiplier());
-                this.chain.setUniform("Degrade", Math.min(1.0f, degrade));
+                this.chain.setUniform("Degrade", degrade(feed.link(), feed.modeValue()));
                 this.chain.setUniform("Link", feed.link());
                 this.chain.setUniform("FeedTime", (feed.gameTime() % 24000L) + partial);
                 this.chain.process(partial);
@@ -205,6 +222,7 @@ public final class CameraTarget implements AutoCloseable {
         } finally {
             main.bindWrite(true);
             RenderSystem.setProjectionMatrix(savedProjection, savedSorting);
+            GlMarkers.pop();
         }
 
         this.renderedAtTick = feed.gameTime();

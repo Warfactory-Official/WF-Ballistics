@@ -68,6 +68,10 @@ public final class MissileModels {
         reg("huge_cluster", "missile_huge_cl");
         reg("huge_incendiary", "missile_huge_inc");
 
+        // Air-launched, pylon-sized: tools/small_airframes.py.
+        reg("atgm", "missile_atgm");
+        reg("guided_rocket", "missile_guided_rocket");
+
         reg("atlas_doomsday", "missile_atlas_doomsday");
         reg("atlas_doomsday_weathered", "missile_atlas_doomsday_weathered");
         reg("atlas_tectonic", "missile_atlas_tectonic");

@@ -11,7 +11,6 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
-import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -85,7 +84,7 @@ public final class PendingChunkEdits extends SavedData {
      *
      * @return how many blocks were written
      */
-    public int drain(ServerLevel level, ChunkAccess chunk) {
+    public int drain(ServerLevel level, LevelChunk chunk) {
         ChunkPos chunkPos = chunk.getPos();
         List<Edit> queue = byChunk.remove(chunkPos.toLong());
         if (queue == null || queue.isEmpty()) {
@@ -98,6 +97,7 @@ public final class PendingChunkEdits extends SavedData {
         for (Edit edit : queue) {
             cursor.set(BlockPos.of(edit.pos()));
             chunk.setBlockState(cursor, edit.state(), false);
+            level.getChunkSource().blockChanged(cursor);
             written++;
         }
         chunk.setUnsaved(true);

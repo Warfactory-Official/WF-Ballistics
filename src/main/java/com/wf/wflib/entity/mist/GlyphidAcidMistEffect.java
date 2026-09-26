@@ -1,5 +1,7 @@
 package com.wf.wflib.entity.mist;
 
+import com.wf.wflib.armor.ArmorExposure;
+import com.wf.wflib.armor.ProtectionType;
 import com.wf.wflib.config.WFConfig;
 import com.wf.wflib.damage.WFDamageTypes;
 import com.wf.wflib.entity.MistEntity;
@@ -10,9 +12,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -28,6 +28,9 @@ public class GlyphidAcidMistEffect implements MistEffect {
     /** Blast resistance a block has to exceed to shrug acid off. */
     private static final float CORROSION_LIMIT = 25.0F;
 
+    /** What acid costs armour at full concentration; see the same constant on the mustard gas effect. */
+    private static final double EXPOSURE_TIER = 250.0D;
+
     @Override
     public void affect(MistEntity mist, Entity target, double intensity) {
         // The colony is immune to its own chemistry.
@@ -42,15 +45,11 @@ public class GlyphidAcidMistEffect implements MistEffect {
         living.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, duration, 1));
         living.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, duration, 0));
 
+        // Acid is corrosive whether or not it is currently doing damage, so the contact is declared
+        // every tick the pool is on the victim and the armour system decides what it costs.
+        ArmorExposure.contact(living, ProtectionType.CHEMICAL, EXPOSURE_TIER * intensity);
         if (living.tickCount % 20 == 0) {
             living.hurt(acidSource(mist), (float) (WFConfig.GLYPHID_ACID_DAMAGE.get() * intensity));
-            for (EquipmentSlot slot : new EquipmentSlot[]{EquipmentSlot.HEAD, EquipmentSlot.CHEST,
-                    EquipmentSlot.LEGS, EquipmentSlot.FEET}) {
-                ItemStack stack = living.getItemBySlot(slot);
-                if (!stack.isEmpty() && stack.isDamageableItem()) {
-                    stack.hurtAndBreak(2, living, slot);
-                }
-            }
         }
     }
 

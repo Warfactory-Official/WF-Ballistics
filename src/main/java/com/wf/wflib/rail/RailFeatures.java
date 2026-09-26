@@ -2,6 +2,9 @@ package com.wf.wflib.rail;
 
 import com.mojang.logging.LogUtils;
 import com.wf.wflib.WFLib;
+import com.wf.wflib.rail.align.AlignmentProgress;
+import com.wf.wflib.rail.align.AlignmentService;
+import com.wf.wflib.rail.build.RailWorks;
 import com.wf.wflib.rail.excavate.ExcavationService;
 import net.minecraft.server.level.ServerLevel;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -25,11 +28,15 @@ public final class RailFeatures {
 
     /** Called from the mod constructor. Registers nothing at all when IR is absent. */
     public static void init(ModContainer container) {
+        // Registered whatever else is installed. Surveying and excavation are both independent of
+        // Immersive Railroading, and a config that is only present sometimes is a config whose values
+        // throw when read. Its own file, so the rail package stays liftable out of the mod in one piece.
+        container.registerConfig(ModConfig.Type.COMMON, RailConfig.SPEC, "wflib-rail.toml");
         if (!RailCompat.isActive()) {
+            LOGGER.info("[wflib] Immersive Railroading is absent; surveying and tunnelling still work,"
+                    + " laying track does not");
             return;
         }
-        // Its own file, so the rail package stays liftable out of the mod in one piece.
-        container.registerConfig(ModConfig.Type.COMMON, RailConfig.SPEC, "wflib-rail.toml");
         if (RailCompat.isForced()) {
             LOGGER.info("[wflib] rail features forced on without Immersive Railroading;"
                     + " only the IR-independent parts (excavation) will do anything");
@@ -44,30 +51,41 @@ public final class RailFeatures {
 
     @SubscribeEvent
     public static void onServerStarted(ServerStartedEvent event) {
-        if (RailCompat.isActive()) {
-            ExcavationService.startup();
-        }
+        // Not gated on Immersive Railroading: digging a hole is not one of the things it provides.
+        ExcavationService.startup();
     }
 
     @SubscribeEvent
     public static void onServerStopping(ServerStoppingEvent event) {
-        if (RailCompat.isActive()) {
-            ExcavationService.shutdown();
-        }
+        ExcavationService.shutdown();
+        // A bore train is a machine somebody is watching, and there is nobody left to watch it.
+        RailWorks.clear();
+        com.wf.wflib.rail.demo.FivePointsFixture.clearAll();
+        // The projections are keyed by route id, which the next world will reuse.
+        AlignmentProgress.clearCache();
     }
 
     /** A chunk has loaded, so any worker rewriting its stored copy is now holding stale data. */
     @SubscribeEvent
     public static void onChunkLoad(ChunkEvent.Load event) {
-        if (RailCompat.isActive() && event.getLevel() instanceof ServerLevel level) {
+        if (event.getLevel() instanceof ServerLevel level) {
             ExcavationService.onChunkLoad(level, event.getChunk().getPos());
         }
     }
 
     @SubscribeEvent
     public static void onLevelTick(LevelTickEvent.Post event) {
-        if (RailCompat.isActive() && event.getLevel() instanceof ServerLevel level) {
-            ExcavationService.tickIfPresent(level);
+        if (!(event.getLevel() instanceof ServerLevel level)) {
+            return;
         }
+        // Alignments are the planning layer and are deliberately not gated on Immersive Railroading: a
+        // route is worth surveying, sharing and arguing about before there is any track to lay on it,
+        // and the editor that draws them is not gated either.
+        AlignmentService.tick(level);
+        ExcavationService.tickIfPresent(level);
+        // After the excavator, so a machine that queued a carve this tick is not also waiting a tick
+        // for it to be picked up.
+        RailWorks.tick(level);
+        com.wf.wflib.rail.demo.FivePointsFixture.tick(level);
     }
 }

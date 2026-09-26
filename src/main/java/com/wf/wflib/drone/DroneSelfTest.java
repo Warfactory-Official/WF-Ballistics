@@ -144,9 +144,9 @@ public final class DroneSelfTest {
         double top = frame.topSpeed(1.0);
         out.add(check("flight/top-speed-is-finite", flatOut.velocity.horizontalDistance() < top + 0.1,
                 "flat out reached " + flatOut.velocity.horizontalDistance() + ", predicted ceiling " + top));
-        out.add(check("flight/top-speed-covers-attack-run", top > DroneEntity.DEFAULT_RELEASE_SPEED,
+        out.add(check("flight/top-speed-covers-attack-run", top > DroneFlight.DEFAULT_RELEASE_SPEED,
                 "the airframe tops out at " + top + " but attack runs are flown at "
-                        + DroneEntity.DEFAULT_RELEASE_SPEED));
+                        + DroneFlight.DEFAULT_RELEASE_SPEED));
 
         Multirotor.Step climb = Multirotor.step(Vec3.ZERO, FlightAttitude.LEVEL, new Vec3(0.0, 0.35, 0.0),
                 frame, 1.0);
@@ -189,10 +189,10 @@ public final class DroneSelfTest {
                 "the approach profile commands a speed the airframe could not stop from in time"));
 
         Vec3 position = new Vec3(100.0 - Tuning.DELIVER_ENTRY_RADIUS, 100.0, 100.0);
-        Vec3 velocity = new Vec3(DroneEntity.DEFAULT_CRUISE_SPEED, 0.0, 0.0);
+        Vec3 velocity = new Vec3(DroneFlight.DEFAULT_CRUISE_SPEED, 0.0, 0.0);
         FlightAttitude held = FlightAttitude.LEVEL;
         for (int i = 0; i < 400; i++) {
-            Vec3 want = Steering.hold(position, spot, 100.0, DroneEntity.DEFAULT_CRUISE_SPEED * 0.4, 0.35,
+            Vec3 want = Steering.hold(position, spot, 100.0, DroneFlight.DEFAULT_CRUISE_SPEED * 0.4, 0.35,
                     frame);
             Multirotor.Step step = Multirotor.step(velocity, held, want, frame, 1.0);
             velocity = step.velocity();
@@ -205,18 +205,18 @@ public final class DroneSelfTest {
                         + "blocks off, still drifting %.3f b/t", offset, velocity.horizontalDistance())));
 
         double handover = Math.max(Tuning.DELIVER_ENTRY_RADIUS,
-                frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED));
+                frame.stoppingDistance(DroneFlight.DEFAULT_CRUISE_SPEED));
         out.add(check("flight/approach-starts-far-enough-out",
-                handover >= frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED),
+                handover >= frame.stoppingDistance(DroneFlight.DEFAULT_CRUISE_SPEED),
                 String.format("delivery begins %.0f blocks out but stopping from cruise takes %.0f",
-                        handover, frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED))));
+                        handover, frame.stoppingDistance(DroneFlight.DEFAULT_CRUISE_SPEED))));
 
-        double textbook = Math.pow(DroneEntity.DEFAULT_CRUISE_SPEED, 2.0) / (2.0 * frame.brakingAccel());
+        double textbook = Math.pow(DroneFlight.DEFAULT_CRUISE_SPEED, 2.0) / (2.0 * frame.brakingAccel());
         out.add(check("flight/stopping-distance-counts-the-turn",
-                frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED) > textbook * 1.2,
+                frame.stoppingDistance(DroneFlight.DEFAULT_CRUISE_SPEED) > textbook * 1.2,
                 String.format("stopping from cruise is %.1f blocks against a textbook %.1f; the time spent "
                                 + "swinging the thrust axis round is missing",
-                        frame.stoppingDistance(DroneEntity.DEFAULT_CRUISE_SPEED), textbook)));
+                        frame.stoppingDistance(DroneFlight.DEFAULT_CRUISE_SPEED), textbook)));
 
         boolean inverts = true;
         for (double v = 0.05; v <= 1.4; v += 0.05) {
@@ -229,13 +229,13 @@ public final class DroneSelfTest {
                 "approachSpeed and stoppingDistance disagree, so the cap does not mean what it says"));
 
         Vec3 fast = new Vec3(100.0 - handover, 100.0, 100.0);
-        Vec3 fastVelocity = new Vec3(DroneEntity.DEFAULT_CRUISE_SPEED, 0.0, 0.0);
+        Vec3 fastVelocity = new Vec3(DroneFlight.DEFAULT_CRUISE_SPEED, 0.0, 0.0);
         FlightAttitude fastHeld = FlightAttitude.LEVEL;
         double worstLate = 0.0;
         int crossings = 0;
         double previous = fast.x - spot.x;
         for (int i = 0; i < 900; i++) {
-            Vec3 want = Steering.hold(fast, spot, 100.0, DroneEntity.DEFAULT_CRUISE_SPEED, 0.35, frame);
+            Vec3 want = Steering.hold(fast, spot, 100.0, DroneFlight.DEFAULT_CRUISE_SPEED, 0.35, frame);
             Multirotor.Step s2 = Multirotor.step(fastVelocity, fastHeld, want, frame, 1.0);
             fastVelocity = s2.velocity();
             fastHeld = s2.attitude();
@@ -785,8 +785,8 @@ public final class DroneSelfTest {
 
     /** Station-keeping, flown rather than measured. */
     private static void formationFlight(List<Result> out) {
-        double cruise = DroneEntity.DEFAULT_CRUISE_SPEED;
-        double climb = DroneEntity.DEFAULT_CLIMB_RATE;
+        double cruise = DroneFlight.DEFAULT_CRUISE_SPEED;
+        double climb = DroneFlight.DEFAULT_CLIMB_RATE;
         out.add(stationKeeping("level", new Vec3(cruise, 0.0, 0.0)));
         out.add(stationKeeping("climbing", new Vec3(0.0, climb, 0.0)));
         out.add(stationKeeping("climbing-cruise", new Vec3(cruise, climb, 0.0)));
@@ -803,11 +803,11 @@ public final class DroneSelfTest {
                 "reversing a near-zero horizontal drift swung the whole formation round: " + commandA
                         + " vs " + commandB));
         float held = Steering.faceTravel(driftA, 0.0f,
-                DroneEntity.DEFAULT_CRUISE_SPEED * Steering.HEADING_MIN_SPEED);
+                DroneFlight.DEFAULT_CRUISE_SPEED * Steering.HEADING_MIN_SPEED);
         out.add(check("formation/heading-holds-through-drift", held == 0.0f,
                 "a drone climbing with a trickle of sideways drift must hold its heading, not chase it"));
         float turned = Steering.faceTravel(new Vec3(cruise, 0.0, 0.0), 0.0f,
-                DroneEntity.DEFAULT_CRUISE_SPEED * Steering.HEADING_MIN_SPEED);
+                DroneFlight.DEFAULT_CRUISE_SPEED * Steering.HEADING_MIN_SPEED);
         out.add(check("formation/heading-still-follows-real-travel", turned != 0.0f,
                 "a drone actually travelling must still turn to face where it is going"));
 
@@ -924,7 +924,7 @@ public final class DroneSelfTest {
      */
     private static float settledYaw(Vec3 velocity) {
         double horiz = Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
-        return horiz < DroneEntity.DEFAULT_CRUISE_SPEED * Steering.HEADING_MIN_SPEED
+        return horiz < DroneFlight.DEFAULT_CRUISE_SPEED * Steering.HEADING_MIN_SPEED
                 ? 0.0f : (float) Mth.atan2(velocity.x, velocity.z);
     }
 
@@ -937,9 +937,9 @@ public final class DroneSelfTest {
                 DroneState.TRANSIT, 20, at(4000, 0), null, DroneProgram.EMPTY, at(0, 0),
                 true, false, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
-                DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
-                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
-                pos.y - DroneEntity.DEFAULT_CRUISE_ALTITUDE, 100.0, 9L, index == 0, 1, null, 0L, index);
+                DroneFlight.DEFAULT_CRUISE_SPEED, DroneFlight.DEFAULT_CRUISE_ALTITUDE,
+                DroneFlight.DEFAULT_CLIMB_RATE, DroneFlight.DEFAULT_RELEASE_SPEED,
+                pos.y - DroneFlight.DEFAULT_CRUISE_ALTITUDE, 100.0, 9L, index == 0, 1, null, 0L, index);
     }
 
     /** The four architectures a squad can hold its shape with. */
@@ -958,7 +958,7 @@ public final class DroneSelfTest {
                 CoordinationModels.get(CoordinationModels.LEGACY) == LeaderFollower.INSTANCE,
                 "a squad saved before models existed was flying leader-follower and must load as it"));
 
-        Vec3 travel = new Vec3(DroneEntity.DEFAULT_CRUISE_SPEED, 0.0, 0.0);
+        Vec3 travel = new Vec3(DroneFlight.DEFAULT_CRUISE_SPEED, 0.0, 0.0);
         DroneSnapshot lead = escort(0, at(0, 0), travel);
         Formation vee = Formations.get(Formations.DEFAULT);
         Vec3 frame = headingOf(travel);
@@ -1046,7 +1046,7 @@ public final class DroneSelfTest {
      */
     private static void slotTracking(List<Result> out) {
         Formation vee = Formations.get(Formations.DEFAULT);
-        Vec3 travel = new Vec3(DroneEntity.DEFAULT_CRUISE_SPEED, 0.0, 0.0);
+        Vec3 travel = new Vec3(DroneFlight.DEFAULT_CRUISE_SPEED, 0.0, 0.0);
         float east = (float) Mth.atan2(travel.x, travel.z);
 
         SquadAnchor straight = new SquadAnchor(at(0, 0), travel, Vec3.ZERO, east, 0.0f);
@@ -1097,7 +1097,7 @@ public final class DroneSelfTest {
     /** Form-up. */
     private static void muster(List<Result> out) {
         Vec3 up = at(0, 0);
-        double alt = DroneEntity.DEFAULT_CRUISE_ALTITUDE;
+        double alt = DroneFlight.DEFAULT_CRUISE_ALTITUDE;
 
         DroneSnapshot solo = musterer(0, up, Vec3.ZERO, alt, 1);
         out.add(check("muster/solo-never-waits",
@@ -1164,8 +1164,8 @@ public final class DroneSelfTest {
                 FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE, DroneState.TAKEOFF, 40,
                 at(4000, 0), null, DroneProgram.EMPTY, at(0, 0), false, false, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
-                DroneEntity.DEFAULT_CRUISE_SPEED, alt, DroneEntity.DEFAULT_CLIMB_RATE,
-                DroneEntity.DEFAULT_RELEASE_SPEED, up.y - alt, 100.0, 9L, true, 4, null, 0L, 0);
+                DroneFlight.DEFAULT_CRUISE_SPEED, alt, DroneFlight.DEFAULT_CLIMB_RATE,
+                DroneFlight.DEFAULT_RELEASE_SPEED, up.y - alt, 100.0, 9L, true, 4, null, 0L, 0);
         out.add(check("muster/climb-out-hands-over-to-it",
                 TakeoffHandler.INSTANCE.next(climbed, squadOf(climbed, wing)) == DroneState.MUSTER,
                 "a drone that reaches cruise altitude with its flight still launching must form up, not set "
@@ -1177,8 +1177,8 @@ public final class DroneSelfTest {
                                 Airframe.AMAZOG, DroneNav.NONE, DroneState.TAKEOFF, 40, at(4000, 0), null,
                                 DroneProgram.EMPTY, at(0, 0), false, false, false, true, List.of(),
                                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY,
-                                PowerProfile.DEFAULT, DroneEntity.DEFAULT_CRUISE_SPEED, alt,
-                                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
+                                PowerProfile.DEFAULT, DroneFlight.DEFAULT_CRUISE_SPEED, alt,
+                                DroneFlight.DEFAULT_CLIMB_RATE, DroneFlight.DEFAULT_RELEASE_SPEED,
                                 up.y - alt, 100.0, 0L, true, 1, null, 0L, 0),
                         SquadView.solo(aloneUp)) == DroneState.TRANSIT,
                 "a solo drone's climb-out must reach transit exactly as it always did"));
@@ -1254,8 +1254,8 @@ public final class DroneSelfTest {
                 DroneState.MUSTER, stateTicks, at(4000, 0), null, DroneProgram.EMPTY, at(0, 0),
                 false, false, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
-                DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
-                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
+                DroneFlight.DEFAULT_CRUISE_SPEED, DroneFlight.DEFAULT_CRUISE_ALTITUDE,
+                DroneFlight.DEFAULT_CLIMB_RATE, DroneFlight.DEFAULT_RELEASE_SPEED,
                 pos.y - altitude, 100.0, 9L, index == 0, ordered, null, 0L, index);
     }
 
@@ -1378,10 +1378,10 @@ public final class DroneSelfTest {
                 DroneState.PAYLOAD_RUN, 5, destination, null, DroneProgram.EMPTY, at(0, 0),
                 false, true, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
-                DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
-                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
-                pos.y - DroneEntity.DEFAULT_CRUISE_ALTITUDE,
-                destination.y - DroneEntity.DEFAULT_CRUISE_ALTITUDE, 7L, index == 0, 1, null, 0L, index);
+                DroneFlight.DEFAULT_CRUISE_SPEED, DroneFlight.DEFAULT_CRUISE_ALTITUDE,
+                DroneFlight.DEFAULT_CLIMB_RATE, DroneFlight.DEFAULT_RELEASE_SPEED,
+                pos.y - DroneFlight.DEFAULT_CRUISE_ALTITUDE,
+                destination.y - DroneFlight.DEFAULT_CRUISE_ALTITUDE, 7L, index == 0, 1, null, 0L, index);
     }
 
     /** Hull-to-hull collision. */
@@ -1423,11 +1423,11 @@ public final class DroneSelfTest {
                 "each drone should clear its own half of a shallow overlap"));
 
         out.add(check("contact/push-outruns-a-held-pair",
-                Contacts.MAX_ESCAPE > DroneEntity.DEFAULT_CRUISE_SPEED * Contacts.SHARE,
+                Contacts.MAX_ESCAPE > DroneFlight.DEFAULT_CRUISE_SPEED * Contacts.SHARE,
                 "a held pair pulls together at cruise speed and each drone clears only its own half, so the "
                         + "push must beat half of cruise: " + Contacts.MAX_ESCAPE));
         out.add(check("contact/push-stays-under-a-tick-of-flight",
-                Contacts.MAX_ESCAPE < DroneEntity.DEFAULT_RELEASE_SPEED,
+                Contacts.MAX_ESCAPE < DroneFlight.DEFAULT_RELEASE_SPEED,
                 "a shove that moved a drone further than flying does would read as a teleport"));
     }
 
@@ -1442,10 +1442,10 @@ public final class DroneSelfTest {
      * That a drone climbs away from the weapon it has just released rather than flying on through it.
      */
     private static void breakOff(List<Result> out) {
-        double cruise = DroneEntity.DEFAULT_CRUISE_ALTITUDE;
+        double cruise = DroneFlight.DEFAULT_CRUISE_ALTITUDE;
         Vec3 target = at(600, 0);
         DroneSnapshot dropped = striker(new Vec3(0.0, 100.0, 0.0), 100.0 - cruise, false,
-                new Vec3(DroneEntity.DEFAULT_RELEASE_SPEED, 0.0, 0.0), target);
+                new Vec3(DroneFlight.DEFAULT_RELEASE_SPEED, 0.0, 0.0), target);
         SquadView alone = SquadView.solo(dropped);
 
         out.add(check("payload/run-holds-until-clear",
@@ -1458,11 +1458,11 @@ public final class DroneSelfTest {
         out.add(check("payload/break-off-runs-out", egress.x > 0.0,
                 "the break-off must carry on past the target, not turn back over the falling bomb: " + egress));
         out.add(check("payload/break-off-keeps-its-speed",
-                egress.horizontalDistance() >= DroneEntity.DEFAULT_RELEASE_SPEED - 1.0E-6,
+                egress.horizontalDistance() >= DroneFlight.DEFAULT_RELEASE_SPEED - 1.0E-6,
                 "easing off while the weapon is still underneath defeats the manoeuvre: " + egress));
 
         DroneSnapshot clear = striker(new Vec3(0.0, 100.0 + Tuning.BREAK_OFF_CLIMB, 0.0), 100.0 - cruise,
-                false, new Vec3(DroneEntity.DEFAULT_RELEASE_SPEED, 0.0, 0.0), target);
+                false, new Vec3(DroneFlight.DEFAULT_RELEASE_SPEED, 0.0, 0.0), target);
         out.add(check("payload/break-off-ends",
                 PayloadRunHandler.INSTANCE.next(clear, SquadView.solo(clear)) != null,
                 "once it has the height the drone should rejoin the mission instead of climbing forever"));
@@ -1482,7 +1482,7 @@ public final class DroneSelfTest {
                 "the program must step on once the break-off is finished, or the drone repeats the strike"));
 
         DroneSnapshot armed = striker(new Vec3(0.0, 100.0, 0.0), 100.0 - cruise, true,
-                new Vec3(DroneEntity.DEFAULT_RELEASE_SPEED, 0.0, 0.0), target);
+                new Vec3(DroneFlight.DEFAULT_RELEASE_SPEED, 0.0, 0.0), target);
         out.add(check("payload/armed-run-is-unchanged",
                 PayloadRunHandler.INSTANCE.next(armed, SquadView.solo(armed)) == null
                         && PayloadRunHandler.INSTANCE.guide(armed, SquadView.solo(armed)).x > 0.0,
@@ -1500,8 +1500,8 @@ public final class DroneSelfTest {
                 DroneState.PAYLOAD_RUN, 40, destination, null, DroneProgram.EMPTY, at(0, 0),
                 false, armed, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
-                DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
-                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
+                DroneFlight.DEFAULT_CRUISE_SPEED, DroneFlight.DEFAULT_CRUISE_ALTITUDE,
+                DroneFlight.DEFAULT_CLIMB_RATE, DroneFlight.DEFAULT_RELEASE_SPEED,
                 groundY, groundY, 0L, true, 1, null, 0L, 0L);
     }
 
@@ -1535,9 +1535,9 @@ public final class DroneSelfTest {
                 "flying on past the lane must not owe more mines than the rack holds"));
 
         //; the run -----------------------------------------------------------------------------
-        double cruise = DroneEntity.DEFAULT_CRUISE_ALTITUDE;
+        double cruise = DroneFlight.DEFAULT_CRUISE_ALTITUDE;
         Vec3 target = at(600, 0);
-        Vec3 run = new Vec3(DroneEntity.DEFAULT_RELEASE_SPEED, 0.0, 0.0);
+        Vec3 run = new Vec3(DroneFlight.DEFAULT_RELEASE_SPEED, 0.0, 0.0);
 
         DroneSnapshot probe = layer(new Vec3(0.0, 100.0, 0.0), 100.0 - cruise, rack, run, target);
         double lead = MineLayHandler.alongTrack(probe, SquadView.solo(probe)) - (0.0 - target.x);
@@ -1575,7 +1575,7 @@ public final class DroneSelfTest {
         out.add(check("minelay/steers-past-the-lay-point", guide.x > 0.0,
                 "a laying drone must keep flying through its own lane, got " + guide));
         out.add(check("minelay/holds-release-speed",
-                guide.horizontalDistance() >= DroneEntity.DEFAULT_RELEASE_SPEED - 1.0E-6,
+                guide.horizontalDistance() >= DroneFlight.DEFAULT_RELEASE_SPEED - 1.0E-6,
                 "slowing down mid-lane bunches the rest of the strip: " + guide));
 
         // Empty rack: behaves exactly as a strike break-off does.
@@ -1690,8 +1690,8 @@ public final class DroneSelfTest {
                 DroneState.MINELAY, 40, destination, null, DroneProgram.EMPTY, at(0, 0),
                 false, false, rack, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
-                DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
-                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
+                DroneFlight.DEFAULT_CRUISE_SPEED, DroneFlight.DEFAULT_CRUISE_ALTITUDE,
+                DroneFlight.DEFAULT_CLIMB_RATE, DroneFlight.DEFAULT_RELEASE_SPEED,
                 groundY, groundY, 0L, true, 1, null, RotorDamage.INTACT, 0L, 0L);
     }
 
@@ -1699,13 +1699,13 @@ public final class DroneSelfTest {
     private static DroneSnapshot cruising(MineLoad rack, Vec3 destination, double range) {
         Vec3 pos = new Vec3(destination.x - range, 100.0, 0.0);
         return new DroneSnapshot(UUID.nameUUIDFromBytes(new byte[]{(byte) 0x6e}), false, pos,
-                new Vec3(DroneEntity.DEFAULT_CRUISE_SPEED, 0.0, 0.0), 0.0f,
+                new Vec3(DroneFlight.DEFAULT_CRUISE_SPEED, 0.0, 0.0), 0.0f,
                 FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE,
                 DroneState.TRANSIT, 40, destination, null, DroneProgram.EMPTY, at(0, 0),
                 false, false, rack, false, true, List.of(),
                 DroneBattery.DEFAULT_CAPACITY, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
-                DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
-                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
+                DroneFlight.DEFAULT_CRUISE_SPEED, DroneFlight.DEFAULT_CRUISE_ALTITUDE,
+                DroneFlight.DEFAULT_CLIMB_RATE, DroneFlight.DEFAULT_RELEASE_SPEED,
                 60.0, 60.0, 0L, true, 1, null, RotorDamage.INTACT, 0L, 0L);
     }
 
@@ -1849,9 +1849,9 @@ public final class DroneSelfTest {
                 FlightAttitude.LEVEL, Airframe.AMAZOG, DroneNav.NONE,
                 state, 5, destination, null, DroneProgram.EMPTY, pos, cargo, false, false, true, List.of(),
                 charge, DroneBattery.DEFAULT_CAPACITY, PowerProfile.DEFAULT,
-                DroneEntity.DEFAULT_CRUISE_SPEED, DroneEntity.DEFAULT_CRUISE_ALTITUDE,
-                DroneEntity.DEFAULT_CLIMB_RATE, DroneEntity.DEFAULT_RELEASE_SPEED,
-                pos.y - DroneEntity.DEFAULT_CRUISE_ALTITUDE, destination.y - DroneEntity.DEFAULT_CRUISE_ALTITUDE,
+                DroneFlight.DEFAULT_CRUISE_SPEED, DroneFlight.DEFAULT_CRUISE_ALTITUDE,
+                DroneFlight.DEFAULT_CLIMB_RATE, DroneFlight.DEFAULT_RELEASE_SPEED,
+                pos.y - DroneFlight.DEFAULT_CRUISE_ALTITUDE, destination.y - DroneFlight.DEFAULT_CRUISE_ALTITUDE,
                 0L, true, 1, null, 0L, 0L);
     }
 

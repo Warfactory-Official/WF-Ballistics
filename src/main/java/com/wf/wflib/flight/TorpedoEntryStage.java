@@ -24,7 +24,7 @@ public final class TorpedoEntryStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        double speed = missile.getCruiseSpeed();
+        double speed = missile.flight().getCruiseSpeed();
         if (!missile.isSubmerged()) {
             return new Vec3(ctx.nx() * speed * AIR_LEAD, -ENTRY_SINK, ctx.nz() * speed * AIR_LEAD);
         }

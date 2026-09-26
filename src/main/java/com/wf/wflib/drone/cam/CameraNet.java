@@ -1,6 +1,8 @@
 package com.wf.wflib.drone.cam;
 
+import com.wf.wflib.MissileEntity;
 import com.wf.wflib.drone.DroneEntity;
+import com.wf.wflib.tv.TvGuidance;
 import com.wf.wflib.item.ModDataComponents;
 import com.wf.wflib.network.CameraFeedPacket;
 import net.minecraft.world.InteractionHand;
@@ -34,6 +36,8 @@ public final class CameraNet {
     private static final int QUIET_HORIZON = 6000;
 
     private static final Map<ResourceKey<Level>, Cameras> BY_LEVEL = new HashMap<>();
+    /** Subscriptions to an entity's feed, all levels; 0 => {@link #watches} off the tracking hot path. */
+    private static int entityWatches;
     private static long encodes;
     private static long deliveries;
 
@@ -65,7 +69,35 @@ public final class CameraNet {
         if (feedId == 0 || !entitled(level, player, feedId)) {
             return;
         }
-        of(level).watching.put(player.getUUID(), new Watch(feedId, level.getGameTime()));
+        Cameras cameras = of(level);
+        cameras.watching.put(player.getUUID(), new Watch(player, feedId, level.getGameTime()));
+        cameras.cachedAudiences = null;
+        recountEntityWatches();
+    }
+
+    /**
+     * @return true if {@code player} has {@code entity}'s feed on screen. Such an entity is tracked to them at any
+     *      range (vanilla stops at the view distance): the feed pass poses the lens from it every frame.
+     */
+    public static boolean watches(ServerPlayer player, Entity entity) {
+        if (entityWatches == 0 || !(player.level() instanceof ServerLevel level)) {
+            return false;
+        }
+        Cameras cameras = BY_LEVEL.get(level.dimension());
+        Watch watch = cameras == null ? null : cameras.watching.get(player.getUUID());
+        return watch != null && watch.player() == player && watch.feedId() == entity.getId();
+    }
+
+    private static void recountEntityWatches() {
+        int n = 0;
+        for (Cameras cameras : BY_LEVEL.values()) {
+            for (Watch watch : cameras.watching.values()) {
+                if (watch.feedId() > 0) {
+                    n++;
+                }
+            }
+        }
+        entityWatches = n;
     }
 
     /** Is this player allowed to watch this feed at all? */
@@ -80,7 +112,7 @@ public final class CameraNet {
                 return true;
             }
         }
-        return holdsPanelWith(level, player, feedId);
+        return holdsPanelWith(level, player, feedId) || TvGuidance.entitled(level, player, feedId);
     }
 
     private static boolean holdsPanelWith(ServerLevel level, ServerPlayer player, int feedId) {
@@ -120,8 +152,39 @@ public final class CameraNet {
 
     public static void unsubscribe(ServerPlayer player) {
         if (player.level() instanceof ServerLevel level) {
-            of(level).watching.remove(player.getUUID());
+            Cameras cameras = of(level);
+            cameras.watching.remove(player.getUUID());
+            cameras.cachedAudiences = null;
+            recountEntityWatches();
         }
+    }
+
+    /** What the last operator to aim this feed asked for, while they still watch it. */
+    public record Order(ServerPlayer player, float yaw, float pitch) {
+    }
+
+    @Nullable
+    public static Order order(ServerLevel level, int feedId) {
+        Cameras cameras = BY_LEVEL.get(level.dimension());
+        Cam cam = cameras == null ? null : cameras.cams.get(feedId);
+        if (cam == null || cam.aimedBy == null || !cameras.watches(level, feedId, cam.aimedBy)) {
+            return null;
+        }
+        return new Order(cam.aimedBy, cam.desiredYaw, cam.desiredPitch);
+    }
+
+    /** @return players with this feed on screen by subscription; monitor audiences excluded. */
+    public static List<ServerPlayer> subscribers(ServerLevel level, int feedId) {
+        Cameras cameras = BY_LEVEL.get(level.dimension());
+        List<ServerPlayer> out = new ArrayList<>();
+        if (cameras != null) {
+            for (Watch watch : cameras.watching.values()) {
+                if (watch.feedId() == feedId) {
+                    out.add(watch.player());
+                }
+            }
+        }
+        return out;
     }
 
     /** A pointing order. */
@@ -130,10 +193,20 @@ public final class CameraNet {
             return;
         }
         Cameras cameras = of(level);
-        Cam cam = cameras.cams.get(feedId);
-        if (cam == null || !cameras.watches(level, feedId, player)) {
+        if (!cameras.watches(level, feedId, player)) {
             return;
         }
+        Cam cam = cameras.cams.get(feedId);
+        if (cam == null) {
+            // Before the first publish: an order dropped here is a TV round flying unsteered until the next renew.
+            CameraSource source = CameraSource.resolve(level, feedId);
+            if (source == null) {
+                return;
+            }
+            cam = new Cam(source.spec(), source.restYaw(), source.restPitch());
+            cameras.cams.put(feedId, cam);
+        }
+        cam.aimedBy = player;
         cam.desiredYaw = cam.clampYaw(yaw);
         cam.desiredPitch = Math.max(cam.spec.pitchMin(), Math.min(cam.spec.pitchMax(), pitch));
         cam.zoom = Math.max(1.0f, Math.min(cam.spec.maxZoom(), zoom));
@@ -215,7 +288,7 @@ public final class CameraNet {
 
         source.bill(spec.drawFor(cam.mode), PUBLISH_INTERVAL);
 
-        CameraFeed feed = new CameraFeed(feedId, eye.x, eye.y, eye.z,
+        CameraFeed feed = new CameraFeed(feedId, source.kind(), eye.x, eye.y, eye.z,
                 cam.yaw, cam.pitch, spec.fovAt(cam.zoom), spec.fovDeg(), spec.maxZoom(), spec.slewRate(),
                 (byte) cam.mode.ordinal(), (byte) spec.modeMask(),
                 source.battery(), link,
@@ -266,6 +339,7 @@ public final class CameraNet {
 
     public static void shutdown() {
         BY_LEVEL.clear();
+        entityWatches = 0;
         CameraChunkStream.shutdown();
         StaticCameraFeeds.shutdown();
         resetCounters();
@@ -307,7 +381,8 @@ public final class CameraNet {
         }
     }
 
-    private record Watch(int feedId, long renewed) {
+    /** Holds the player, not its UUID: a FakePlayer is absent from the player list. */
+    private record Watch(ServerPlayer player, int feedId, long renewed) {
     }
 
     private static final class Cam {
@@ -318,6 +393,8 @@ public final class CameraNet {
         private float desiredYaw;
         private float desiredPitch;
         private float zoom = 1.0f;
+        @Nullable
+        private ServerPlayer aimedBy;
         /** The heading of the mount. The centre of the arc, for a gimbal that has one. */
         private float restYaw;
 
@@ -375,7 +452,9 @@ public final class CameraNet {
                     it.remove();
                 }
             }
-            watching.entrySet().removeIf(e -> now - e.getValue().renewed() > SUBSCRIPTION_TTL);
+            if (watching.entrySet().removeIf(e -> now - e.getValue().renewed() > SUBSCRIPTION_TTL)) {
+                recountEntityWatches();
+            }
             lastWatched.values().removeIf(at -> now - at > QUIET_HORIZON);
         }
 
@@ -409,10 +488,10 @@ public final class CameraNet {
 
         private Map<Integer, List<Anchor>> build(ServerLevel level) {
             Map<Integer, List<Anchor>> out = new HashMap<>();
-            for (Map.Entry<UUID, Watch> entry : watching.entrySet()) {
-                ServerPlayer player = level.getServer().getPlayerList().getPlayer(entry.getKey());
-                if (player != null && player.level() == level) {
-                    out.computeIfAbsent(entry.getValue().feedId(), id -> new ArrayList<>())
+            for (Watch watch : watching.values()) {
+                ServerPlayer player = watch.player();
+                if (!player.isRemoved() && player.level() == level) {
+                    out.computeIfAbsent(watch.feedId(), id -> new ArrayList<>())
                             .add(new Anchor(player, player.getEyePosition()));
                 }
             }
@@ -445,6 +524,9 @@ public final class CameraNet {
      */
     @Nullable
     public static CameraSpec specOf(Entity entity) {
+        if (entity instanceof MissileEntity missile) {
+            return missile.seeker().spec();
+        }
         return entity instanceof DroneEntity drone ? drone.cameraSpec() : null;
     }
 }

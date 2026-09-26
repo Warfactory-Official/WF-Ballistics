@@ -11,10 +11,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * An O(1) per-level set of live glyphids, maintained from join/leave events, mirroring {@code DroneTracker} and
- * {@code OBBEntityTracker}.
- */
+/** Per-level set of live glyphids from join/leave events. */
 @EventBusSubscriber(modid = WFLib.MODID, bus = EventBusSubscriber.Bus.GAME)
 public final class GlyphidTracker {
 

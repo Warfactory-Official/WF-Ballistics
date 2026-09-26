@@ -21,7 +21,7 @@ public final class TorpedoTerminalStage implements FlightStage {
         if (range < 1.0E-4) {
             return missile.getDeltaMovement(); // sitting on the aim point; coast and let the fuze do it
         }
-        return toTarget.scale(missile.getCruiseSpeed() * SPRINT / range);
+        return toTarget.scale(missile.flight().getCruiseSpeed() * SPRINT / range);
     }
 
     @Override

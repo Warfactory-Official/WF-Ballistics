@@ -35,7 +35,7 @@ public final class BuildPilot {
      * Keep this drone pointed at something useful. Called once per tick per drone that is on a job.
      */
     public static void advance(ServerLevel level, DroneEntity drone) {
-        WorkAssignment work = drone.assignment();
+        WorkAssignment work = drone.orders().assignment();
         if (work == null) {
             return;
         }
@@ -44,14 +44,14 @@ public final class BuildPilot {
             standDown(level, drone, job == null ? "job is gone" : "job finished");
             return;
         }
-        if (!worksJobs(drone.getDroneState())) {
-            standDown(level, drone, "off the job: " + drone.getDroneState());
+        if (!worksJobs(drone.flight().getDroneState())) {
+            standDown(level, drone, "off the job: " + drone.flight().getDroneState());
             return;
         }
         boolean open = job.workable();
         if (open != work.siteOpen()) {
             work = work.withSiteOpen(open);
-            drone.setAssignment(work);
+            drone.orders().setAssignment(work);
         }
         if (!open) {
             // Give the block back unpenalised: the order did nothing wrong, the ground changed under it.
@@ -69,12 +69,12 @@ public final class BuildPilot {
      */
     private static void assign(ServerLevel level, DroneEntity drone, WorkJob job) {
         boolean building = job.kind().equals(BuildJobs.CONSTRUCT);
-        if (!building && drone.cargoFull()) {
+        if (!building && drone.hold().cargoFull()) {
             // Nowhere to put anything else. Everything recovered so far is worth more delivered than carried.
             sendToStation(level, drone, job, "cargo full");
             return;
         }
-        WorkOrder order = job.queue().claim(drone.getUUID(), drone.position(), drone.getCruiseSpeed(),
+        WorkOrder order = job.queue().claim(drone.getUUID(), drone.position(), drone.flight().getCruiseSpeed(),
                 level.getGameTime());
         if (order == null) {
             if (job.queue().finished()) {
@@ -91,15 +91,15 @@ public final class BuildPilot {
                 job.queue().release(drone.getUUID(), order.id(), true);
                 return;
             }
-            if (!drone.hasItem(item)) {
+            if (!drone.hold().hasItem(item)) {
                 job.queue().release(drone.getUUID(), order.id(), false);
                 sendToStation(level, drone, job, "out of " + item.getDescription().getString());
                 return;
             }
         }
-        drone.setAssignment(drone.assignment().withOrder(order.at(), order.id(), order.data())
+        drone.orders().setAssignment(drone.orders().assignment().withOrder(order.at(), order.id(), order.data())
                 .withStation(null));
-        drone.setDestination(Vec3.atCenterOf(order.at()));
+        drone.route().setDestination(Vec3.atCenterOf(order.at()));
     }
 
     /**
@@ -111,8 +111,8 @@ public final class BuildPilot {
             detach(drone, why + ", and no station to go to");
             return;
         }
-        drone.setAssignment(drone.assignment().withOrder(null, -1, 0).withStation(station));
-        drone.setDestination(station);
+        drone.orders().setAssignment(drone.orders().assignment().withOrder(null, -1, 0).withStation(station));
+        drone.route().setDestination(station);
         drone.recordEvent(WFEventType.EXFIL, why + ", heading for the station");
     }
 
@@ -137,7 +137,7 @@ public final class BuildPilot {
 
     /** Do the work at the block the drone says it is over. */
     public static void finish(ServerLevel level, DroneEntity drone, BlockPos at) {
-        WorkAssignment work = drone.assignment();
+        WorkAssignment work = drone.orders().assignment();
         if (work == null || !work.hasOrder() || !work.order().equals(at)) {
             return;
         }
@@ -164,9 +164,9 @@ public final class BuildPilot {
         boolean done;
         if (job.kind().equals(BuildJobs.CONSTRUCT)) {
             BlockState state = stateFor(level, job, work.data());
-            done = state != null && drone.placeFromCargo(level, at, state);
+            done = state != null && drone.hold().placeFromCargo(level, at, state);
         } else {
-            done = drone.breakIntoCargo(level, at);
+            done = drone.hold().breakIntoCargo(level, at);
         }
         if (done) {
             job.queue().complete(drone.getUUID(), work.orderId());
@@ -180,7 +180,7 @@ public final class BuildPilot {
      * Move items between the drone and the station it is sitting over.
      */
     public static void exchange(ServerLevel level, DroneEntity drone) {
-        WorkAssignment work = drone.assignment();
+        WorkAssignment work = drone.orders().assignment();
         if (work == null || !work.hasStation()) {
             return;
         }
@@ -191,13 +191,13 @@ public final class BuildPilot {
         }
         int moved;
         if (job.kind().equals(BuildJobs.CONSTRUCT)) {
-            moved = drone.loadFromStation(level, work.station(), shoppingList(level, job));
+            moved = drone.hold().loadFromStation(level, work.station(), shoppingList(level, job));
             drone.recordEvent(WFEventType.CARGO_PICKUP, "loaded " + moved + " item(s)");
         } else {
-            moved = drone.unloadToStation(level, work.station());
+            moved = drone.hold().unloadToStation(level, work.station());
             drone.recordEvent(WFEventType.CARGO_DROP, "handed over " + moved + " item(s)");
         }
-        drone.setAssignment(work.withStation(null));
+        drone.orders().setAssignment(work.withStation(null));
         if (moved == 0 && job.kind().equals(BuildJobs.CONSTRUCT)) {
             detach(drone, "the supplier has nothing this job needs");
         }
@@ -248,9 +248,9 @@ public final class BuildPilot {
     }
 
     private static void clearOrder(DroneEntity drone) {
-        WorkAssignment work = drone.assignment();
+        WorkAssignment work = drone.orders().assignment();
         if (work != null) {
-            drone.setAssignment(work.withOrder(null, -1, 0));
+            drone.orders().setAssignment(work.withOrder(null, -1, 0));
         }
     }
 
@@ -267,19 +267,19 @@ public final class BuildPilot {
 
     /** Take this drone off the job, giving back whatever it was holding, unpenalised. */
     public static void standDown(ServerLevel level, DroneEntity drone, String why) {
-        WorkJob job = drone.assignment() == null ? null
-                : WorkRegistry.get(level).byId(drone.assignment().jobId());
+        WorkJob job = drone.orders().assignment() == null ? null
+                : WorkRegistry.get(level).byId(drone.orders().assignment().jobId());
         if (job != null) {
             job.queue().abandon(drone.getUUID());
         }
-        drone.setAssignment(null);
+        drone.orders().setAssignment(null);
         drone.recordEvent(WFEventType.MISSION_COMPLETE, why);
     }
 
     /** Take this drone off the job and stop it going anywhere. */
     public static void detach(DroneEntity drone, String why) {
-        drone.setAssignment(null);
-        drone.setDestination(null);
+        drone.orders().setAssignment(null);
+        drone.route().setDestination(null);
         drone.recordEvent(WFEventType.MISSION_COMPLETE, why);
     }
 }

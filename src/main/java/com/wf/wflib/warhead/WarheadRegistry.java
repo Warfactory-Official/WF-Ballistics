@@ -30,15 +30,22 @@ public final class WarheadRegistry {
         if (level.isClientSide) {
             return;
         }
-        var xnt = new ExplosionAEF(level, pos.x, pos.y, pos.z, STANDARD_BLAST_SIZE);
+        float size = sizeFor(source, STANDARD_BLAST_SIZE);
+        var xnt = new ExplosionAEF(level, pos.x, pos.y, pos.z, size, source.exploder());
 
-        xnt.setBlockAllocator(new BlockAllocatorStandard(32));
-        xnt.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
+        if (source.breaksBlocks()) {
+            xnt.setBlockAllocator(new BlockAllocatorStandard(size < 8 ? 16 : 32));
+            xnt.setBlockProcessor(new BlockProcessorStandard().setNoDrop());
+        }
         xnt.setEntityProcessor(new EntityProcessorCross());
         xnt.setPlayerProcessor(new PlayerProcessorStandard());
         xnt.igniterFaction(source.igniterFactionId());
         xnt.explode();
-        ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
+        if (size >= STANDARD_BLAST_SIZE * 0.5f) {
+            ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
+        } else {
+            ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
+        }
     };
     public static final InterceptDetonation STANDARD_INTERCEPT = (source, pos) -> {
         Level level = source.level();
@@ -59,11 +66,14 @@ public final class WarheadRegistry {
         if (level.isClientSide) {
             return;
         }
-        new ExplosionAEF(level, pos.x, pos.y, pos.z, SHAPED_CHARGE_SIZE)
+        var xnt = new ExplosionAEF(level, pos.x, pos.y, pos.z, sizeFor(source, SHAPED_CHARGE_SIZE), source.exploder())
                 .makeShapedCharge(source.angle(), source.blastHalfAngleDeg(),
                         BlockAllocatorShapedCharge.DEFAULT_JET_POWER)
-                .igniterFaction(source.igniterFactionId())
-                .explode();
+                .igniterFaction(source.igniterFactionId());
+        if (!source.breaksBlocks()) {
+            xnt.setBlockAllocator(null);
+        }
+        xnt.explode();
         ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
     };
 
@@ -125,6 +135,11 @@ public final class WarheadRegistry {
     }
 
     private WarheadRegistry() {
+    }
+
+    private static float sizeFor(WarheadCarrier source, float authored) {
+        float size = source.blastSize();
+        return size > 0 ? size : authored;
     }
 
     public static ResourceLocation rl(String path) {

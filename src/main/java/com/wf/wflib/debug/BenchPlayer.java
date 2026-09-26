@@ -69,7 +69,8 @@ public class BenchPlayer extends FakePlayer {
         for (int i = PLACED.size() - 1; i >= 0; i--) {
             BenchPlayer player = PLACED.get(i);
             if (player.getGameProfile().getName().equals(name)) {
-                CameraChunkStream.forget(player.getUUID());
+                CameraChunkStream.forget(player);
+                com.wf.wflib.stream.ChunkStreams.drop(player);
                 player.discard();
                 PLACED.remove(i);
             }
@@ -80,7 +81,8 @@ public class BenchPlayer extends FakePlayer {
     public static int clear() {
         int removed = PLACED.size();
         for (BenchPlayer player : PLACED) {
-            CameraChunkStream.forget(player.getUUID());
+            CameraChunkStream.forget(player);
+                com.wf.wflib.stream.ChunkStreams.drop(player);
             player.discard();
         }
         PLACED.clear();

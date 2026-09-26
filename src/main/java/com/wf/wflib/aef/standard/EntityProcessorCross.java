@@ -152,10 +152,8 @@ public class EntityProcessorCross implements IEntityProcessor {
         return range != null ? range.mutateRange(explosion, radius) : radius;
     }
 
-    /**
-     * {@link #isWithinBlastShape}, reachable from the sim-tier pass without making the gate public.
-     */
-    boolean withinShape(ExplosionAEF explosion, double px, double py, double pz, double x, double y, double z) {
+    /** {@link #isWithinBlastShape}, for callers outside the hierarchy. */
+    public boolean withinShape(ExplosionAEF explosion, double px, double py, double pz, double x, double y, double z) {
         return isWithinBlastShape(explosion, px, py, pz, x, y, z);
     }
 

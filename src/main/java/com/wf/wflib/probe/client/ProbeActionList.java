@@ -149,11 +149,14 @@ public final class ProbeActionList {
     // --- a row ---------------------------------------------------------------------------------
 
     private static Component label(ProbeAction action) {
-        if (action.enabled() || action.note() == null) {
-            return action.label();
+        net.minecraft.network.chat.MutableComponent out = Component.empty().append(action.label());
+        if (action.ticks() > 0) {
+            out.append(Component.literal(String.format(java.util.Locale.ROOT, " (%.0fs)", action.ticks() / 20.0f)));
         }
-        return Component.empty().append(action.label()).append(Component.literal(" - "))
-                .append(action.note());
+        if (action.note() != null) {
+            out.append(Component.literal(" - ")).append(action.note());
+        }
+        return out;
     }
 
     private static int colour(ProbeAction action, float alpha) {

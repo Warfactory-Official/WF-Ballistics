@@ -39,7 +39,7 @@ public final class LoiterStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        double maxSpeed = missile.getCruiseSpeed();
+        double maxSpeed = missile.flight().getCruiseSpeed();
         double vy = Mth.clamp((ctx.safeAltitude() - missile.getY()) * ALTITUDE_GAIN, -maxSpeed, maxSpeed);
 
         double dist = ctx.horizontalDist();
@@ -54,7 +54,7 @@ public final class LoiterStage implements FlightStage {
             double radialErr = Mth.clamp((dist - orbitRadius) / orbitRadius, -1.0, 1.0);
             vx = (tx + ctx.nx() * radialErr) * maxSpeed;
             vz = (tz + ctx.nz() * radialErr) * maxSpeed;
-            missile.setLoiterTicks(missile.getLoiterTicks() + 1);
+            missile.flight().setLoiterTicks(missile.flight().getLoiterTicks() + 1);
         }
         return new Vec3(vx, vy, vz);
     }
@@ -62,11 +62,11 @@ public final class LoiterStage implements FlightStage {
     @Override
     @Nullable
     public MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
-        if (missile.hasDesignatedTarget()) {
+        if (missile.seeker().hasDesignatedTarget()) {
             boolean onStation = ctx.horizontalDist() <= orbitRadius + 6.0;
-            return (missile.hasLiveDesignatedTarget() && onStation) ? MissileEntity.Phase.ATTACK : null;
+            return (missile.seeker().hasLiveDesignatedTarget() && onStation) ? MissileEntity.Phase.ATTACK : null;
         }
-        return missile.getLoiterTicks() >= loiterTicks ? MissileEntity.Phase.ATTACK : null;
+        return missile.flight().getLoiterTicks() >= loiterTicks ? MissileEntity.Phase.ATTACK : null;
     }
 
     @Override

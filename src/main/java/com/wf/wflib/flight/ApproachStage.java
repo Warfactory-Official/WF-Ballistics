@@ -28,12 +28,12 @@ public final class ApproachStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        Vec3 approach = missile.getAttackApproachDir();
+        Vec3 approach = missile.flight().getAttackApproachDir();
         if (approach == null) {
             return CruiseStage.INSTANCE.guide(missile, ctx);
         }
 
-        double maxSpeed = missile.getCruiseSpeed();
+        double maxSpeed = missile.flight().getCruiseSpeed();
         Vec3 pos = ctx.position();
         Vec3 target = ctx.target();
         double vy = CruiseStage.verticalVelocity(missile, ctx);
@@ -48,7 +48,7 @@ public final class ApproachStage implements FlightStage {
             dirX = tl > 1.0E-4 ? tx / tl : -approach.x;
             dirZ = tl > 1.0E-4 ? tz / tl : -approach.z;
         } else {
-            double join = joinDistance(ctx.horizontalDist(), missile.getApproachJoinCap());
+            double join = joinDistance(ctx.horizontalDist(), missile.flight().getApproachJoinCap());
             double jx = target.x + approach.x * join;
             double jz = target.z + approach.z * join;
             double goalHeading = Math.atan2(-approach.z, -approach.x);
@@ -83,7 +83,7 @@ public final class ApproachStage implements FlightStage {
     @Override
     @Nullable
     public MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
-        Vec3 approach = missile.getAttackApproachDir();
+        Vec3 approach = missile.flight().getAttackApproachDir();
         if (approach == null) {
             return CruiseStage.INSTANCE.next(missile, ctx);
         }
@@ -152,11 +152,11 @@ public final class ApproachStage implements FlightStage {
     }
 
     private static double turnRadius(MissileEntity missile) {
-        double turnRate = missile.getMaxTurnRate();
+        double turnRate = missile.flight().getMaxTurnRate();
         if (turnRate < 1.0E-4) {
             return 1.0E4;
         }
-        return missile.getCruiseSpeed() / turnRate * RADIUS_SAFETY;
+        return missile.flight().getCruiseSpeed() / turnRate * RADIUS_SAFETY;
     }
 
     @Override

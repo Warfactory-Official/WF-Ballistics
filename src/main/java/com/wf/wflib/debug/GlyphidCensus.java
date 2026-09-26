@@ -8,7 +8,7 @@ import com.wf.wflib.entity.glyphid.brain.GlyphidMind;
 import com.wf.wflib.entity.glyphid.nav.GlyphidFlowField;
 import com.wf.wflib.entity.glyphid.nav.GlyphidFlowFields;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphid;
-import com.wf.wflib.entity.glyphid.sim.SimGlyphidRegistry;
+import com.wf.wflib.entity.glyphid.sim.SimGlyphidManager;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.ArrayList;
@@ -110,7 +110,7 @@ public final class GlyphidCensus {
         }
 
         int records = 0;
-        for (SimGlyphid sim : SimGlyphidRegistry.get(level).view()) {
+        for (SimGlyphid sim : SimGlyphidManager.tier(level).view()) {
             records++;
             highest = Math.max(highest, sim.y);
             if (sim.mind().chewing || sim.wantsChew) {

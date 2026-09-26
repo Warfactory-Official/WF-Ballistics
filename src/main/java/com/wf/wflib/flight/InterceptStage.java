@@ -44,8 +44,8 @@ public final class InterceptStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        if (missile.getPhase() == MissileEntity.Phase.ASCEND) {
-            return new Vec3(0.0, missile.getCruiseSpeed(), 0.0);
+        if (missile.flight().getPhase() == MissileEntity.Phase.ASCEND) {
+            return new Vec3(0.0, missile.flight().getCruiseSpeed(), 0.0);
         }
         Vec3 to = ctx.target().subtract(ctx.position());
         double len = to.length();
@@ -53,13 +53,13 @@ public final class InterceptStage implements FlightStage {
             // On top of the aim point: keep the current heading rather than producing a zero/NaN direction.
             return missile.getDeltaMovement();
         }
-        return to.scale(missile.getCruiseSpeed() / len);
+        return to.scale(missile.flight().getCruiseSpeed() / len);
     }
 
     @Override
     @Nullable
     public MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
-        if (missile.getPhase() == MissileEntity.Phase.ASCEND
+        if (missile.flight().getPhase() == MissileEntity.Phase.ASCEND
                 && (clearedLaunchWalls(missile) || missile.tickCount >= MAX_CLEAR_TICKS)) {
             return MissileEntity.Phase.CRUISE;
         }

@@ -145,16 +145,16 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
     /** Re-read everything that only moves on a tick boundary. */
     private void sampleTick() {
         sampledTick = entity.tickCount;
-        targetRoll = entity.getRoll();
-        targetPitch = entity.getPitch();
-        boolean loaded = entity.isLoaded();
-        carryingCrate = entity.hasCrateAboard();
-        carryingBomb = entity.hasPayloadAboard();
-        mineModelId = entity.slungMineModel();
-        mineCount = entity.slungMineCount();
-        targetRotorScale = entity.getDroneState()
+        targetRoll = entity.flight().getRoll();
+        targetPitch = entity.flight().getPitch();
+        boolean loaded = entity.hold().isLoaded();
+        carryingCrate = entity.hold().hasCrateAboard();
+        carryingBomb = entity.hold().hasPayloadAboard();
+        mineModelId = entity.hold().slungMineModel();
+        mineCount = entity.hold().slungMineCount();
+        targetRotorScale = entity.flight().getDroneState()
                 .powered()
-                        ? (float) airframe.rotorScale(entity.getThrottle(),
+                        ? (float) airframe.rotorScale(entity.flight().getThrottle(),
                                 PowerProfile.DEFAULT.massFactor(loaded))
                         : 0.0f;
         lightPos.set(Mth.floor(curX), Mth.floor(curY), Mth.floor(curZ));

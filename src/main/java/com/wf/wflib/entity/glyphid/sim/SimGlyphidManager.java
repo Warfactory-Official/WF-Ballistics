@@ -1,27 +1,44 @@
 package com.wf.wflib.entity.glyphid.sim;
 
 import com.mojang.logging.LogUtils;
+import com.wf.wflib.WFLib;
+import com.wf.wflib.drone.WorldThread;
+import com.wf.wflib.entity.glyphid.brain.GlyphidBrain;
+import com.wf.wflib.entity.glyphid.brain.GlyphidSnapshot;
+import com.wf.wflib.sim.SimKind;
+import com.wf.wflib.sim.SimScheduler;
+import com.wf.wflib.sim.SimTier;
+import com.wf.wflib.sim.SimWorld;
 import com.wf.wflib.debug.SwarmBench;
 import com.wf.wflib.debug.SwarmProfiler;
 import com.wf.wflib.entity.glyphid.EntityGlyphid;
 import com.wf.wflib.entity.glyphid.GlyphidCaste;
 import com.wf.wflib.entity.glyphid.GlyphidTasks;
 import com.wf.wflib.entity.glyphid.GlyphidTracker;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
- * Decides which tier each glyphid belongs in, and runs the ones that are records: <b>a glyphid is an entity when
- * something could interact with it, and a record the rest of the time</b>, with hysteresis so one on the boundary
- * does not flicker.
+ * Glyphid tiers: <b>entity when something could interact with it, record otherwise</b>, with hysteresis.
+ * Prepare = terrain prefetch (tick thread); advance = brain pass over the records (worker, overlaps the level tick);
+ * resolve (LATE) = demote/promote.
  */
-public final class SimGlyphidManager {
+public final class SimGlyphidManager implements SimKind<SimGlyphid> {
 
     private static final Logger LOGGER = LogUtils.getLogger();
+
+    public static final SimGlyphidManager KIND = new SimGlyphidManager();
 
     /** Inside this range of a player a glyphid is a real entity. */
     public static double range = 64.0;
@@ -33,44 +50,117 @@ public final class SimGlyphidManager {
     /** Ticks between tier decisions. At a fifth of a block a tick, five ticks costs a block of the band. */
     private static final int DECIDE_INTERVAL = 5;
 
+    /** The world as each level's records may see it: refilled on the tick thread, read by the worker. */
+    private static final Map<ResourceKey<Level>, SimWorldPrefetch> PREFETCH = new HashMap<>();
+    private static volatile String ranOn = "-";
+
     private SimGlyphidManager() {
     }
 
-    /**
-     * The front half of the tick, from {@code LevelTickEvent.Pre}: read the world, then set the pass going, so
-     * records advance <em>during</em> the vanilla level tick.
-     */
-    public static void beginTick(ServerLevel level) {
-        if (!SwarmBench.simTier) {
-            SimGlyphidPass.idle(level);
+    public static SimTier<SimGlyphid> tier(ServerLevel level) {
+        return SimWorld.get(level).tier(KIND);
+    }
+
+    /** Next identity, counting down; persisted so a reload cannot reissue a live id. */
+    public static int claimId(SimTier<SimGlyphid> tier) {
+        int id = tier.meta().contains("nextId") ? tier.meta().getInt("nextId") : -1;
+        tier.meta().putInt("nextId", id - 1);
+        tier.setDirty();
+        return id;
+    }
+
+    @Override
+    public ResourceLocation id() {
+        return ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "glyphid");
+    }
+
+    @Override
+    public CompoundTag save(SimGlyphid record) {
+        return record.save();
+    }
+
+    @Override
+    public SimGlyphid load(CompoundTag tag) {
+        return SimGlyphid.load(tag);
+    }
+
+    @Override
+    public boolean async() {
+        return SwarmBench.simAsync;
+    }
+
+    @Override
+    public Slot slot() {
+        return Slot.LATE;
+    }
+
+    @Override
+    public void prepare(ServerLevel level, SimTier<SimGlyphid> tier) {
+        SimWorldPrefetch world = PREFETCH.computeIfAbsent(level.dimension(), key -> new SimWorldPrefetch());
+        if (!SwarmBench.simTier || tier.passRecords().isEmpty()) {
+            world.clear();
             return;
         }
         long t = SwarmProfiler.begin();
-        SimGlyphidPass.begin(level, SimGlyphidRegistry.get(level));
+        world.refill(level);
         SwarmProfiler.end(SwarmProfiler.Phase.SIM, t);
     }
 
-    /** The back half, from {@code LevelTickEvent.Post}: join the pass, then decide who belongs in which tier. */
-    public static void tick(ServerLevel level) {
-        SimGlyphidRegistry registry = SimGlyphidRegistry.get(level);
+    @Override
+    public void advance(SimTier<SimGlyphid> tier, long gameTime) {
         if (!SwarmBench.simTier) {
-            if (registry.count() > 0) {
-                promoteAll(level, registry);
+            return;
+        }
+        List<SimGlyphid> records = tier.passRecords();
+        if (records.isEmpty()) {
+            return;
+        }
+        SimWorldPrefetch world = PREFETCH.get(tier.dimension());
+        for (int i = 0; i < records.size(); i++) {
+            SimGlyphid sim = records.get(i);
+            sim.tickCount++;
+            GlyphidSnapshot self = sim.snapshot(world);
+            sim.apply(world, GlyphidBrain.plan(self, sim.mind()));
+        }
+        ranOn = Thread.currentThread().getName();
+    }
+
+    @Override
+    public void resolve(ServerLevel level, SimTier<SimGlyphid> tier) {
+        if (!SwarmBench.simTier) {
+            if (tier.count() > 0) {
+                promoteAll(level, tier);
             }
             return;
         }
         long t = SwarmProfiler.begin();
-        SimGlyphidPass.join(level, registry);
+        SwarmProfiler.charge(SwarmProfiler.Phase.SIM_ASYNC, tier.passNanos());
+        SwarmProfiler.charge(SwarmProfiler.Phase.SIM_WAIT, tier.takeStall());
         if (level.getGameTime() % DECIDE_INTERVAL == 0L) {
-            demote(level, registry);
-            promote(level, registry);
+            demote(level, tier);
+            promote(level, tier);
         }
         SwarmProfiler.end(SwarmProfiler.Phase.SIM, t);
     }
 
+    /** {@code swarmbench simthread}: where the pass ran, its cost, prefetch stats. */
+    public static List<String> report(ServerLevel level) {
+        SimTier<SimGlyphid> tier = tier(level);
+        SimWorldPrefetch world = PREFETCH.get(level.dimension());
+        int[] terrain = world == null ? new int[4] : world.stats();
+        return List.of(
+                String.format(Locale.ROOT, "  %d records on %s (%s, %d workers, assertions %s)",
+                        tier.count(), ranOn, SwarmBench.simAsync ? "async" : "async off", SimScheduler.poolSize(),
+                        WorldThread.armed() ? "armed" : "NOT ARMED"),
+                String.format(Locale.ROOT, "  last pass %.3f ms", tier.passNanos() / 1.0E6),
+                String.format(Locale.ROOT,
+                        "  prefetch: %d columns held, %d wanted, %d destinations, %d in unloaded chunks",
+                        terrain[0], terrain[1], terrain[2], terrain[3]));
+    }
+
     // --- entity -> record ---
 
-    private static void demote(ServerLevel level, SimGlyphidRegistry registry) {
+    private static void demote(ServerLevel level, SimTier<SimGlyphid> registry) {
         List<ServerPlayer> players = level.players();
         int budget = DEMOTE_PER_TICK;
         // Copied because discarding a body removes it from the tracker as it is being walked.
@@ -81,7 +171,7 @@ public final class SimGlyphidManager {
             if (!simmable(players, glyphid)) {
                 continue;
             }
-            registry.add(SimGlyphid.fromEntity(registry.claimId(), glyphid));
+            registry.add(SimGlyphid.fromEntity(claimId(registry), glyphid));
             glyphid.discard();
             budget--;
         }
@@ -128,7 +218,7 @@ public final class SimGlyphidManager {
     // --- record -> entity ---
 
     /** Give a body back to every record that has run into something only a body can do. */
-    private static void promote(ServerLevel level, SimGlyphidRegistry registry) {
+    private static void promote(ServerLevel level, SimTier<SimGlyphid> registry) {
         List<ServerPlayer> players = level.players();
         int budget = PROMOTE_PER_TICK;
         List<SimGlyphid> all = registry.view();
@@ -179,7 +269,7 @@ public final class SimGlyphidManager {
     }
 
     /** Give every record a body, for turning the tier off and for shutdown. Nothing may be left behind. */
-    public static void promoteAll(ServerLevel level, SimGlyphidRegistry registry) {
+    public static void promoteAll(ServerLevel level, SimTier<SimGlyphid> registry) {
         List<SimGlyphid> all = registry.view();
         for (int i = all.size() - 1; i >= 0; i--) {
             SimGlyphid sim = all.get(i);
@@ -191,7 +281,7 @@ public final class SimGlyphidManager {
     }
 
     public static void promoteAll(ServerLevel level) {
-        promoteAll(level, SimGlyphidRegistry.get(level));
+        promoteAll(level, tier(level));
     }
 
     /** A place the benchmark says to treat as a player, or null. */
@@ -222,7 +312,7 @@ public final class SimGlyphidManager {
     }
 
     public static int count(ServerLevel level) {
-        return SimGlyphidRegistry.get(level).count();
+        return tier(level).count();
     }
 
     /**
@@ -230,7 +320,7 @@ public final class SimGlyphidManager {
      *      walk at the same speed.
      */
     public static double meanSpeed(ServerLevel level) {
-        List<SimGlyphid> all = SimGlyphidRegistry.get(level).view();
+        List<SimGlyphid> all = tier(level).view();
         if (all.isEmpty()) {
             return 0.0;
         }

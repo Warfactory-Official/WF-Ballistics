@@ -1,5 +1,7 @@
 package com.wf.wflib.orbital;
 
+import com.wf.wflib.sim.SimMissileManager;
+import com.wf.wflib.sim.SimTier;
 import com.wf.wflib.compat.WarforgeCompat;
 import com.wf.wflib.drone.WorldThread;
 import com.wf.wflib.recon.ReconBound;
@@ -7,7 +9,6 @@ import com.wf.wflib.recon.ReconNet;
 import com.wf.wflib.recon.ReconNetwork;
 import com.wf.wflib.recon.ReconOwners;
 import com.wf.wflib.sim.SimMissile;
-import com.wf.wflib.sim.SimMissileRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
@@ -40,9 +41,9 @@ final class OrbitalManager {
         if (descents.isEmpty()) {
             return;
         }
-        SimMissileRegistry missiles = SimMissileRegistry.get(level);
+        SimTier<SimMissile> missiles = SimMissileManager.tier(level);
         for (java.util.Map.Entry<java.util.UUID, OrbitalDescents.Descent> entry : descents.entries()) {
-            SimMissile flying = missiles.getById(entry.getKey());
+            SimMissile flying = SimMissileManager.find(level, entry.getKey());
             if (flying == null) {
                 descents.remove(entry.getKey());
                 continue;

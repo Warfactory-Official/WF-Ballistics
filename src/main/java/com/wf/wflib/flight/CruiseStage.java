@@ -30,22 +30,22 @@ public final class CruiseStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        double maxSpeed = missile.getCruiseSpeed();
+        double maxSpeed = missile.flight().getCruiseSpeed();
         double vy = verticalVelocity(missile, ctx);
         return new Vec3(ctx.nx() * maxSpeed, vy, ctx.nz() * maxSpeed);
     }
 
     /** Eased, deadbanded vertical guidance toward the terrain-safe (or fixed) cruise altitude. */
     public static double verticalVelocity(MissileEntity missile, FlightContext ctx) {
-        double targetY = missile.getCruiseTargetY();
+        double targetY = missile.flight().getCruiseTargetY();
         if (Double.isNaN(targetY)) {
             targetY = ctx.safeAltitude();
         } else {
             targetY += (ctx.safeAltitude() - targetY) * TERRAIN_TARGET_SMOOTHING;
         }
-        missile.setCruiseTargetY(targetY);
+        missile.flight().setCruiseTargetY(targetY);
 
-        double maxSpeed = missile.getCruiseSpeed();
+        double maxSpeed = missile.flight().getCruiseSpeed();
         double error = targetY - missile.getY();
         double desiredVy;
         if (Math.abs(error) < ALTITUDE_DEADBAND) {
@@ -72,15 +72,15 @@ public final class CruiseStage implements FlightStage {
      * rate) so that stage can reach the aim on the resolved dive angle without a turn tighter than its radius.
      */
     private static double handoffRange(MissileEntity missile, FlightContext ctx) {
-        double theta = Math.toRadians(missile.resolveDiveAngle(ctx));
+        double theta = Math.toRadians(missile.flight().resolveDiveAngle(ctx));
         double tan = Math.tan(theta);
         double height = missile.getY() - ctx.target().y;
         if (tan <= 1.0e-4 || height <= 0.0) {
             return BRAKING_RANGE;
         }
         double lead = 0.0;
-        if (missile.attackStage().needsPitchoverLead()) {
-            double turnRate = missile.getMaxTurnRate();
+        if (missile.flight().attackStage().needsPitchoverLead()) {
+            double turnRate = missile.flight().getMaxTurnRate();
             double radius = turnRate > 1.0e-4 ? AttackStage.terminalSpeed(missile) / turnRate : 0.0;
             lead = radius * Math.tan(theta / 2.0);
         }

@@ -1,7 +1,11 @@
 package com.wf.wflib.drone.sim;
 
 import com.mojang.logging.LogUtils;
+import com.wf.wflib.WFLib;
 import com.wf.wflib.api.WFEventType;
+import com.wf.wflib.sim.SimKind;
+import com.wf.wflib.sim.SimTier;
+import com.wf.wflib.sim.SimWorld;
 import com.wf.wflib.api.WFTelemetryService;
 import com.wf.wflib.drone.DroneEntity;
 import com.wf.wflib.drone.DroneState;
@@ -10,6 +14,8 @@ import com.wf.wflib.drone.ai.DroneAiScheduler;
 import com.wf.wflib.drone.ai.DroneCarrier;
 import com.wf.wflib.drone.cam.CameraNet;
 import com.wf.wflib.sim.MissileListenerRegistry;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.ChunkPos;
@@ -20,11 +26,10 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Moves drones between being real entities and being {@link SimDrone} records, the drone equivalent of {@code
- * SimMissileManager}.
- */
-public final class SimDroneManager {
+/** Drones entity <-> {@link SimDrone} record. Records keep flying on the real AI ({@link DroneAiScheduler}). */
+public final class SimDroneManager implements SimKind<SimDrone> {
+
+    public static final SimDroneManager KIND = new SimDroneManager();
 
     /** A drone further than this from any player offloads. */
     public static final double OFFLOAD_PLAYER_RANGE = 192.0;
@@ -57,18 +62,31 @@ public final class SimDroneManager {
     private SimDroneManager() {
     }
 
-    /**
-     * Touching this class registers the off-world carrier source with the scheduler.
-     */
-    public static void bootstrap() {
+    public static SimTier<SimDrone> tier(ServerLevel level) {
+        return SimWorld.get(level).tier(KIND);
     }
 
     private static void collect(ServerLevel level, List<DroneCarrier> out) {
-        out.addAll(SimDroneRegistry.get(level).view());
+        out.addAll(tier(level).view());
     }
 
-    /** Run the offload/onload decisions for one dimension. */
-    public static void tick(ServerLevel level) {
+    @Override
+    public ResourceLocation id() {
+        return ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "drone");
+    }
+
+    @Override
+    public CompoundTag save(SimDrone record) {
+        return record.save();
+    }
+
+    @Override
+    public SimDrone load(CompoundTag tag) {
+        return SimDrone.load(tag);
+    }
+
+    @Override
+    public void resolve(ServerLevel level, SimTier<SimDrone> tier) {
         offloadEligible(level);
         onloadEligible(level);
     }
@@ -79,11 +97,11 @@ public final class SimDroneManager {
             if (!canOffload(level, drone)) {
                 continue;
             }
-            SimDrone sd = SimDrone.fromEntity(drone, drone.hasCargo() ? drone.saveCargo() : null);
-            SimDroneRegistry.get(level).add(sd);
+            SimDrone sd = SimDrone.fromEntity(drone, drone.hold().hasCargo() ? drone.hold().saveCargo() : null);
+            tier(level).add(sd);
             drone.recordEvent(WFEventType.OFFLOAD, "to drone sim");
             LOGGER.debug("[wflib] drone {} offloaded to simulation at {}", sd.id, sd.pos);
-            drone.discard();
+            drone.leaveWorld();
         }
     }
 
@@ -98,7 +116,7 @@ public final class SimDroneManager {
                 && CameraNet.quietFor(level, drone.getId()) < CAMERA_QUIET_TICKS) {
             return false;
         }
-        DroneState state = drone.getDroneState();
+        DroneState state = drone.flight().getDroneState();
         if (state != DroneState.TRANSIT && state != DroneState.EXFIL) {
             return false;
         }
@@ -113,7 +131,7 @@ public final class SimDroneManager {
     }
 
     private static void onloadEligible(ServerLevel level) {
-        SimDroneRegistry registry = SimDroneRegistry.get(level);
+        SimTier<SimDrone> registry = tier(level);
         List<SimDrone> all = new ArrayList<>(registry.view());
         for (SimDrone sd : all) {
             boolean travelling = sd.state == DroneState.TRANSIT || sd.state == DroneState.EXFIL;
@@ -134,8 +152,8 @@ public final class SimDroneManager {
      *      simulation, and the caller should try the slower recovery.
      */
     public static boolean onload(ServerLevel level, java.util.UUID id) {
-        SimDroneRegistry registry = SimDroneRegistry.get(level);
-        SimDrone sd = registry.getById(id);
+        SimTier<SimDrone> registry = tier(level);
+        SimDrone sd = registry.find(d -> d.id.equals(id));
         if (sd == null) {
             return false;
         }
@@ -181,7 +199,7 @@ public final class SimDroneManager {
     }
 
     private static Vec3 waypoint(DroneEntity drone) {
-        return waypoint(drone.getDroneState(), drone.getDestination(), drone.getExfil());
+        return waypoint(drone.flight().getDroneState(), drone.route().getDestination(), drone.route().getExfil());
     }
 
     private static Vec3 waypoint(SimDrone sd) {

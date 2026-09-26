@@ -1,5 +1,6 @@
 package com.wf.wflib.client.cam;
 
+import com.mojang.blaze3d.pipeline.RenderTarget;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -11,18 +12,22 @@ public final class FeedPass {
     private static Vec3 origin;
     private static int viewDistance;
     private static boolean thermal;
+    @Nullable
+    private static RenderTarget target;
 
     private FeedPass() {
     }
 
-    static void begin(Vec3 at, int distance, boolean thermalMode) {
+    static void begin(Vec3 at, int distance, boolean thermalMode, RenderTarget into) {
         origin = at;
+        target = into;
         viewDistance = distance;
         thermal = thermalMode;
     }
 
     static void end() {
         origin = null;
+        target = null;
         thermal = false;
     }
 
@@ -46,6 +51,16 @@ public final class FeedPass {
     public static Vec3 sortOrigin() {
         Vec3 at = origin;
         return at != null ? at : Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
+    }
+
+    /**
+     * @return the feed's framebuffer while a pass runs: {@code MixinMinecraftFeedTarget} answers it for
+     *      {@code getMainRenderTarget}. Iris (no pack: {@code VanillaRenderingPipeline.beginLevelRendering}) binds
+     *      the main target inside {@code renderLevel} => terrain drawn to the screen, feed = clear colour.
+     */
+    @Nullable
+    public static RenderTarget target() {
+        return target;
     }
 
     public static boolean active() {

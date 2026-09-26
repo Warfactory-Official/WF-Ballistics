@@ -37,6 +37,8 @@ public final class ProbeNetwork {
         registrar.playToClient(ProbeDataPacket.TYPE, ProbeDataPacket.STREAM_CODEC,
                 (pkt, ctx) -> ctx.enqueueWork(
                         () -> com.wf.wflib.probe.client.ProbeClientData.accept(pkt)));
+        registrar.playToClient(ProbeJobPacket.TYPE, ProbeJobPacket.STREAM_CODEC,
+                (pkt, ctx) -> ctx.enqueueWork(() -> com.wf.wflib.probe.client.ProbeJobOverlay.accept(pkt)));
     }
 
     @SubscribeEvent

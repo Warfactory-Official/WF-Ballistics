@@ -112,9 +112,7 @@ neoForge {
         minecraftVersion = project.parchment_minecraft_version
     }
 
-    // Access Transformers are auto-detected at src/main/resources/META-INF/accesstransformer.cfg.
-    // (None ship today; uncomment to make it explicit if one is added.)
-    // accessTransformers = project.files('src/main/resources/META-INF/accesstransformer.cfg')
+    accessTransformers = project.files('src/main/resources/META-INF/accesstransformer.cfg')
 
     runs {
         client {
@@ -156,7 +154,9 @@ neoForge {
         configureEach {
             // -PwithWarforge runs get their own game directory: WarForge keeps faction/claim state in
             // the save, so a factions run must not share a world with the plain dev run.
-            gameDirectory = project.file(project.hasProperty('withWarforge') ? 'run-warforge' : 'run')
+            gameDirectory = project.file(
+                    project.hasProperty('withIR') ? 'run-ir'
+                            : project.hasProperty('withWarforge') ? 'run-warforge' : 'run')
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.DEBUG
 
@@ -180,6 +180,11 @@ neoForge {
             // -PrailForce turns the Immersive Railroading package on without IR installed. Only the parts
             // that name no IR type can run under it - today that is the whole excavator - and it exists
             // because otherwise nothing in that package can be exercised at all on this machine.
+            // -ProwDebug logs one line per right-of-way query: whether WarForge answered, and what it
+            // said. Off by default; the query runs twice a second while a line is being edited.
+            if (project.hasProperty('rowDebug')) {
+                systemProperty 'wflib.rowDebug', 'true'
+            }
             if (project.hasProperty('railForce')) {
                 systemProperty 'wflib.railForce', 'true'
             }
@@ -322,6 +327,26 @@ dependencies {
     if (project.hasProperty('withWarforge')) {
         localRuntime("com.flansmod.warforge:warforge-remaintained:${warforge_version}") { transitive = false }
         localRuntime "com.lowdragmc.ldlib2:ldlib2-neoforge-${minecraft_version}:${ldlib2_version}:all"
+    }
+
+    // --- Immersive Railroading (compile-only optional integration) ---------------------------
+    //     Backs rail/build/ir: the track layer that builds real IR track from a surveyed route.
+    //     This has to be a compile dependency rather than reflection, because what is being called is
+    //     a curve solver and a block-placing builder with a dozen typed arguments; reflection against
+    //     that is a runtime error waiting for the one code path nobody ran.
+    //
+    //     Compile against the released jar, never against a source checkout: IR's master branch is
+    //     ahead of the release, and RailSettings in particular has grown four constructor arguments
+    //     since 1.11.0. Code written from the source tree compiles and then fails to link in game.
+    compileOnly("maven.modrinth:immersive-railroading:${ir_version}") { transitive = false }
+    compileOnly("maven.modrinth:universal-mod-core:${umc_version}") { transitive = false }
+
+    // Dev-only: `-PwithIR` puts IR and both of its hard dependencies into the dev run, in their own
+    // game directory. Without it the rail package still runs, and lays vanilla track instead.
+    if (project.hasProperty('withIR')) {
+        localRuntime("maven.modrinth:immersive-railroading:${ir_version}") { transitive = false }
+        localRuntime("maven.modrinth:universal-mod-core:${umc_version}") { transitive = false }
+        localRuntime("maven.modrinth:track-api:${trackapi_version}") { transitive = false }
     }
 
     // --- Unit tests -------------------------------------------------------------------------

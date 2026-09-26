@@ -1,5 +1,6 @@
 package com.wf.wflib.mine.gametest;
 
+import com.wf.wflib.util.ForcedChunks;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.item.MinePreset;
 import com.wf.wflib.item.MinePresetRegistry;
@@ -140,7 +141,7 @@ public class NavalMineGameTest {
         int cz = SectionPos.blockToSectionCoord(tank.getZ());
         for (int ox = -1; ox <= 1; ox++) {
             for (int oz = -1; oz <= 1; oz++) {
-                level.setChunkForced(cx + ox, cz + oz, forced);
+                ForcedChunks.set(level, cx + ox, cz + oz, forced);
             }
         }
     }

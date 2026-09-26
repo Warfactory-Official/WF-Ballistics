@@ -1,5 +1,8 @@
 package com.wf.wflib.drone.cam;
 
+import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+
 /**
  * The optics and the datalink, as numbers.
  *
@@ -37,6 +40,18 @@ public record CameraSpec(float fovDeg, float maxZoom, float pitchMin, float pitc
     /** Everything airborne. A drone can rotate, so limiting its gimbal in yaw would limit nothing. */
     public static final float FREE_YAW = 180.0f;
 
+    public static final Codec<CameraSpec> CODEC = RecordCodecBuilder.create(i -> i.group(
+                    Codec.FLOAT.fieldOf("fov").forGetter(CameraSpec::fovDeg),
+                    Codec.FLOAT.fieldOf("zoom").forGetter(CameraSpec::maxZoom),
+                    Codec.FLOAT.fieldOf("pitch_min").forGetter(CameraSpec::pitchMin),
+                    Codec.FLOAT.fieldOf("pitch_max").forGetter(CameraSpec::pitchMax),
+                    Codec.FLOAT.fieldOf("yaw_range").forGetter(CameraSpec::yawRange),
+                    Codec.FLOAT.fieldOf("slew").forGetter(CameraSpec::slewRate),
+                    Codec.DOUBLE.fieldOf("range").forGetter(CameraSpec::downlinkRange),
+                    Codec.INT.fieldOf("modes").forGetter(CameraSpec::modeMask),
+                    Codec.INT.fieldOf("fe").forGetter(CameraSpec::feDraw))
+            .apply(i, CameraSpec::new));
+
     /** Every drone carries this much: a fixed wide-angle optical head on a two-axis gimbal. */
     public static final CameraSpec STANDARD = new CameraSpec(
             70.0f, 4.0f, -30.0f, 90.0f, FREE_YAW, 5.0f, 1000.0, mask(CameraMode.OPTICAL), 2);
@@ -45,6 +60,13 @@ public record CameraSpec(float fovDeg, float maxZoom, float pitchMin, float pitc
     public static final CameraSpec RECON = new CameraSpec(
             60.0f, 8.0f, -45.0f, 90.0f, FREE_YAW, 9.0f, 1600.0,
             mask(CameraMode.OPTICAL, CameraMode.THERMAL, CameraMode.LOWLIGHT), 6);
+
+    /**
+     * Missile nose seeker. Gimbal = operator's aim, missile pursues its line of sight: free both axes, slew fast
+     * enough that the view never lags the mouse. Range = datalink; past it the missile flies its last lock.
+     */
+    public static final CameraSpec TV_SEEKER = new CameraSpec(
+            40.0f, 4.0f, -90.0f, 90.0f, FREE_YAW, 30.0f, 1200.0, mask(CameraMode.OPTICAL), 0);
 
     /** A camera on a wall, and a deliberately different thing from a drone's. */
     public static final CameraSpec SECURITY = new CameraSpec(

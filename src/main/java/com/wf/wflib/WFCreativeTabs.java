@@ -62,6 +62,8 @@ public final class WFCreativeTabs {
                         ModItems.shellItems().forEach(item -> output.accept(item.get()));
                         // Preset mines (registration order).
                         ModItems.mineItems().forEach(item -> output.accept(item.get()));
+                        // Armour and its inserts (registration order).
+                        ModItems.armorItems().forEach(item -> output.accept(item.get()));
                     })
                     .build());
 

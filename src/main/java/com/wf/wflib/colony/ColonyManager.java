@@ -4,7 +4,7 @@ import com.mojang.logging.LogUtils;
 import com.wf.wflib.entity.glyphid.EntityGlyphid;
 import com.wf.wflib.entity.glyphid.GlyphidTracker;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphid;
-import com.wf.wflib.entity.glyphid.sim.SimGlyphidRegistry;
+import com.wf.wflib.entity.glyphid.sim.SimGlyphidManager;
 import com.wf.wflib.industry.IndustryCluster;
 import com.wf.wflib.industry.IndustryClusters;
 import com.wf.wflib.industry.IndustryRegistry;
@@ -177,7 +177,7 @@ public final class ColonyManager {
                 standing++;
             }
         }
-        for (SimGlyphid sim : SimGlyphidRegistry.get(level).view()) {
+        for (SimGlyphid sim : SimGlyphidManager.tier(level).view()) {
             if (sim.garrison && sim.homeX == colony.x && sim.homeZ == colony.z) {
                 standing++;
             }

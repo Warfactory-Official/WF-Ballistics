@@ -1,6 +1,7 @@
 package com.wf.wflib.drone.sim;
 
 import com.wf.wflib.drone.DroneEntity;
+import com.wf.wflib.drone.DroneFlight;
 import com.wf.wflib.drone.DroneModels;
 import com.wf.wflib.drone.MineLoad;
 import com.wf.wflib.drone.DroneProgram;
@@ -59,9 +60,9 @@ public final class SimDrone implements DroneCarrier {
     /** The work job this drone was on when it offloaded. */
     @Nullable
     public com.wf.wflib.work.WorkAssignment assignment;
-    public double cruiseSpeed = DroneEntity.DEFAULT_CRUISE_SPEED;
-    public double cruiseAltitude = DroneEntity.DEFAULT_CRUISE_ALTITUDE;
-    public double climbRate = DroneEntity.DEFAULT_CLIMB_RATE;
+    public double cruiseSpeed = DroneFlight.DEFAULT_CRUISE_SPEED;
+    public double cruiseAltitude = DroneFlight.DEFAULT_CRUISE_ALTITUDE;
+    public double climbRate = DroneFlight.DEFAULT_CLIMB_RATE;
     public ResourceLocation modelId = DroneModels.DEFAULT;
     /** The camera head bolted on, or null for none. */
     @Nullable
@@ -76,7 +77,7 @@ public final class SimDrone implements DroneCarrier {
     public ResourceLocation payloadId;
     /** The mine rack, carried whole so an off-world minelayer comes back with exactly the rack it left with. */
     public MineLoad mines;
-    public double releaseSpeed = DroneEntity.DEFAULT_RELEASE_SPEED;
+    public double releaseSpeed = DroneFlight.DEFAULT_RELEASE_SPEED;
     public long lastGameTime;
 
     public static SimDrone fromEntity(DroneEntity drone, @Nullable CompoundTag cargo) {
@@ -85,30 +86,30 @@ public final class SimDrone implements DroneCarrier {
         sd.pos = drone.position();
         sd.velocity = drone.getDeltaMovement();
         sd.yaw = drone.headingRadians();
-        sd.attitude = drone.getAttitude();
-        sd.state = drone.getDroneState();
-        sd.destination = drone.getDestination();
-        sd.exfil = drone.getExfil();
+        sd.attitude = drone.flight().getAttitude();
+        sd.state = drone.flight().getDroneState();
+        sd.destination = drone.route().getDestination();
+        sd.exfil = drone.route().getExfil();
         sd.charge = drone.battery().charge();
         sd.capacity = drone.battery().capacity();
         sd.simY = drone.getY();
         sd.squadId = drone.squadId();
         sd.leader = drone.leader();
-        sd.program = drone.getProgram();
+        sd.program = drone.orders().getProgram();
         sd.formationId = drone.formationId();
         sd.formationSpacing = drone.formationSpacing();
         sd.coordinationId = drone.coordinationId();
-        sd.squadSize = drone.squadSize();
-        sd.assignment = drone.assignment();
-        sd.cruiseSpeed = drone.getCruiseSpeed();
-        sd.cruiseAltitude = drone.getCruiseAltitude();
-        sd.climbRate = drone.getClimbRate();
+        sd.squadSize = drone.squad().squadSize();
+        sd.assignment = drone.orders().assignment();
+        sd.cruiseSpeed = drone.flight().getCruiseSpeed();
+        sd.cruiseAltitude = drone.flight().getCruiseAltitude();
+        sd.climbRate = drone.flight().getClimbRate();
         sd.modelId = drone.getModelId();
         sd.camera = drone.cameraSpec();
         sd.cargo = cargo;
-        sd.payloadId = drone.getPayloadId();
-        sd.mines = drone.getMines();
-        sd.releaseSpeed = drone.getReleaseSpeed();
+        sd.payloadId = drone.hold().getPayloadId();
+        sd.mines = drone.hold().getMines();
+        sd.releaseSpeed = drone.flight().getReleaseSpeed();
         sd.lastGameTime = drone.level().getGameTime();
         return sd;
     }
@@ -121,27 +122,27 @@ public final class SimDrone implements DroneCarrier {
         drone.setUUID(this.id);
         drone.setModelId(this.modelId);
         drone.setCameraSpec(this.camera);
-        drone.setDestination(this.destination);
-        drone.setExfil(this.exfil);
-        drone.setCruiseSpeed(this.cruiseSpeed);
-        drone.setCruiseAltitude(this.cruiseAltitude);
+        drone.route().setDestination(this.destination);
+        drone.route().setExfil(this.exfil);
+        drone.flight().setCruiseSpeed(this.cruiseSpeed);
+        drone.flight().setCruiseAltitude(this.cruiseAltitude);
         drone.battery().setCapacity(this.capacity);
         drone.battery().setCharge(this.charge);
-        drone.setSquad(this.squadId, this.leader, this.formationId);
-        drone.setFormationSpacing(this.formationSpacing);
-        drone.setCoordinationId(this.coordinationId);
-        drone.setSquadSize(this.squadSize);
-        drone.setAssignment(this.assignment);
-        drone.setProgram(this.program);
-        drone.setPayload(this.payloadId);
-        drone.setMines(this.mines);
-        drone.setReleaseSpeed(this.releaseSpeed);
-        drone.setState(this.state);
+        drone.squad().setSquad(this.squadId, this.leader, this.formationId);
+        drone.squad().setFormationSpacing(this.formationSpacing);
+        drone.squad().setCoordinationId(this.coordinationId);
+        drone.squad().setSquadSize(this.squadSize);
+        drone.orders().setAssignment(this.assignment);
+        drone.orders().setProgram(this.program);
+        drone.hold().setPayload(this.payloadId);
+        drone.hold().setMines(this.mines);
+        drone.flight().setReleaseSpeed(this.releaseSpeed);
+        drone.flight().setState(this.state);
         drone.setHeadingRadians(this.yaw);
-        drone.setAttitude(this.attitude);
+        drone.flight().setAttitude(this.attitude);
         drone.setDeltaMovement(this.velocity);
         if (this.cargo != null) {
-            drone.loadCargo(this.cargo);
+            drone.hold().loadCargo(this.cargo);
         }
         return drone;
     }
@@ -338,7 +339,7 @@ public final class SimDrone implements DroneCarrier {
             sd.mines = MineLoad.load(tag.getCompound("Mines"));
         }
         sd.releaseSpeed = tag.contains("ReleaseSpeed")
-                ? tag.getDouble("ReleaseSpeed") : DroneEntity.DEFAULT_RELEASE_SPEED;
+                ? tag.getDouble("ReleaseSpeed") : DroneFlight.DEFAULT_RELEASE_SPEED;
         sd.lastGameTime = tag.getLong("LastGameTime");
         sd.program = tag.contains("Program") ? DroneProgram.load(tag.getCompound("Program")) : DroneProgram.EMPTY;
         return sd;

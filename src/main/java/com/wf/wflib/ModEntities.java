@@ -6,8 +6,8 @@ import com.wf.wflib.drone.DroneDebrisEntity;
 import com.wf.wflib.drone.DroneEntity;
 import com.wf.wflib.entity.*;
 import com.wf.wflib.entity.glyphid.EntityGlyphid;
-import com.wf.wflib.kinetic.KineticShellEntity;
 import com.wf.wflib.mine.MineEntity;
+import com.wf.wflib.round.RocketEntity;
 import com.wf.wflib.entity.glyphid.EntityGlyphidBomb;
 import com.wf.wflib.entity.glyphid.GlyphidWaypoint;
 import com.wf.wflib.entity.glyphid.caste.EntityGlyphidBehemoth;
@@ -39,13 +39,15 @@ public class ModEntities {
                     .build("missile")
             );
 
-    public static final DeferredHolder<EntityType<?>, EntityType<KineticShellEntity>> KINETIC_SHELL =
-            ENTITY_TYPES.register("kinetic_shell", () -> EntityType.Builder.<KineticShellEntity>of(KineticShellEntity::new, MobCategory.MISC)
-                    .sized(0.5F, 0.5F)
-                    .clientTrackingRange(32)
+
+    public static final DeferredHolder<EntityType<?>, EntityType<RocketEntity>> ROCKET =
+            ENTITY_TYPES.register("rocket", () -> EntityType.Builder.<RocketEntity>of(RocketEntity::new, MobCategory.MISC)
+                    .sized(0.4F, 0.4F)
+                    .clientTrackingRange(16)
                     .updateInterval(1)
-                    .fireImmune()
-                    .build("kinetic_shell")
+                    .noSave()
+                    .noSummon()
+                    .build("rocket")
             );
 
     public static final DeferredHolder<EntityType<?>, EntityType<BombletEntity>> BOMBLET =

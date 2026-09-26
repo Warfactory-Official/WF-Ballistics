@@ -98,7 +98,7 @@ public final class WFClientConfig {
                 .defineInRange("feedViewDistance", 8, 2, 16);
         CAMERA_EFFECTS = b
                 .comment("Run the video post chain (macroblocking, sensor noise, desaturation, thermal",
-                        "palette). Turning this off leaves a clean picture at the same frame rate and saves",
+                        "palette) on feeds and on vehicle sights that use it. Turning this off leaves a clean picture at the same frame rate and saves",
                         "two full-screen passes per feed frame, and loses the link quality read-out that the",
                         "artifacts are, so a failing datalink stops being visible.")
                 .define("videoEffects", true);

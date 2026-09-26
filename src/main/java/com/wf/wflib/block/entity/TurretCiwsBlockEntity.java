@@ -1,9 +1,7 @@
 package com.wf.wflib.block.entity;
 
-import com.wf.wflib.MissileEntity;
 import com.wf.wflib.block.ModBlockEntities;
 import com.wf.wflib.compat.WarforgeCompat;
-import com.wf.wflib.drone.DroneEntity;
 import com.wf.wflib.entity.InterceptTarget;
 import com.wf.wflib.recon.ContactClass;
 import com.wf.wflib.recon.ReconBound;
@@ -151,8 +149,7 @@ public class TurretCiwsBlockEntity extends BlockEntity implements IMissileListen
         }
         this.aimDir = slew(this.aimDir, toTrack.scale(1.0 / dist), TURN_RATE);
 
-        Class<? extends Entity> type = track.guess() == ContactClass.DRONE ? DroneEntity.class : MissileEntity.class;
-        Entity resolved = FireControl.resolve(sl, type, track, MAX_TRACK_ERROR,
+        Entity resolved = FireControl.resolve(sl, Entity.class, track, MAX_TRACK_ERROR,
                 e -> e instanceof InterceptTarget t && t.interceptEngageable());
         if (resolved == null) {
             return;

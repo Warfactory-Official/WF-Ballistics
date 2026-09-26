@@ -1,5 +1,6 @@
 package com.wf.wflib.client.gui;
 
+import com.wf.wflib.missile.MissileFlight;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.MissileEntity.Phase;
 import com.wf.wflib.MissileModels;
@@ -363,7 +364,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         Vec3 approachDir = attackDirIndex > 0
                 ? new Vec3(ATTACK_DIRS[attackDirIndex][0], 0.0, ATTACK_DIRS[attackDirIndex][1]) : null;
         int ticks = ArrivalEstimator.estimateTicks(Vec3.atCenterOf(menu.pos()),
-                new Vec3(tx, ty, tz), speed, MissileEntity.ascentSpeedFor(speed), cruiseAltitudeY, loiterTicks,
+                new Vec3(tx, ty, tz), speed, MissileFlight.ascentSpeedFor(speed), cruiseAltitudeY, loiterTicks,
                 approachDir, MissileEntity.DEFAULT_APPROACH_JOIN_CAP);
         return String.format("ETA ~%.1fs", ticks / 20.0);
     }

@@ -2,7 +2,7 @@ package com.wf.wflib.aef.standard;
 
 import com.wf.wflib.aef.ExplosionAEF;
 import com.wf.wflib.entity.glyphid.sim.SimGlyphid;
-import com.wf.wflib.entity.glyphid.sim.SimGlyphidRegistry;
+import com.wf.wflib.entity.glyphid.sim.SimGlyphidManager;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
@@ -34,7 +34,7 @@ public final class SimGlyphidBlast {
         if (!(level instanceof ServerLevel server)) {
             return;
         }
-        List<SimGlyphid> all = SimGlyphidRegistry.get(server).view();
+        List<SimGlyphid> all = SimGlyphidManager.tier(server).view();
         if (all.isEmpty()) {
             return;
         }
@@ -69,7 +69,7 @@ public final class SimGlyphidBlast {
                 all.remove(i);
             }
         }
-        SimGlyphidRegistry.get(server).setDirty();
+        SimGlyphidManager.tier(server).setDirty();
     }
 
     /**

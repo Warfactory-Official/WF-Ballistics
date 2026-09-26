@@ -14,6 +14,7 @@ import com.wf.wflib.recon.SourceIds;
 import com.wf.wflib.recon.TargetSink;
 import com.wf.wflib.recon.TargetSource;
 import com.wf.wflib.recon.snapshot.TargetSnapshot;
+import com.wf.wflib.round.RocketEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.server.level.ServerLevel;
@@ -43,6 +44,13 @@ public final class EntityTargetSource implements TargetSource {
         for (int i = 0; i < missiles.size(); i++) {
             sink.accept(missile(missiles.get(i)));
         }
+        List<RocketEntity> rockets = level.getEntitiesOfClass(RocketEntity.class, volume, e -> !e.isRemoved());
+        for (int i = 0; i < rockets.size(); i++) {
+            RocketEntity rocket = rockets.get(i);
+            UUID team = rocket.interceptTeamId();
+            sink.accept(snapshot(rocket, ContactClass.MISSILE, SignatureRegistry.of(rocket), EmconState.SILENT,
+                    team == null ? 0L : SourceIds.of(team), false));
+        }
         List<DroneEntity> drones = level.getEntitiesOfClass(DroneEntity.class, volume, e -> !e.isRemoved());
         for (int i = 0; i < drones.size(); i++) {
             sink.accept(drone(drones.get(i)));
@@ -66,7 +74,7 @@ public final class EntityTargetSource implements TargetSource {
 
     private static TargetSnapshot drone(DroneEntity drone) {
         // A drone flying its own program needs no link, so it is dark; one being flown is talking.
-        EmconState emcon = drone.getProgram().isEmpty() ? EmconState.ACTIVE : EmconState.SILENT;
+        EmconState emcon = drone.orders().getProgram().isEmpty() ? EmconState.ACTIVE : EmconState.SILENT;
         return snapshot(drone, ContactClass.DRONE, SignatureRegistry.of(drone), emcon, 0L, false);
     }
 
@@ -136,7 +144,7 @@ public final class EntityTargetSource implements TargetSource {
         @Nullable
         public Signature of(Entity entity) {
             if (entity instanceof MissileEntity missile) {
-                return ReconSignatures.missile(missile.getRcs(), missile.isSubmergedMedium());
+                return ReconSignatures.missile(missile.signature().getRcs(), missile.isSubmergedMedium());
             }
             if (entity instanceof DroneEntity) {
                 return ReconSignatures.drone();

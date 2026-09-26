@@ -45,8 +45,8 @@ public final class DroneMission {
     public ResourceLocation coordinationId = CoordinationModels.DEFAULT;
     /** Ticks between one drone leaving the pad and the next, or 0 to put the whole flight up at once. */
     public int launchInterval = DEFAULT_LAUNCH_INTERVAL;
-    public double cruiseSpeed = DroneEntity.DEFAULT_CRUISE_SPEED;
-    public double cruiseAltitude = DroneEntity.DEFAULT_CRUISE_ALTITUDE;
+    public double cruiseSpeed = DroneFlight.DEFAULT_CRUISE_SPEED;
+    public double cruiseAltitude = DroneFlight.DEFAULT_CRUISE_ALTITUDE;
     public double batteryCapacity = DroneBattery.DEFAULT_CAPACITY;
     /** Warhead to sling under each drone, by registered id. */
     @Nullable
@@ -54,7 +54,7 @@ public final class DroneMission {
     /** The rack of mines to sling under each drone, or null for a mission that lays none. */
     @Nullable
     public MineLoad mines;
-    public double releaseSpeed = DroneEntity.DEFAULT_RELEASE_SPEED;
+    public double releaseSpeed = DroneFlight.DEFAULT_RELEASE_SPEED;
     /**
      * How hard this delivery tries to hide where it came from.
      */
@@ -246,9 +246,9 @@ public final class DroneMission {
         m.coordinationId = tag.contains("Coordination")
                 ? CoordinationModels.parse(tag.getString("Coordination")) : CoordinationModels.LEGACY;
         m.launchInterval = tag.contains("LaunchInterval") ? clampInterval(tag.getInt("LaunchInterval")) : 0;
-        m.cruiseSpeed = tag.contains("CruiseSpeed") ? tag.getDouble("CruiseSpeed") : DroneEntity.DEFAULT_CRUISE_SPEED;
+        m.cruiseSpeed = tag.contains("CruiseSpeed") ? tag.getDouble("CruiseSpeed") : DroneFlight.DEFAULT_CRUISE_SPEED;
         m.cruiseAltitude = tag.contains("CruiseAltitude")
-                ? tag.getDouble("CruiseAltitude") : DroneEntity.DEFAULT_CRUISE_ALTITUDE;
+                ? tag.getDouble("CruiseAltitude") : DroneFlight.DEFAULT_CRUISE_ALTITUDE;
         m.batteryCapacity = tag.contains("BatteryCapacity")
                 ? tag.getDouble("BatteryCapacity") : DroneBattery.DEFAULT_CAPACITY;
         if (tag.contains("Payload")) {
@@ -258,7 +258,7 @@ public final class DroneMission {
             m.mines = MineLoad.load(tag.getCompound("Mines"));
         }
         m.releaseSpeed = tag.contains("ReleaseSpeed")
-                ? tag.getDouble("ReleaseSpeed") : DroneEntity.DEFAULT_RELEASE_SPEED;
+                ? tag.getDouble("ReleaseSpeed") : DroneFlight.DEFAULT_RELEASE_SPEED;
         m.mode = ExchangeMode.byName(tag.getString("Mode"));
         m.recipientCode = tag.contains("Recipient") ? tag.getString("Recipient") : null;
         m.program = tag.contains("Program") ? DroneProgram.load(tag.getCompound("Program")) : DroneProgram.EMPTY;
@@ -368,7 +368,7 @@ public final class DroneMission {
         }
 
         if (cargo != null) {
-            spawned.get(0).loadCargo(cargo);
+            spawned.get(0).hold().loadCargo(cargo);
         }
         return new Result(List.copyOf(spawned), wanted, null);
     }
@@ -386,29 +386,29 @@ public final class DroneMission {
         drone.setTeamId(com.wf.wflib.recon.ReconOwners.owningAt(
                 level, net.minecraft.core.BlockPos.containing(origin)));
         drone.setModelId(modelId);
-        drone.setDestination(destination);
-        drone.setExfil(exfilOr(origin));
-        drone.setCruiseSpeed(cruiseSpeed);
-        drone.setCruiseAltitude(cruiseAltitude);
+        drone.route().setDestination(destination);
+        drone.route().setExfil(exfilOr(origin));
+        drone.flight().setCruiseSpeed(cruiseSpeed);
+        drone.flight().setCruiseAltitude(cruiseAltitude);
         drone.battery().setCapacity(batteryCapacity);
         drone.battery().recharge(batteryCapacity);
-        drone.setSquad(squadId, index == 0, formationId);
-        drone.setFormationSpacing(formationSpacing);
-        drone.setCoordinationId(coordinationId);
-        drone.setSquadSize(total);
-        drone.setProgram(program);
-        drone.setExchange(exchangeId, stationCode, mode.classified(), collecting,
+        drone.squad().setSquad(squadId, index == 0, formationId);
+        drone.squad().setFormationSpacing(formationSpacing);
+        drone.squad().setCoordinationId(coordinationId);
+        drone.squad().setSquadSize(total);
+        drone.orders().setProgram(program);
+        drone.orders().setExchange(exchangeId, stationCode, mode.classified(), collecting,
                 approachLegs, egressLegs);
         if (jobId != null) {
-            drone.setAssignment(com.wf.wflib.build.BuildJobs.joining(jobId, level));
+            drone.orders().setAssignment(com.wf.wflib.build.BuildJobs.joining(jobId, level));
         }
         if (payloadId != null) {
-            drone.setPayload(payloadId);
-            drone.setReleaseSpeed(releaseSpeed);
+            drone.hold().setPayload(payloadId);
+            drone.flight().setReleaseSpeed(releaseSpeed);
         }
         if (mines != null) {
-            drone.setMines(mines);
-            drone.setReleaseSpeed(releaseSpeed);
+            drone.hold().setMines(mines);
+            drone.flight().setReleaseSpeed(releaseSpeed);
         }
         level.addFreshEntity(drone);
         return drone;

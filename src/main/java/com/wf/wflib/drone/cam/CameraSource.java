@@ -1,5 +1,6 @@
 package com.wf.wflib.drone.cam;
 
+import com.wf.wflib.MissileEntity;
 import com.wf.wflib.block.SecurityCameraBlock;
 import com.wf.wflib.drone.DroneEntity;
 import net.minecraft.core.BlockPos;
@@ -37,6 +38,9 @@ public interface CameraSource {
     /** Charge this feed's running cost to whatever is paying for it. */
     void bill(int fe, int ticks);
 
+    /** {@link CameraFeed#DRONE} / {@link CameraFeed#FIXED} / {@link CameraFeed#GUIDED}. */
+    byte kind();
+
     /** @return the source behind this feed id, or null if there is no longer one. */
     @Nullable
     static CameraSource resolve(ServerLevel level, int feedId) {
@@ -49,6 +53,10 @@ public interface CameraSource {
     @Nullable
     private static CameraSource airborne(ServerLevel level, int feedId) {
         Entity entity = level.getEntity(feedId);
+        if (entity instanceof MissileEntity missile) {
+            return missile.isAlive() && missile.seeker().spec() != null && !missile.damage().isDowned() && !missile.isDud()
+                    ? new Guided(missile, missile.seeker().spec()) : null;
+        }
         if (!(entity instanceof DroneEntity drone) || !drone.isAlive()) {
             return null;
         }
@@ -112,6 +120,56 @@ public interface CameraSource {
         public void bill(int fe, int ticks) {
             this.drone.battery().drain(fe * ticks / 20.0);
         }
+
+        @Override
+        public byte kind() {
+            return CameraFeed.DRONE;
+        }
+    }
+
+    /** A TV round's nose seeker. Rest = the heading it is flying. */
+    record Guided(MissileEntity missile, CameraSpec spec) implements CameraSource {
+
+        /** @return unit heading; straight up before it has moved (the launch pose). */
+        public static Vec3 heading(MissileEntity missile) {
+            Vec3 v = missile.getDeltaMovement();
+            return v.lengthSqr() < 1.0E-8 ? new Vec3(0.0, 1.0, 0.0) : v.normalize();
+        }
+
+        @Override
+        public Vec3 eye() {
+            return this.missile.position().add(heading(this.missile).scale(this.missile.noseForward()));
+        }
+
+        @Override
+        public float restYaw() {
+            Vec3 h = heading(this.missile);
+            return (float) Math.toDegrees(Math.atan2(-h.x, h.z));
+        }
+
+        @Override
+        public float restPitch() {
+            return (float) Math.toDegrees(-Math.asin(Math.max(-1.0, Math.min(1.0, heading(this.missile).y))));
+        }
+
+        @Override
+        public float battery() {
+            return (float) this.missile.motor().getFuel() / Math.max(1, this.missile.motor().getFuelCapacity());
+        }
+
+        @Override
+        public float speed() {
+            return (float) this.missile.getDeltaMovement().length() * 20.0f;
+        }
+
+        @Override
+        public void bill(int fe, int ticks) {
+        }
+
+        @Override
+        public byte kind() {
+            return CameraFeed.GUIDED;
+        }
     }
 
     /** A camera on a wall. */
@@ -154,6 +212,11 @@ public interface CameraSource {
 
         @Override
         public void bill(int fe, int ticks) {
+        }
+
+        @Override
+        public byte kind() {
+            return CameraFeed.FIXED;
         }
     }
 }

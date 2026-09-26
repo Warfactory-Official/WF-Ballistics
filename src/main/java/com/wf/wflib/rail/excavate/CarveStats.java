@@ -9,6 +9,7 @@ public final class CarveStats {
     private final AtomicLong storedCells = new AtomicLong();
     private final AtomicLong storedNanos = new AtomicLong();
     private final AtomicLong attendedBlocks = new AtomicLong();
+    private final AtomicLong linedCells = new AtomicLong();
     private final AtomicLong blockEntitiesPruned = new AtomicLong();
     private final AtomicLong aborted = new AtomicLong();
     private final AtomicLong abortedNanos = new AtomicLong();
@@ -62,6 +63,15 @@ public final class CarveStats {
 
     void recordAttended(int blocks) {
         this.attendedBlocks.addAndGet(blocks);
+    }
+
+    /** Cells turned into tunnel lining, by either path. Counted apart from cells removed. */
+    void recordLined(int cells) {
+        this.linedCells.addAndGet(cells);
+    }
+
+    public long linedCells() {
+        return this.linedCells.get();
     }
 
     public long storedChunks() {
@@ -122,6 +132,7 @@ public final class CarveStats {
         this.storedCells.set(0);
         this.storedNanos.set(0);
         this.attendedBlocks.set(0);
+        this.linedCells.set(0);
         this.blockEntitiesPruned.set(0);
         this.aborted.set(0);
         this.abortedNanos.set(0);
@@ -147,9 +158,9 @@ public final class CarveStats {
     @Override
     public String toString() {
         return String.format(
-                "stored %d chunks / %d cells (mean %.0f us), attended %d blocks, pruned %d BEs, "
-                        + "aborted %d (mean %.0f us), refused %d sections",
-                storedChunks(), storedCells(), meanStoredMicros(), attendedBlocks(), blockEntitiesPruned(),
-                aborted(), meanAbortedMicros(), refusedSections());
+                "stored %d chunks / %d cells (mean %.0f us), attended %d blocks, lined %d cells, "
+                        + "pruned %d BEs, aborted %d (mean %.0f us), refused %d sections",
+                storedChunks(), storedCells(), meanStoredMicros(), attendedBlocks(), linedCells(),
+                blockEntitiesPruned(), aborted(), meanAbortedMicros(), refusedSections());
     }
 }

@@ -60,7 +60,7 @@ public class MissileItem extends Item implements ModelledItem {
         MissileEntity best = null;
         double bestSq = Double.MAX_VALUE;
         for (MissileEntity m : level.getEntitiesOfClass(MissileEntity.class, search,
-                e -> e.isAlive() && !e.isInterceptor())) {
+                e -> e.isAlive() && !e.interceptor().isActive())) {
             Optional<Vec3> clip = m.getBoundingBox().inflate(m.getPickRadius()).clip(eye, end);
             if (clip.isPresent()) {
                 double d = clip.get().distanceToSqr(eye);
@@ -123,12 +123,12 @@ public class MissileItem extends Item implements ModelledItem {
             if (preset.isInterceptor()) {
                 MissileEntity locked = lockCandidate(level, player);
                 if (locked != null) {
-                    missile.setInterceptLock(locked.getUUID());
+                    missile.interceptor().setLock(locked.getUUID());
                 }
             } else {
                 Entity designated = aimEntity(level, player);
                 if (designated != null) {
-                    missile.setDesignatedTarget(designated.getUUID());
+                    missile.seeker().setDesignatedTarget(designated.getUUID());
                 }
             }
             Vec3 spawn = player.getEyePosition().add(player.getLookAngle().scale(2.0));

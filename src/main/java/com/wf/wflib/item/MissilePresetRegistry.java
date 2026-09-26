@@ -3,6 +3,7 @@ package com.wf.wflib.item;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.MissileModels;
 import com.wf.wflib.WFLib;
+import com.wf.wflib.drone.cam.CameraSpec;
 import com.wf.wflib.flight.FlightStageRegistry;
 import com.wf.wflib.sim.MissileSimConfig;
 import com.wf.wflib.warhead.FireWarhead;
@@ -128,6 +129,12 @@ public final class MissilePresetRegistry {
         register(MissilePreset.builder(rl("emp"), MissileModels.rl("stealth"), WarheadRegistry.rl("emp"))
                 .terrainFollow(24.0).cruiseSpeed(1.2).stealth().evasion(0.3f)
                 .fuel(MissileEntity.FuelType.LIQUID, 1600).build());
+
+        register(MissilePreset.builder(rl("tv"), MissileModels.rl("atgm"), WarheadRegistry.rl("shaped_charge"))
+                .cruiseSpeed(2.5).turnRate(0.12).health(10.0f).accel(0.25, 0.25)
+                .fuel(MissileEntity.FuelType.SOLID, 600)
+                .ascentStage(FlightStageRegistry.rl("air_launch")).attackStage(FlightStageRegistry.rl("direct"))
+                .seeker(CameraSpec.TV_SEEKER).build());
 
         register(MissilePreset.builder(rl("torpedo"), MissileModels.rl("micro"), TorpedoWarhead.ID)
                 .torpedo().highAltitude(8.0).clearance(4.0).cruiseSpeed(0.35).turnRate(0.1)

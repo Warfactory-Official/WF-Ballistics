@@ -42,8 +42,8 @@ public final class SwarmManager {
      * @return true if both missiles are in the same (non-zero) swarm.
      */
     public static boolean sameSwarm(MissileEntity a, MissileEntity b) {
-        long id = a.getSwarmId();
-        return id != 0L && id == b.getSwarmId();
+        long id = a.swarm().getSwarmId();
+        return id != 0L && id == b.swarm().getSwarmId();
     }
 
     /**
@@ -75,7 +75,7 @@ public final class SwarmManager {
      *      small list, so call it at most once per member per tick.
      */
     public static List<MissileEntity> nearby(MissileEntity missile, double radius) {
-        Set<MissileEntity> set = members(missile.level(), missile.getSwarmId());
+        Set<MissileEntity> set = members(missile.level(), missile.swarm().getSwarmId());
         if (set.size() <= 1) {
             return List.of();
         }
@@ -98,7 +98,7 @@ public final class SwarmManager {
      */
     public static MissileEntity commander(Level level, long swarmId) {
         for (MissileEntity m : members(level, swarmId)) {
-            if (m.isCommander() && m.isAlive() && !m.isRemoved()) {
+            if (m.swarm().isCommander() && m.isAlive() && !m.isRemoved()) {
                 return m;
             }
         }
@@ -126,8 +126,8 @@ public final class SwarmManager {
 
     private static int formationIndex(MissileEntity commander, MissileEntity subordinate) {
         List<MissileEntity> subs = new ArrayList<>();
-        for (MissileEntity m : members(commander.level(), commander.getSwarmId())) {
-            if (!m.isCommander() && m.isAlive() && !m.isRemoved()) {
+        for (MissileEntity m : members(commander.level(), commander.swarm().getSwarmId())) {
+            if (!m.swarm().isCommander() && m.isAlive() && !m.isRemoved()) {
                 subs.add(m);
             }
         }
@@ -144,7 +144,7 @@ public final class SwarmManager {
         MissileEntity best = null;
         double bestSq = Double.MAX_VALUE;
         for (MissileEntity m : members(level, swarmId)) {
-            if (m == dying || m.isCommander() || !m.isAlive() || m.isRemoved()) {
+            if (m == dying || m.swarm().isCommander() || !m.isAlive() || m.isRemoved()) {
                 continue;
             }
             double d = m.position().distanceToSqr(dying.position());
@@ -154,15 +154,15 @@ public final class SwarmManager {
             }
         }
         if (best != null) {
-            best.setCommander(true);
-            best.setTarget(dying.getTarget());
+            best.swarm().setCommander(true);
+            best.flight().setTarget(dying.flight().getTarget());
         }
     }
 
     // --- membership maintenance ---
 
     private static void add(MissileEntity missile) {
-        long id = missile.getSwarmId();
+        long id = missile.swarm().getSwarmId();
         if (id == 0L || missile.level().isClientSide) {
             return;
         }
@@ -201,7 +201,7 @@ public final class SwarmManager {
     @SubscribeEvent
     public static void onLeave(EntityLeaveLevelEvent event) {
         if (event.getEntity() instanceof MissileEntity missile) {
-            remove(missile, missile.getSwarmId(), event.getLevel());
+            remove(missile, missile.swarm().getSwarmId(), event.getLevel());
         }
     }
 }

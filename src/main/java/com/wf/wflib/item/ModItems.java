@@ -28,6 +28,7 @@ public final class ModItems {
     private static final Map<ResourceLocation, DeferredHolder<Item, MissileItem>> MISSILE_ITEMS = new LinkedHashMap<>();
     private static final Map<ResourceLocation, DeferredHolder<Item, MineItem>> MINE_ITEMS = new LinkedHashMap<>();
     private static final Map<ResourceLocation, DeferredHolder<Item, KineticShellItem>> SHELL_ITEMS = new LinkedHashMap<>();
+    private static final Map<ResourceLocation, DeferredHolder<Item, Item>> ARMOR_ITEMS = new LinkedHashMap<>();
 
     static {
         // Presets must exist before we enumerate them into items (both happen before the registry freezes).
@@ -45,6 +46,16 @@ public final class ModItems {
         for (MinePreset preset : MinePresetRegistry.all()) {
             MINE_ITEMS.put(preset.id(), ITEMS.register("mine_" + preset.id().getPath(),
                     () -> new MineItem(preset, new Item.Properties().stacksTo(16))));
+        }
+        // Armour: one item per preset, the same shape as the three registries above. Durability is the
+        // piece's one statement of how much it can take; condition is that number at a hundred to one.
+        for (com.wf.wflib.armor.ArmorPreset preset : com.wf.wflib.armor.ArmorPresets.all()) {
+            ARMOR_ITEMS.put(preset.id(), ITEMS.register(preset.path(), () -> preset.isInsert()
+                    ? new com.wf.wflib.armor.ArmorInsertItem(preset,
+                            new Item.Properties().stacksTo(1).durability(preset.durability()))
+                    : new com.wf.wflib.armor.ArmorPieceItem(preset,
+                            com.wf.wflib.armor.ArmorMaterials.of(preset),
+                            new Item.Properties().durability(preset.durability()))));
         }
     }
 
@@ -99,6 +110,16 @@ public final class ModItems {
     /** @return the item a mine preset is laid from, or empty if that preset was registered too late. */
     public static Optional<DeferredHolder<Item, MineItem>> mineItem(ResourceLocation presetId) {
         return Optional.ofNullable(MINE_ITEMS.get(presetId));
+    }
+
+    public static Collection<DeferredHolder<Item, Item>> armorItems() {
+        return ARMOR_ITEMS.values();
+    }
+
+    /** @return the item an armour preset is worn as, or null if that preset was registered too late. */
+    public static Item armorItem(ResourceLocation presetId) {
+        DeferredHolder<Item, Item> holder = ARMOR_ITEMS.get(presetId);
+        return holder == null ? null : holder.get();
     }
 
     public static void register(IEventBus bus) {

@@ -154,4 +154,89 @@ class StoredChunkCarverTest {
         assertEquals(0, outcome.sectionsTouched());
         assertFalse(outcome.changed());
     }
+
+    @Test
+    @DisplayName("the lining pass puts the wall in and the bore pass takes the inside out")
+    void liningAndBoring() {
+        CompoundTag chunk = chunk();
+        // A short tunnel well inside one chunk, so the whole shell is in this column.
+        CarveVolume.Corridor bore = CarveVolume.corridor(
+                new double[]{4.0, 12.0}, new double[]{8.0, 8.0}, 4, 2, 4);
+        CarvePlan plan = CarvePlan.tunnel(bore, "minecraft:deepslate_bricks", LightingPolicy.DEFERRED);
+
+        StoredChunkCarver.Outcome lining =
+                StoredChunkCarver.carve(chunk, ORIGIN, plan.at(CarvePlan.Stage.LINE));
+        assertTrue(lining.cellsLined() > 0, "the wall went in");
+        assertEquals(0, lining.cellsCleared(), "and nothing came out on that pass");
+
+        StoredChunkCarver.Outcome boring =
+                StoredChunkCarver.carve(chunk, ORIGIN, plan.at(CarvePlan.Stage.BORE));
+        assertTrue(boring.cellsCleared() > 0, "the inside came out");
+        assertEquals(0, boring.cellsLined(), "and no more wall went in on that pass");
+        assertTrue(boring.changed());
+
+        // Every cell of the bore is air and every cell of the shell is the lining, in the stored tag.
+        var box = plan.bounds();
+        for (int x = Math.max(0, box.minX()); x <= Math.min(15, box.maxX()); x++) {
+            for (int y = Math.max(0, box.minY()); y <= Math.min(15, box.maxY()); y++) {
+                for (int z = Math.max(0, box.minZ()); z <= Math.min(15, box.maxZ()); z++) {
+                    String at = nameAt(chunk, x, y, z);
+                    if (bore.contains(x, y, z)) {
+                        assertEquals(SectionNbt.AIR, at, "bore at " + x + "," + y + "," + z);
+                    } else if (plan.shell().contains(x, y, z)) {
+                        assertEquals("minecraft:deepslate_bricks", at,
+                                "lining at " + x + "," + y + "," + z);
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("the dewatering pass changes no blocks at all in a stored chunk")
+    void dewateringAStoredChunkDoesNothing() {
+        CompoundTag chunk = chunk();
+        CarveVolume.Corridor bore = CarveVolume.corridor(
+                new double[]{4.0, 12.0}, new double[]{8.0, 8.0}, 4, 2, 4);
+        CarvePlan plan = CarvePlan.tunnel(bore, "minecraft:deepslate_bricks", LightingPolicy.DEFERRED);
+        StoredChunkCarver.Outcome outcome =
+                StoredChunkCarver.carve(chunk, ORIGIN, plan.at(CarvePlan.Stage.DEWATER));
+        assertFalse(outcome.changed(), "a chunk on disk has no fluid simulation to settle");
+        assertTrue(chunk.contains(StoredChunkCarver.HEIGHTMAPS), "and so nothing to invalidate");
+    }
+
+    @Test
+    @DisplayName("a lining replacing a chest takes its block entity with it")
+    void liningPrunesBlockEntities() {
+        CompoundTag chunk = chunk();
+        CarveVolume.Corridor bore = CarveVolume.corridor(
+                new double[]{4.0, 12.0}, new double[]{8.0, 8.0}, 4, 2, 4);
+        CarvePlan plan = CarvePlan.tunnel(bore, "minecraft:deepslate_bricks", LightingPolicy.DEFERRED);
+        // A block entity in the wall rather than in the bore: the old carve only pruned the bore.
+        int wallZ = 8;
+        while (bore.contains(8, 2, wallZ)) {
+            wallZ++;
+        }
+        assertTrue(plan.shell().contains(8, 2, wallZ), "picked a cell that really is in the wall");
+        blockEntity(chunk, 8, 2, wallZ);
+
+        StoredChunkCarver.Outcome outcome =
+                StoredChunkCarver.carve(chunk, ORIGIN, plan.at(CarvePlan.Stage.LINE));
+        assertEquals(1, outcome.blockEntitiesRemoved(),
+                "a block entity under the lining is orphaned exactly as one in the bore is");
+    }
+
+    /** The block name stored at one cell of the chunk's y=0 section. */
+    private static String nameAt(CompoundTag chunk, int x, int y, int z) {
+        CompoundTag section = chunk.getList(StoredChunkCarver.SECTIONS, Tag.TAG_COMPOUND).getCompound(0);
+        CompoundTag states = section.getCompound(SectionNbt.BLOCK_STATES);
+        ListTag palette = states.getList(SectionNbt.PALETTE, Tag.TAG_COMPOUND);
+        if (!states.contains(SectionNbt.DATA, Tag.TAG_LONG_ARRAY)) {
+            return palette.getCompound(0).getString(SectionNbt.NAME);
+        }
+        long[] data = states.getLongArray(SectionNbt.DATA);
+        int bits = SectionNbt.bitsForPalette(palette.size());
+        SimpleBitStorage storage = new SimpleBitStorage(bits, SectionNbt.CELLS, data);
+        return palette.getCompound(storage.get(SectionNbt.index(x, y, z))).getString(SectionNbt.NAME);
+    }
 }

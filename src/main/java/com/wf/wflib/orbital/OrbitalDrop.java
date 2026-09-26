@@ -1,8 +1,8 @@
 package com.wf.wflib.orbital;
 
+import com.wf.wflib.sim.SimMissileManager;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.sim.SimMissile;
-import com.wf.wflib.sim.SimMissileRegistry;
 import com.wf.wflib.warhead.WarheadRegistry;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -62,7 +62,7 @@ public final class OrbitalDrop {
         sm.teamId = self.owner();
         sm.lastGameTime = now;
         sm.role = SimMissile.Role.NORMAL;
-        SimMissileRegistry.get(level).add(sm);
+        SimMissileManager.tier(level).add(sm);
         OrbitalDescents.get(level).add(sm.id,
                 new OrbitalDescents.Descent(targetX, targetZ, warhead, self.owner()));
         return sm.id;

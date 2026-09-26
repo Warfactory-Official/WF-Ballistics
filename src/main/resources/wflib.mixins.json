@@ -17,6 +17,8 @@
     "AccessorChunkMap",
     "AccessorLivingEntity",
     "MixinChunkMapTrackedEntity",
+    "MixinChunkMap",
+    "MixinPlayerChunkSender",
     "gt.MixinNotifiableEnergyContainer"
   ],
   "client": [
@@ -25,8 +27,11 @@
     "MixinLevelRendererFeed",
     "MixinViewArea",
     "MixinClientChunkCache",
+    "MixinClientLevelStreamLog",
     "MixinParticleEngine",
-    "MixinRenderSectionSort"
+    "MixinRenderSectionSort",
+    "MixinMouseHandler",
+    "MixinMinecraftFeedTarget"
   ],
   "injectors": {
     "defaultRequire": 1

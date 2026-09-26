@@ -1,8 +1,12 @@
 package com.wf.wflib.item;
 
+import com.wf.wflib.missile.MissileBuilder;
+import com.wf.wflib.missile.SeekerMode;
+import com.wf.wflib.api.ThreatKind;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.MissileModels;
 import com.wf.wflib.ModEntities;
+import com.wf.wflib.drone.cam.CameraSpec;
 import com.wf.wflib.flight.FlightStageRegistry;
 import com.wf.wflib.sim.MissileSimConfig;
 import com.wf.wflib.warhead.WarheadRegistry;
@@ -14,7 +18,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.Map;
 
 /**
- * An immutable, launch-ready missile configuration: the full {@link MissileEntity.Builder} minus the target, which
+ * An immutable, launch-ready missile configuration: the full {@link MissileBuilder} minus the target, which
  * is supplied at fire time.
  */
 public final class MissilePreset {
@@ -58,6 +62,22 @@ public final class MissilePreset {
     private final ResourceLocation damageResponseId;
     private final MissileEntity.DownedAction downedAction;
     private final DownedActionPicker downedActionPicker;
+    private final double dudChance;
+    private final CameraSpec seeker;
+    private final SeekerMode seekerMode;
+    private final float seekerFov;
+    private final double radarRange;
+    private final float proximity;
+    private final float impactDamage;
+    private final ThreatKind threatKind;
+    private final float caliber;
+    private final float penetration;
+    private final float blastSize;
+    private final boolean breaksBlocks;
+    private final double dragK;
+    private final boolean glides;
+    private final double gLimit;
+    private final double gRefSpeed;
 
     private MissilePreset(Builder b) {
         this.id = b.id;
@@ -99,6 +119,22 @@ public final class MissilePreset {
         this.damageResponseId = b.damageResponseId;
         this.downedAction = b.downedAction;
         this.downedActionPicker = b.downedActionPicker;
+        this.dudChance = b.dudChance;
+        this.seeker = b.seeker;
+        this.seekerMode = b.seekerMode;
+        this.seekerFov = b.seekerFov;
+        this.radarRange = b.radarRange;
+        this.proximity = b.proximity;
+        this.impactDamage = b.impactDamage;
+        this.threatKind = b.threatKind;
+        this.caliber = b.caliber;
+        this.penetration = b.penetration;
+        this.blastSize = b.blastSize;
+        this.breaksBlocks = b.breaksBlocks;
+        this.dragK = b.dragK;
+        this.glides = b.glides;
+        this.gLimit = b.gLimit;
+        this.gRefSpeed = b.gRefSpeed;
     }
 
     public static Builder builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
@@ -244,6 +280,19 @@ public final class MissilePreset {
         return downedAction;
     }
 
+    public double dudChance() {
+        return dudChance;
+    }
+
+    public SeekerMode seekerMode() {
+        return seekerMode;
+    }
+
+    /** @return the TV seeker, or null for a round nobody can fly. */
+    public CameraSpec seeker() {
+        return seeker;
+    }
+
     /**
      * Builds (but does not spawn) a live missile aimed at {@code target}.
      */
@@ -254,7 +303,7 @@ public final class MissilePreset {
             double rad = accuracy * Math.sqrt(level.random.nextDouble());
             aim = new Vec3(target.x + Math.cos(ang) * rad, target.y, target.z + Math.sin(ang) * rad);
         }
-        MissileEntity.Builder b = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
+        MissileBuilder b = MissileEntity.builder(ModEntities.STEALTH_MISSILE.get(), level)
                 .model(modelId)
                 .detonation(warheadId)
                 .target(aim)
@@ -315,6 +364,16 @@ public final class MissilePreset {
         }
         // Roll the shot-down behaviour per launch when a weighted/random picker was given, else use the fixed one.
         b.downedAction(downedActionPicker != null ? downedActionPicker.pick(level.random) : downedAction);
+        b.dudChance(dudChance);
+        if (seeker != null) {
+            b.seeker(seeker);
+        }
+        b.seekerMode(seekerMode, seekerFov, radarRange);
+        b.proximity(proximity).impactDamage(impactDamage).threat(threatKind, caliber, penetration)
+                .blast(blastSize, breaksBlocks).drag(dragK, glides);
+        if (gLimit > 0.0) {
+            b.gLimit(gLimit, gRefSpeed);
+        }
         return b.build();
     }
 
@@ -387,6 +446,22 @@ public final class MissilePreset {
         private ResourceLocation damageResponseId = null;   // null = standard (take damage as dealt)
         private MissileEntity.DownedAction downedAction = MissileEntity.DownedAction.CRASH;
         private DownedActionPicker downedActionPicker = null; // non-null = roll the action per launch
+        private double dudChance = MissileEntity.DEFAULT_DUD_CHANCE;
+        private CameraSpec seeker = null;
+        private SeekerMode seekerMode = SeekerMode.DESIGNATED;
+        private float seekerFov = 30.0f;
+        private double radarRange = 1024.0;
+        private float proximity = 0.0f;
+        private float impactDamage = 0.0f;
+        private ThreatKind threatKind = null;
+        private float caliber = 0.0f;
+        private float penetration = 0.0f;
+        private float blastSize = 0.0f;
+        private boolean breaksBlocks = true;
+        private double dragK = 0.0;
+        private boolean glides = false;
+        private double gLimit = 0.0;
+        private double gRefSpeed = 1.0;
 
         private Builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
             this.id = id;
@@ -477,7 +552,7 @@ public final class MissilePreset {
 
         /**
          * Make this preset an interceptor with the given kill chance (see {@link
-         * MissileEntity.Builder#interceptor}).
+         * MissileBuilder#interceptor}).
          */
         public Builder interceptor(float chance) {
             this.interceptor = true;
@@ -487,7 +562,7 @@ public final class MissilePreset {
 
         /**
          * Load the tank: {@code type} of propellant and {@code ticks} of powered flight (see {@link
-         * MissileEntity.Builder#fuel}).
+         * MissileBuilder#fuel}).
          */
         public Builder fuel(MissileEntity.FuelType type, int ticks) {
             this.fuelType = type;
@@ -512,7 +587,7 @@ public final class MissilePreset {
             return this;
         }
 
-        /** Travel through the given medium (see {@link MissileEntity.Builder#medium}). */
+        /** Travel through the given medium (see {@link MissileBuilder#medium}). */
         public Builder medium(MissileEntity.Medium medium) {
             this.medium = medium;
             return this;
@@ -551,7 +626,7 @@ public final class MissilePreset {
 
         /**
          * Range (degrees below horizontal) the terminal dive auto-picks from when no explicit {@link #attackAngle}
-         * is set (see {@link MissileEntity.Builder#diveAngleRange}).
+         * is set (see {@link MissileBuilder#diveAngleRange}).
          */
         public Builder diveAngleRange(double minDegrees, double maxDegrees) {
             this.minDiveAngle = minDegrees;
@@ -584,7 +659,7 @@ public final class MissilePreset {
 
         /**
          * Evasive maneuvering: makes evasion boosts jink off-course instead of sprinting straight (see {@link
-         * MissileEntity.Builder#evasiveManeuver}).
+         * MissileBuilder#evasiveManeuver}).
          */
         public Builder evasiveManeuver() {
             this.evasiveManeuver = true;
@@ -602,7 +677,7 @@ public final class MissilePreset {
 
         /**
          * Tint of the exhaust trail (hot RGB 0xRRGGBB) the client-side plume fades from (see {@link
-         * MissileEntity.Builder#exhaustColor}).
+         * MissileBuilder#exhaustColor}).
          */
         public Builder exhaustColor(int rgb) {
             this.exhaustColor = rgb;
@@ -611,7 +686,7 @@ public final class MissilePreset {
 
         /**
          * The looping flight sound this missile plays client-side, by registered {@link
-         * net.minecraft.sounds.SoundEvent} id (see {@link MissileEntity.Builder#flightSound}).
+         * net.minecraft.sounds.SoundEvent} id (see {@link MissileBuilder#flightSound}).
          */
         public Builder flightSound(ResourceLocation soundId) {
             this.flightSoundId = soundId;
@@ -620,14 +695,14 @@ public final class MissilePreset {
 
         /**
          * Distance (blocks) at which this missile's flight loop fades to silence and the server broadcasts it:
-         * independent of view/render distance (see {@link MissileEntity.Builder#flightSoundRange}).
+         * independent of view/render distance (see {@link MissileBuilder#flightSoundRange}).
          */
         public Builder flightSoundRange(double blocks) {
             this.flightSoundRange = blocks;
             return this;
         }
 
-        /** Idle engine pitch of the flight loop (see {@link MissileEntity.Builder#flightSoundBasePitch}). */
+        /** Idle engine pitch of the flight loop (see {@link MissileBuilder#flightSoundBasePitch}). */
         public Builder flightSoundBasePitch(float pitch) {
             this.flightSoundBasePitch = pitch;
             return this;
@@ -635,7 +710,7 @@ public final class MissilePreset {
 
         /**
          * Engine "rev": added flight-loop pitch per block/tick of the missile's own speed (see {@link
-         * MissileEntity.Builder#flightSoundSpeedPitch}).
+         * MissileBuilder#flightSoundSpeedPitch}).
          */
         public Builder flightSoundSpeedPitch(double perBlockPerTick) {
             this.flightSoundSpeedPitch = perBlockPerTick;
@@ -655,9 +730,70 @@ public final class MissilePreset {
             return this;
         }
 
+        /** Chance a downed missile lands as a dud instead of going off; 0 disables. */
+        public Builder dudChance(double chance) {
+            this.dudChance = chance;
+            return this;
+        }
+
         /** Pick the shot-down behaviour per launch (see {@link DownedActionPicker}): e.g. */
         public Builder downedAction(DownedActionPicker picker) {
             this.downedActionPicker = picker;
+            return this;
+        }
+
+        /** See {@link MissileBuilder#seekerMode}. */
+        public Builder seekerMode(SeekerMode mode, float fov, double radarRange) {
+            this.seekerMode = mode;
+            this.seekerFov = fov;
+            this.radarRange = radarRange;
+            return this;
+        }
+
+        /** See {@link MissileBuilder#proximity}. */
+        public Builder proximity(float radius) {
+            this.proximity = radius;
+            return this;
+        }
+
+        /** See {@link MissileBuilder#impactDamage}. */
+        public Builder impactDamage(float damage) {
+            this.impactDamage = damage;
+            return this;
+        }
+
+        /** See {@link MissileBuilder#threat}. */
+        public Builder threat(ThreatKind kind, float caliber, float penetration) {
+            this.threatKind = kind;
+            this.caliber = caliber;
+            this.penetration = penetration;
+            return this;
+        }
+
+        /** See {@link MissileBuilder#blast}. */
+        public Builder blast(float size, boolean breaksBlocks) {
+            this.blastSize = size;
+            this.breaksBlocks = breaksBlocks;
+            return this;
+        }
+
+        /** See {@link MissileBuilder#drag}. */
+        public Builder drag(double k, boolean glides) {
+            this.dragK = k;
+            this.glides = glides;
+            return this;
+        }
+
+        /** See {@link MissileBuilder#gLimit}. */
+        public Builder gLimit(double accel, double refSpeed) {
+            this.gLimit = accel;
+            this.gRefSpeed = refSpeed;
+            return this;
+        }
+
+        /** TV round (see {@link MissileBuilder#seeker}). */
+        public Builder seeker(CameraSpec seeker) {
+            this.seeker = seeker;
             return this;
         }
 

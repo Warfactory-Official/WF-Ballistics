@@ -1,63 +1,46 @@
 package com.wf.wflib.entity;
 
+import com.wf.wflib.api.PreciseHitbox;
 import com.wf.wflib.util.OBB;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
+import org.joml.Vector3f;
 
 import java.util.List;
 
-/**
- * Marks an entity that carries one or more oriented bounding boxes ({@link OBB}) used for precise, rotation-aware
- * hit detection in place of the coarse vanilla AABB.
- */
-public interface OBBEntity {
+/** Entity whose hit/collision shape is its {@link OBB}s, not the vanilla AABB. */
+public interface OBBEntity extends PreciseHitbox {
 
     List<OBB> getOBBs();
 
-    /**
-     * @return true when the entity has no OBBs and should fall back to vanilla AABB behavior.
-     */
+    default void updateOBBs() {
+    }
+
+    /** No OBBs => vanilla AABB behaviour. */
     default boolean enableAABB() {
         return this.getOBBs().isEmpty();
     }
 
-    /**
-     * @return true if any of this entity's OBBs (offset by {@code vec3}) overlaps the block at {@code pos}.
-     */
-    default boolean isInObb(BlockPos pos, Vec3 vec3) {
-        List<OBB> obbList = this.getOBBs();
-        AABB aabb1 = new AABB(pos).inflate(0.3, 0.6, 0.3);
-        for (OBB obb : obbList) {
-            OBB moved = obb.move(vec3);
-            if (OBB.isColliding(moved, aabb1)) {
-                return true;
-            }
-        }
-        return false;
+    /** F3+B draws the boxes through WFLib's generic overlay; false when the entity draws its own debug. */
+    default boolean drawsDebugOBBs() {
+        return true;
     }
 
-    /**
-     * @return true if any of this entity's OBBs (offset by {@code vec3}) overlaps the given entity,
-     *      using OBB-vs-OBB when the other entity is also an {@link OBBEntity}.
-     */
-    default boolean isInObb(Entity entity, Vec3 vec3) {
-        List<OBB> obbList = this.getOBBs();
-        for (OBB obb : obbList) {
-            OBB moved = obb.move(vec3);
-            if (entity instanceof OBBEntity other && !other.enableAABB()) {
-                for (OBB obb2 : other.getOBBs()) {
-                    if (OBB.isColliding(moved, obb2)) {
-                        return true;
-                    }
-                }
-            } else {
-                if (OBB.isColliding(moved, entity.getBoundingBox())) {
-                    return true;
-                }
+    /** Nearest box entry; boxes inflated by 2 x pick radius (fast crossers need slack). */
+    @Nullable
+    @Override
+    default Vec3 clip(Vec3 from, Vec3 to) {
+        float inflate = ((Entity) this).getPickRadius() * 2.0f;
+        double best = Double.MAX_VALUE;
+        for (OBB obb : getOBBs()) {
+            OBB box = inflate > 0 ? obb.inflate(inflate) : obb;
+            Vector3f[] axes = box.getAxes();
+            double t = box.clipFraction(from.x, from.y, from.z, to.x, to.y, to.z, axes);
+            if (t >= 0 && t < best) {
+                best = t;
             }
         }
-        return false;
+        return best == Double.MAX_VALUE ? null : from.add(to.subtract(from).scale(best));
     }
 }

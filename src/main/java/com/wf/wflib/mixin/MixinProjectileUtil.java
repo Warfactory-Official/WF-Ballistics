@@ -1,8 +1,9 @@
 package com.wf.wflib.mixin;
 
-import com.wf.wflib.entity.OBBEntity;
-import com.wf.wflib.entity.OBBEntityTracker;
-import com.wf.wflib.util.OBB;
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
+import com.llamalad7.mixinextras.sugar.Local;
+import com.wf.wflib.api.PreciseHitbox;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.entity.projectile.ProjectileUtil;
@@ -10,118 +11,67 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Vector3d;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
 /**
- * Routes projectile entity hit-testing through {@link OBB}s for any {@link OBBEntity} (missiles), so a
- * bullet/missile hits the oriented box that wraps the model rather than the coarse vanilla AABB.
+ * Vanilla's per-candidate AABB clip -> {@link PreciseHitbox#clip} for shaped entities. Candidates still come from
+ * vanilla's AABB scan: a shape must stay inside its entity's AABB (+ query inflation) to be found.
  */
 @Mixin(ProjectileUtil.class)
 public class MixinProjectileUtil {
 
-    @Inject(method = "getEntityHitResult(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;F)Lnet/minecraft/world/phys/EntityHitResult;",
-            at = @At("HEAD"), cancellable = true)
-    private static void wflib$getEntityHitResult(Level pLevel, Entity pProjectile, Vec3 pStartVec, Vec3 pEndVec, AABB pBoundingBox, Predicate<Entity> pFilter, float pInflationAmount, CallbackInfoReturnable<EntityHitResult> cir) {
-        if (!OBBEntityTracker.hasAny(pLevel)) return;
+    private static final String PICK = "getEntityHitResult(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;D)Lnet/minecraft/world/phys/EntityHitResult;";
+    private static final String PROJECTILE = "getEntityHitResult(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;F)Lnet/minecraft/world/phys/EntityHitResult;";
+    private static final String CLIP = "Lnet/minecraft/world/phys/AABB;clip(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;)Ljava/util/Optional;";
 
-        AABB search = pBoundingBox.inflate(8);
-        Vector3d startVec = OBB.vec3ToVector3d(pStartVec);
-        Vector3d from = OBB.vec3ToVector3d(pStartVec);
-        Vector3d to = OBB.vec3ToVector3d(pEndVec);
-        double pDistance = pStartVec.distanceToSqr(pEndVec);
-
-        for (Entity entity : OBBEntityTracker.get(pLevel)) {
-            if (entity == pProjectile || !(entity instanceof OBBEntity obbEntity) || obbEntity.enableAABB()) continue;
-            if (!pFilter.test(entity) || !entity.getBoundingBox().intersects(search)) continue;
-            if (pProjectile instanceof Projectile projectile &&
-                    (projectile.getOwner() == entity || entity.getPassengers().contains(projectile.getOwner()))) {
-                continue;
-            }
-            for (var obb : obbEntity.getOBBs()) {
-                obb = obb.inflate(entity.getPickRadius() * 2);
-                Optional<Vector3d> optional = obb.clip(from, to);
-                if (obb.contains(pStartVec)) {
-                    if (pDistance >= 0) {
-                        cir.setReturnValue(new EntityHitResult(entity, OBB.vector3dToVec3(optional.orElse(startVec))));
-                        return;
-                    }
-                } else if (optional.isPresent()) {
-                    var vec = new Vector3d(optional.get());
-                    double d1 = pStartVec.distanceToSqr(OBB.vector3dToVec3(vec));
-                    if (d1 < pDistance || pDistance == 0) {
-                        cir.setReturnValue(new EntityHitResult(entity, OBB.vector3dToVec3(vec)));
-                        return;
-                    }
-                }
-            }
+    /** Crosshair pick: a carrier's AABB holds its whole deck, so AABB picks stole every click there. */
+    @WrapOperation(method = PICK, at = @At(value = "INVOKE", target = CLIP))
+    private static Optional<Vec3> wflib$pickShape(AABB aabb, Vec3 start, Vec3 end, Operation<Optional<Vec3>> original,
+                                                  @Local(ordinal = 2) Entity candidate) {
+        if (candidate instanceof PreciseHitbox shape) {
+            return Optional.ofNullable(shape.clip(start, end));
         }
+        return original.call(aabb, start, end);
     }
 
-    @Inject(method = "getEntityHitResult(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;D)Lnet/minecraft/world/phys/EntityHitResult;",
-            at = @At("HEAD"), cancellable = true)
-    private static void wflib$getEntityHitResult(Entity pShooter, Vec3 pStartVec, Vec3 pEndVec, AABB pBoundingBox, Predicate<Entity> pFilter, double pDistance, CallbackInfoReturnable<EntityHitResult> cir) {
-        Level level = pShooter.level();
-        if (!OBBEntityTracker.hasAny(level)) return;
-
-        AABB search = pBoundingBox.inflate(8);
-        Vector3d startVec = OBB.vec3ToVector3d(pStartVec);
-        Vector3d from = OBB.vec3ToVector3d(pStartVec);
-        Vector3d to = OBB.vec3ToVector3d(pEndVec);
-
-        for (Entity entity : OBBEntityTracker.get(level)) {
-            if (entity == pShooter || !(entity instanceof OBBEntity obbEntity) || obbEntity.enableAABB()) continue;
-            if (!pFilter.test(entity) || !entity.getBoundingBox().intersects(search)) continue;
-            if (entity.getPassengers().contains(pShooter)) continue;
-
-            for (var obb : obbEntity.getOBBs()) {
-                obb = obb.inflate(entity.getPickRadius() * 2);
-                Optional<Vector3d> optional = obb.clip(from, to);
-                if (obb.contains(pStartVec)) {
-                    if (pDistance >= 0) {
-                        cir.setReturnValue(new EntityHitResult(entity, OBB.vector3dToVec3(optional.orElse(startVec))));
-                        return;
-                    }
-                } else if (optional.isPresent()) {
-                    var vec = new Vector3d(optional.get());
-                    double d1 = pStartVec.distanceToSqr(OBB.vector3dToVec3(vec));
-                    if (d1 < pDistance || pDistance == 0) {
-                        if (entity.getRootVehicle() == pShooter.getRootVehicle() && !entity.canRiderInteract()) {
-                            if (pDistance == 0) {
-                                cir.setReturnValue(new EntityHitResult(entity, OBB.vector3dToVec3(vec)));
-                                return;
-                            }
-                        } else {
-                            cir.setReturnValue(new EntityHitResult(entity, OBB.vector3dToVec3(vec)));
-                            return;
-                        }
-                    }
-                }
-            }
-        }
+    /** Eye inside the AABB is no hit by itself for a shaped entity. */
+    @WrapOperation(method = PICK, at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/phys/AABB;contains(Lnet/minecraft/world/phys/Vec3;)Z"))
+    private static boolean wflib$containsUnlessShaped(AABB aabb, Vec3 point, Operation<Boolean> original,
+                                                      @Local(ordinal = 2) Entity candidate) {
+        return !(candidate instanceof PreciseHitbox) && original.call(aabb, point);
     }
 
-    /**
-     * Vanilla's fallback loop (run when the HEAD injections above found no OBB hit) clips each candidate's {@link
-     * Entity#getBoundingBox()}.
-     */
-    @Redirect(method = {
-            "getEntityHitResult(Lnet/minecraft/world/level/Level;Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;F)Lnet/minecraft/world/phys/EntityHitResult;",
-            "getEntityHitResult(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;D)Lnet/minecraft/world/phys/EntityHitResult;"
-    }, at = @At(value = "INVOKE", target = "Lnet/minecraft/world/level/Level;getEntities(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/phys/AABB;Ljava/util/function/Predicate;)Ljava/util/List;"))
-    private static List<Entity> wflib$dropObbFromAabbScan(Level level, Entity entity, AABB box, Predicate<? super Entity> predicate) {
-        List<Entity> candidates = level.getEntities(entity, box, predicate);
-        if (!candidates.isEmpty() && OBBEntityTracker.hasAny(level)) {
-            candidates.removeIf(e -> e instanceof OBBEntity obbEntity && !obbEntity.enableAABB());
+    /** Projectile sweep. A shaped entity never takes a hit from its own owner or the owner's mount. */
+    @WrapOperation(method = PROJECTILE, at = @At(value = "INVOKE", target = CLIP))
+    private static Optional<Vec3> wflib$sweepShape(AABB aabb, Vec3 start, Vec3 end, Operation<Optional<Vec3>> original,
+                                                   @Local(ordinal = 0, argsOnly = true) Entity projectile,
+                                                   @Local(ordinal = 2) Entity candidate) {
+        if (!(candidate instanceof PreciseHitbox shape)) {
+            return original.call(aabb, start, end);
         }
-        return candidates;
+        if (projectile instanceof Projectile p && p.getOwner() != null
+                && (p.getOwner() == candidate || candidate.getPassengers().contains(p.getOwner()))) {
+            return Optional.empty();
+        }
+        return Optional.ofNullable(shape.clip(start, end));
+    }
+
+    /** Vanilla returns the target's origin as the hit point; a shaped target reports where the sweep met it. */
+    @Inject(method = PROJECTILE, at = @At("RETURN"), cancellable = true)
+    private static void wflib$shapeHitPoint(Level level, Entity projectile, Vec3 start, Vec3 end, AABB box,
+                                            Predicate<Entity> filter, float inflation,
+                                            CallbackInfoReturnable<EntityHitResult> cir) {
+        EntityHitResult hit = cir.getReturnValue();
+        if (hit != null && hit.getEntity() instanceof PreciseHitbox shape) {
+            Vec3 at = shape.clip(start, end);
+            cir.setReturnValue(new EntityHitResult(hit.getEntity(), at != null ? at : hit.getLocation()));
+        }
     }
 }

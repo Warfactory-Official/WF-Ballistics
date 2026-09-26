@@ -1,8 +1,8 @@
 package com.wf.wflib.api;
 
+import com.wf.wflib.sim.SimMissileManager;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.sim.SimMissile;
-import com.wf.wflib.sim.SimMissileRegistry;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.entity.EntityTypeTest;
 
@@ -45,13 +45,13 @@ public final class WFLibAPI {
         if (level.getEntity(id) instanceof MissileEntity missile) {
             return fromEntity(missile);
         }
-        SimMissile sm = SimMissileRegistry.get(level).getById(id);
+        SimMissile sm = SimMissileManager.find(level, id);
         return sm == null ? null : fromSim(sm);
     }
 
     public static List<MissileData> listSimMissiles(ServerLevel level) {
         List<MissileData> out = new ArrayList<>();
-        for (SimMissile sm : SimMissileRegistry.get(level).view()) {
+        for (SimMissile sm : SimMissileManager.tier(level).view()) {
             out.add(fromSim(sm));
         }
         return out;
@@ -72,9 +72,9 @@ public final class WFLibAPI {
     }
 
     public static MissileData fromEntity(MissileEntity m) {
-        String phase = m.isInterceptor() ? "INTERCEPTOR" : m.getPhase().name();
+        String phase = m.interceptor().isActive() ? "INTERCEPTOR" : m.flight().getPhase().name();
         return new MissileData(m.getUUID(), false, m.getModelId().getPath(), phase,
-                m.position(), m.getTarget(), m.getCruiseSpeed(), m.getFuel(), m.getFuelCapacity());
+                m.position(), m.flight().getTarget(), m.flight().getCruiseSpeed(), m.motor().getFuel(), m.motor().getFuelCapacity());
     }
 
     public static MissileData fromSim(SimMissile sm) {

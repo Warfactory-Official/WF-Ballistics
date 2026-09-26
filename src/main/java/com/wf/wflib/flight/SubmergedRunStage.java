@@ -30,22 +30,22 @@ public final class SubmergedRunStage implements FlightStage {
 
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
-        double speed = missile.getCruiseSpeed();
+        double speed = missile.flight().getCruiseSpeed();
         return new Vec3(ctx.nx() * speed, depthVelocity(missile, ctx), ctx.nz() * speed);
     }
 
     /** Eased, deadbanded vertical guidance onto the corridor. */
     public static double depthVelocity(MissileEntity missile, FlightContext ctx) {
         double commanded = ctx.clampToCorridor(ctx.safeAltitude());
-        double targetY = missile.getCruiseTargetY();
+        double targetY = missile.flight().getCruiseTargetY();
         if (Double.isNaN(targetY)) {
             targetY = commanded;
         } else {
             targetY += (commanded - targetY) * DEPTH_TARGET_SMOOTHING;
         }
-        missile.setCruiseTargetY(targetY);
+        missile.flight().setCruiseTargetY(targetY);
 
-        double maxSpeed = missile.getCruiseSpeed();
+        double maxSpeed = missile.flight().getCruiseSpeed();
         double error = targetY - missile.getY();
         double desiredVy;
         if (Math.abs(error) < DEPTH_DEADBAND) {
@@ -60,7 +60,7 @@ public final class SubmergedRunStage implements FlightStage {
     @Override
     @Nullable
     public MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
-        double range = Math.max(TERMINAL_RANGE, missile.getCruiseSpeed() * TERMINAL_TICKS);
+        double range = Math.max(TERMINAL_RANGE, missile.flight().getCruiseSpeed() * TERMINAL_TICKS);
         return ctx.horizontalDist() < range ? MissileEntity.Phase.ATTACK : null;
     }
 

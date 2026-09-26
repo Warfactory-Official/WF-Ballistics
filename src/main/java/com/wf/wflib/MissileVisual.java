@@ -18,6 +18,8 @@ import dev.engine_room.flywheel.lib.visual.AbstractEntityVisual;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Vec3i;
+import com.wf.wflib.round.client.RoundRenderer;
+import com.wf.wflib.round.client.RoundRenderers;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.projectile.Projectile;
@@ -81,6 +83,9 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
     private double curZ;
     private int lastPosTick = -1;
     private boolean orientationInit = false;
+    // Accumulated downed roll (rad) and the frame time it was last advanced to, in ticks.
+    private float downedSpin = 0f;
+    private float lastFrameTime = Float.NaN;
     private final Vector3f smoothedHeading = new Vector3f(0.0f, 1.0f, 0.0f);
     private boolean headingInit = false;
     private float prevHeadingYaw = Float.NaN;
@@ -104,6 +109,13 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         updatePosition(0.0f);
     }
 
+    /** A {@code RoundRenderer} look replaces the airframe ({@code MissileRenderer}). */
+    private boolean drawnByRenderer() {
+        ResourceLocation look = entity instanceof MissileEntity m ? m.getLook() : null;
+        RoundRenderer renderer = look == null ? null : RoundRenderers.get(look);
+        return renderer != null && renderer.hasLook();
+    }
+
     /**
      * Wraps an angle (radians) into [-PI, PI] so a yaw delta across the +/-PI seam stays small.
      */
@@ -119,8 +131,13 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
     }
 
     private void updatePosition(float partialTick) {
-        PartRigs.Rig current = PartRigs.missile(modelId);
+        PartRigs.Rig current = this.drawnByRenderer() ? null : PartRigs.missile(modelId);
         if (current == null) {
+            if (instance != null) {
+                instance.delete();
+                instance = null;
+                rig = null;
+            }
             return;
         }
         if (rig != current) {
@@ -167,7 +184,14 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
             targetBank = Mth.clamp(-effectiveTurn * BANK_GAIN, -MAX_BANK, MAX_BANK);
 
             double rhx = curX - prevX, rhy = curY - prevY, rhz = curZ - prevZ;
-            if (rhx * rhx + rhy * rhy + rhz * rhz < 1.0E-8) {
+            if (entity instanceof MissileEntity m && m.isDud()) {
+                Vector3f rest = m.dudHeading();
+                rhx = rest.x;
+                rhy = rest.y;
+                rhz = rest.z;
+                headingInit = false; // snap: a dud does not ease into its resting attitude
+                targetBank = 0f;
+            } else if (rhx * rhx + rhy * rhy + rhz * rhz < 1.0E-8) {
                 Vec3 dm = entity.getDeltaMovement();
                 rhx = dm.x;
                 rhy = dm.y;
@@ -208,10 +232,16 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
 
         // Ease the roll toward its per-tick target every frame so banking looks smooth.
         bank += (targetBank - bank) * BANK_SMOOTHING;
+        float frameTime = entity.tickCount + partialTick;
+        if (!Float.isNaN(lastFrameTime) && frameTime > lastFrameTime) {
+            float roll = entity instanceof MissileEntity m ? m.downedRoll() : 0f;
+            downedSpin = (downedSpin + roll * (frameTime - lastFrameTime)) % Mth.TWO_PI;
+        }
+        lastFrameTime = frameTime;
 
         Matrix4f matrix = pose.translation(renderX, renderY, renderZ)
                 .rotate(orientation)
-                .rotateY(bank); // roll about the model's nose/long axis (local +Y)
+                .rotateY(bank + downedSpin); // roll about the model's nose/long axis (local +Y)
 
         if (entity.tickCount != lightTick) {
             lightTick = entity.tickCount;

@@ -68,7 +68,7 @@ public final class MissileTargetDebugRenderer {
             if (!(serverLevel.getEntity(e.getUUID()) instanceof MissileEntity serverMissile)) {
                 continue;
             }
-            Vec3 target = serverMissile.getTarget();
+            Vec3 target = serverMissile.flight().getTarget();
             if (target == null || (target.x == 0.0 && target.y == 0.0 && target.z == 0.0)) {
                 continue; // unset / default
             }

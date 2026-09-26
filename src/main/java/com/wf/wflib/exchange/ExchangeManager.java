@@ -175,7 +175,7 @@ public final class ExchangeManager {
         if (exchange == null) {
             return;
         }
-        Exchange.Party party = exchange.party(drone.getStationCode());
+        Exchange.Party party = exchange.party(drone.orders().getStationCode());
         if (party == null) {
             return;
         }
@@ -192,7 +192,7 @@ public final class ExchangeManager {
         if (exchange == null) {
             return;
         }
-        Exchange.Party party = exchange.party(drone.getStationCode());
+        Exchange.Party party = exchange.party(drone.orders().getStationCode());
         if (party == null) {
             return;
         }
@@ -202,7 +202,7 @@ public final class ExchangeManager {
 
     @Nullable
     private static Exchange exchangeOf(ServerLevel level, DroneEntity drone) {
-        UUID id = drone.getExchangeId();
+        UUID id = drone.orders().getExchangeId();
         return id == null ? null : ExchangeRegistry.get(level).byId(id);
     }
 
@@ -212,8 +212,8 @@ public final class ExchangeManager {
         ExchangeRegistry.get(server).touch();
         for (ServerLevel level : server.getAllLevels()) {
             for (DroneEntity drone : List.copyOf(DroneTracker.drones(level))) {
-                if (exchange.id().equals(drone.getExchangeId())) {
-                    drone.abortExchange();
+                if (exchange.id().equals(drone.orders().getExchangeId())) {
+                    drone.orders().abortExchange();
                 }
             }
         }
