@@ -3,6 +3,8 @@ package com.wf.wflib.client;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.client.gui.ModelGalleryScreen;
 import com.wf.wflib.client.cam.FeedProbe;
+import com.wf.wflib.client.cam.OffscreenViewDebug;
+import com.wf.wflib.round.client.RoundDebug;
 import com.wf.wflib.stream.client.ClientChunkStreamAudit;
 import com.wf.wflib.stream.client.ClientStreamDebug;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -29,6 +31,15 @@ public final class WFClientCommands {
             Minecraft.getInstance().execute(() -> Minecraft.getInstance().setScreen(new ModelGalleryScreen()));
             return 1;
         }));
+        event.getDispatcher().register(OffscreenViewDebug.command());
+        event.getDispatcher().register(Commands.literal("wfdebug").then(Commands.literal("rounds")
+                .executes(ctx -> rounds(ctx.getSource(), !RoundDebug.enabled()))
+                .then(Commands.literal("on").executes(ctx -> rounds(ctx.getSource(), true)))
+                .then(Commands.literal("off").executes(ctx -> rounds(ctx.getSource(), false)))
+                .then(Commands.literal("status").executes(ctx -> {
+                    ctx.getSource().sendSuccess(() -> Component.literal(RoundDebug.status()), false);
+                    return 1;
+                }))));
         event.getDispatcher().register(Commands.literal("wffeed").then(Commands.literal("cull")
                 .then(Commands.literal("skip").executes(ctx -> probe(ctx.getSource(), FeedProbe.Mode.SKIP)))
                 .then(Commands.literal("evict").executes(ctx -> probe(ctx.getSource(), FeedProbe.Mode.EVICT)))));
@@ -51,6 +62,12 @@ public final class WFClientCommands {
         }
         String summary = ClientStreamDebug.map(radius);
         source.sendSuccess(() -> Component.literal("chunk map -> logs (" + summary + ")"), false);
+        return 1;
+    }
+
+    private static int rounds(CommandSourceStack source, boolean on) {
+        RoundDebug.setEnabled(on);
+        source.sendSuccess(() -> Component.literal("Round debug overlay " + (on ? "on" : "off")), false);
         return 1;
     }
 

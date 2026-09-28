@@ -1,10 +1,16 @@
 package com.wf.wflib.kinetic;
 
 import com.wf.wflib.MissileModels;
+import com.google.gson.JsonObject;
 import com.wf.wflib.api.ThreatKind;
+import com.wf.wflib.round.effect.ImpactEffects;
+import com.wf.wflib.round.effect.ImpactTrigger;
 import org.jetbrains.annotations.Nullable;
 import com.wf.wflib.warhead.WarheadRegistry;
 import net.minecraft.resources.ResourceLocation;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /** Everything a kinetic round is: how it flies, what it does to what it hits, and what it looks like. */
 public final class KineticPreset {
@@ -30,6 +36,7 @@ public final class KineticPreset {
     private final float impactDamage;
     private final int penetration;
     private final float penetrationResistance;
+    private final float blockPen;
     private final float caliberMm;
     private final float armorPenetrationMm;
 
@@ -55,6 +62,11 @@ public final class KineticPreset {
     private final int fuseDelay;
     private final float burrow;
     private final boolean entityContact;
+    private final float damagePerKJ;
+    private final float pierceDT;
+    private final float pierceDR;
+    private final List<ImpactEffects.Bound> effects;
+    private final int effectTriggers;
 
     private KineticPreset(Builder b) {
         this.id = b.id;
@@ -71,6 +83,7 @@ public final class KineticPreset {
         this.impactDamage = b.impactDamage;
         this.penetration = b.penetration;
         this.penetrationResistance = b.penetrationResistance;
+        this.blockPen = b.blockPen;
         this.caliberMm = b.caliberMm;
         this.armorPenetrationMm = b.armorPenetrationMm;
         this.fragmentCount = b.fragmentCount;
@@ -92,6 +105,15 @@ public final class KineticPreset {
         this.fuseDelay = b.fuseDelay;
         this.burrow = b.burrow;
         this.entityContact = b.entityContact;
+        this.damagePerKJ = b.damagePerKJ;
+        this.pierceDT = b.pierceDT;
+        this.pierceDR = b.pierceDR;
+        this.effects = List.copyOf(b.effects);
+        int mask = 0;
+        for (ImpactEffects.Bound e : this.effects) {
+            mask |= e.on().bit;
+        }
+        this.effectTriggers = mask;
     }
 
     public static Builder builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
@@ -171,9 +193,17 @@ public final class KineticPreset {
         return penetration;
     }
 
-    /** The hardest thing the shell can drill: blast resistance above this stops it dead. */
+    /** Hardest block drilled: {@code PenTable} resistance (mm/m) above this stops it dead. */
     public float penetrationResistance() {
         return penetrationResistance;
+    }
+
+    /**
+     * Non-destructive block penetration ({@code round/pen/BlockPen}): mm steel-equivalent at {@link #muzzleSpeed},
+     * scaled by kinetic energy; 0 = none. After {@link #penetration()} drilling.
+     */
+    public float blockPen() {
+        return blockPen;
     }
 
     public float caliberMm() {
@@ -226,7 +256,10 @@ public final class KineticPreset {
         return threatKind;
     }
 
-    /** Force-loads the chunk it descends into (artillery); false => lost at unloaded ground (bullets). */
+    /**
+     * Force-loads the chunk it descends into (artillery). False: rounds fly unloaded ground on its saved terrain
+     * (bullets); rockets are discarded there.
+     */
     public boolean loadsChunks() {
         return loadsChunks;
     }
@@ -260,7 +293,7 @@ public final class KineticPreset {
         return quadraticDrag == 0.0f ? decay() : Math.max(decay() - quadraticDrag * speed, 0.0);
     }
 
-    /** Direct-hit damage factor on a living target struck within 0.25 of its eye height. */
+    /** Direct-hit damage factor on a HEAD part, or (no part) within 0.25 of eye height. */
     public float headshot() {
         return headshot;
     }
@@ -285,6 +318,30 @@ public final class KineticPreset {
         return durability;
     }
 
+    /** HP per kJ of impact energy; 0 = {@link #impactDamage} / mass rule. */
+    public float damagePerKJ() {
+        return damagePerKJ;
+    }
+
+    /** Armour threshold ignored by a direct hit. */
+    public float pierceDT() {
+        return pierceDT;
+    }
+
+    /** Fraction of armour resistance ignored by a direct hit. */
+    public float pierceDR() {
+        return pierceDR;
+    }
+
+    /** Impact effects, declaration order. */
+    public List<ImpactEffects.Bound> effects() {
+        return effects;
+    }
+
+    public boolean hasEffects(ImpactTrigger on) {
+        return (effectTriggers & on.bit) != 0;
+    }
+
     public static final class Builder {
 
         private final ResourceLocation id;
@@ -302,7 +359,8 @@ public final class KineticPreset {
         private float mass = 20.0f;
         private float impactDamage = 0.0f;
         private int penetration = 0;
-        private float penetrationResistance = 30.0f;
+        private float penetrationResistance = 60.0f;
+        private float blockPen = 0.0f;
         private float caliberMm = 120.0f;
         private float armorPenetrationMm = 0.0f;
 
@@ -327,6 +385,10 @@ public final class KineticPreset {
         private int fuseDelay = 0;
         private float burrow = 0.0f;
         private boolean entityContact = true;
+        private float damagePerKJ = 0.0f;
+        private float pierceDT = 0.0f;
+        private float pierceDR = 0.0f;
+        private final List<ImpactEffects.Bound> effects = new ArrayList<>();
 
         private Builder(ResourceLocation id, ResourceLocation modelId, ResourceLocation warheadId) {
             this.id = id;
@@ -377,10 +439,16 @@ public final class KineticPreset {
             return this;
         }
 
-        /** Drill through up to {@code blocks} of cover no harder than {@code resistance} before going off. */
+        /** Drill through up to {@code blocks} of cover no harder than {@code resistance} (mm/m) before going off. */
         public Builder penetration(int blocks, double resistance) {
             this.penetration = blocks;
             this.penetrationResistance = (float) resistance;
+            return this;
+        }
+
+        /** See {@link KineticPreset#blockPen()}. */
+        public Builder blockPen(double mmSteel) {
+            this.blockPen = (float) mmSteel;
             return this;
         }
 
@@ -422,7 +490,7 @@ public final class KineticPreset {
             return this;
         }
 
-        /** Lost at unloaded ground instead of loading it. */
+        /** Unloaded ground flown on its saved terrain (rockets: discarded) instead of loaded. */
         public Builder noChunkLoading() {
             this.loadsChunks = false;
             return this;
@@ -482,6 +550,30 @@ public final class KineticPreset {
 
         public Builder durability(double health) {
             this.durability = (float) health;
+            return this;
+        }
+
+        /** Direct hit = {@code 0.5 m (20 v)^2 / 1000 * perKJ} (v blocks/tick) x launch damage scale. */
+        public Builder energyDamage(double perKJ) {
+            this.damagePerKJ = (float) perKJ;
+            return this;
+        }
+
+        /** Direct hit ignores {@code dt} of armour threshold and {@code dr} of its resistance. */
+        public Builder pierce(double dt, double dr) {
+            this.pierceDT = (float) dt;
+            this.pierceDR = (float) dr;
+            return this;
+        }
+
+        /** {@link ImpactEffects#bind}: unknown id or bad params throw here. */
+        public Builder effect(ResourceLocation id, ImpactTrigger on, double chance, JsonObject params) {
+            this.effects.add(ImpactEffects.bind(id, on, chance, params));
+            return this;
+        }
+
+        public Builder effect(ImpactEffects.Bound effect) {
+            this.effects.add(effect);
             return this;
         }
 

@@ -253,15 +253,18 @@ dependencies {
     // one instance each posed from a shared bone palette, instead of one instance per moving part.
     // A local jar because GemRender is not published anywhere yet; declared required in the toml, so
     // it is not jar-in-jar'd either.
-    compileOnly files('libs/gemrender-1.21.1-0.1.0.jar')
+    compileOnly fileTree('libs') { include 'gemrender-*.jar' }
     // Client runs only, for the same reason as JourneyMap below: GemRender jar-in-jars lwjgl-ktx for its
     // KTX2 textures, and that module requires org.lwjgl, which a dedicated server does not have on its
     // module path. FML dies building the transforming module layer before any mod is constructed. The
     // dependency is declared side = "CLIENT" in neoforge.mods.toml, so the server never wanted it: the
     // server does not build a rig.
     if (!gradle.startParameter.taskNames.any { it.toLowerCase().contains('server') }) {
-        localRuntime files('libs/gemrender-1.21.1-0.1.0.jar')
+        localRuntime fileTree('libs') { include 'gemrender-*.jar' }
     }
+
+    // --- AHF (humanoid hit parts, lag-comp history): required both sides, local jar ------------
+    implementation files("libs/${ahf_jar}")
 
     // --- Flywheel (Engine-Room, NeoForge 1.21.1) ---------------------------------------------
     // Flywheel is declared a required dependency in neoforge.mods.toml, so it is NOT jar-in-jar'd
@@ -377,6 +380,8 @@ var generateModMetadata = tasks.register('generateModMetadata', ProcessResources
             neo_version_range      : neo_version_range,
             loader_version_range   : loader_version_range,
             flywheel_version_range : flywheel_version_range,
+            ahf_version_range      : ahf_version_range,
+            gemrender_version_range: gemrender_version_range,
             mod_id                 : mod_id,
             mod_name               : mod_name,
             mod_license            : mod_license,

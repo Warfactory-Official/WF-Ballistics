@@ -1,12 +1,10 @@
 package com.wf.wflib.client.cam;
 
-import com.mojang.blaze3d.pipeline.RenderTarget;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
-import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.renderer.SectionOcclusionGraph;
 import net.minecraft.client.renderer.ViewArea;
-import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 import org.jetbrains.annotations.Nullable;
+import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
 
 /**
  * The pieces of {@code LevelRenderer} state that are <em>per camera</em> rather than per world, exposed so a feed
@@ -24,6 +22,9 @@ public interface FeedRenderState {
     ViewArea wfCamViewArea();
 
     void wfCamSetViewArea(@Nullable ViewArea viewArea);
+
+    /** {@code lastViewDistance}; != effective render distance => next {@code setupRender} calls {@code allChanged}. */
+    int wfCamLastViewDistance();
 
     /** {@code {lastCameraSectionX, Y, Z}}: the section the grid was last re-centred on. */
     int[] wfCamLastCameraSection();
@@ -51,16 +52,6 @@ public interface FeedRenderState {
 
     void wfCamSetTransparentOrigin(double[] values);
 
-    /**
-     * Fabulous graphics' auxiliary framebuffers, in the order {@code {entity, translucent, itemEntity, particles,
-     * weather, clouds}}.
-     */
-    RenderTarget[] wfCamFabulousTargets();
-
-    void wfCamSetFabulousTargets(RenderTarget[] targets);
-
-    @Nullable
-    PostChain wfCamTransparencyChain();
-
-    void wfCamSetTransparencyChain(@Nullable PostChain chain);
+    /** Exchange the cloud mesh + key with {@code cache}; twice restores. */
+    void wfCamSwapClouds(CloudCache cache);
 }

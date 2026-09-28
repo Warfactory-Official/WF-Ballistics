@@ -1,9 +1,12 @@
 package com.wf.wflib.api;
 
+import com.norwood.ahf.part.HitboxPart;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.Event;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
 
 /**
  * A WFLib projectile has met an entity, before it does anything about it. Server side, game bus.
@@ -29,6 +32,8 @@ public class ProjectileStrikeEvent extends Event {
     private final Vec3 location;
     private final Vec3 velocity;
     private final Threat threat;
+    @Nullable
+    private final List<HitboxPart> parts;
     private Outcome outcome = Outcome.PROCEED;
     @Nullable
     private Vec3 detonation;
@@ -40,6 +45,13 @@ public class ProjectileStrikeEvent extends Event {
     /** Entity-less striker: {@code key} = {@link StrikeContext#key}. */
     public ProjectileStrikeEvent(@Nullable Entity projectile, Object key, Entity target, Vec3 location, Vec3 velocity,
                                  Threat threat) {
+        this(projectile, key, target, location, velocity, threat, null);
+    }
+
+    /** {@code parts} = {@link StrikeContext#parts} of the damage that follows. */
+    public ProjectileStrikeEvent(@Nullable Entity projectile, Object key, Entity target, Vec3 location, Vec3 velocity,
+                                 Threat threat, @Nullable List<HitboxPart> parts) {
+        this.parts = parts;
         this.projectile = projectile;
         this.key = key;
         this.target = target;
@@ -73,6 +85,12 @@ public class ProjectileStrikeEvent extends Event {
 
     public Threat threat() {
         return threat;
+    }
+
+    /** {@link StrikeContext#parts}. */
+    @Nullable
+    public List<HitboxPart> parts() {
+        return parts;
     }
 
     public Outcome outcome() {

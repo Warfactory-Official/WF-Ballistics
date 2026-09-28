@@ -5,7 +5,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/** Where the world is being rendered from, while a feed is being rendered. */
+/** State of the running {@link OffscreenView} pass. */
 public final class FeedPass {
 
     @Nullable
@@ -18,7 +18,8 @@ public final class FeedPass {
     private FeedPass() {
     }
 
-    static void begin(Vec3 at, int distance, boolean thermalMode, RenderTarget into) {
+    /** @param at grid centre; null => main grid (shared) */
+    static void begin(@Nullable Vec3 at, int distance, boolean thermalMode, RenderTarget into) {
         origin = at;
         target = into;
         viewDistance = distance;
@@ -41,13 +42,13 @@ public final class FeedPass {
         return thermal;
     }
 
-    /** @return where the feed's grid should be centred, or null when the main view is being drawn. */
+    /** @return where the pass's own grid is centred; null => main view or a shared-grid pass. */
     @Nullable
     public static Vec3 origin() {
         return origin;
     }
 
-    /** Where the camera currently drawing the world is, feed or not. */
+    /** Translucent sort origin: own-grid pass camera, else main camera. */
     public static Vec3 sortOrigin() {
         Vec3 at = origin;
         return at != null ? at : Minecraft.getInstance().gameRenderer.getMainCamera().getPosition();
@@ -64,10 +65,10 @@ public final class FeedPass {
     }
 
     public static boolean active() {
-        return origin != null;
+        return target != null;
     }
 
-    /** Sections either side of the drone the current feed holds. Only meaningful while {@link #active()}. */
+    /** Fog distance of the current pass, in sections. Only meaningful while {@link #active()}. */
     public static int viewDistance() {
         return viewDistance;
     }

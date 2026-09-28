@@ -97,6 +97,9 @@ level.addFreshEntity(m);
 The preset builder covers the common design space. Reach for the entity builder when you need ascent tuning
 or per-launch state (a designated target, a swarm id, an interceptor lock).
 
+Per-launch overrides on a preset: `preset.builder(level, target)` -> `MissileBuilder` (`attackProfile`,
+`approachJoinCap` have no entity setter) -> `build()`.
+
 ---
 
 ## 3. The knobs, one by one
@@ -2163,13 +2166,53 @@ Unguided round (bullet, shell, bomb) with no entity: `round/Rounds`, one struct-
 
 - Contract: `pos += v; v = v * decay - g`, `decay = (double) (1f - drag)`; water state from the pre-move position.
   ywzj's closed-form solver inverts exactly this.
-- Collision per tick: one block clip over the segment through **loaded chunks only** (unloaded = air, never a
-  sync load); entities by `PreciseHitbox`, else AABB + 0.3. The shooter's whole ride stack is never hit.
-- Strike: `ProjectileStrikeEvent` with `projectile() == null`, `key()` = round key; damage through
-  `RoundDamageSource`, a `StrikeContext` (threat, travel, key). Armour/hit code reads `StrikeContext.of(source)`.
-- Wire: one `RoundPacket` per player per tick (spawns grouped by preset, end keys); audience 1024 blocks, whole
-  level for chunk-loading rounds. Client (`round/client`) flies the same recurrence without collision; tracer
-  streaks (`TracerRenderer`), rigged models (`RoundsVisual`, one Flywheel effect per level).
+- Collision per tick (rounds and `RocketEntity`): one block clip over the segment, never a sync load; every entity
+  before the clip end struck nearest first, then the block (pass-through never tunnels). The shooter's whole ride
+  stack is never hit. A strike or impact listener ending the round ends its step there. Unloaded voxels: air, except
+  non-chunk-loading rounds (§29).
+  | target | hit test | parts |
+  |---|---|---|
+  | `PreciseHitbox` | `clip` | null |
+  | living | segment clear of AABB and registration box, both + 0.3 => miss; else AHF `classifyRay` (`classifyRayPierced` iff AHF `penetrationEnabled`) | AHF, entry order |
+  | living, AHF no part | player + usable rig => miss (rig authority); else AABB + 0.3 | null |
+  | other | AABB + 0.3 | null |
+- Lag comp: `launch(..., damageScale, rewindTicks, shooterSeq)`. `rewindTicks > 0` => every step sweeps living
+  targets as broadcast in `broadcastTick - rewindTicks` at that step (AHF `EntityHistory.candidates` padded 0.3 +
+  snapshot). No snapshot then, passengers, `PreciseHitbox` => live, source tick `LIVE`. Common config
+  `rounds.rewindWholeFlight` (>= 1.5.0; default true; `Rounds.rewindWholeFlight`) false => spent by the first step that
+  swept entities (1.6.0: a step retried on still-decoding terrain, or dark, keeps it), later live.
+- Sweep cost (`RoundSweepBench`, 20 players + 200 husks, 2026-09-27): live 1.4-1.65x the 1.2.0 AABB sweep (per-hit
+  AHF classification), rewound 3 ticks +10-30% over live, same hit count; AHF capture 26 us/tick.
+- Strike: `ProjectileStrikeEvent` with `projectile() == null`, `key()` = round key, `parts()`; damage through
+  `RoundDamageSource`, a `StrikeContext` (threat, travel, key, `parts()`) and AHF `AhfHitSource` (swept segment,
+  tick; `LIVE` = unrewound; `hitPart` = first part => AHF pierced list = one part, read `parts()`). Armour/hit code
+  reads `StrikeContext.of(source)`.
+- Headshot factor: `ArmorSystem.resolutionClaimed(victim)` (claimed players, `claimResolution` predicates) => 1;
+  parts => `parts[0] == HEAD`; no parts => eye height +- 0.25 at the swept tick.
+- Pierce: preset `pierceDT/DR` on `RoundDamageSource`; `ArmorSystem.pierceDT/DR(source)` = the round's, else the
+  thread context (`DamageResistanceHandler.setup`), which rounds never touch => damage nested in the hit keeps the
+  outer context.
+- WFLib-owned armour (`ArmorSystem.onIncomingDamage`): parts => `resolveSlot(slotFor(parts[0]))`; else coverage
+  weighted.
+- Wire (`rounds-5`; 1.4.0 `LOST` -> `DEFERRED`; 1.5.0 + pierces): one `RoundPacket` per player per tick: spawns grouped
+  by preset (+ shooter id, seq, both varint `+1`), ends (key, position as doubles, `RoundEnd`), pierces (§29b); audience 1024 blocks, whole level for chunk-loading rounds;
+  FakePlayers / connections without the channel skipped. Client (`round/client`) flies the same recurrence without
+  collision; end before the round's first client tick => one replayed segment to the end point; landing re-sync
+  updates the same `Round`. Tracer streaks (`TracerRenderer`), rigged models (`RoundsVisual`,
+  one Flywheel effect per level).
+- Client API: `ClientRounds.addObserver(RoundObserver)` (every round: `tick`, `ended(at, reason)`, `pierced`),
+  `byShot(shooterId, seq)`, `predict(preset, shooterId, seq, pos, v, adoptTicks)` (1.3.3): shooter-side round, same
+  recurrence + loaded-block clip (ends there, or pierces as §29b); first server spawn with that shooter + seq adopts it (prediction's
+  flight kept, server key + end taken, later re-syncs ignored); none within `adoptTicks` => removed (`CLEARED`).
+  Prediction ended on a block before adoption => its server spawn/end swallowed. Server launch line off the
+  prediction's (> 1e-3 rad, server spread; >= 1.6.0): velocity = server round's flown to the prediction's age, position
+  eased onto it over 2 ticks; ended prediction => server round drawn on its own.
+- Tracer streak <= distance flown since the round's first known position (1.3.3; before: a round spawned at the camera
+  streaked behind it across the screen). Alpha-blended, unlit (additive washed out to white on a daylit sky). Half width
+  per end = clamp(0.05, 0.0012 x d, 0.0035 x d) (1.7.3; one head-distance width => tail under the eye drawn as a band
+  across the screen). Head dot 0.0025 rad (1.7.3): streak along the view ray (own shot, round flying away) projects to
+  < 1 px; measured 1.7.2 0-2 px -> 1.7.3 8 px (eye launch, sky). `tracerColor` 0 => nothing drawn, model-less round
+  invisible.
 - Foreign look: `RoundRenderers.register(id, RoundRenderer)` (client) precedes the glTF model: rounds and rockets by
   preset id, missiles by `look`. Per-round client `tick`/`ended` hooks (sounds).
 
@@ -2183,14 +2226,17 @@ Unguided round (bullet, shell, bomb) with no entity: `round/Rounds`, one struct-
 | Flight | `speed`, `drag`, `gravity`, `life` | blocks/tick, fraction/tick, blocks/tick^2, ticks |
 | | `water(drag, gravityFactor)` | |
 | | `dispersion` | degrees added to the gun's spread |
-| Terminal | `mass`, `impactDamage` | direct hit = 0.05 m v^2 unless flat |
-| | `headshot(multiplier)` | living target hit within eye height +- 0.25 |
-| | `penetration(blocks, resistance)` | re-swept after each drilled block within the tick |
+| Terminal | `mass`, `impactDamage`, `energyDamage(perKJ)` | direct hit = `0.5 m (20v)^2 / 1000 * perKJ` if set, else flat, else 0.05 m v^2; x launch `damageScale` |
+| | `headshot(multiplier)` | see headshot factor (§27) |
+| | `pierce(dt, dr)` | armour DT/DR ignored by the direct hit |
+| | `penetration(blocks, resistance)` | drill: destroys blocks with pen table (§29b) mm/m `<= resistance` (default 60; < 1.6.4 blast resistance, default 30; shipped `ap`/`heat` 250 = METAL: pre-1.6.4 vanilla outcome kept); re-swept after each drilled block within the tick (demolition) |
+| | `effect(id, on, chance, params)` | impact effects (§29c); unknown id / bad params throw at build |
+| | `blockPen(mm)` | non-destructive pierce (§29b); after drilling |
 | | `airburst(height)` | ray down of height + one tick's travel |
 | | `proximity(radius)` | |
 | | `fragments`, `blastHalfAngle`, `blast(size, breaksBlocks)` | to the warhead; blast credited to the shooter |
 | | `passesThroughEntities()` | hurt and keep going |
-| Behaviour | `noChunkLoading()` | lost at unloaded ground (bullets) |
+| Behaviour | `noChunkLoading()` | flies unloaded ground on its saved terrain (bullets, §29) |
 | | `tracer(rgb)` | streak colour; 0 = none |
 | | `stackSize` | |
 | | `quadraticDrag(k)` | `decay = 1 - drag - k\|v\|` (clamped 0); client flies the same |
@@ -2200,8 +2246,56 @@ Unguided round (bullet, shell, bomb) with no entity: `round/Rounds`, one struct-
 
 ## 29. Ground
 
-Segment end in an unloaded chunk: chunk-loading round below the build limit => ticket for that chunk, waits in place
-(life refunded) until it loads; else lost. Above the build limit nothing is checked. Transient: not saved.
+Chunk-loading round, any column of its segment unloaded (segment not wholly above the build limit) => tickets on every
+column of the segment (tickets outside it released; loaded ones kept, else a released one unloads and they never all
+load), waits in place (life refunded) until all load.
+
+Non-chunk-loading round over unloaded ground (1.4.0; before: `LOST` at the first unloaded chunk) = virtual flight:
+
+- Same step, same recurrence: segment voxels in unloaded chunks read on-disk terrain (`round/terrain`); fluid for the
+  water law from it too. Entities swept as ever => re-entering loaded chunks resumes strikes and rewind unchanged.
+  Segment over unloaded columns only, none loaded within 3 blocks of its XZ box (query inflate 1 + entity section
+  lookup 2) (`DARK`) skips the entity sweep. Pierced remainder (new heading/length): columns reclassified.
+- Terrain = the chunk as last saved: region file read `READ`-only (`RegionReader`; vanilla `RegionFile` ctor opens
+  `CREATE, WRITE`, `close()` pads + forces), NBT -> per-section masks (`SolidityDecoder`): full-cube collision =
+  solid, other non-empty collision = its state's shape (via `EmptyBlockGetter`), fluid = wet. 1.18+ layout, no
+  DataFixer (renamed block => air).
+  | on disk | flown as |
+  |---|---|
+  | no region file / chunk never saved (ungenerated) | air |
+  | unreadable (torn read; slot holding another chunk: `xPos`/`zPos` checked), decode error, pre-1.18 | retried 2x, 5 then 10 ticks later (round waits); then air, logged |
+  | saved (`ChunkDataEvent.Save`), IO worker write pending | read through the IO worker (pending write) until an IO worker sync issued after the save completes |
+  | dropped from the chunk map, unload save not yet run (tick spare time; never on a sprinting server) | previous save (stale window; ends at that save) |
+- Cache (`AsyncTerrainSource`): per level, server-thread owned, LRU 2048 columns / 64 MB, 256 decodes in flight on its own 2
+  daemon threads; invalidated on chunk load/unload/save (queued from the chunk events, drained at resolve). Column
+  decoding => decoded prefix flown (hits short of it), round stops at its face (resync, no decay/gravity), waits
+  there, life spent (>= 1.7.2; <= 1.7.1 whole step waited: loaded target short of it missed while decoding). Decodes queued 8 ticks of travel ahead. Air columns (ungenerated, no
+  region file, unreadable) in a separate FIFO set (32768), never the LRU (>= 1.6.2; 1.6.1: misses flying on over
+  ungenerated ground evicted decoded terrain => later rounds waited on re-decodes, arrived late).
+- Below the build range by 64 (vanilla `checkBelowWorld`) and not rising => `EXPIRED` (>= 1.6.2; before: flew out its
+  life, 2400 ticks for MineAssault rounds).
+- Unwatched fast-forward: segment over unloaded columns, no player within 1024 of the round and no viewer (player sent
+  its spawn or a resync) => up to 16 steps/tick, each while the next segment stays over unloaded columns. Watched => 1
+  step/tick (client copy flies 1/tick).
+- Resync/pierce/end packets: audience now + viewers still in the level (a round flown past 1024 still ends on the
+  client that drew it). Queue full => lookup waits, no stat; region-file existence cached per region.
+- Block hit in an unloaded chunk: round ends `BLOCK` there; `DeferredImpact` stored (`DeferredImpacts`, saved with the
+  level, 4096 max, overflow dropped + warned), applied at the first rounds resolve after the chunk loads (never in
+  `ChunkEvent.Load`): `RoundImpactEvent`, then land (fuse/burrow) or warhead, shooter by UUID. Resting round whose
+  chunk unloads => `DEFERRED`, rests again on load with the fuse left. In-flight rounds: transient (life-bounded; client
+  copies and keys not restorable).
+- Divergences from loaded ground: no drilling (first solid voxel stops; `blockPen` pierces, §29b); face from the collision shape only (no
+  interaction-shape override); airburst ray over a decoding column does not trip; a deferred warhead's blast
+  reaching still-unloaded neighbours loads them (vanilla explosion).
+- Cost (`VirtualFlightBench`, 500 rounds x 25 steps, flat lane, 2026-09-28, 3 runs): disk step 0.92-1.56x the
+  loaded step (500-715 ns vs 458-599 ns; no entity sweep, per-voxel mask lookup); terrain span walk on a loaded
+  non-chunk-loading step ~50 ns (458 vs 408 ns chunk-loading twin). Decode per column: flat 54-183 us; real terrain
+  (`run/world` r.0.0, 1016 chunks) 167-421 us read+inflate + 210-239 us palette, 5.8 mixed sections, 5.1 KB held
+  => LRU full ~10 MB.
+- Cost, dispersed (`VirtualFlightBench.dispersedFire`, 500 unwatched rounds at random headings, 4 blocks/tick, 160^2
+  planted chunks with a farmland layer, ticks paced to 50 ms, 2026-09-28): round steps 2.19 ms/tick mean, 3.57 max;
+  stalled only the first tick (500 waiting on first decodes); 7 region stats in 20 ticks; 1855 decodes x 57 us; LRU
+  2048 columns, 3.4 MB. Unpaced (sprinting gametest ticks): 638-5600 stalled round-ticks of 9500.
 
 ## 29a. Rockets
 
@@ -2217,24 +2311,194 @@ preset, from, direction, inaccuracy, carrier, shooter, faction, controlId)`.
   any `InterceptTarget` entity, not only `MissileEntity`/`DroneEntity`.
 - Client: exhaust + launch hooks on the preset's `RoundRenderer`; none registered => not drawn.
 
+## 29b. Block penetration
+
+`KineticPreset.blockPen` (pack `blockPen`), `round/pen`. Blocks never change.
+
+- Capacity `C = blockPen * |v|^2 / muzzleSpeed^2` (mm steel-eq; KE-scaled => drag and earlier blocks reduce it).
+- Cost `c = resistance * t`; `t` = ray length inside the collision shape's boxes (slab, pane, bars: thin; gaps free).
+- `c < C` => exits at the last box exit: `|v'| = |v| sqrt(1 - c/C)`, heading turned `u * 8 deg * c/C` about a
+  seeded azimuth; rest of the tick flown from there with `v'`, entities behind struck at `v'`; drag/gravity then as
+  usual; client copies re-synced. `c >= C` => stops at the depth `C` buys: impact there (`RoundImpactEvent` with the
+  entry hit, warhead/landing at the stop point). 64 pierces/step, then the next block stops it.
+- Seed `(round key | shooter,seq if shooterSeq, block pos)`: a predicted shot deflects as its server round.
+- Resistance (mm per metre of block, `PenTable`; drill reads it too): data map `wflib:penetration` (>= 1.6.4;
+  `data/<ns>/data_maps/block/penetration.json`, `{"values": {"<block>|#<tag>": {"resistance": mm}}}`, synced to
+  clients, not mandatory) > `PenMaterial` class: first match of `wflib:penetration/<name>` tag (most resistant) >
+  unbreakable => `IMPENETRABLE` > blast resistance >= 600 => `ARMOR` > `c:glass_blocks`/`c:glass_panes`,
+  `#leaves`/`#wool`/`#wool_carpets`, `#planks`/`#logs` > sound type > blast resistance `<=1` SOFT, `<=4` WOOD, `<=20`
+  STONE, else METAL. Table per state id, rebuilt on tag reload (`shouldUpdateStaticData`: integrated client skipped;
+  remote client from synced tags) and on block data map update (server reload, client sync).
+  | material | mm/m | rifle 10 mm: 1 block |
+  |---|---:|---|
+  | GLASS | 0.3 | 97% energy out (speed 0.985) |
+  | SOFT | 1.5 | 85% |
+  | WOOD | 6 | 40%; second plank stops it 2/3 in |
+  | EARTH | 25 | stops 0.4 in |
+  | STONE | 60 | stops 0.17 in |
+  | METAL | 250 | |
+  | ARMOR | 1000 | |
+  | IMPENETRABLE | inf | stops on the face |
+- Shipped data map: wfcore blocks, each `neoforge:mod_loaded wfcore` (no wfcore => entries inert, no unknown-id
+  errors). WFLib owns the table; wfcore not edited (build red, not ours). Calibration, not measured ballistics (7.62
+  stopped in ~0.4 m sand, ~0.12 m concrete):
+  | block | mm/m | class it replaces |
+  |---|---:|---|
+  | `sandbags`, `hesco_bastion` | 40 | EARTH 25 |
+  | `standard_concrete` | 130 | STONE 60 |
+  | `reinforced_concrete` | 250 | STONE 60 |
+  | `ballistic_glass` | 300 | GLASS 0.3 |
+  | `hardened_steel` | 1000 | METAL 250 |
+  | `tungsten_plating` | 1500 | METAL 250 |
+- Suggested `blockPen` (calibration, not measured ballistics): pistol 3, 5.56 10, 7.62x51 16, .50 BMG 40.
+- Cost (`BlockPenGameTest.pierceCost`, launch+step+destroy, best of 7, 3 runs, other tests running): clear 1.1-1.7
+  us, plank pierce 3.2-3.8 us, stone stop 2.9-5.9 us (impact + warhead + end; one 19.8 us outlier). Table: 27018
+  states 3-17 ms per rebuild (1.6.4-1.7.0), 2 per reload (data map, tags). Decode, real terrain (`r.0.0`): 8.2 KB/chunk held (partials sparse/dense; hash map
+  per voxel was 9.1, 14.5 dense-only) => LRU full ~17 MB, 64 MB cap; decode 1.7.0 252-308 us (4 runs), 1.6.4 258-267 (2), 1.6.3 261-276 (1.4.0: 210-239); other tests running, decoder unchanged since 1.6.4.
+- Unloaded ground: solid voxels carry their resistance from decode (`SectionSolidity`: one per section, else palette
+  of the section's distinct values + ceil(log2 n) rank bit planes, 512 B each); partial voxels by their state (rank into the section's partial states: 1 B/voxel
+  dense, 3 B/partial voxel sparse, none uniform). Stop => `DeferredImpact` at the stop point.
+  Server table rebuild => every decoded column and in-flight decode dropped (`AsyncTerrainSource.invalidateAll`). Neighbour-dependent shapes
+  decode as if alone (§29).
+- Events: `RoundPierceEvent` (server, game bus: key, entry hit, `BlockPen.Pass` exited/point/velocity/spent, incoming
+  velocity), before the stop's `RoundImpactEvent`. Client: `RoundNetwork.Pierce` (key, block, entry + face, exit or
+  stop point, exited) to the end audience; `RoundObserver.pierced` once per pierce: a live prediction reports its
+  own, server's skipped; prediction stopped where the server exited => server spawn revives it as a plain round.
+- Not covered: `RocketEntity` (no pierce).
+
+## 29c. Impact effects
+
+`round/effect` (>= 1.6.4): preset list of `(id, on, chance, params)`, `KineticPreset.Builder.effect`, bound by
+`ImpactEffects.bind` at build (unknown id, chance outside (0, 1], unread or bad param => `IllegalArgumentException`).
+
+- Register: `ImpactEffects.register(id, ctx -> ...)` (no params) / `registerFactory(id, (on, params) -> effect)`
+  (`Params.num/reqNum/bool/reqRl`); mod construction, any thread, before presets naming it are built; twice => throws.
+- `ImpactEffect.check(RegistryAccess)`: `ServerStartingEvent` over every registered preset (`ImpactEffects.check`);
+  failures joined in one `IllegalStateException` => server does not start.
+- Triggers (`ImpactTrigger`; key = pack spelling):
+  | key | when | ctx |
+  |---|---|---|
+  | `hit` | entity struck, strike outcome PROCEED, after the direct hit; `ImpactEffect.threat` folded in before `ProjectileStrikeEvent` | `entity`, `parts`, `at` entry |
+  | `block` | stopped on a block: loaded after `RoundImpactEvent`; unloaded when its deferred impact applies | `block`, `at` stop point, `pass` if pierced |
+  | `pierceIn` | `blockPen` met a loaded block, after `RoundPierceEvent` (unloaded: none) | `block`, `pass`, `at` entry |
+  | `pierceOut` | `blockPen` exited it | `pass`, `at` exit, `velocity` after |
+  | `end` | round removed at a loaded point, impact not owed (stop in unloaded chunk => none; its deferred impact fires `block` + `end` BLOCK once loaded; landed fuse/burrow re-added, `end` when that ends); rocket detonated | `end`, `at` |
+- Ctx: level, trigger, preset, key (round key, or the rocket), projectile (rocket), shooter, faction, `at`, `velocity`,
+  `energy()` J, `openSide()` (voxel before `at` along the flight; after it for `pierceOut`).
+- Chance rolled per trigger per effect (`level.random`); `>= 1` never rolled. Rockets: `hit`, `block`, `end`.
+- No effect for a trigger => one bitmask test at its site, no context built.
+- Built-ins (`ImpactEffects.IGNITE` ...):
+  | id | params | triggers |
+  |---|---|---|
+  | `wflib:ignite` | `seconds` (5) | `hit`: target burns; others: fire on `openSide()` if placeable |
+  | `wflib:damage` | `type` (damage type id; unregistered => server start refused), `amount` | `hit` only; i-frames ignored |
+  | `wflib:explode` | `warhead` (unregistered => server start refused), `size` (warhead's), `breaksBlocks` (true) | all |
+  | `wflib:thermal` | `pen` mm (0), `wear` x (1) | `hit` only: threat `penetrationMm + pen`, `wearFactor x wear` |
+- Target systems stay separate: vehicle armour reads `Threat.penetrationMm`; WFLib armour DT/DR plus
+  `Threat.wearFactor` (plate/insert wear points x factor, ceil; `ArmorSystem` via `StrikeContext`).
+- Armour pen at impact (`Rounds.threat(preset, v)`, strike path): KINETIC/SMALL_ARMS `armorPenetrationMm x |v|^2 /
+  muzzleSpeed^2` (as `blockPen`); HEAT/TANDEM_HEAT/HE and motors unscaled. `Rounds.threat(preset)` = muzzle figure
+  (rocket `threat()`). Measured (`armourPenFallsWithImpactEnergy`, 100 mm, 800 m/s, drag 0.02): 0 blocks 100 mm,
+  523 blocks 54.55, 1014 blocks 24.31.
+
 ## 30. Loading and firing one
 
 Guns live in ywzj_vehicle (`org.ywzj.vehicle.compat.wflib`; its `docs/vehicle-pack-format.md` §11).
 
 ```java
 long key = Rounds.fire(level, preset, muzzle, direction, inaccuracyDegrees, carrierVelocity, shooter, factionId);
+long key = Rounds.launch(level, preset, muzzle, velocity, shooter, factionId, damageScale, rewindTicks, shotSeq);
 Rounds.position(level, key); Rounds.within(level, box); Rounds.destroy(level, key); // APS
 ```
 
-Registering: `KineticPresetRegistry.register(KineticPreset.builder(...).build())` during mod construction => a
-carryable item. Vehicle weapons register model-less presets later (no item).
+Debug (op): `/wflib round <preset>` fires from the command source position along its rotation, shooter = source
+entity (`execute anchored eyes positioned ^ ^ ^ run ...` for the eye).
+
+Client overlay: `/wfdebug rounds [on|off|status]` (client command, off by default; bare = toggle; `status` = live
+rounds with preset, tracer, local, speed). Every `ClientRounds` round, tracer or not (`round/client/RoundDebug`).
+| mark | colour |
+|---|---|
+| flown path (origin cross, per-tick points, head) | cyan = local (own prediction, adopted or not); white = server copy |
+| head cross | preset tracer rgb; magenta = `tracerColor` 0 (TracerRenderer draws nothing) |
+| predicted arc (`RoundArc`, dry, no collision, <= 200 ticks or life/void end) | yellow, dashed, fading |
+| resync (server snap; adopted prediction re-aimed) | orange: before cross -> after |
+| pierce | blue entry cross -> light-blue exit cross; stopped inside: purple cross |
+| end (kept 4 s fading, last 32) | BLOCK red, ENTITY green, FUSE amber, DESTROYED/DUD brown, EXPIRED/DEFERRED/CLEARED grey |
+- Path ring 512 points/round (older dropped, origin kept); frame loop allocation-free.
+- `RoundArc.predict` == `Rounds` step in open air bit for bit (`anArcPredictionIsTheFlight`, `RoundArcTest`). Wet
+  segments diverge (water drag not predicted).
+
+Registering: `KineticPresetRegistry.register(KineticPreset.builder(...).build())` (copy-on-write, any thread) during
+mod construction => a carryable item. Vehicle weapons register model-less presets later (no item).
 
 ## 31. What is verified
 
 `round/gametest/RoundGameTest`: arc vs an independent recurrence (through the build limit), chunk ticket on
-descent, bullet lost over unloaded ground, direct hit carries its `StrikeContext`, contact fuze, wall crossing,
-drilling, airburst, bomb burrow + fuse, resting, headshot. `RocketGameTest`: burn then coast, contact fuze, radar contact + kill past durability.
-Rendering: not yet looked at in a client.
+descent, loaded part of a segment into unloaded ground strikes, direct hit carries its `StrikeContext`, contact fuze, wall crossing,
+drilling, airburst, bomb burrow + fuse, resting, headshot. `RoundHitGameTest`: rewound hit on a moved player (+ live
+misses, untracked body live), parts on event + damage, player rig HEAD vs torso, claimed player / predicate claim
+factor 1, spider eye-band fallback, husk band HEAD below the eye band, pass-through meets the wall behind (two bodies
+one tick), pierce open during hit and reset, energy damage + scale, struck part's armour slot, wire shooter/seq/end +
+same-packet spawn+end (codec round trip). `VirtualFlightGameTest`: loaded -> unloaded gap -> loaded target struck;
+target short of an undecoded column struck on the launch step (1.7.2; prefix flight dropped => only it fails);
+block on disk in an unloaded chunk stops the round, chunk stays unloaded, warhead only after load; pool (water, slab
+floor, drag + quadratic drag + gravity) flown from disk then loaded at the same coordinates: every step and the hit
+bit-equal; watched round 1 step/tick vs unwatched fast-forward, end reaches the watcher from > 1024; column cached from
+an old save, chunk saved anew (event + IO worker write) => round stops on the new wall; slot holding another chunk's NBT
+=> not cached, retry reads the rewritten slot; 1024 columns x 11 lookups with the queue full => 1 stat; partial section
+(farmland/slab/snow/path) states per voxel exact, <= 4.7 KB, 16 slabs sparse <= 128 B; watched round resyncing (pierce)
+past 1024 still 1 step/tick, pierce + resync + end reach the watcher. Fixture writes go through the server's IO worker (`ChunkStorage.write`; 1.6.1 wrote the region file itself and refused a region the IO worker held open: 1 of 3 runs crashed); 2x LRU air columns (no region file + ungenerated in a file) never evict a decoded wall; round
+falling below min - 64 expired, rising or shallower flies on. Mutations caught: watched check dropped, disk fluid
+dropped, save event ignored, failed read cached as air, region existence uncached, sparse partials off, resync
+audience without viewers (5 fail, nothing else); air columns into the LRU + void expiry dropped (1.6.2: those 2 fail,
+nothing else). `RegionReaderTest` (JUnit): same NBT as vanilla (incl. external
+`.mcc`, unpadded tail), never creates/pads/writes while vanilla's ctor creates and `close()` pads; palette unpack
+vs `SimpleBitStorage`; slot redirected to another chunk's sectors rejected by position. Not tested: resting round deferred
+(`DEFERRED`), deferred store across a restart, pierced remainder into unloaded columns off a loaded segment,
+chunk-loading middle-column tickets, `DARK` next to a loaded column, IO worker pending read vs a written file (race). `BlockPenGameTest` (rifle
+`blockPen` 10 at 40 blocks/tick): plank => exits, energy 0.4 exact, exit on the far face, deflection <= 4.8 deg; second
+plank stops it 2/3 in (KE-scaled); two stone => stops 1/6 into the first, impact event; glass => speed 0.985; husk
+behind a plank struck at the exit speed; plank + stone on disk vs loaded, same shot seed: entries, exit/stop points,
+exit velocity bit-equal, stop => deferred impact there; no block changed in any. Mutations caught: pierce dropped (all
+6), disk material forced to STONE. `BlockPenTest`, `SectionSolidityTest` (JUnit): spans/union/gaps, stop depth,
+diagonal, KE capacity, seeded bounded deflection; resistance palette round trip, planes = ceil(log2 values).
+Client (`/wflib round wflib:test_pen_slow`, 1/10 speed): tracers cross glass, leave the plank shorter, end on
+stone; walls intact. `RocketGameTest`: burn then coast, contact fuze, radar contact + kill past durability.
+Rendering, client replay, observers: not yet looked at in a client.
+
+Impact effects + pen table (1.6.4, fixes 1.7.0; JUnit 259, GT 104/104):
+- `ImpactEffectsTest` (JUnit): unknown id, chance 0 / 1.5, unread or mistyped param, `damage` without type / off `hit`,
+  unqualified type, amount 0, `thermal` off `hit` / wear < 1 refused; thermal threat `8 + 12`, wear x3; trigger mask;
+  chance 0.25 fires 0.25 +- 0.015 of 20000; chance 1 draws no random.
+- `ImpactEffectGameTest`: husk, plank, stone on one line => `hit, pierceIn, pierceOut, pierceIn, block, end` with
+  their points, energy 1280 J; clear flight destroyed => `end` only; ignite => husk 80 fire ticks, fire above the
+  struck stone; damage => physical then `in_fire` 3; explode => struck plank gone; thermal => pen 20 -> 50, wear x3,
+  plate lost 975 -> 2925; energy-scaled pen at 0/523/1014 blocks read from `StrikeContext.of(source)` (ywzj
+  `Ballistics.resolve` input; ywzj itself not run), pen ratio == `|v|^2` ratio; unknown damage type + warhead => one
+  start-check failure naming both; plank over stone on disk: 0 effects unloaded (pierce, owed `end`, a round
+  expiring in that air), `block` + `end` once at the stop point after load.
+- `PenTableGameTest`: world datapack `dried_kelp_block` 123 overrides class 25 after `reloadResources`, removed =>
+  25; entry conditioned on an absent mod ignored; blockPen 200 exits with `1 - 123/200`; drill rated 123 takes it,
+  122.5 does not; stone/planks/bedrock keep class values; kelp decoded from disk 25, dropped by the reload, re-decoded
+  123. `apDrillsIronButNotObsidian`: `ap` drills iron, stops on obsidian; `heat` in [METAL, ARMOR).
+- Remote client (`mc-harness/scenarios/pentable_sync.mjs`, dedicated server + client): kelp join 123/123, datapack
+  disabled 25/25, enabled 123/123 (server/client). Data map listener dropped => client 25 at join.
+- Mutations (each alone, fresh run dir): threat fold, hit apply, pierce, block, end effects dropped; unscaled threat;
+  wear factor ignored; data map ignored; drill on blast resistance; decoder fixed at 60 => the expected tests fail,
+  nothing else. 1.7.0: unloaded `end` guard, both `end` guards, unloaded pierce guard, reload invalidation, damage
+  check, `ap` at 100 => only their tests fail (+ once `aRoundDoesNotHitItsLauncherOnTheDrop`, timing). Uncaught:
+  `owed` alone (stop point in its own unloaded chunk => loaded guard covers; +X face on a loaded neighbour untested);
+  data map listener dropped in GT (server tags rebuild covers; caught by the client scenario above).
+- Effect-free step cost (`effectFreeStepCost`, own batch, 2000 x launch+step+destroy, best of 31, same run dir, 3
+  runs each): 1.6.3 clear 720-782 ns, husk 724-806, stone 442-489; 1.6.4 670-733, 677-743, 405-505. In batch
+  `wflib_bench` it measured RoundSweepBench's 20 players (1.7 us).
+- Isolation fixes: `airColumnsDoNotEvictTerrain` no longer compares the global absent-set size (another virtual
+  test's region overlaps: 1017 of 1023 in 4 of 12 runs with 101 tests); `aRocketPastABodyStillMeetsTheWall` no longer
+  clears the shared detonation list (wiped `aRocketDetonatesOnTheGround`'s, 1 run).
+- Not tested: client prediction on datapack values (`predict`), rocket effects, landed fuse/burrow re-added from a
+  deferred impact.
+- Gap: `aResyncFarFromTheWatcherKeepsIt` intermittent "no pierce; round at null" (2 of 8 main-tree runs since
+  1.6.4); root cause unknown.
 
 ---
 
@@ -3484,3 +3748,61 @@ else's, and the seabed walk stopping at a shoal and not at a seabed.
 - `HostWakeup`: last position per host (`wflib_host_wakeup` saved data, recorded on join/leave + every 40 t); `request(player, id, callback)` tickets the chunk until loaded and `tickCount > 1`.
 - Config `detachedBody.*`, `streamDebug.*` (common). Commands: `/wflib stream audit|status|sent|sleeping|debug|reset`; client `/wfstream audit|map`.
 - Verified: `mc-harness/scenarios/chunk_stream_audit.mjs` (server belief vs client held, feed + detached UAV).
+
+# Part XXIV: Offscreen views
+
+## 83. API (`client.cam.OffscreenView`)
+
+| factory | grid | cost | limit |
+|---|---|---|---|
+| `sharedGrid()` | main grid (player-centred), own graph | no extra section buffers/compiles | camera outside player render distance => nothing there |
+| `ownGrid(viewDistance)` | second grid centred on camera | duplicate buffers + compiles | chunks outside client ring need streaming (§82) |
+
+- `render(pos, yaw, pitch, roll, fovDeg, target, delta)`: anchor = camera entity; `render(anchor, ...)` explicit. Anchor hidden (vanilla-rendered entities only). `close()` releases graph, grid, cloud mesh.
+- Call from `RenderFrameEvent.Pre` only. Nested pass => `IllegalStateException`; target without depth => `IllegalArgumentException`; `false` => nothing drawn (no level, or main grid rebuilt this frame: `lastViewDistance` != render distance).
+- Aspect = target w/h; near 0.05; far `GameRenderer.getDepthFar()` (Voxy raises it).
+- Drone/TV feeds = `ownGrid(camera.feedViewDistance)` + post chain + OSD (`CameraTarget`).
+
+## 84. Per-view state
+
+- Swapped per pass, every renderer (`MixinLevelRendererTargets`, Sodium included): Fabulous aux targets + outline `entityTarget` + transparency chain nulled, panoramic mode on. Else Fabulous sends entities/translucents to the screen; outline `entityTarget.clear` rebinds the window-sized viewport mid-pass (entities + everything after drawn at window scale into a smaller target).
+- Vanilla renderer only (`MixinLevelRendererFeed`): graph, `visibleSections`, `prevCam*`, cloud mesh + key (`CloudCache`); own grid also `viewArea`, `lastCameraSection*`, translucent sort origin.
+- Shared grid: translucent sort origin := camera each pass => no resort from the view; main buffers keep the main camera's sort.
+- Clouds: key = camera 12-block cell. `needsUpdate`/`allChanged` (reload, cloud toggle, level change) => every view's
+  mesh regenerates, not just the installed one. One shared mesh => two cameras in different cells rebuild + re-upload it twice a frame. Measured (flat, view 40 blocks off the player, mean of rep 2): pass CPU 0.246 -> 0.168 ms, rest of frame 0.433 -> 0.372 ms; view in the player's cell unchanged.
+- Sodium: grid mixins off; pass runs Sodium's renderer, which re-walks visibility each pass. Sodium's own cloud cache not swapped.
+
+## 85. Boxy far entities
+
+- Boxy hooks sit inside `renderLevel` (`MixinLevelRendererDistantEntities`: compiled-chunk bypass, cull override, depth re-band, Voxy depth join; `MixinEntityRenderDistance`) => run in the pass unchanged. Entity counted rendered (`E: 1/…`).
+- Boxy PRECISE depth needs a stencil on the pass target (`getMainRenderTarget` = target in the pass); none => BASIC.
+- Far entity missing when target != window (<= 1.7.0): Sodium => targets not swapped (§84) => outline target clear set the window viewport before entities. Isolated by GL trace (viewport 512 -> 1920x1080 at `entityTarget.clear`, `LevelRenderer.renderLevel`). Not Voxy/Boxy.
+- Voxy >= 0.2.16 (wf2-21 fork): viewport per draw framebuffer (`ViewportSelector`, idle 10 s => freed; shader pack => one), `NormalRenderPipeline` targets per size (<= 3). Shared viewport = HiZ + depth-bounding realloc and the other camera's temporal visibility every pass. 0.2.17: main viewport = `Minecraft.mainRenderTarget` id via field accessor (0.2.16 first-seen framebuffer => roles swap when a feed renders first or a resize renews the id; `getMainRenderTarget()` = feed target in a pass).
+- Rig `mc-harness/scenarios/offscreen_boxy.mjs` (Sodium 0.8.12, Boxy 2.0.0-alpha.2, bot `Far` on glass at x 1000, window 1920x1080, `/wfview shared <size>`, `eye 3`), steady state (n ~ 610):
+
+| WFLib / Voxy | target | Far drawn | pass CPU ms | GPU span ms | rest of frame CPU ms |
+|---|---|---|---|---|---|
+| 1.7.0 / 0.2.15 | 512x512 | no | | | |
+| 1.7.1 / 0.2.15 | 512x512 | yes | 0.75-0.93 | 0.63-0.70 | 0.72-0.84 |
+| 1.7.1 / 0.2.15 | 1920x1080 | yes | 0.54-0.61 | 0.66-0.73 | 0.55-0.60 |
+| 1.7.1 / 0.2.16 | 512x512 | yes | 0.50-0.60 | 0.35-0.38 | 0.57-0.60 |
+| 1.7.1 / 0.2.16 | 1920x1080 | yes | 0.50-0.72 | 0.50-0.56 | 0.53-0.70 |
+
+## 86. Debug + measured
+
+- Client `/wfview shared <w> [h]` | `own <w> <distance>` | `eye <fov>` | `at x y z yaw pitch roll fov` | `stats` | `off`. Blit top-left. `stats`: pass CPU, GPU timestamp span (`glQueryCounter`), entity counts, rest-of-frame CPU (Pre-after-pass -> Post); resets.
+- GPU timing: `GL_TIME_ELAPSED` FORBIDDEN; vanilla `TimerQuery` (F3 / metrics) holds one open across the frame.
+- Vanilla renderer, 7900 XTX, uncapped: 256 vs 512 indistinguishable (fill not the bottleneck).
+
+| scene | pass CPU ms | GPU span ms |
+|---|---|---|
+| flat, RD 8, fancy, 2 mobs | 0.14-0.25 | 0.07-0.10 |
+| generated terrain, RD 12, fancy, from y 110 | 0.12-0.21 | 0.09-0.17 |
+| flat + campfire smoke + burning zombie, fancy | 0.33-0.78 | 0.31-1.03 |
+| same, fabulous | 0.31-0.59 | 0.28-0.63 |
+
+## 87. What is verified
+
+- Headless client (gamescope), fancy + fabulous: view from behind the scene (terrain, water, glass, villager, pig, burning zombie, campfire smoke), 30 deg roll, `eye 10` zoom, own grid. Pixel gate: red/blue wool + pig pink inside the blit, all zero with the view off. Mutation: Fabulous target nulling removed => pig pixels 0, gate fails.
+- Drone monitor + TV feed screenshots before/after the extraction: same content.
+- Under Voxy + Boxy + Sodium: `/wfview shared 512` and 1024x576 draw bot `Far` at 1000 (`mc-harness/scenarios/offscreen_boxy.mjs`); MineAssault PiP scope 512 px draws it at 4.5x / 10x (`mc-harness/scenarios/ma_scope.mjs`). Mutation: 1.7.0 target-swap skip under Sodium => Far missing in both.

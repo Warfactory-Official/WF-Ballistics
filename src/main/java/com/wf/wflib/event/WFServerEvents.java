@@ -1,6 +1,8 @@
 package com.wf.wflib.event;
 
 import com.wf.wflib.sim.SimTier;
+import com.wf.wflib.kinetic.KineticPresetRegistry;
+import com.wf.wflib.round.effect.ImpactEffects;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -242,6 +244,7 @@ public final class WFServerEvents {
      */
     @SubscribeEvent
     public static void onServerStarting(ServerStartingEvent event) {
+        ImpactEffects.check(KineticPresetRegistry.all(), event.getServer().registryAccess());
         DroneAiScheduler.startup();
         SimScheduler.startup();
     }
@@ -289,6 +292,13 @@ public final class WFServerEvents {
                                         .executes(ctx -> spawnFrag(ctx.getSource(),
                                                 IntegerArgumentType.getInteger(ctx, "count"),
                                                 DoubleArgumentType.getDouble(ctx, "speed"))))))
+                .then(Commands.literal("round")
+                        .then(Commands.argument("preset", net.minecraft.commands.arguments.ResourceLocationArgument.id())
+                                .suggests((ctx, b) -> SharedSuggestionProvider.suggestResource(
+                                        com.wf.wflib.kinetic.KineticPresetRegistry.all().stream()
+                                                .map(com.wf.wflib.kinetic.KineticPreset::id), b))
+                                .executes(ctx -> fireRound(ctx.getSource(), net.minecraft.commands.arguments
+                                        .ResourceLocationArgument.getId(ctx, "preset")))))
                 .then(Commands.literal("boom")
                         .executes(ctx -> boom(ctx.getSource(), "standard"))
                         .then(Commands.argument("preset", StringArgumentType.word())
@@ -2582,6 +2592,19 @@ public final class WFServerEvents {
      * ExplosionCreator} call a missile makes, so the smoke, the debris and the water foam can be looked at without
      * flying something into the sea first.
      */
+    /** Kinetic round from the source position along its rotation (`execute anchored eyes positioned ^ ^ ^` = eye). */
+    private static int fireRound(CommandSourceStack src, ResourceLocation id) {
+        com.wf.wflib.kinetic.KineticPreset preset = com.wf.wflib.kinetic.KineticPresetRegistry.get(id);
+        if (preset == null) {
+            src.sendFailure(Component.literal("No round " + id));
+            return 0;
+        }
+        long key = com.wf.wflib.round.Rounds.fire(src.getLevel(), preset, src.getPosition(),
+                Vec3.directionFromRotation(src.getRotation()), 0.0f, Vec3.ZERO, src.getEntity(), null);
+        src.sendSuccess(() -> Component.literal("Round " + key + " (" + id + ")"), false);
+        return 1;
+    }
+
     private static int boom(CommandSourceStack src, String preset) {
         Vec3 pos = src.getPosition();
         ServerLevel level = src.getLevel();

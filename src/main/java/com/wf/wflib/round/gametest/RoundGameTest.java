@@ -7,6 +7,7 @@ import com.wf.wflib.item.ModItems;
 import com.wf.wflib.kinetic.KineticPreset;
 import com.wf.wflib.kinetic.KineticPresetRegistry;
 import com.wf.wflib.kinetic.KineticShellItem;
+import com.wf.wflib.round.RoundArc;
 import com.wf.wflib.round.Rounds;
 import com.wf.wflib.warhead.WarheadRegistry;
 import net.minecraft.core.BlockPos;
@@ -18,6 +19,7 @@ import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.monster.Husk;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -50,6 +52,7 @@ public class RoundGameTest {
     private static final ResourceLocation HEADSHOT_ROUND = KineticPresetRegistry.rl("test_headshot_round");
     /** Two dozen blocks a tick: a whole wall fits between two positions. */
     private static final ResourceLocation FAST_ROUND = KineticPresetRegistry.rl("test_fast_round");
+    private static final ResourceLocation DRAG_ROUND = KineticPresetRegistry.rl("test_drag_round");
 
     private static final double CLIMB_SPEED = 1.0;
     private static final float TEST_DRAG = 0.01f;
@@ -74,6 +77,8 @@ public class RoundGameTest {
                 .speed(0.0).drag(0.0).quadraticDrag(0.005).fuseDelay(5).burrow(1.0).noEntityContact().build());
         KineticPresetRegistry.register(KineticPreset.builder(FAST_ROUND, micro, RECORDING_WARHEAD)
                 .speed(24.0).build());
+        KineticPresetRegistry.register(KineticPreset.builder(DRAG_ROUND, null, WarheadRegistry.rl("inert"))
+                .speed(3.0).drag(0.003).quadraticDrag(0.0011722).gravity(0.04).life(400).noChunkLoading().build());
     }
 
     @SubscribeEvent
@@ -126,6 +131,40 @@ public class RoundGameTest {
         });
     }
 
+    /** Debug overlay's arc ({@link RoundArc}) vs real steps: every position bit-equal. */
+    @GameTest(template = TEMPLATE)
+    public static void anArcPredictionIsTheFlight(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        KineticPreset preset = KineticPresetRegistry.get(DRAG_ROUND);
+        Vec3 start = new Vec3(centre(helper, 0.0).x, level.getMaxBuildHeight() + 40.0, centre(helper, 0.0).z);
+        Vec3 velocity = new Vec3(0.013, 2.7, -0.021);
+        long key = Rounds.launch(level, preset, start, velocity, null, null);
+        int ticks = 60;
+        double[] arc = new double[3 * ticks];
+        int n = RoundArc.predict(preset, start.x, start.y, start.z, velocity.x, velocity.y, velocity.z,
+                Rounds.remainingLife(level, key), level.getMinBuildHeight() - Rounds.VOID_DEPTH, ticks, arc);
+        if (n != ticks) {
+            Rounds.destroy(level, key);
+            helper.fail("arc " + n + " of " + ticks + " steps");
+            return;
+        }
+        for (int k = 0; k < ticks; k++) {
+            if (!Rounds.step(level, key)) {
+                helper.fail("round ended at step " + k);
+                return;
+            }
+            Vec3 at = Rounds.position(level, key);
+            if (at.x != arc[3 * k] || at.y != arc[3 * k + 1] || at.z != arc[3 * k + 2]) {
+                Rounds.destroy(level, key);
+                helper.fail("step " + k + ": round " + at + " arc (" + arc[3 * k] + ", " + arc[3 * k + 1] + ", "
+                        + arc[3 * k + 2] + ")");
+                return;
+            }
+        }
+        Rounds.destroy(level, key);
+        helper.succeed();
+    }
+
     /** Artillery descending into unloaded ground takes a ticket for it. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void aShellLoadsTheGroundItFallsInto(GameTestHelper helper) {
@@ -134,30 +173,39 @@ public class RoundGameTest {
         long key = Rounds.launch(level, KineticPresetRegistry.get(CONTACT_ROUND), far, new Vec3(0.0, -1.0, 0.0),
                 null, null);
         helper.runAfterDelay(2, () -> {
-            long held = Rounds.heldChunk(level, key);
+            long[] held = Rounds.heldChunks(level, key);
             Rounds.destroy(level, key);
-            if (held == Long.MIN_VALUE || held != ChunkPos.asLong(BlockPos.containing(far))) {
-                helper.fail("the shell holds no ticket for the ground under it: " + held);
+            if (held.length != 1 || held[0] != ChunkPos.asLong(BlockPos.containing(far))) {
+                helper.fail("the shell holds no ticket for the ground under it: " + java.util.Arrays.toString(held));
                 return;
             }
             helper.succeed();
         });
     }
 
-    /** A bullet leaving loaded ground is gone, not a chunk load. */
+    /** Segment crossing into unloaded ground: the loaded part strikes (flight beyond: {@link VirtualFlightGameTest}). */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void aBulletIsLostOverUnloadedGround(GameTestHelper helper) {
+    public static void aTargetShortOfUnloadedGroundIsStillStruck(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
-        Vec3 far = centre(helper, 60.0).add(4096.0, 0.0, 4096.0);
-        long key = Rounds.launch(level, KineticPresetRegistry.get(BULLET), far, new Vec3(4.0, 0.0, 0.0), null, null);
-        helper.runAfterDelay(2, () -> {
-            if (Rounds.position(level, key) != null) {
-                Rounds.destroy(level, key);
-                helper.fail("a bullet kept flying over unloaded ground");
-                return;
-            }
-            helper.succeed();
-        });
+        Husk husk = pinnedHusk(level, centre(helper, 8.0));
+        Vec3 start = husk.position().add(0.0, 1.0, -1.5);
+        Vec3 velocity = new Vec3(0.0, 0.0, 3000.0);
+        Vec3 far = start.add(velocity);
+        if (level.getChunkSource().getChunkNow(Mth.floor(far.x) >> 4, Mth.floor(far.z) >> 4) != null) {
+            husk.discard();
+            helper.fail("setup: segment end loaded");
+            return;
+        }
+        STRIKES.clear();
+        long key = Rounds.launch(level, KineticPresetRegistry.get(BULLET), start, velocity, null, null);
+        helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(STRIKES.stream().anyMatch(sc -> Long.valueOf(key)
+                        .equals(sc.key())), "not struck"))
+                .thenExecute(() -> {
+                    Rounds.destroy(level, key);
+                    husk.discard();
+                })
+                .thenSucceed();
     }
 
     /** A direct hit hurts through a damage source carrying the round's strike (threat, travel). */
@@ -185,8 +233,8 @@ public class RoundGameTest {
         Rounds.destroy(level, key);
         husk.discard();
         StrikeContext strike = STRIKES.isEmpty() ? null : STRIKES.get(0);
-        if (after >= before || strike == null || strike.threat().penetrationMm() != 20.0f
-                || strike.velocity().y >= 0.0) {
+        if (after >= before || strike == null || Math.abs(strike.threat().penetrationMm()
+                - 20.0 * strike.velocity().lengthSqr() / 16.0) > 1.0e-4 || strike.velocity().y >= 0.0) {
             helper.fail("hit: health " + before + " -> " + after + ", strike " + strike + ", round " + trace);
             return;
         }

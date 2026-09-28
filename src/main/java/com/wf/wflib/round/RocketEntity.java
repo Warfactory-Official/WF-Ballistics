@@ -10,6 +10,9 @@ import com.wf.wflib.kinetic.KineticPreset;
 import com.wf.wflib.kinetic.KineticPresetRegistry;
 import com.wf.wflib.recon.ContactClass;
 import com.wf.wflib.round.client.RocketClient;
+import com.wf.wflib.round.effect.ImpactContext;
+import com.wf.wflib.round.effect.ImpactEffects;
+import com.wf.wflib.round.effect.ImpactTrigger;
 import com.wf.wflib.warhead.WarheadRegistry;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.core.BlockPos;
@@ -123,9 +126,15 @@ public class RocketEntity extends Entity implements InterceptTarget, ThreatSourc
         Entity root = this.shooter == null ? null : this.shooter.getRootVehicle();
         Predicate<Entity> canHit = e -> e != this && e.isAlive() && !e.isSpectator() && e.canBeHitByProjectile()
                 && (root == null || e.getRootVehicle() != root);
-        HitResult hit = Rounds.sweep(level, from, from.add(v), canHit);
-        if (hit instanceof Rounds.EntityHit eh) {
-            ProjectileStrikeEvent strike = Rounds.strike(level, this.preset, this, this, eh, from, v, this.shooter);
+        Vec3 to = from.add(v);
+        BlockHitResult block = Rounds.clipLoaded(level, from, to);
+        Vec3 end = block.getType() == HitResult.Type.MISS ? to : block.getLocation();
+        for (Rounds.EntityHit eh : Rounds.entityHits(level, from, end, canHit, RoundDamageSource.LIVE)) {
+            ProjectileStrikeEvent strike = Rounds.strike(level, this.preset, this, this, eh, from, end, v,
+                    this.shooter, this.faction, 1.0f);
+            if (this.isRemoved()) {
+                return;
+            }
             if (strike.outcome() == ProjectileStrikeEvent.Outcome.DUD) {
                 this.discard();
                 return;
@@ -134,10 +143,16 @@ public class RocketEntity extends Entity implements InterceptTarget, ThreatSourc
                 this.detonate(level, strike.detonation() != null ? strike.detonation() : eh.at);
                 return;
             }
-        } else if (hit.getType() == HitResult.Type.BLOCK) {
-            BlockHitResult bh = (BlockHitResult) hit;
-            NeoForge.EVENT_BUS.post(new RoundImpactEvent(level, this.preset, bh, v));
-            this.detonate(level, bh.getLocation());
+        }
+        if (block.getType() == HitResult.Type.BLOCK) {
+            NeoForge.EVENT_BUS.post(new RoundImpactEvent(level, this.preset, block, v));
+            if (this.preset.hasEffects(ImpactTrigger.BLOCK)) {
+                ImpactEffects.fire(new ImpactContext(level, ImpactTrigger.BLOCK, this.preset, this, this, this.shooter,
+                        this.faction, block.getLocation(), v, block, null, null, null, null));
+            }
+            if (!this.isRemoved()) {
+                this.detonate(level, block.getLocation());
+            }
             return;
         }
         if (Rounds.fuseTripped(level, this.preset, from, v, canHit)) {
@@ -201,6 +216,10 @@ public class RocketEntity extends Entity implements InterceptTarget, ThreatSourc
         Vec3 v = this.getDeltaMovement();
         Vec3 angle = v.lengthSqr() < 1.0e-8 ? this.getLookAngle() : v.normalize();
         this.discard();
+        if (this.preset.hasEffects(ImpactTrigger.END)) {
+            ImpactEffects.fire(new ImpactContext(level, ImpactTrigger.END, this.preset, this, this, this.shooter,
+                    this.faction, at, v, null, null, null, null, null));
+        }
         WarheadRegistry.get(this.preset.warheadId())
                 .detonate(new RoundCarrier(level, this.preset, angle, this.shooter, this.faction), at);
     }

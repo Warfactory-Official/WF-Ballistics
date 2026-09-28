@@ -1,15 +1,16 @@
 package com.wf.wflib.mixin;
 
-import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.mojang.blaze3d.vertex.VertexBuffer;
+import com.wf.wflib.client.cam.CloudCache;
 import com.wf.wflib.client.cam.FeedGraphs;
 import com.wf.wflib.client.cam.FeedPass;
 import com.wf.wflib.client.cam.FeedRenderState;
 import com.wf.wflib.client.cam.FeedViewArea;
 import com.wf.wflib.stream.client.DetachedView;
 import it.unimi.dsi.fastutil.objects.ObjectArrayList;
+import net.minecraft.client.CloudStatus;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
-import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.renderer.SectionOcclusionGraph;
 import net.minecraft.client.renderer.ViewArea;
 import net.minecraft.client.renderer.chunk.SectionRenderDispatcher;
@@ -47,6 +48,9 @@ public abstract class MixinLevelRendererFeed implements FeedRenderState {
     private ViewArea viewArea;
 
     @Shadow
+    private int lastViewDistance;
+
+    @Shadow
     private int lastCameraSectionX;
     @Shadow
     private int lastCameraSectionY;
@@ -71,20 +75,26 @@ public abstract class MixinLevelRendererFeed implements FeedRenderState {
     @Shadow
     private double zTransparentOld;
 
+
     @Shadow
-    private RenderTarget entityTarget;
+    private boolean generateClouds;
     @Shadow
-    private RenderTarget translucentTarget;
+    private VertexBuffer cloudBuffer;
     @Shadow
-    private RenderTarget itemEntityTarget;
+    private int prevCloudX;
     @Shadow
-    private RenderTarget particlesTarget;
+    private int prevCloudY;
     @Shadow
-    private RenderTarget weatherTarget;
+    private int prevCloudZ;
     @Shadow
-    private RenderTarget cloudsTarget;
+    private Vec3 prevCloudColor;
     @Shadow
-    private PostChain transparencyChain;
+    private CloudStatus prevCloudsType;
+
+    @Inject(method = {"needsUpdate", "allChanged"}, at = @At("TAIL"))
+    private void wfCamRegenerateClouds(CallbackInfo ci) {
+        CloudCache.regenerateAll();
+    }
 
     @Override
     public ViewArea wfCamViewArea() {
@@ -94,6 +104,11 @@ public abstract class MixinLevelRendererFeed implements FeedRenderState {
     @Override
     public void wfCamSetViewArea(ViewArea viewArea) {
         this.viewArea = viewArea;
+    }
+
+    @Override
+    public int wfCamLastViewDistance() {
+        return this.lastViewDistance;
     }
 
     @Override
@@ -155,29 +170,28 @@ public abstract class MixinLevelRendererFeed implements FeedRenderState {
     }
 
     @Override
-    public RenderTarget[] wfCamFabulousTargets() {
-        return new RenderTarget[]{this.entityTarget, this.translucentTarget, this.itemEntityTarget,
-                this.particlesTarget, this.weatherTarget, this.cloudsTarget};
-    }
-
-    @Override
-    public void wfCamSetFabulousTargets(RenderTarget[] targets) {
-        this.entityTarget = targets[0];
-        this.translucentTarget = targets[1];
-        this.itemEntityTarget = targets[2];
-        this.particlesTarget = targets[3];
-        this.weatherTarget = targets[4];
-        this.cloudsTarget = targets[5];
-    }
-
-    @Override
-    public PostChain wfCamTransparencyChain() {
-        return this.transparencyChain;
-    }
-
-    @Override
-    public void wfCamSetTransparencyChain(PostChain chain) {
-        this.transparencyChain = chain;
+    public void wfCamSwapClouds(CloudCache cache) {
+        boolean generate = this.generateClouds;
+        VertexBuffer buffer = this.cloudBuffer;
+        int x = this.prevCloudX;
+        int y = this.prevCloudY;
+        int z = this.prevCloudZ;
+        Vec3 color = this.prevCloudColor;
+        CloudStatus type = this.prevCloudsType;
+        this.generateClouds = cache.generate;
+        this.cloudBuffer = cache.buffer;
+        this.prevCloudX = cache.x;
+        this.prevCloudY = cache.y;
+        this.prevCloudZ = cache.z;
+        this.prevCloudColor = cache.color;
+        this.prevCloudsType = cache.type;
+        cache.generate = generate;
+        cache.buffer = buffer;
+        cache.x = x;
+        cache.y = y;
+        cache.z = z;
+        cache.color = color;
+        cache.type = type;
     }
 
     @Inject(method = "addRecentlyCompiledSection", at = @At("HEAD"))

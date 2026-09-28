@@ -1,10 +1,13 @@
 package com.wf.wflib.api;
 
+import com.norwood.ahf.part.HitboxPart;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.projectile.Projectile;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.List;
 
 /**
  * What struck: the one view armour and hit-location code reads, whether the striker is a projectile entity or an
@@ -26,6 +29,12 @@ public interface StrikeContext {
 
     @Nullable
     Entity shooter();
+
+    /** Parts struck, entry order (AHF); null = no part model for the target (vehicles, wide mobs, projectiles). */
+    @Nullable
+    default List<HitboxPart> parts() {
+        return null;
+    }
 
     /** Round damage sources are contexts; a {@link ThreatSource} projectile is adapted; else null. */
     @Nullable

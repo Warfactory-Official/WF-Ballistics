@@ -72,7 +72,7 @@ public class KineticShellItem extends Item implements ModelledItem {
         // Terminal behaviour.
         if (preset.penetration() > 0) {
             tooltip.add(kv("Penetration", preset.penetration() + " blocks up to "
-                    + String.format("%.0f", preset.penetrationResistance()) + " resistance", ChatFormatting.GOLD));
+                    + String.format("%.0f", preset.penetrationResistance()) + " mm/m", ChatFormatting.GOLD));
         }
         if (preset.airburstHeight() > 0.0) {
             tooltip.add(kv("Airburst", String.format("%.0f blocks up", preset.airburstHeight()),
@@ -89,7 +89,7 @@ public class KineticShellItem extends Item implements ModelledItem {
             tooltip.add(Component.literal("Passes through what it hits").withStyle(ChatFormatting.DARK_GRAY));
         }
         if (!preset.loadsChunks()) {
-            tooltip.add(Component.literal("Lost over unloaded ground").withStyle(ChatFormatting.DARK_GRAY));
+            tooltip.add(Component.literal("Flies unloaded ground without loading it").withStyle(ChatFormatting.DARK_GRAY));
         }
         super.appendHoverText(stack, context, tooltip, flag);
     }
