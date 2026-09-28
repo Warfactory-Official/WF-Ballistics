@@ -1,0 +1,67 @@
+{
+  "values": {
+    "wfcore:sandbags": {
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "wfcore"
+        }
+      ],
+      "resistance": 40
+    },
+    "wfcore:hesco_bastion": {
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "wfcore"
+        }
+      ],
+      "resistance": 40
+    },
+    "wfcore:standard_concrete": {
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "wfcore"
+        }
+      ],
+      "resistance": 130
+    },
+    "wfcore:reinforced_concrete": {
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "wfcore"
+        }
+      ],
+      "resistance": 250
+    },
+    "wfcore:ballistic_glass": {
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "wfcore"
+        }
+      ],
+      "resistance": 300
+    },
+    "wfcore:hardened_steel": {
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "wfcore"
+        }
+      ],
+      "resistance": 1000
+    },
+    "wfcore:tungsten_plating": {
+      "neoforge:conditions": [
+        {
+          "type": "neoforge:mod_loaded",
+          "modid": "wfcore"
+        }
+      ],
+      "resistance": 1500
+    }
+  }
+}

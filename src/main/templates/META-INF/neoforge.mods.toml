@@ -45,9 +45,17 @@ side = "CLIENT"
 [[dependencies.wflib]]
 modId = "gemrender"
 type = "required"
-versionRange = "*"
+versionRange = "${gemrender_version_range}"
 ordering = "AFTER"
 side = "CLIENT"
+
+# --- Required: AHF (hit parts + lag-comp history for rounds) ---
+[[dependencies.wflib]]
+modId = "ahf"
+type = "required"
+versionRange = "${ahf_version_range}"
+ordering = "NONE"
+side = "BOTH"
 
 # Optional integration: when Superb Warfare is present, WF missiles are folded into its
 # superbwarfare:destroyable_projectile tag so its missiles, anti-air and radar can lock onto them.

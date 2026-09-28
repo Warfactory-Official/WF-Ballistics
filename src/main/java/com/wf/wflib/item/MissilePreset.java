@@ -297,6 +297,11 @@ public final class MissilePreset {
      * Builds (but does not spawn) a live missile aimed at {@code target}.
      */
     public MissileEntity build(Level level, Vec3 target) {
+        return builder(level, target).build();
+    }
+
+    /** {@link #build} before {@link MissileBuilder#build()}: per-launch overrides (attack profile, join cap). */
+    public MissileBuilder builder(Level level, Vec3 target) {
         Vec3 aim = target;
         if (accuracy > 0.0) {
             double ang = level.random.nextDouble() * Math.PI * 2.0;
@@ -374,7 +379,7 @@ public final class MissilePreset {
         if (gLimit > 0.0) {
             b.gLimit(gLimit, gRefSpeed);
         }
-        return b.build();
+        return b;
     }
 
     /** Picks a {@link MissileEntity.DownedAction} at launch time: call e.g. */

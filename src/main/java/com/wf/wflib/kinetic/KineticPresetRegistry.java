@@ -2,6 +2,7 @@ package com.wf.wflib.kinetic;
 
 import com.wf.wflib.MissileModels;
 import com.wf.wflib.WFLib;
+import com.wf.wflib.round.pen.PenMaterial;
 import com.wf.wflib.warhead.FireWarhead;
 import com.wf.wflib.warhead.GasWarhead;
 import com.wf.wflib.warhead.RecursiveFrag;
@@ -14,12 +15,14 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-/** Registry of loadable {@link KineticPreset}s, keyed by {@link ResourceLocation}. */
+/** Registry of loadable {@link KineticPreset}s, keyed by {@link ResourceLocation}. Copy-on-write: any thread. */
 public final class KineticPresetRegistry {
 
     private static final ResourceLocation DEFAULT_ID = rl("he");
-    private static final Map<ResourceLocation, KineticPreset> PRESETS = new LinkedHashMap<>();
-    private static boolean bootstrapped = false;
+    /** Pre-1.6.4 blast-resistance 100/60 outcome: every class below ARMOR drilled. */
+    private static final double DRILLS_METAL = PenMaterial.METAL.resistance;
+    private static volatile Map<ResourceLocation, KineticPreset> presets = Map.of();
+    private static volatile boolean bootstrapped = false;
 
     private KineticPresetRegistry() {
     }
@@ -28,28 +31,30 @@ public final class KineticPresetRegistry {
         return ResourceLocation.fromNamespaceAndPath(WFLib.MODID, path);
     }
 
-    public static void register(KineticPreset preset) {
-        PRESETS.put(preset.id(), preset);
+    public static synchronized void register(KineticPreset preset) {
+        Map<ResourceLocation, KineticPreset> next = new LinkedHashMap<>(presets);
+        next.put(preset.id(), preset);
+        presets = Collections.unmodifiableMap(next);
     }
 
     public static KineticPreset get(ResourceLocation id) {
         bootstrap();
-        return PRESETS.get(id);
+        return presets.get(id);
     }
 
     public static boolean exists(ResourceLocation id) {
         bootstrap();
-        return PRESETS.containsKey(id);
+        return presets.containsKey(id);
     }
 
     public static Collection<KineticPreset> all() {
         bootstrap();
-        return Collections.unmodifiableCollection(PRESETS.values());
+        return presets.values();
     }
 
     public static Set<ResourceLocation> ids() {
         bootstrap();
-        return Collections.unmodifiableSet(PRESETS.keySet());
+        return presets.keySet();
     }
 
     public static ResourceLocation defaultId() {
@@ -59,26 +64,34 @@ public final class KineticPresetRegistry {
     /** The round anything unrecognised flies as, so a shell is never a null preset. */
     public static KineticPreset fallback() {
         bootstrap();
-        return PRESETS.get(DEFAULT_ID);
+        return presets.get(DEFAULT_ID);
     }
 
     public static void bootstrap() {
         if (bootstrapped) {
             return;
         }
-        bootstrapped = true;
+        synchronized (KineticPresetRegistry.class) {
+            if (bootstrapped) {
+                return;
+            }
+            registerDefaults();
+            bootstrapped = true;
+        }
+    }
 
+    private static void registerDefaults() {
         // A field gun's shell: the reference round every other one is a variation on.
         register(KineticPreset.builder(DEFAULT_ID, MissileModels.rl("micro"), WarheadRegistry.rl("standard"))
                 .speed(6.0).mass(20.0).build());
 
         register(KineticPreset.builder(rl("ap"), MissileModels.rl("micro"), WarheadRegistry.rl("inert"))
-                .speed(12.0).drag(0.005).mass(30.0).penetration(8, 100.0).armorPenetration(550.0)
+                .speed(12.0).drag(0.005).mass(30.0).penetration(8, DRILLS_METAL).armorPenetration(550.0)
                 .passesThroughEntities().build());
 
         // Shaped charge: a narrow jet along the impact heading, so it drills rather than craters.
         register(KineticPreset.builder(rl("heat"), MissileModels.rl("micro"), WarheadRegistry.rl("shaped_charge"))
-                .speed(8.0).mass(22.0).penetration(2, 60.0).blastHalfAngle(15.0).armorPenetration(450.0).build());
+                .speed(8.0).mass(22.0).penetration(2, DRILLS_METAL).blastHalfAngle(15.0).armorPenetration(450.0).build());
 
         // Airburst fragmentation: bursts short of the ground so the cone covers infantry in the open.
         register(KineticPreset.builder(rl("frag"), MissileModels.rl("micro"), WarheadRegistry.rl("fragmentation"))

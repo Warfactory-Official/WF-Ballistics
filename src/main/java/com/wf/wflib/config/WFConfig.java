@@ -36,6 +36,7 @@ public final class WFConfig {
     public static final ModConfigSpec.DoubleValue INTERCEPTOR_HIT_DAMAGE;
     public static final ModConfigSpec.DoubleValue INTERCEPTOR_GRAZE_DAMAGE;
     public static final ModConfigSpec.DoubleValue MIN_PROJECTILE_DAMAGE;
+    public static final ModConfigSpec.BooleanValue REWIND_WHOLE_FLIGHT;
     // --- Stealth ---
     public static final ModConfigSpec.DoubleValue STEALTH_RCS;
     // --- Evasion ---
@@ -182,6 +183,13 @@ public final class WFConfig {
                         "archer cannot plink one out of the sky and bypass interceptors and CIWS entirely.",
                         "Purpose-built anti-air hits far harder and is unaffected. 0 restores vanilla damage.")
                 .defineInRange("minProjectileDamage", 20.0, 0.0, 100000.0);
+        b.pop();
+
+        b.comment("Rounds.").push("rounds");
+        REWIND_WHOLE_FLIGHT = b
+                .comment("Lag compensation: true = every step of a round sweeps targets as its shooter saw them;",
+                        "false = first step only, later steps sweep live targets.")
+                .define("rewindWholeFlight", true);
         b.pop();
 
         b.comment("Stealth missiles: reduced-observability, not invisible.").push("stealth");
@@ -573,6 +581,7 @@ public final class WFConfig {
         MissileSimConfig.INTERCEPTOR_HIT_DAMAGE = INTERCEPTOR_HIT_DAMAGE.get().floatValue();
         MissileSimConfig.INTERCEPTOR_GRAZE_DAMAGE = INTERCEPTOR_GRAZE_DAMAGE.get().floatValue();
         MissileSimConfig.MIN_PROJECTILE_DAMAGE = MIN_PROJECTILE_DAMAGE.get().floatValue();
+        com.wf.wflib.round.Rounds.rewindWholeFlight = REWIND_WHOLE_FLIGHT.get();
         MissileSimConfig.STEALTH_RCS = STEALTH_RCS.get().floatValue();
         MissileSimConfig.DIVE_EVASION_MULTIPLIER = DIVE_EVASION_MULTIPLIER.get();
         MissileSimConfig.BATTERY_MAGAZINE = BATTERY_MAGAZINE.get();

@@ -2,8 +2,6 @@ package com.wf.wflib.client.cam;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.VertexSorting;
 import com.mojang.logging.LogUtils;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.WFLib;
@@ -17,8 +15,7 @@ import net.minecraft.client.renderer.PostChain;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.Vec3;
-import org.joml.Matrix4f;
-import org.joml.Quaternionf;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 
 /** One camera feed's picture: a framebuffer, the post chain that ages it, and the pass that fills it. */
@@ -39,11 +36,11 @@ public final class CameraTarget implements AutoCloseable {
     private static final float DEGRADE_ONSET = 0.75f;
 
     private final int feedId;
-    private final FeedCamera camera = new FeedCamera();
     private final FeedTexture texture = new FeedTexture();
     private final ResourceLocation location;
-    /** This feed's own visibility traversal. The single most important object here; see its class doc. */
-    private final FeedRenderSwap sections = new FeedRenderSwap();
+    @Nullable
+    private OffscreenView view;
+    private int viewDistance;
 
     private TextureTarget target;
     private PostChain chain;
@@ -151,11 +148,16 @@ public final class CameraTarget implements AutoCloseable {
         }
         float partial = delta.getGameTimeDeltaPartialTick(true);
         ensureChain(feed.modeValue());
+        int distance = WFClientConfig.CAMERA_FEED_VIEW_DISTANCE.get();
+        if (this.view == null || this.viewDistance != distance) {
+            if (this.view != null) {
+                this.view.close();
+            }
+            this.view = OffscreenView.ownGrid(distance);
+            this.viewDistance = distance;
+        }
 
         RenderTarget main = mc.getMainRenderTarget();
-        Matrix4f savedProjection = RenderSystem.getProjectionMatrix();
-        VertexSorting savedSorting = RenderSystem.getVertexSorting();
-
         GlMarkers.push("wf feed " + this.feedId + " render");
         try {
             Entity anchor = mc.level.getEntity(feed.feedId());
@@ -175,36 +177,15 @@ public final class CameraTarget implements AutoCloseable {
                 double boom = anchor == null ? GIMBAL_BOOM : Math.max(GIMBAL_BOOM, anchor.getBbWidth());
                 lens = FeedMotion.position(feed).add(forward.scale(boom));
             }
-            this.camera.place(mc.level, anchor != null ? anchor : mc.player,
-                    lens, yaw, pitch, partial);
-
-            Matrix4f projection = new Matrix4f().setPerspective(
-                    (float) Math.toRadians(FeedGimbal.fov(feed)),
-                    (float) this.width / (float) this.height,
-                    0.05f, mc.gameRenderer.getDepthFar());
-            Quaternionf rotation = this.camera.rotation().conjugate(new Quaternionf());
-            Matrix4f frustum = new Matrix4f().rotation(rotation);
-
-            this.target.clear(Minecraft.ON_OSX);
-            this.target.bindWrite(true);
-            RenderSystem.setProjectionMatrix(projection, VertexSorting.DISTANCE_TO_ORIGIN);
-            mc.levelRenderer.prepareCullFrustum(this.camera.getPosition(), frustum, projection);
-
-            mc.getProfiler().push("wf_drone_camera");
-            FeedPass.begin(lens, WFClientConfig.CAMERA_FEED_VIEW_DISTANCE.get(),
-                    feed.modeValue() == CameraMode.THERMAL, this.target);
-            try {
-                this.sections.install(mc.levelRenderer);
-                mc.levelRenderer.renderLevel(delta, false, this.camera, mc.gameRenderer,
-                        mc.gameRenderer.lightTexture(), frustum, projection);
-            } finally {
-                this.sections.uninstall(mc.levelRenderer);
-                FeedPass.end();
+            boolean thermal = feed.modeValue() == CameraMode.THERMAL;
+            if (!this.view.render(anchor != null ? anchor : mc.player, lens, yaw, pitch, 0.0f,
+                    FeedGimbal.fov(feed), this.target, delta, thermal)) {
+                return;
             }
-            mc.getProfiler().pop();
 
-            if (feed.modeValue() == CameraMode.THERMAL && this.chain != null) {
-                CameraHeatMask.render(this.chain, this.target, this.camera, frustum, projection, partial);
+            if (thermal && this.chain != null) {
+                CameraHeatMask.render(this.chain, this.target, this.view.camera(), this.view.frustum(),
+                        this.view.projection(), partial);
             }
 
             if (this.chain != null) {
@@ -221,7 +202,6 @@ public final class CameraTarget implements AutoCloseable {
                     this.feedId, e);
         } finally {
             main.bindWrite(true);
-            RenderSystem.setProjectionMatrix(savedProjection, savedSorting);
             GlMarkers.pop();
         }
 
@@ -259,7 +239,10 @@ public final class CameraTarget implements AutoCloseable {
     @Override
     public void close() {
         closeChain();
-        this.sections.close();
+        if (this.view != null) {
+            this.view.close();
+            this.view = null;
+        }
         Minecraft.getInstance().getTextureManager().release(this.location);
         if (this.target != null) {
             this.target.destroyBuffers();
