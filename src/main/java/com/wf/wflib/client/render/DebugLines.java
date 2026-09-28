@@ -120,8 +120,13 @@ public final class DebugLines {
     /** A small axis cross, for marking a point. */
     public static void cross(PoseStack pose, VertexConsumer buffer, Vec3 at, double size,
                              float r, float g, float b, float a) {
-        line(pose, buffer, at.x - size, at.y, at.z, at.x + size, at.y, at.z, r, g, b, a);
-        line(pose, buffer, at.x, at.y - size, at.z, at.x, at.y + size, at.z, r, g, b, a);
-        line(pose, buffer, at.x, at.y, at.z - size, at.x, at.y, at.z + size, r, g, b, a);
+        cross(pose, buffer, at.x, at.y, at.z, size, r, g, b, a);
+    }
+
+    public static void cross(PoseStack pose, VertexConsumer buffer, double x, double y, double z, double size,
+                             float r, float g, float b, float a) {
+        line(pose, buffer, x - size, y, z, x + size, y, z, r, g, b, a);
+        line(pose, buffer, x, y - size, z, x, y + size, z, r, g, b, a);
+        line(pose, buffer, x, y, z - size, x, y, z + size, r, g, b, a);
     }
 }

@@ -76,9 +76,9 @@ final class FeedAudit {
         if (mc.gameRenderer.isPanoramicMode()) {
             report(phase, "panoramic", "panoramic mode is still set, so useShaderTransparency() is lying");
         }
-        if (mc.levelRenderer instanceof FeedRenderState state && Minecraft.useShaderTransparency()) {
+        if (Minecraft.useShaderTransparency()) {
             // Only meaningful on a Fabulous client. On Fancy these are legitimately null and always were.
-            for (RenderTarget target : state.wfCamFabulousTargets()) {
+            for (RenderTarget target : ((FeedTargets) mc.levelRenderer).wfCamTargets()) {
                 if (target == null) {
                     report(phase, "fabulous-targets", "a Fabulous auxiliary target is null while shader "
                             + "transparency is on");
