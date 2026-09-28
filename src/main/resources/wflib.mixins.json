@@ -25,6 +25,7 @@
     "MixinEntityRenderDispatcher",
     "MixinLevelRenderer",
     "MixinLevelRendererFeed",
+    "MixinLevelRendererTargets",
     "MixinViewArea",
     "MixinClientChunkCache",
     "MixinClientLevelStreamLog",

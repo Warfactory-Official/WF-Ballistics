@@ -1,6 +1,9 @@
 package com.wf.wflib.armor;
 
+import com.norwood.ahf.part.HitboxPart;
+import com.wf.wflib.api.StrikeContext;
 import com.wf.wflib.damage.DamageResistanceHandler;
+import com.wf.wflib.round.RoundDamageSource;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
@@ -13,6 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Predicate;
 
 /**
  * The front door. One reduction step, one owner: everything that wants to know what armour did to a
@@ -34,6 +39,7 @@ public final class ArmorSystem {
     private static final Map<InnateKey, ArmorSpec> INNATE = new ConcurrentHashMap<>();
 
     private static volatile boolean externalPlayerResolution;
+    private static final List<Predicate<? super LivingEntity>> EXTERNAL_BODIES = new CopyOnWriteArrayList<>();
 
     private ArmorSystem() {
     }
@@ -54,6 +60,33 @@ public final class ArmorSystem {
 
     public static boolean playerResolutionClaimed() {
         return externalPlayerResolution;
+    }
+
+    /** {@link #claimPlayerResolution} for non-player bodies matching {@code bodies} (another mod owns their HP). */
+    public static void claimResolution(Predicate<? super LivingEntity> bodies) {
+        EXTERNAL_BODIES.add(bodies);
+    }
+
+    /** Someone else resolves armour and HP for {@code entity}: this mod's handler and headshot factor skip it. */
+    public static boolean resolutionClaimed(LivingEntity entity) {
+        if (entity instanceof Player) {
+            return externalPlayerResolution;
+        }
+        for (Predicate<? super LivingEntity> p : EXTERNAL_BODIES) {
+            if (p.test(entity)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Slot in front of an AHF part. */
+    public static EquipmentSlot slotFor(HitboxPart part) {
+        return switch (part) {
+            case HEAD -> EquipmentSlot.HEAD;
+            case TORSO, LEFT_ARM, RIGHT_ARM -> EquipmentSlot.CHEST;
+            case LEFT_LEG, RIGHT_LEG -> EquipmentSlot.LEGS;
+        };
     }
 
     /** How much of a body this slot is in front of, for the whole-entity door. */
@@ -111,6 +144,15 @@ public final class ArmorSystem {
         return resolve(entity, type, amount, worn, source, applyWear);
     }
 
+    /** Pierce for {@code source}: a round's own, else the thread's {@link DamageResistanceHandler#setup} context. */
+    public static float pierceDT(@Nullable DamageSource source) {
+        return source instanceof RoundDamageSource round ? round.pierceDT() : DamageResistanceHandler.currentPierceDT();
+    }
+
+    public static float pierceDR(@Nullable DamageSource source) {
+        return source instanceof RoundDamageSource round ? round.pierceDR() : DamageResistanceHandler.currentPierceDR();
+    }
+
     /**
      * Resolves a hit against a ready-made set of layers, applies the wear, and hands back the whole
      * answer rather than a single float: a number alone cannot tell "the plate stopped it" from
@@ -140,16 +182,16 @@ public final class ArmorSystem {
             return ArmorResult.untouched(type, amount);
         }
 
-        ArmorResult result = ArmorResolver.resolve(layers, type, amount,
-                DamageResistanceHandler.currentPierceDT(), DamageResistanceHandler.currentPierceDR());
+        ArmorResult result = ArmorResolver.resolve(layers, type, amount, pierceDT(source), pierceDR(source));
         if (applyWear && !result.wear().isEmpty()) {
-            applyWear(result, owners, within);
+            StrikeContext strike = source == null ? null : StrikeContext.of(source);
+            applyWear(result, owners, within, strike == null ? 1.0f : strike.threat().wearFactor());
         }
         return result;
     }
 
-    /** Spends the wear the resolver attributed, on the stacks that actually earned it. */
-    private static void applyWear(ArmorResult result, List<WornArmor> owners, List<Integer> within) {
+    /** Spends the wear the resolver attributed, x {@code factor} (threat), on the stacks that actually earned it. */
+    private static void applyWear(ArmorResult result, List<WornArmor> owners, List<Integer> within, float factor) {
         List<WornArmor> dirty = null;
         for (ArmorResult.LayerWear entry : result.wear()) {
             WornArmor owner = owners.get(entry.index());
@@ -159,7 +201,8 @@ public final class ArmorSystem {
             }
             int slotIndex = within.get(entry.index());
             ItemStack stack = owner.stackFor(slotIndex);
-            if (ArmorStacks.wear(stack, entry.points()) > 0 && owner.layerToInsert()[slotIndex] >= 0) {
+            int points = factor == 1.0f ? entry.points() : (int) Math.ceil(entry.points() * (double) factor);
+            if (ArmorStacks.wear(stack, points) > 0 && owner.layerToInsert()[slotIndex] >= 0) {
                 if (dirty == null) {
                     dirty = new ArrayList<>(2);
                 }
@@ -190,8 +233,7 @@ public final class ArmorSystem {
         if (entity.level().isClientSide) {
             return;
         }
-        boolean player = entity instanceof Player;
-        if (player ? externalPlayerResolution : !ArmorConfig.mobArmor) {
+        if (!(entity instanceof Player) && !ArmorConfig.mobArmor || resolutionClaimed(entity)) {
             return;
         }
         applyToEvent(event);
@@ -225,7 +267,10 @@ public final class ArmorSystem {
             ArmorExposure.track(entity);
         }
 
-        ArmorResult result = resolveWhole(entity, event.getSource(), type, amount, true);
+        StrikeContext strike = StrikeContext.of(event.getSource());
+        List<HitboxPart> parts = strike == null ? null : strike.parts();
+        ArmorResult result = parts == null ? resolveWhole(entity, event.getSource(), type, amount, true)
+                : resolveSlot(entity, slotFor(parts.get(0)), event.getSource(), amount, true);
         if (result.absorbed() <= 0.0D) {
             return;
         }

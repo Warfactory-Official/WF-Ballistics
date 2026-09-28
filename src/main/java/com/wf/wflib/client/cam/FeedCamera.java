@@ -14,9 +14,10 @@ public final class FeedCamera extends Camera {
      * @param anchor the entity the camera belongs to: the drone when the client is tracking it. Never null;
      *      vanilla dereferences it during setup and during fog and fluid checks
      */
-    public void place(BlockGetter level, Entity anchor, Vec3 pos, float yaw, float pitch, float partialTick) {
+    public void place(BlockGetter level, Entity anchor, Vec3 pos, float yaw, float pitch, float roll,
+                      float partialTick) {
         this.setup(level, anchor, false, false, partialTick);
         this.setPosition(pos);
-        this.setRotation(yaw, pitch, 0.0f);
+        this.setRotation(yaw, pitch, roll);
     }
 }

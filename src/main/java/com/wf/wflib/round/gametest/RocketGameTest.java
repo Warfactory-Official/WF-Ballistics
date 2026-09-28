@@ -1,6 +1,7 @@
 package com.wf.wflib.round.gametest;
 
 import com.wf.wflib.WFLib;
+import com.wf.wflib.api.ProjectileStrikeEvent;
 import com.wf.wflib.kinetic.KineticPreset;
 import com.wf.wflib.kinetic.KineticPresetRegistry;
 import com.wf.wflib.recon.ContactClass;
@@ -14,9 +15,13 @@ import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.monster.Husk;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -27,6 +32,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /** Rockets: motor then coast, contact fuze, air defence and the sensor net see them. */
 @GameTestHolder(WFLib.MODID)
 @PrefixGameTestTemplate(false)
+@EventBusSubscriber(modid = WFLib.MODID)
 public class RocketGameTest {
 
     private static final String TEMPLATE = "empty";
@@ -34,13 +40,26 @@ public class RocketGameTest {
     private static final ResourceLocation WARHEAD = WarheadRegistry.rl("test_rocket_warhead");
     private static final List<Vec3> DETONATIONS = new CopyOnWriteArrayList<>();
     private static final ResourceLocation ROCKET = KineticPresetRegistry.rl("test_rocket");
+    /** No motor, no drag, 4 blocks/tick. */
+    private static final ResourceLocation FAST = KineticPresetRegistry.rl("test_fast_rocket");
     private static final int BURN = 10;
     private static final double ACCEL = 0.3;
+    private static final String WAVED = "wflib_test_waved";
 
     static {
         WarheadRegistry.register(WARHEAD, (source, pos) -> DETONATIONS.add(pos));
         KineticPresetRegistry.register(KineticPreset.builder(ROCKET, null, WARHEAD)
                 .speed(1.0).motor(ACCEL, BURN).quadraticDrag(0.002).life(400).durability(6.0).build());
+        KineticPresetRegistry.register(KineticPreset.builder(FAST, null, WARHEAD)
+                .speed(4.0).drag(0.0).gravity(0.0).life(40).build());
+    }
+
+    /** Strikes on tagged bodies pass (a hull's miss, say). */
+    @SubscribeEvent
+    public static void onStrike(ProjectileStrikeEvent event) {
+        if (event.projectile() instanceof RocketEntity && event.target().getTags().contains(WAVED)) {
+            event.setOutcome(ProjectileStrikeEvent.Outcome.PASS);
+        }
     }
 
     /** Template 3^3 in a barrier shell: flight tests stay above height 5. */
@@ -101,6 +120,36 @@ public class RocketGameTest {
             }
             helper.succeed();
         });
+    }
+
+    /** A body passing the strike in the same tick's segment as a wall: the rocket still bursts on the wall. */
+    @GameTest(template = TEMPLATE)
+    public static void aRocketPastABodyStillMeetsTheWall(GameTestHelper helper) {
+        ServerLevel level = helper.getLevel();
+        BlockPos wall = BlockPos.containing(centre(helper, 8.0));
+        level.setBlockAndUpdate(wall, Blocks.STONE.defaultBlockState());
+        Husk husk = new Husk(EntityType.HUSK, level);
+        husk.moveTo(wall.getX() + 0.5, wall.getY() + 1.0, wall.getZ() + 0.5);
+        husk.setNoAi(true);
+        husk.setNoGravity(true);
+        husk.addTag(WAVED);
+        level.addFreshEntity(husk);
+        Vec3 start = new Vec3(wall.getX() + 0.5, wall.getY() + 4.5, wall.getZ() + 0.5);
+        RocketEntity rocket = RocketEntity.fire(level, KineticPresetRegistry.get(FAST), start, new Vec3(0.0, -1.0, 0.0),
+                0.0f, Vec3.ZERO, null, null, null);
+        rocket.tick();
+        boolean removed = rocket.isRemoved();
+        Vec3 at = rocket.position();
+        rocket.discard();
+        husk.discard();
+        level.setBlockAndUpdate(wall, Blocks.AIR.defaultBlockState());
+        Vec3 hit = DETONATIONS.stream().filter(p -> p.distanceTo(start) < 5.0).findFirst().orElse(null);
+        if (!removed || hit == null || Math.abs(hit.y - (wall.getY() + 1.0)) > 1.0e-6) {
+            helper.fail("removed " + removed + " at " + at + ", detonation " + hit + " (wall top " + (wall.getY() + 1)
+                    + ")");
+            return;
+        }
+        helper.succeed();
     }
 
     /** Air defence: engageable, damage past durability sets the warhead off in the air; radar sees a missile. */
