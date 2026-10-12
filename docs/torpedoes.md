@@ -132,33 +132,3 @@ never wired, its javadoc saying in as many words that without it *"a depth charg
 against the water column or try to destroy flowing water and leave odd gaps."* A torpedo that beached, or
 one detonated above the waterline, gets the ordinary allocator instead: the water allocator's premise is
 that the medium is not a target, and on land the medium is the target.
-
-REDACTED
-
-REDACTED
-
-- **A set depth is held.** Eight blocks under a surface at a known y, in a tank of known depth, started
-  REDACTED
-  REDACTED
-- **A bottom-follower holds the bed.** Same tank, same surface, three blocks over the bed: a different
-  REDACTED
-  REDACTED
-- **The run stays under the surface**, and is still in the water at the end of it.
-- **A broached torpedo is written off.** Lifted forty blocks clear, not six: six is a porpoise and it
-  REDACTED
-  REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-
-REDACTED
-REDACTED
-

@@ -41,26 +41,3 @@ the face shading, the biome tint and the jar's baked sky light in those channels
 its knockback (`0.5 + 1.6k` blocks/tick + `0.45 + 0.6k` up). `LivingEntity.tickDeath` held while airborne (<= 100
 ticks); landing => `splatter` effect (`WFBursts.bloodSpray` + `bloodPool` decals, none in water) + corpse removed
 (loot/XP already dropped at death). Not thrown: players, NoAI mobs (never move), burning corpses (cremated).
-
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-
-- debris **lands and stays**: two frames a second apart differ by 0.36% of their pixels, all of it the
-  smoke plume;
-- it lands **on the surface**, scattered around the blast at the expected radius, and close up the chunks
-  REDACTED
-- **49 simultaneous blasts, about 1 500 colliding mesh particles: 163 fps against a 169 fps empty-scene
-  REDACTED
-  REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-

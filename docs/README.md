@@ -6,11 +6,11 @@ the look-at probe, recon/sonar, and the UI widget system other mods build HUDs f
 
 | doc | scope |
 |---|---|
-REDACTED
-REDACTED
+| [missiles](missiles.md) | missile state machine, flight knobs, presets, swarm sim |
+| [delivery-drones](delivery-drones.md) | drone AI, flight/nav, payload/mine-laying/demolition missions, squads, programs |
 | [construction-and-salvage](construction-and-salvage.md) | blueprints, work queue, build drones, territory rules |
 | [kinetic-rounds](kinetic-rounds.md) | rounds, rockets, block penetration/damage, ricochet, shared ammo, countermeasures |
-REDACTED
+| [ntm-doors](ntm-doors.md) | multiblock door roster, rendering |
 | [the-probe](the-probe.md) | look-at panel: elements, providers, action list |
 | [model-gallery](model-gallery.md) | model gallery screen |
 | [explosion-debris](explosion-debris.md) | blast debris + corpse FX |
@@ -25,7 +25,6 @@ REDACTED
 | [offscreen-views](offscreen-views.md) | OffscreenView API, Boxy far-entity interplay |
 | [maps-and-telemetry](maps-and-telemetry.md) | map API + telemetry packets |
 | [ui-widgets](ui-widgets.md) | UI widget system: pieces, expressions, hosts, JSON layouts |
-REDACTED
 
-REDACTED
-REDACTED
+Each doc keeps the detailed explanatory voice it was written in; this index is a reference layer on top,
+not a rewrite.

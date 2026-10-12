@@ -40,23 +40,3 @@
 | 1.7.1 / 0.2.15 | 1920x1080 | yes | 0.54-0.61 | 0.66-0.73 | 0.55-0.60 |
 | 1.7.1 / 0.2.16 | 512x512 | yes | 0.50-0.60 | 0.35-0.38 | 0.57-0.60 |
 | 1.7.1 / 0.2.16 | 1920x1080 | yes | 0.50-0.72 | 0.50-0.56 | 0.53-0.70 |
-
-REDACTED
-
-- Client `/wfview shared <w> [h]` | `own <w> <distance>` | `eye <fov>` | `at x y z yaw pitch roll fov` | `stats` | `off`. Blit top-left. `stats`: pass CPU, GPU timestamp span (`glQueryCounter`), entity counts, rest-of-frame CPU (Pre-after-pass -> Post); resets.
-- GPU timing: `GL_TIME_ELAPSED` FORBIDDEN; vanilla `TimerQuery` (F3 / metrics) holds one open across the frame.
-- Vanilla renderer, 7900 XTX, uncapped: 256 vs 512 indistinguishable (fill not the bottleneck).
-
-REDACTED
-|---|---|---|
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-
-REDACTED
-
-- Headless client (gamescope), fancy + fabulous: view from behind the scene (terrain, water, glass, villager, pig, burning zombie, campfire smoke), 30 deg roll, `eye 10` zoom, own grid. Pixel gate: red/blue wool + pig pink inside the blit, all zero with the view off. Mutation: Fabulous target nulling removed => pig pixels 0, gate fails.
-- Drone monitor + TV feed screenshots before/after the extraction: same content.
-- Under Voxy + Boxy + Sodium: `/wfview shared 512` and 1024x576 draw bot `Far` at 1000 (`mc-harness/scenarios/offscreen_boxy.mjs`); MineAssault PiP scope 512 px draws it at 4.5x / 10x (`mc-harness/scenarios/ma_scope.mjs`). Mutation: 1.7.0 target-swap skip under Sodium => Far missing in both.
-

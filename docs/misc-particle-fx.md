@@ -48,32 +48,3 @@ but it does not need one, because the landing was worked out when it was thrown.
 shorter life, `emitter.spawn` hands back the contact that produced it, and `ShatterScheduler` holds the
 crack burst until the moment the chunk gets there. Capped at 300 outstanding, because the whole burst is
 now known at once rather than discovered a chunk at a time.
-
-REDACTED
-
-REDACTED
-REDACTED
-
-- **block chunks** fly out of the crater as tumbling stone cubes and vanish where they land: 120 spawned
-  REDACTED
-  REDACTED
-- **shrapnel** chips fly, land and stay put on the stage, textured from the block atlas;
-- **ash** falls for a second or two and settles flat on the ground, and is still lying there six seconds
-  later;
-- **the fireball** is an orange additive cluster at the blast;
-- **plumes** hang around the crater instead of leaving it.
-
-REDACTED
-
-- **Plumes flew away and never came back.** `SmokePlumeParticle` gets vanilla's `friction`, which is
-  REDACTED
-  REDACTED
-- **One `InstanceType` per burst instead of one per kind.** Flywheel keys its instancers on the
-  REDACTED
-  REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-

@@ -94,16 +94,3 @@ talking through the sea.
 The same heightmap had the same bug one layer over, with a louder symptom: a torpedo detonating twenty blocks
 down was being recorded as a **camouflet**, a charge buried in rock at double coupling, the loudest thing on
 the seismic band. One line, both places.
-
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-

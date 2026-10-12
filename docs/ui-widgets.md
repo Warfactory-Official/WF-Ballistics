@@ -79,11 +79,6 @@ Native widget = any `WidgetDef`; read subjects through `binder.subject(..)` => `
 - Feed OSD: `wflib:camera_osd`, `Canvas.begin(fbo, .., topRowFirst = true)` over the feed picture.
 - Probe panel, nodes, job bar; map painter + `MapTool.render(Canvas, MapView)` (Xaero, JourneyMap): canvas; 3D probe elements through vanilla between `suspend`/`resume`.
 
-REDACTED
-
-- `/wfui demo` (every widget), `/wfui surface` (demo through `UiSurfaces`), `/wfui stats` (us + bytes per frame by stage collect/begin/eval/measure/draw/end, 600-frame windows, log `[wflib ui]`; `stats detail` + top 12 allocating signals, own bookkeeping allocates); `-Dwflib.ui.stats=true`.
-- Demo, 781 vertices / 4 batches: 26-35 us/frame, 0.0 B/frame steady (harness `wf_ui_demo.mjs`). Allocation traps found: `FontSet.getGlyph` / `getGlyphInfo` allocate a method ref per call (canvas caches BMP glyphs); `GuiGraphics.flush` allocates an iterator (skipped when nothing is pending); `CopyOnWriteArrayList` for-each.
-
 ## 96. JSON layouts (`ui/json/`)
 
 Files (client resources, pack-overridable, F3+T): `assets/<ns>/wf_ui/layouts/<path>.json` => layout `<ns>:<path>`; `wf_ui/components/<path>.json` => widget type `<ns>:<path>`; `wf_ui/palettes/<path>.json` => flat constant map.

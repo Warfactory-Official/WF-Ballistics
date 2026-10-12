@@ -18,8 +18,3 @@
 - Stale feed (> `CameraFeed.STALE_TICKS`) or lost => "SIGNAL LOST" card 20 ticks, link dropped.
 - Feed entity tracked to its subscribers at any range when the client holds its chunk (`CameraNet.watches` in `MixinChunkMapTrackedEntity`); vanilla stops at the view distance. Stream window centred on entity + velocity * 20 t (capped at half the radius), any entity feed (was drones only).
 - Any feed pass: `getMainRenderTarget()` = feed FBO (`MixinMinecraftFeedTarget`). Iris without a pack binds the main target inside `renderLevel`; before this every feed under Iris was blank sky.
-
-REDACTED
-
-- `TvGuidanceGameTest` (6): gimbal = line of sight flown, let-go block lock, let-go entity lock, stranger refused + launcher offered, past datalink range flies the last sight line, `wflib:tv` preset wiring.
-

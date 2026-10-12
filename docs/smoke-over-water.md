@@ -75,33 +75,3 @@ The alphas are far below the numbers they replace, and that is the second half o
 blast is hundreds of quads that grow to five times its radius and lie on top of one another; under
 addition that density bought brightness, and under compositing it buys opacity. At the old 0.75 the near
 layer alone would black out the screen.
-
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-
-- **before**: the lake is *gone*. The whole surface, out to its far edge, replaced by the stone bed at
-  REDACTED
-  REDACTED
-- **after**: the lake is intact in every frame of the burst. The smoke darkens the water it lies over
-  REDACTED
-  REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-

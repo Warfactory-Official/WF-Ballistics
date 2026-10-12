@@ -238,28 +238,6 @@ willing to receive it from you) so a supplier that only hands materials out cann
 Blueprints load with or without their extension, and job ids match on a prefix because the list prints
 prefixes and nobody is retyping thirty-six characters.
 
-REDACTED
-
-REDACTED
-REDACTED
-heard of a world.
-
-REDACTED
-
-- `blueprint/litematica-negative-size`: a region whose x and y extents both run backwards, with one block in
-  REDACTED
-  REDACTED
-- `work/abandon-is-free-lapse-is-not`: the attempt-counting split, above.
-- `work/claims-repel`: two workers at the same point must not be sent to the same corner.
-- `work/only-the-holder-completes`: a stale worker cannot mark somebody else's order done.
-- `work/orphaned-claims-recovered`: a reload must not permanently strand a claimed order.
-- `plan/door-halves-count-once`: one order and one item for a door, not two of each.
-- `plan/wall-variants-resolve-to-their-item`: exists because the opposite was assumed first.
-- `station/legacy-keeps-every-role`: a pad from before roles keeps doing everything.
-
-REDACTED
-REDACTED
-
 ## 23. Drones that actually build (`WORK`, `SUPPLY`)
 
 Two states and one class of world-thread logic turn a queue into a building site.
@@ -399,31 +377,3 @@ because on a staggered launch most of them do not exist yet.
 Chunks around live claims are held loaded: nothing can be placed into an unloaded chunk, and a drone that
 arrived to find one would fail the order three times and block it. The hold is renewed per tick and lapses on
 its own, so a finished job stops holding without having to remember to let go.
-
-REDACTED
-
-REDACTED
-
-- `work/closed-site-drops-the-target`: a suspended site must stop being somewhere to be, not merely be
-  REDACTED
-- `work/arrival-state-follows-the-assignment`: order → `WORK`, station → `SUPPLY`, neither → `EXFIL`,
-  closed → `EXFIL`.
-- `work/job-drones-do-not-hold-formation` and `work/job-flights-do-not-muster`.
-- `work/site-state-is-not-persisted`: `siteOpen` is a sample of the world; a stale one would leave a drone
-  REDACTED
-- `work/suspension-is-reversible`: progress survives, and the job comes back.
-- `territory/survey-covers-every-chunk`: a 61-block box straddling chunk boundaries on both bounds hits all
-  REDACTED
-  REDACTED
-- `territory/samples-land-inside-the-job` and `territory/refusal-reports-where`.
-
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-
-REDACTED
-
----
-

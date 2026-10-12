@@ -58,22 +58,3 @@ Two numbers had to move with them, and neither is taste:
 
 Alpha went up on both (0.30 to 0.46 on the fireball, 0.38 to 0.46 on the puff) and the alpha exponents
 came down, so the cloud holds its opacity for more of its life instead of fading from the first frame.
-
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-
-- **Submerged (y=195, five blocks down).** A white column with a froth collar at its foot, no fireball,
-  REDACTED
-  REDACTED
-- **At the waterline (y=200).** Smoke column and foam together, which is the ship-hit case.
-- **On land (`large`, over terrain).** The smoke column is still standing and still rising nine seconds
-  REDACTED
-- The foam vertex and cull shaders compile and link under the indirect backend
-  REDACTED
-
-REDACTED
-REDACTED
-

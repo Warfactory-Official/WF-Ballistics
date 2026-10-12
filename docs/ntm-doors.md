@@ -113,35 +113,3 @@ hidden it. In a wall (which is where a door goes) the wall hides it, exactly as 
 The silo hatches read their fold off a 20-to-100-tick ramp on a door that only opens for 60, so they stop
 half way. That is NTM's own arithmetic, kept, because a door built to an NTM plan should look like the one
 in the plan.
-
-REDACTED
-
-REDACTED
-
-- the **sliding blast door** shut and open (frame, both leaves parting into the wall, locks turning;
-- the **vault door** through its whole travel) the plug pulling clear of the frame, then rolling aside
-  REDACTED
-- the **transition seal** shut and open: the imported `.glb`, checked against four gold markers at the
-  REDACTED
-- the **water door** and the **silo hatch** shut, and the hatch opening;
-- state sync, the open-range block clearing, and the probe panel reading a door.
-
-- **redstone**: a redstone block against a vault door opens it and holds it open, and the probe reads
-  REDACTED
-- **the lock and key** end to end: a blank padlock cuts itself a pin pattern and hands over the matching
-  REDACTED
-  REDACTED
-- **no bare-handed path**: three uses on a shut door with an empty hand leave it shut.
-
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
--- was vanilla's rule that a sneaking player holding an item never reaches a block's use handler, which
-REDACTED
-
-REDACTED
-
----
-

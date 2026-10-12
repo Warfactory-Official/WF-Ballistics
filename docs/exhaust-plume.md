@@ -92,15 +92,3 @@ interpolated from `xo` to `x` across the tick, so emitting to `x` put the head o
 missile would be at the *end* of the tick, sticking out in front of the nozzle by a whole tick of
 travel, snapping back twenty times a second. At a block a tick that is invisible. At eighteen it is a
 strobe.
-
-REDACTED
-
-- **The turn.** Matched pair, same swarm, same camera, zoomed into the launch loop: before, the arc is a
-  REDACTED
-- **Cost.** Twelve missiles with the camera inside the plumes and smoke filling the whole frame:
-  REDACTED
-  REDACTED
-  REDACTED
-- **Density and colour**, from the side at a hundred blocks: a bright cream core at the nozzle, a white
-  REDACTED
-

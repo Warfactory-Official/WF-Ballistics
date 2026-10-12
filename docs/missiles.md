@@ -463,17 +463,3 @@ For a fully custom flight path (a non-default ascent, a designated-target drone,
 the entity directly with `MissileEntity.builder(...)` and add it to the level yourself.
 
 ---
-
-REDACTED
-
-- Fire it and watch the arc. If it never reaches top speed, raise `acceleration`. If it overshoots a moving
-  REDACTED
-- If it falls out of the sky short of the target, the tank is too small for `speed x distance` (remember climb
-  REDACTED
-- Against interceptors: a missile that is never caught is over-tuned (too fast + too evasive); a missile always
-  REDACTED
-- Balance goal: every missile beatable by some interceptor tier, and every interceptor tier useful against some
-  class of missile.
-
----
-

@@ -91,37 +91,3 @@ texture or a bad font, which is why four screens carried it. The correct shape i
 and the content on top of it, with `renderBackground` never called by hand; a screen that wants a panel
 *under* its widgets overrides `renderBackground` and draws it there, which is what `DroneProgramScreen`
 now does.
-
-REDACTED
-
-REDACTED
-REDACTED
-REDACTED
-REDACTED
-
-- every tab draws: 36 missiles, 9 mines, 2 drones, 27 pieces, 33 doors, 2 glyphids, 8 props: both
-  REDACTED
-- the inspector: figures, clip chips, the turntable, and a scrub that holds;
-- a **dispenser rack scrubbed from `laid` to `firing`**: six capped tubes, then three open and three
-  REDACTED
-  REDACTED
-- a **vault door scrubbed open** pulls its plug and rolls it aside;
-- the **Amazog** with its bin, its gear and all eight rotors.
-
-REDACTED
-
-- the **bomblet drew as a missing texture**. `ModModels.BOMBLET` is a baked model instanced into a
-  REDACTED
-  REDACTED
-  REDACTED
-- **a clip asked for at exactly its own duration wrapped back to its first frame.** GemRender's direct
-  REDACTED
-  REDACTED
-  REDACTED
-  REDACTED
-
-REDACTED
-REDACTED
-
----
-
