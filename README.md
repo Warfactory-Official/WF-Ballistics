@@ -1,6 +1,6 @@
 # WFLib
 
-A guided-missile and area-effect explosion library for **Minecraft 1.20.1 / Forge**.
+A guided-missile and area-effect explosion library for **Minecraft 1.21.1 / NeoForge**.
 
 WFLib provides a fully server-simulated missile entity - with an oriented hitbox, phased
 flight (ascent → cruise → attack), fuel, warheads, and active interception - plus a pluggable
@@ -10,10 +10,10 @@ behaviour is registered through a small registry and is meant to be extended by 
 
 | | |
 |---|---|
-| Minecraft | 1.20.1 |
-| Loader | Forge 47.4+ |
-| Java | 17 |
-| Rendering | [Flywheel](https://github.com/Jozufozu/Flywheel) 1.0.x (client) |
+| Minecraft | 1.21.1 |
+| Loader | NeoForge 21.1.248+ |
+| Java | 21 |
+| Rendering | GemRender (skinned/rigged glTF models) + [Flywheel](https://github.com/Jozufozu/Flywheel) 1.0.6 (client) |
 | License | GPL-3.0 |
 
 ---
@@ -141,7 +141,7 @@ Other extension points: `MissileAttitudeRegistry` (how a model orients to its he
 
 ## Building
 
-Standard ForgeGradle project:
+NeoForge ModDevGradle project:
 
 ```bash
 ./gradlew build            # produces the mod jar in build/libs
@@ -151,7 +151,7 @@ Standard ForgeGradle project:
 ```
 
 The built jar bundles Flywheel via `jarJar`. `spark` is a runtime-only profiling dependency (pulled from
-CurseMaven). Mappings are Mojang official for 1.20.1.
+CurseMaven). Mappings are Mojang official for 1.21.1, layered with Parchment parameter names.
 
 ### WarForge
 
