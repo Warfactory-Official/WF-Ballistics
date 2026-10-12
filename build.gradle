@@ -89,6 +89,23 @@ repositories {
     }
     mavenLocal { content { includeGroup 'com.flansmod.warforge' } }
 
+    // --- GemRender + AHF: Warfactory's self-hosted Maven, snapshots channel -------------------
+    maven {
+        name = 'Warfactory Snapshots'
+        url = 'https://repo.warfactory.co/snapshots'
+        content { includeGroup 'com.wf.gemrender'; includeGroup 'com.norwood' }
+        // Anonymous reads work on this server; only `publish` needs credentials. A present-but-null
+        // credentials block makes Gradle refuse anonymous reads too, so omit it entirely when unset.
+        def warfactoryUser = project.findProperty('warfactoryUser') ?: System.getenv('WARFACTORY_MAVEN_USER')
+        def warfactoryToken = project.findProperty('warfactoryToken') ?: System.getenv('WARFACTORY_MAVEN_TOKEN')
+        if (warfactoryUser != null && warfactoryToken != null) {
+            credentials {
+                username = warfactoryUser
+                password = warfactoryToken
+            }
+        }
+    }
+
     // --- Repos for the compile-only integrations (kept from the Forge build; re-enable with the
     //     corresponding dependencies once their 1.21.1 coordinates are confirmed) ---
     maven { name = 'GTCEu Maven'; url = 'https://maven.gtceu.com'; content { includeGroup 'com.gregtechceu.gtceu' } }
@@ -253,18 +270,18 @@ dependencies {
     // one instance each posed from a shared bone palette, instead of one instance per moving part.
     // A local jar because GemRender is not published anywhere yet; declared required in the toml, so
     // it is not jar-in-jar'd either.
-    compileOnly fileTree('libs') { include 'gemrender-*.jar' }
+    compileOnly "com.wf.gemrender:gemrender-1.21.1:${gemrender_version}-SNAPSHOT"
     // Client runs only, for the same reason as JourneyMap below: GemRender jar-in-jars lwjgl-ktx for its
     // KTX2 textures, and that module requires org.lwjgl, which a dedicated server does not have on its
     // module path. FML dies building the transforming module layer before any mod is constructed. The
     // dependency is declared side = "CLIENT" in neoforge.mods.toml, so the server never wanted it: the
     // server does not build a rig.
     if (!gradle.startParameter.taskNames.any { it.toLowerCase().contains('server') }) {
-        localRuntime fileTree('libs') { include 'gemrender-*.jar' }
+        localRuntime "com.wf.gemrender:gemrender-1.21.1:${gemrender_version}-SNAPSHOT"
     }
 
-    // --- AHF (humanoid hit parts, lag-comp history): required both sides, local jar ------------
-    implementation files("libs/${ahf_jar}")
+    // --- AHF (humanoid hit parts, lag-comp history): required both sides ----------------------
+    implementation "com.norwood:ahf-1.21.1-neoforge:${ahf_version}-SNAPSHOT"
 
     // --- Flywheel (Engine-Room, NeoForge 1.21.1) ---------------------------------------------
     // Flywheel is declared a required dependency in neoforge.mods.toml, so it is NOT jar-in-jar'd
@@ -410,15 +427,28 @@ tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
 
+configurations.all {
+    resolutionStrategy.cacheChangingModulesFor(0, 'seconds')
+}
+
 publishing {
     publications {
         register('mavenJava', MavenPublication) {
             from components.java
+            artifactId = mod_id
+            version = "${project.version}-SNAPSHOT"
         }
     }
     repositories {
         maven {
-            url "file://${project.projectDir}/mcmodsrepo"
+            name = 'WarfactorySnapshots'
+            url = 'https://repo.warfactory.co/snapshots'
+            def warfactoryUser = project.findProperty('warfactoryUser') ?: System.getenv('WARFACTORY_MAVEN_USER')
+            def warfactoryToken = project.findProperty('warfactoryToken') ?: System.getenv('WARFACTORY_MAVEN_TOKEN')
+            credentials {
+                username = warfactoryUser
+                password = warfactoryToken
+            }
         }
     }
 }

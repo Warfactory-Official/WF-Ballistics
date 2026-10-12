@@ -39,3 +39,9 @@ jobs:
           name: wflib-nightly-${{ github.sha }}
           path: build/libs/*.jar
           retention-days: 14
+
+      - name: Publish snapshot
+        env:
+          WARFACTORY_MAVEN_USER: ${{ secrets.WARFACTORY_MAVEN_USER }}
+          WARFACTORY_MAVEN_TOKEN: ${{ secrets.WARFACTORY_MAVEN_TOKEN }}
+        run: ./gradlew publish --no-daemon --stacktrace
