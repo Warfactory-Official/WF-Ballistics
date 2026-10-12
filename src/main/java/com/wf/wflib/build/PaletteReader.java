@@ -29,9 +29,6 @@ final class PaletteReader {
         this.current = SharedConstants.getCurrentVersion().getDataVersion().getVersion();
     }
 
-    /**
-     * @return the state this entry names, or air if this server has no such block.
-     */
     BlockState read(CompoundTag entry) {
         CompoundTag fixed = this.upgrade(entry);
         ResourceLocation id = ResourceLocation.tryParse(fixed.getString("Name"));
@@ -51,9 +48,6 @@ final class PaletteReader {
         return fixed.getValue() instanceof CompoundTag tag ? tag : entry;
     }
 
-    /**
-     * @return how many entries named a block this server does not have.
-     */
     int unresolved() {
         return this.unresolved;
     }

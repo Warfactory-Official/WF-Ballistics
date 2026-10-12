@@ -17,10 +17,15 @@ import net.neoforged.neoforge.registries.datamaps.DataMapsUpdatedEvent;
 import net.neoforged.neoforge.registries.datamaps.RegisterDataMapTypesEvent;
 import org.slf4j.Logger;
 
+import java.util.Optional;
+
 /**
- * Block penetration resistance, mm steel-eq per metre: data map {@code wflib:penetration}
- * ({@code data/<ns>/data_maps/block/penetration.json}, block or tag -> {@code {"resistance": mm}}, synced) > {@link
- * PenMaterial} class. Read by {@link BlockPen} (pierce, client prediction) and the drill.
+ * Block penetration resistance, mm steel-eq per metre, impulse toughness, kg m/s, and ricochet critical grazing
+ * angle, deg: data map {@code wflib:penetration} ({@code data/<ns>/data_maps/block/penetration.json}, block or tag ->
+ * {@code {"resistance": mm, "toughness": kg m/s, "ricochet": deg}}, synced; toughness absent =>
+ * {@link PenMaterial#TOUGHNESS_PER_RESISTANCE} x resistance; ricochet absent => the {@link PenMaterial} class's) >
+ * {@link PenMaterial} class. Read by {@link BlockPen} (pierce, client prediction), {@link BlockDamage},
+ * {@link Ricochet} and the drill.
  */
 @EventBusSubscriber(modid = WFLib.MODID)
 public final class PenTable {
@@ -31,14 +36,22 @@ public final class PenTable {
     private static final Logger LOGGER = LogUtils.getLogger();
     /** By {@code Block.BLOCK_STATE_REGISTRY} id; null => resolve per call. */
     private static volatile float[] table;
+    private static volatile float[] toughnessTable;
+    private static volatile float[] ricochetTable;
 
     private PenTable() {
     }
 
-    /** @param resistance mm steel-eq per metre of ray inside the collision shape */
-    public record Resistance(float resistance) {
+    /**
+     * @param resistance mm steel-eq per metre of ray inside the collision shape
+     * @param toughness  round impulse that destroys it, kg m/s
+     * @param ricochet   critical grazing angle, deg
+     */
+    public record Resistance(float resistance, Optional<Float> toughness, Optional<Float> ricochet) {
         public static final Codec<Resistance> CODEC = RecordCodecBuilder.create(i -> i.group(
-                Codec.floatRange(0.0f, Float.MAX_VALUE).fieldOf("resistance").forGetter(Resistance::resistance)
+                Codec.floatRange(0.0f, Float.MAX_VALUE).fieldOf("resistance").forGetter(Resistance::resistance),
+                Codec.floatRange(0.0f, Float.MAX_VALUE).optionalFieldOf("toughness").forGetter(Resistance::toughness),
+                Codec.floatRange(0.0f, 90.0f).optionalFieldOf("ricochet").forGetter(Resistance::ricochet)
         ).apply(i, Resistance::new));
     }
 
@@ -48,10 +61,39 @@ public final class PenTable {
         return t != null && id < t.length ? t[id] : resolve(state);
     }
 
+    /** Round impulse that destroys {@code state}, kg m/s; infinite => never. */
+    public static float toughness(BlockState state) {
+        float[] t = toughnessTable;
+        int id = Block.getId(state);
+        return t != null && id < t.length ? t[id] : resolveToughness(state);
+    }
+
+    /** Critical grazing angle, deg: shallower => {@link Ricochet} may skip the round off. */
+    public static float ricochet(BlockState state) {
+        float[] t = ricochetTable;
+        int id = Block.getId(state);
+        return t != null && id < t.length ? t[id] : resolveRicochet(state);
+    }
+
     static float resolve(BlockState state) {
-        @SuppressWarnings("deprecation")
-        Resistance r = state.getBlock().builtInRegistryHolder().getData(PENETRATION);
+        Resistance r = data(state);
         return r != null ? r.resistance() : PenMaterial.resolve(state).resistance;
+    }
+
+    static float resolveToughness(BlockState state) {
+        Resistance r = data(state);
+        return r == null ? PenMaterial.resolve(state).toughness
+                : r.toughness().orElse(PenMaterial.TOUGHNESS_PER_RESISTANCE * r.resistance());
+    }
+
+    static float resolveRicochet(BlockState state) {
+        Resistance r = data(state);
+        return r != null && r.ricochet().isPresent() ? r.ricochet().get() : PenMaterial.resolve(state).ricochet;
+    }
+
+    @SuppressWarnings("deprecation")
+    private static Resistance data(BlockState state) {
+        return state.getBlock().builtInRegistryHolder().getData(PENETRATION);
     }
 
     /**
@@ -61,10 +103,16 @@ public final class PenTable {
     static void rebuild(String cause, boolean server) {
         long t0 = System.nanoTime();
         float[] t = new float[Block.BLOCK_STATE_REGISTRY.size()];
+        float[] k = new float[t.length];
+        float[] r = new float[t.length];
         for (BlockState state : Block.BLOCK_STATE_REGISTRY) {
             t[Block.getId(state)] = resolve(state);
+            k[Block.getId(state)] = resolveToughness(state);
+            r[Block.getId(state)] = resolveRicochet(state);
         }
         table = t;
+        toughnessTable = k;
+        ricochetTable = r;
         if (server) {
             AsyncTerrainSource.invalidateAll();
         }

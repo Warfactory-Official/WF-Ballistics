@@ -1,5 +1,8 @@
 package com.wf.wflib.demolition;
 
+import com.wf.wflib.audio.AudioCategory;
+import com.wf.wflib.audio.Blasts;
+import com.wf.wflib.audio.WfAudio;
 import com.wf.wflib.compat.WarforgeCompat;
 import it.unimi.dsi.fastutil.longs.Long2BooleanMap;
 import it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap;
@@ -43,8 +46,6 @@ public final class MiningExplosion {
     private static final float MAX_DAMAGE = 6.0F;
     /** Cap on distinct block types sampled for the debris particle burst. */
     private static final int DEBRIS_TYPES = 8;
-    /** How far the boom carries, before the distant variant's volume multiplier. See {@link DemolitionAudio}. */
-    private static final float AUDIO_RANGE = 16.0F;
 
     private MiningExplosion() {
     }
@@ -118,7 +119,7 @@ public final class MiningExplosion {
         // Smoke and the block-break burst always play; only the flying debris needs blocks to have broken.
         spawnBlastEffect(level, center, radius, broken > 0 ? debris : List.of());
         spawnCrackParticles(level, center, radius, nearby);
-        DemolitionAudio.playBlast(level, Vec3.atCenterOf(center), 4.0F, AUDIO_RANGE);
+        WfAudio.at(level, Vec3.atCenterOf(center), AudioCategory.EXPLOSIONS, Blasts.miningCharge());
         damageEntities(level, center, radius, player);
 
         for (BlockPos p : chain) {

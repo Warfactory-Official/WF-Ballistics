@@ -13,12 +13,8 @@ import net.minecraft.client.renderer.texture.TextureAtlas;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.resources.ResourceLocation;
 
-/** Custom {@link ParticleRenderType}s. */
 public final class WFParticleRenderTypes {
 
-    /**
-     * Translucent particle sheet with additive blending and no depth write.
-     */
     public static final ParticleRenderType ADDITIVE = new ParticleRenderType() {
         @Override
         public BufferBuilder begin(Tesselator tesselator, TextureManager textureManager) {
@@ -40,7 +36,7 @@ public final class WFParticleRenderTypes {
     public static final ParticleRenderType SHOCKWAVE = new ParticleRenderType() {
         @Override
         public BufferBuilder begin(Tesselator tesselator, TextureManager textureManager) {
-            // Re-enable cull from any prior invocation of this type (1.21 has no end() hook).
+            // reset then disable cull: undoes a prior invocation; ParticleRenderType has no end() hook in 1.21.
             RenderSystem.enableCull();
             RenderSystem.depthMask(false);
             RenderSystem.disableCull();

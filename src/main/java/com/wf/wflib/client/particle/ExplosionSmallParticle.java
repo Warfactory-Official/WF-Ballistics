@@ -5,22 +5,34 @@ import net.minecraft.client.particle.*;
 import net.minecraft.core.particles.SimpleParticleType;
 import net.minecraft.util.Mth;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
 public class ExplosionSmallParticle extends TextureSheetParticle {
 
     private final float baseScale;
     private final float hue;
+    /** Launch (damped, vent frame) apart from buoyant rise (+y, undamped). */
+    private double lx, ly, lz, rise;
 
     public ExplosionSmallParticle(ClientLevel level, double x, double y, double z, float scale, float speedMult) {
         super(level, x, y, z);
         this.lifetime = 25 + this.random.nextInt(10);
         this.baseScale = scale * 0.9F + this.random.nextFloat() * 0.2F;
         this.quadSize = this.baseScale;
-        this.xd = this.random.nextGaussian() * speedMult;
-        this.zd = this.random.nextGaussian() * speedMult;
+        this.lx = this.random.nextGaussian() * speedMult;
+        this.lz = this.random.nextGaussian() * speedMult;
         this.hue = 20F + this.random.nextFloat() * 20F;
         this.hasPhysics = true;
         this.roll = this.random.nextFloat() * Mth.TWO_PI;
+    }
+
+    /** Launch velocity into the vent frame (+y -> open side). */
+    public void vent(Quaternionf vent) {
+        Vector3f v = vent.transform(new Vector3f((float) lx, (float) ly, (float) lz));
+        lx = v.x;
+        ly = v.y;
+        lz = v.z;
     }
 
     @Override
@@ -34,9 +46,10 @@ public class ExplosionSmallParticle extends TextureSheetParticle {
             return;
         }
 
-        this.yd += 0.004D;
-        this.xd *= 0.65D;
-        this.zd *= 0.65D;
+        this.rise += 0.004D;
+        this.lx *= 0.65D;
+        this.ly *= 0.65D;
+        this.lz *= 0.65D;
 
         float ageScaled = (float) this.age / this.lifetime;
         this.oRoll = this.roll;
@@ -51,7 +64,7 @@ public class ExplosionSmallParticle extends TextureSheetParticle {
         this.bCol = (rgb & 0xFF) / 255F;
         this.alpha = (float) Math.pow(1 - Math.min(ageScaled, 1), 0.25) * 0.7F * 0.5F;
 
-        this.move(this.xd, this.yd, this.zd);
+        this.move(this.lx, this.ly + this.rise, this.lz);
     }
 
     @Override

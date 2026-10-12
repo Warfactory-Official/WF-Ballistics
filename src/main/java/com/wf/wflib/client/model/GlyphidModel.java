@@ -27,19 +27,15 @@ public final class GlyphidModel {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /**
-     * The mould the infested subtype is drawn in, over whatever skin the caste already wears.
-     */
     private static final ResourceLocation INFESTATION = texture("glyphid_infestation");
 
-    /** The stitched sheet the castes are tiled into. A name, not a file: nothing reads it. */
+    /** Id only, not a resource path; nothing reads it as a file. */
     private static final ResourceLocation ATLAS =
             ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "atlas/glyphid");
 
     /**
-     * Drawn at depth-equal with no depth write, which is how vanilla lays a decal over a mob: the overlay is the
-     * same rig under the same pose, so its fragments land at exactly the depth the body's did and neither blending
-     * nor sorting has anything to decide.
+     * Depth-equal, no depth write: vanilla's mob-decal trick. Same rig/pose => fragments land at the
+     * body's exact depth; no blend/sort decision needed.
      */
     private static final Material INFESTED_MATERIAL = SimpleMaterial.builder()
             .texture(INFESTATION)
@@ -49,61 +45,48 @@ public final class GlyphidModel {
             .mipmap(false)
             .build();
 
-    /** Every caste's texture in ordinal order, which is the order the sheet is tiled in. */
+    /** Ordinal order = sheet tile order. */
     private static final List<ResourceLocation> CASTES = castes();
 
-    /** The swarm: one rig, one sheet, a tile per caste in {@link GlyphidCaste} order. */
     private static final Entry BODY = new Entry("body", CASTES, skinMaterial(CASTES.get(0)));
 
-    /** The infestation overlay. */
     private static final Entry INFESTED = new Entry("infested", List.of(INFESTATION), INFESTED_MATERIAL);
 
     private GlyphidModel() {
     }
 
-    /**
-     * Declare the handles up front, so the rigs are built when resources finish loading rather than by whichever
-     * visual happens to want one first, which would be an obj parse on a flywheel task thread, mid-frame.
-     */
+    /** Eager init: lazy build would run as an obj parse on a flywheel task thread, mid-frame. */
     public static void init() {
         body();
         infested();
     }
 
-    /**
-     * A caste's model together with everything the visual needs to pose it: the two drives that turn gameplay
-     * quantities into clip-local time, and the armour clips indexed by the bits they answer to.
-     *
-     * @param armor one clip per combination of plates still attached; null at
-     *      {@link EntityGlyphid#FULL_ARMOR}, which is the common case and needs no layer at all
-     */
+    /** @param armor indexed by armour-bit combo; null at {@link EntityGlyphid#FULL_ARMOR} (no layer needed). */
     public record Skin(GemRenderGltfModel model, AnimationDrive walk, AnimationDrive bite,
                        GltfAnimation[] armor) {
 
-        /** @return the armour layer for these bits, or null when the animal has all its plates */
+        /** @return null: all plates attached, no layer. */
         @Nullable
         public GltfAnimation armor(byte bits) {
             int index = bits & EntityGlyphid.FULL_ARMOR;
             return index >= armor.length ? null : armor[index];
         }
 
-        /** Which tile of the sheet this caste wears, for {@code instance.variant(...)}. */
+        /** Tile index for {@code instance.variant(...)}. */
         public VariantUv variant(GlyphidCaste caste) {
             return model.variant(caste.ordinal());
         }
     }
 
-    /**
-     * @return the rig every glyphid is drawn from, or null while the mesh has yet to load or has failed
-     */
+    /** @return null: mesh not yet loaded, or failed. */
     @Nullable
     public static Skin body() {
         return BODY.get();
     }
 
     /**
-     * @return the infestation overlay, or null if it could not be built. Posed from the body's palette
-     *      rather than its own, so nothing here needs to know how a glyphid moves.
+     * @return null if it could not be built. Posed from the body's palette rather than its own, so
+     *      nothing here needs to know how a glyphid moves.
      */
     @Nullable
     public static Skin infested() {
@@ -129,15 +112,11 @@ public final class GlyphidModel {
                 .build();
     }
 
-    /** One rig's handle plus the {@link Skin} derived from whatever is currently behind it. */
     private static final class Entry {
 
         private final ModelCache.Handle<GemRenderGltfModel> handle;
 
-        /**
-         * Volatile rather than synchronised: flywheel asks for this from several visual threads at once, and two of
-         * them racing to build the same Skin costs one wasted derivation and nothing else.
-         */
+        /** Volatile not synchronised: flywheel reads from several visual threads; a lost race just rebuilds once. */
         private volatile Skin skin;
 
         private Entry(String name, List<ResourceLocation> skins, Material material) {
@@ -147,7 +126,7 @@ public final class GlyphidModel {
                     id -> build(rig, skins, material));
         }
 
-        /** Builds the rig, and falls back to the first skin alone if the sheet will not stitch. */
+        /** Falls back to the first skin alone (material already bound to it) if the sheet will not stitch. */
         private static GemRenderGltfModel build(String rig, List<ResourceLocation> skins,
                                                 Material material) throws Exception {
             try {
@@ -179,7 +158,7 @@ public final class GlyphidModel {
 
             current = new Skin(model,
                     AnimationDrive.cyclic(model.animation(GlyphidRig.WALK), (float) (Math.PI * 2.0)),
-                    // The attack animation already arrives as 0 to 1, which is exactly the clip.
+                    // BITE clip already spans 0..1.
                     AnimationDrive.ranged(model.animation(GlyphidRig.BITE), 0.0f, 1.0f),
                     armor);
             skin = current;

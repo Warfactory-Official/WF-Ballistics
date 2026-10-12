@@ -15,10 +15,7 @@ public enum ProbeKind {
     THERMAL("thermal", Band.THERMAL, 96.0, 3.0, 112.0, 6.0, 24, 3000, 300),
     /** A met station. */
     WEATHER("weather", null, 192.0, 4.0, 144.0, 6.0, 8, 2000, 200),
-    /**
-     * A hydrophone. The cheapest thing on the grid while it listens and the most expensive the moment it
-     * pings; reach matches the geophone's so no collection volume grows past the current worst case.
-     */
+    /** A hydrophone: cheapest idle, costliest while pinging. Reach == {@link #SEISMIC}'s: caps worst-case volume. */
     SONAR("sonar", Band.SONAR, 384.0, 0.0, 96.0, 4.0, 10, 8000, 1200);
 
     /** What a ping costs, as a multiple of the idle draw. */
@@ -57,34 +54,19 @@ public enum ProbeKind {
         return "probe_" + id;
     }
 
-    /**
-     * @return the band this probe works in, or null for {@link #WEATHER}, which works in none.
-     */
     @Nullable
     public Band band() {
         return band;
     }
 
-    /**
-     * @return true if this probe registers a sensor. False for a met station, which registers a station
-     *      instead: the one branch in the block entity, and the only place the fourth kind differs in behaviour
-     *      rather than in numbers.
-     */
     public boolean sensing() {
         return band != null;
     }
 
-    /**
-     * @return true if this probe has to be standing in water to work at all. The whole identity of a water
-     *      probe, and the one gate a dry placement reports instead of silently registering nothing.
-     */
     public boolean underwater() {
         return band == Band.SONAR;
     }
 
-    /**
-     * @return what to call this probe in a readout: its band, or {@code WEATHER} for the one with none.
-     */
     public String label() {
         return band == null ? "WEATHER" : band.name();
     }
@@ -93,35 +75,20 @@ public enum ProbeKind {
         return baseRange;
     }
 
-    /**
-     * @return blocks over which a met station's sample is taken as describing the ground. The same number as
-     *      {@link #baseRange()} and named separately because it means something entirely different; see
-     *      {@link #WEATHER}.
-     */
     public double stationRange() {
         return baseRange;
     }
 
-    /**
-     * @return blocks the radio reaches in one hop. Not the same as {@link #baseRange()}, and deliberately
-     *      shorter: a probe covers more ground than it can relay, so a grid has to be built forward rather than
-     *      sprayed outward.
-     */
+    /** < {@link #baseRange()} for every kind but {@link #THERMAL}, which relays further than it senses. */
     public double linkRange() {
         return linkRange;
     }
 
-    /**
-     * @return blocks above the block that <em>links</em> are measured from. See {@link #SEISMIC} for why this
-     *      is not the sensing mast.
-     */
+    /** Independent of the private sensing-mast height. */
     public double linkMast() {
         return linkMast;
     }
 
-    /**
-     * @return FE consumed per tick while online.
-     */
     public int feDraw() {
         return feDraw;
     }
@@ -130,29 +97,16 @@ public enum ProbeKind {
         return feCapacity;
     }
 
-    /**
-     * @return ticks of warm-up before this contributes anything.
-     */
     public int calibrationTicks() {
         return calibrationTicks;
     }
 
-    /**
-     * @return this probe's sensor, on the given network.
-     * @throws IllegalStateException for {@link #WEATHER}, which has none. Guarded by {@link #sensing()} at the
-     *      one call site rather than silently returning something inert, because a
-     *      met station that quietly registered a blind sensor would show up as a
-     *      sensor count nobody could account for.
-     */
+    /** Throws for {@link #WEATHER}; callers must guard with {@link #sensing()} first. */
     public SensorSpec spec(long netId) {
         return spec(netId, false);
     }
 
-    /**
-     * @param pinging whether this set is radiating. Only {@link #SONAR} has anything to do with it: every
-     *      other probe either always radiates or never does, and neither is a decision the player gets
-     *      to make tick by tick.
-     */
+    /** {@code pinging} matters only for {@link #SONAR}; other kinds always or never radiate. */
     public SensorSpec spec(long netId, boolean pinging) {
         if (band == null) {
             throw new IllegalStateException("probe kind " + id + " registers a station, not a sensor");

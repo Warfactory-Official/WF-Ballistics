@@ -27,7 +27,6 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 public class ModEntities {
-    // 1. Create the DeferredRegister for Entity Types
     public static final DeferredRegister<EntityType<?>> ENTITY_TYPES =
             DeferredRegister.create(Registries.ENTITY_TYPE, WFLib.MODID);
 
@@ -119,7 +118,7 @@ public class ModEntities {
                     .build("nuke_explosion")
             );
 
-    // Torex: the toroidal-convection mushroom cloud effect. Large box, far tracking, never moves.
+    // Torex: toroidal-convection mushroom cloud effect; stationary.
     public static final DeferredHolder<EntityType<?>, EntityType<EntityNukeTorex>> NUKE_TOREX =
             ENTITY_TYPES.register("torex", () -> EntityType.Builder.<EntityNukeTorex>of(EntityNukeTorex::new, MobCategory.MISC)
                     .noSave()
@@ -215,15 +214,12 @@ public class ModEntities {
                     .build("debug_dummy")
             );
 
-    // 3. Register the DeferredRegister with the Mod Event Bus
     public static void register(IEventBus eventBus) {
         ENTITY_TYPES.register(eventBus);
         eventBus.addListener(ModEntities::registerAttributes);
     }
 
-    /**
-     * Living entities need an attribute supplier registered before anything can spawn one.
-     */
+    /** Living entities need an attribute supplier registered before anything can spawn one. */
     private static void registerAttributes(EntityAttributeCreationEvent event) {
         event.put(GLYPHID.get(), EntityGlyphid.createAttributes().build());
         event.put(GLYPHID_SCOUT.get(), EntityGlyphidScout.createAttributes().build());

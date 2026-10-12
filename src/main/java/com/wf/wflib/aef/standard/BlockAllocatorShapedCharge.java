@@ -10,14 +10,14 @@ import net.minecraft.world.phys.Vec3;
 import java.util.HashSet;
 import java.util.Set;
 
-/** Directional <b>shaped-charge</b> allocator: the Munroe / HEAT effect. */
+/** Directional shaped-charge allocator: the Munroe/HEAT effect. */
 public class BlockAllocatorShapedCharge extends BlockAllocatorStandard {
 
-    /** Default cone half-angle in degrees: a fairly tight jet. */
+    /** Default cone half-angle, degrees: a tight jet. */
     public static final float DEFAULT_HALF_ANGLE_DEG = 22.0F;
-    /** Default on-axis power multiplier (penetration depth vs. a same-{@code size} sphere). */
+    /** Default on-axis power multiplier, vs. a same-{@code size} sphere: penetration depth. */
     public static final float DEFAULT_JET_POWER = 4.0F;
-    /** Default power fraction (of {@code size}) at the very rim of the cone. */
+    /** Default power fraction of {@code size} at the cone rim. */
     public static final float DEFAULT_EDGE_POWER = 0.6F;
 
     protected final Vec3 axis;
@@ -37,13 +37,13 @@ public class BlockAllocatorShapedCharge extends BlockAllocatorStandard {
     }
 
     /**
-     * @param direction the jet axis (round's travel/impact direction); {@code (0,-1,0)} if zero-length
-     * @param halfAngleDeg cone half-angle in degrees, clamped to [1, 89]
-     * @param jetPower on-axis power multiplier applied to {@code size}: the penetration knob
-     * @param edgePower power multiplier at the cone rim (usually &lt; 1, a shallow lip)
-     * @param rings number of concentric cone rings sampled from axis out to the rim
-     * @param radial rays on the outermost ring (inner rings scale down proportionally)
-     * @param jetRays rays bundled on-axis to carve the penetrating channel a few blocks wide
+     * @param direction jet axis (round's travel direction); {@code (0,-1,0)} if zero-length
+     * @param halfAngleDeg cone half-angle, degrees, clamped to [1, 89]
+     * @param jetPower on-axis power multiplier on {@code size}: penetration knob
+     * @param edgePower power multiplier at cone rim, usually &lt; 1
+     * @param rings concentric cone rings sampled axis to rim
+     * @param radial rays on outermost ring; inner rings scale down proportionally
+     * @param jetRays on-axis rays bundled to carve the penetrating channel
      */
     public BlockAllocatorShapedCharge(Vec3 direction, float halfAngleDeg, float jetPower, float edgePower,
                                       int rings, int radial, int jetRays) {
@@ -65,17 +65,17 @@ public class BlockAllocatorShapedCharge extends BlockAllocatorStandard {
 
         Vec3 up = Math.abs(axis.y) < 0.999 ? new Vec3(0, 1, 0) : new Vec3(1, 0, 0);
         Vec3 u = up.cross(axis).normalize();
-        Vec3 v = axis.cross(u); // unit already: axis & u are orthonormal
+        Vec3 v = axis.cross(u); // unit: axis, u already orthonormal
 
         for (int n = 0; n < jetRays; n++) {
             double theta = halfAngleRad * 0.12 * (n / (double) jetRays);
-            double phi = n * 2.399963229728653; // golden angle: even spread with no RNG
+            double phi = n * 2.399963229728653; // golden angle; even spread, no RNG
             Vec3 dir = coneDir(u, v, theta, phi);
             march(explosion, level, x, y, z, dir, size * jetPower * powerRoll(level), affected, cursor);
         }
 
         for (int r = 1; r <= rings; r++) {
-            double t = r / (double) rings;                 // 0 (axis) .. 1 (rim)
+            double t = r / (double) rings;                 // 0=axis, 1=rim
             double theta = halfAngleRad * t;
             float ringPower = Mth.lerp((float) t, jetPower, edgePower);
             int count = Math.max(3, (int) Math.ceil(radial * t));
@@ -88,10 +88,6 @@ public class BlockAllocatorShapedCharge extends BlockAllocatorStandard {
         return affected;
     }
 
-    /**
-     * March one ray of pre-computed starting {@code power} outward from the centre, draining it by each block's
-     * resistance and collecting every destructible block it passes.
-     */
     private void march(ExplosionAEF explosion, Level level, double x, double y, double z,
                        Vec3 dir, float power, Set<BlockPos> out, BlockPos.MutableBlockPos cursor) {
         double cx = x, cy = y, cz = z;
@@ -113,7 +109,7 @@ public class BlockAllocatorShapedCharge extends BlockAllocatorStandard {
         com.wf.wflib.debug.ExplosionTrace.ray(x, y, z, cx, cy, cz, broke);
     }
 
-    /** Ray direction at polar angle {@code theta} off the axis and azimuth {@code phi} around it. */
+    /** Ray direction at polar angle {@code theta} off axis, azimuth {@code phi}. */
     private Vec3 coneDir(Vec3 u, Vec3 v, double theta, double phi) {
         double st = Math.sin(theta), ct = Math.cos(theta);
         return axis.scale(ct)
@@ -121,7 +117,7 @@ public class BlockAllocatorShapedCharge extends BlockAllocatorStandard {
                 .add(v.scale(st * Math.sin(phi)));
     }
 
-    /** Vanilla-style per-ray power jitter so the crater edge isn't unnaturally smooth. */
+    /** Vanilla-style jitter so the crater edge isn't too smooth. */
     private float powerRoll(Level level) {
         return 0.7F + level.random.nextFloat() * 0.6F;
     }

@@ -14,9 +14,8 @@ import java.util.Iterator;
 import java.util.List;
 
 /**
- * Keeps the chunks around a detonation force-loaded for a short grace window after the missile that caused it is
- * gone, so a multi-tick effect the blast spawned (fire boxes, gas cloud, ...) isn't frozen by a chunk unload the
- * instant the missile is discarded.
+ * Grace-holds chunks after a detonation's missile is gone: a multi-tick effect it spawned (fire boxes, gas
+ * cloud, ...) would otherwise freeze on an immediate chunk unload.
  */
 public final class DetonationChunkGuard {
 

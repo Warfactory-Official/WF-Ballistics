@@ -17,14 +17,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * One {@link ArmorMaterial} per worn preset, existing almost entirely so vanilla has something to
- * hang the armour texture on.
- *
- * <p>They declare ordinary iron-grade defense, which looks like a contradiction and is not. A piece
- * cannot have two authorities, so while this system is switched on {@code ArmorEvents} strips those
- * attributes off every piece it manages, and the numbers below never reach a damage calculation. What
- * they are for is the master switch: with {@code armor.enabled} off, a plate carrier should be a chest
- * piece rather than a cosmetic, and these are what it falls back to.
+ * Per-preset {@link ArmorMaterial}; exists for the vanilla texture hook and the {@code armor.enabled=false}
+ * fallback. Declared defense numbers are never read while this system is active ({@code ArmorEvents} strips
+ * the attributes).
  */
 public final class ArmorMaterials {
 
@@ -34,7 +29,7 @@ public final class ArmorMaterials {
     private static final Map<ResourceLocation, DeferredHolder<ArmorMaterial, ArmorMaterial>> BY_PRESET =
             new LinkedHashMap<>();
 
-    /** Iron's spread, and only ever read when this system is switched off. */
+    /** Iron's defense spread; read only with {@code armor.enabled=false}. */
     private static final Map<ArmorItem.Type, Integer> FALLBACK_DEFENSE = Map.of(
             ArmorItem.Type.HELMET, 2,
             ArmorItem.Type.CHESTPLATE, 6,
@@ -52,9 +47,8 @@ public final class ArmorMaterials {
                     9,
                     SoundEvents.ARMOR_EQUIP_IRON,
                     () -> Ingredient.EMPTY,
-                    // Named after the preset, so the texture lives at
-                    // textures/models/armor/<preset>_layer_1.png. A preset drawn by GemRender never
-                    // reaches this, but it still needs a material to be an ArmorItem at all.
+                    // Texture path textures/models/armor/<preset>_layer_1.png; GemRender-drawn presets
+                    // still need a material to be an ArmorItem at all.
                     List.of(new ArmorMaterial.Layer(preset.id())),
                     0.0F,
                     0.0F)));

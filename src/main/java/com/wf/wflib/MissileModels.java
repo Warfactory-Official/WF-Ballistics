@@ -11,19 +11,13 @@ import org.joml.Vector3f;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Registry of the missile models a {@link MissileEntity} can render with, keyed by a stable {@link
- * ResourceLocation} (persisted/synced on the entity so the model is chosen at runtime, HBM-style, rather than
- * compiled in).
- */
+/** {@link MissileEntity} model registry; id persists/syncs on the entity (HBM-style runtime pick, not compiled in). */
 public final class MissileModels {
 
-    /**
-     * Id used when a requested one is unknown or unset.
-     */
+    /** Fallback when a requested id is unknown or unset. */
     public static final ResourceLocation DEFAULT = ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "v2");
     public static final String DEFAULT_ATTITUDE = "missile";
-    // Continuous spin speed for the Shahed pusher propeller (degrees per tick). Purely visual.
+    // Shahed pusher prop spin, deg/tick; visual only.
     private static final float SHAHED_ROTOR_SPEED = 45.0f;
     private static final Map<ResourceLocation, ResourceLocation> BY_ID = new LinkedHashMap<>();
     private static final Map<ResourceLocation, Double> LENGTHS = new ConcurrentHashMap<>();
@@ -96,24 +90,15 @@ public final class MissileModels {
         return ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "entity/missiles/" + modelName);
     }
 
-    /**
-     * @return the {@link ResourceLocation} key for a model's short path under the mod namespace.
-     */
     public static ResourceLocation rl(String id) {
         return ResourceLocation.fromNamespaceAndPath(WFLib.MODID, id);
     }
 
-    /**
-     * @return the key of the {@link #DEFAULT} model.
-     */
     public static ResourceLocation defaultId() {
         return DEFAULT;
     }
 
-    /**
-     * Resolve a persisted/typed id string to a model key: a bare path is taken under the mod namespace, a {@code
-     * namespace:path} string is parsed as-is, and anything unparseable falls back to {@link #DEFAULT}.
-     */
+    /** Bare path under mod namespace, {@code ns:path} as-is, unparseable => {@link #DEFAULT}. */
     public static ResourceLocation parse(String id) {
         if (id == null || id.isEmpty()) {
             return DEFAULT;
@@ -122,31 +107,20 @@ public final class MissileModels {
         return parsed != null ? parsed : DEFAULT;
     }
 
-    /**
-     * @return true if the id maps to a known model.
-     */
     public static boolean exists(ResourceLocation id) {
         return BY_ID.containsKey(id);
     }
 
-    /**
-     * @return the model json location for the id, falling back to {@link #DEFAULT}.
-     */
     public static ResourceLocation model(ResourceLocation id) {
         return BY_ID.getOrDefault(id, BY_ID.get(DEFAULT));
     }
 
-    /**
-     * @return all registered ids, in registration order.
-     */
+    /** @return registered ids, in registration order. */
     public static Set<ResourceLocation> ids() {
         return Collections.unmodifiableSet(BY_ID.keySet());
     }
 
-    /**
-     * @return the longest axis of the model's mesh, in model units (cached). Reads the model json + obj
-     *      off the jar, so it works server-side. Falls back to 1.0 if the assets can't be read.
-     */
+    /** @return longest mesh axis (model units), cached; reads off the jar (works server-side); 1.0 if unreadable. */
     public static double length(ResourceLocation id) {
         return LENGTHS.computeIfAbsent(id, i -> {
             try {
@@ -158,10 +132,7 @@ public final class MissileModels {
         });
     }
 
-    /**
-     * @return the mesh size (per-axis, model units) of the missile model, cached. Reads the model json +
-     *      obj off the jar so it works server-side. Falls back to a 1×1×1 box if the assets can't be read.
-     */
+    /** @return mesh size per axis (model units), cached; reads off the jar (works server-side); 1x1x1 if unreadable. */
     public static Vec3 dimensions(ResourceLocation id) {
         return DIMENSIONS.computeIfAbsent(id, i -> {
             try {
@@ -173,10 +144,7 @@ public final class MissileModels {
         });
     }
 
-    /**
-     * @return the geometric center offset (model units) of the missile model relative to its origin,
-     *      cached. Missile meshes sit base-at-origin, so this is roughly {@code (0, length/2, 0)}.
-     */
+    /** @return center offset (model units), cached; base-at-origin mesh => roughly {@code (0, length/2, 0)}. */
     public static Vec3 center(ResourceLocation id) {
         return CENTERS.computeIfAbsent(id, i -> {
             try {
@@ -210,9 +178,6 @@ public final class MissileModels {
         ATTITUDES.put(rl(id), attitudeId);
     }
 
-    /**
-     * @return the attitude id for a model (how it rotates to its heading), or {@link #DEFAULT_ATTITUDE}.
-     */
     public static String attitudeId(ResourceLocation id) {
         return ATTITUDES.getOrDefault(id, DEFAULT_ATTITUDE);
     }

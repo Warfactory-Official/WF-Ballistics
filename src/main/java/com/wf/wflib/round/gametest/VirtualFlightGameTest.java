@@ -657,7 +657,9 @@ public class VirtualFlightGameTest {
                         start.add(v.scale(preset.lifeTicks()))), "decoding"))
                 .thenExecute(() -> key[0] = Rounds.launch(level, preset, start, v, null, null))
                 .thenWaitUntil(() -> helper.assertTrue(packets.stream().anyMatch(p -> p.pierces().stream()
-                        .anyMatch(r -> r.key() == key[0])), "no pierce; round at " + Rounds.position(level, key[0])))
+                        .anyMatch(r -> r.key() == key[0])), "no pierce; round at " + Rounds.position(level, key[0])
+                        + ", ends " + packets.stream().flatMap(p -> p.ends().stream()).filter(e -> e.key() == key[0])
+                        .toList()))
                 .thenExecute(() -> {
                     Vec3 at = Rounds.position(level, key[0]);
                     helper.assertTrue(at != null && Math.abs(at.x - watcher.getX()) > 1024.0, "pierced at " + at);

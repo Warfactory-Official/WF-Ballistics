@@ -96,6 +96,14 @@ public class RoundGameTest {
             if (preset.id().getPath().startsWith("test_")) {
                 continue;
             }
+            com.wf.wflib.ammo.AmmoVariant variant = com.wf.wflib.ammo.Ammo.variant(preset.id());
+            if (variant != null) {
+                if (com.wf.wflib.ammo.AmmoItems.item(variant.calibre()) == null) {
+                    helper.fail("no cartridge carrying variant " + preset.id());
+                    return;
+                }
+                continue;
+            }
             KineticShellItem item = ModItems.shellItem(preset.id()).map(holder -> holder.get()).orElse(null);
             if (item == null || item.preset() != preset) {
                 helper.fail("no item carrying round " + preset.id());
@@ -142,7 +150,7 @@ public class RoundGameTest {
         int ticks = 60;
         double[] arc = new double[3 * ticks];
         int n = RoundArc.predict(preset, start.x, start.y, start.z, velocity.x, velocity.y, velocity.z,
-                Rounds.remainingLife(level, key), level.getMinBuildHeight() - Rounds.VOID_DEPTH, ticks, arc);
+                Rounds.remainingLife(level, key), level.getMinBuildHeight() - Rounds.VOID_DEPTH, false, ticks, arc);
         if (n != ticks) {
             Rounds.destroy(level, key);
             helper.fail("arc " + n + " of " + ticks + " steps");

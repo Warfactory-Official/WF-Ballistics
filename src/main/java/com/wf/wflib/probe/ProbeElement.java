@@ -132,7 +132,7 @@ public sealed interface ProbeElement {
     /** Children stacked. A panel is one of these. */
     record Column(List<ProbeElement> children, int gap) implements ProbeElement {
         public static Column of(ProbeElement... children) {
-            return new Column(List.of(children), 2);
+            return new Column(List.of(children), 4);
         }
     }
 
@@ -145,8 +145,9 @@ public sealed interface ProbeElement {
     }
 
     /** Draws into a box whose top-left corner is {@code (x, y)}. */
+    /** Draws in canvas units at the element's top-left; vanilla 3D drawing needs {@code canvas.suspend()} first. */
     @FunctionalInterface
     interface Drawable {
-        void draw(GuiGraphics graphics, int x, int y, int width, int height, float partialTick);
+        void draw(com.wf.gemrender.ui.Canvas canvas, int x, int y, int w, int h, float partialTick);
     }
 }

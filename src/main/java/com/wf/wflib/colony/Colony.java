@@ -21,20 +21,16 @@ public final class Colony {
     public double population;
     public double aggression;
     public int expansionCooldown;
-    /** Whether the nest's blocks have been placed in the world yet. */
     public boolean built;
-    /** Egg chambers still standing, and so the colony's life: at zero it is removed. */
+    /** Egg chambers; 0 => colony removed. */
     public int spawners;
-    /** Defenders standing in the world as bodies rather than as numbers. */
+    /** Defenders as spawned bodies, not a count (cf. {@code population}). */
     public int garrison;
     /** Extra mounds grown onto this colony. A count, not positions: {@link NestCells} derives the rest. */
     public int buds;
-    /** The ground height each budded mound was laid at, in the order they were grown. */
+    /** Ground height each budded mound was laid at, in grow order. */
     public final IntArrayList budHeights = new IntArrayList();
 
-    /**
-     * @return how many buds have been stamped into the world
-     */
     public int builtBuds() {
         return budHeights.size();
     }
@@ -47,12 +43,7 @@ public final class Colony {
         this.tier = tier;
     }
 
-    // --- distance scaling ---
-
-    /**
-     * @return the tier a colony founded at this distance from spawn would have, or -1 inside the safe
-     *      radius where none may exist.
-     */
+    /** -1 inside the safe radius: no colony founds there. */
     public static int tierAtDistance(double distance) {
         int safe = ColonyConfig.safeRadius();
         if (distance < safe) {
@@ -69,24 +60,16 @@ public final class Colony {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
-    // --- derived strength ---
-
     public int populationCap() {
         return ColonyConfig.basePopulationCap() * (tier + 1);
     }
 
-    /**
-     * @return the population cap less the bodies already standing, so a garrison and a population cannot both
-     *      be full: that would be the same bugs counted twice.
-     */
+    /** Cap less garrison; population + garrison would double-count the same bugs. */
     public double room() {
         return Math.max(0.0, populationCap() - garrison);
     }
 
-    /**
-     * @return the most defenders this nest will hold. Garrison bugs are retained rather than despawned, so
-     *      without a ceiling a nest visited often enough would grow one without bound.
-     */
+    /** Ceiling needed: garrison bugs never despawn. */
     public int garrisonCap() {
         return ColonyConfig.garrisonPerChamber() * spawners;
     }
@@ -99,25 +82,16 @@ public final class Colony {
         return ColonyConfig.baseWarbandSize() * (tier + 1);
     }
 
-    /**
-     * @return how wide one of this colony's mounds is. For the whole cluster see {@link #footprintRadius()}.
-     */
+    /** One mound's radius; cf. {@link #footprintRadius()} for the whole cluster. */
     public int nestRadius() {
         return 2 + tier;
     }
 
-    /**
-     * @return how far the whole cluster reaches: the outermost cell plus its own mound. What anything asking
-     *      "does this colony own that block" wants.
-     */
+    /** Ownership radius: outermost cell + its mound. */
     public int footprintRadius() {
         return nestRadius() + NestCells.extent(this);
     }
 
-    /**
-     * @return how many mounds this colony may grow onto itself. Rises with tier, so a frontier hive sprawls
-     *      while a starting one stays a single dome.
-     */
     public int budCap() {
         return NestCells.cap(tier);
     }
@@ -126,9 +100,7 @@ public final class Colony {
         return aggression >= ColonyConfig.strikeThreshold() && population >= warbandSize();
     }
 
-    /**
-     * @return whether the lattice has room for another mound. Says nothing about affording one.
-     */
+    /** Room only; affordability unchecked. */
     public boolean canBud() {
         return buds < budCap();
     }
@@ -150,8 +122,6 @@ public final class Colony {
     public boolean hasResolvedY() {
         return y != Y_UNRESOLVED;
     }
-
-    // --- persistence ---
 
     public CompoundTag save() {
         CompoundTag tag = new CompoundTag();

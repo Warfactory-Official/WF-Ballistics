@@ -12,7 +12,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
-/** Registers the mod's {@link ParticleType}s. */
 public final class WFParticles {
 
     public static final DeferredRegister<ParticleType<?>> PARTICLE_TYPES =
@@ -34,10 +33,7 @@ public final class WFParticles {
             PARTICLE_TYPES.register("mist", () -> new SimpleParticleType(false) {
             });
 
-    /**
-     * A chunk of flying rock: a tumbling copy of the block it came from, so a blast throws the actual ore about
-     * rather than grey confetti.
-     */
+    /** Tumbling copy of its source block; a blast throws actual ore, not grey confetti. */
     public static final DeferredHolder<ParticleType<?>, ParticleType<BlockParticleOption>> BLOCK_DEBRIS =
             PARTICLE_TYPES.register("block_debris", () -> new ParticleType<BlockParticleOption>(false) {
 
@@ -55,6 +51,11 @@ public final class WFParticles {
     /** The heavy dark smoke a demolition charge leaves hanging over the hole. */
     public static final DeferredHolder<ParticleType<?>, SimpleParticleType> SMOKE_PLUME =
             PARTICLE_TYPES.register("smoke_plume", () -> new SimpleParticleType(false) {
+            });
+
+    /** Smoke-grenade screen: white, slow. */
+    public static final DeferredHolder<ParticleType<?>, SimpleParticleType> SMOKE_SCREEN =
+            PARTICLE_TYPES.register("smoke_screen", () -> new SimpleParticleType(true) {
             });
 
     private WFParticles() {

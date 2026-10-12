@@ -18,7 +18,9 @@ public class InstancedTrailVisual extends AbstractVisual implements EffectVisual
     public InstancedTrailVisual(VisualizationContext ctx, InstancedTrailEffect effect, float partialTick) {
         super(ctx, (Level) effect.level(), partialTick);
         this.pool = new ParticlePool(ctx, effect.emitter(), effect.kind().instanceType(),
-                ParticleModels.translucent(WFParticleTextures.MIST_SOFT));
+                effect.kind() == InstancedTrailEffect.Kind.EXHAUST
+                        ? ParticleModels.glowing(WFParticleTextures.MIST_SOFT)
+                        : ParticleModels.absorbance(WFParticleTextures.MIST_SOFT));
     }
 
     @Override

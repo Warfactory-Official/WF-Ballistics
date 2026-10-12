@@ -1,7 +1,6 @@
 package com.wf.wflib.client.rail;
 
 import com.wf.wflib.WFLib;
-import com.wf.wflib.client.journeymap.rail.RailMapEditor;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -23,8 +22,7 @@ public final class RailClientEvents {
 
     @SubscribeEvent
     public static void onLoggedOut(ClientPlayerNetworkEvent.LoggingOut event) {
-        // Otherwise one server's railways stay drawn over the next world's terrain. The working copy
-        // is dropped too: it is a view of a route on that server, and it means nothing on the next one.
+        // else: last server's railways stay drawn over the next world. Working copy is server-specific too.
         PublishedAlignments.clear();
         RouteOwnership.clear();
         RailMapEditor.resetSession();

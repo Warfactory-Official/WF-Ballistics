@@ -12,19 +12,10 @@ import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 
 /**
- * The level drawn from an arbitrary camera into a caller-owned framebuffer, with its own section-visibility graph.
- *
- * <p>Call only from {@code RenderFrameEvent.Pre} (main target bound, profiler stack empty, no level pass running).
- * One instance per independent view; instances hold GPU/graph state until {@link #close()}.
- *
- * <p>Grid modes:
- * <ul>
- * <li>{@link #sharedGrid()}: main view's section grid (centred on the player), own graph. Camera outside the
- * player's render distance => nothing drawn there. Translucent geometry keeps the main view's sort.</li>
- * <li>{@link #ownGrid(int)}: second grid centred on the camera; duplicates section buffers and compiles.
- * Chunks outside the client's ring need streaming (drone feeds).</li>
- * </ul>
- * Entities: vanilla render-distance cull is measured from this camera; the anchor entity is hidden.
+ * Level drawn from an arbitrary camera into a caller-owned framebuffer, own section-visibility graph.
+ * Call only from {@code RenderFrameEvent.Pre} (main target bound, profiler stack empty, no level pass running).
+ * One instance per view; holds GPU/graph state until {@link #close()}. Entity render-distance cull measured
+ * from this camera.
  */
 public final class OffscreenView implements AutoCloseable {
 
@@ -39,11 +30,19 @@ public final class OffscreenView implements AutoCloseable {
         this.swap = new FeedRenderSwap(viewDistance);
     }
 
+    /**
+     * Main view's section grid, centred on the player; own graph. Outside the player's render distance =>
+     * nothing drawn here. Translucent sort follows the main view's.
+     */
     public static OffscreenView sharedGrid() {
         return new OffscreenView(FeedRenderSwap.SHARED);
     }
 
-    /** @param viewDistance sections either side of the camera; also the fog distance */
+    /**
+     * Second grid centred on the camera; duplicates section buffers and compiles. Drone feeds: chunks outside
+     * the client's ring need streaming.
+     * @param viewDistance sections either side of the camera; also the fog distance
+     */
     public static OffscreenView ownGrid(int viewDistance) {
         if (viewDistance < 2) {
             throw new IllegalArgumentException("viewDistance " + viewDistance);
@@ -51,7 +50,6 @@ public final class OffscreenView implements AutoCloseable {
         return new OffscreenView(viewDistance);
     }
 
-    /** {@link #render(Entity, Vec3, float, float, float, float, RenderTarget, DeltaTracker)} anchored on the camera entity. */
     public boolean render(Vec3 pos, float yaw, float pitch, float roll, float fovDeg,
                           RenderTarget target, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();

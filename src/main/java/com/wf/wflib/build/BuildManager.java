@@ -9,13 +9,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * The per-tick housekeeping a construction site needs that the generic {@code work} package must not know about:
- * whether the ground is still ours, and keeping the blocks being worked on loaded.
- */
+/** Territory + chunk-load housekeeping the generic {@code work} package must not know about. */
 public final class BuildManager {
 
-    /** How far around a live claim to hold chunks loaded, in chunks. */
     private static final int CLAIM_CHUNK_RADIUS = 1;
 
     private BuildManager() {
@@ -37,7 +33,6 @@ public final class BuildManager {
         }
     }
 
-    /** Re-survey a running job and suspend or resume it. */
     private static void enforce(ServerLevel level, WorkJob job) {
         TerritoryVerdict verdict = SiteRules.survey(level, BuildJobs.factionOf(job), job.bounds());
         String reason = verdict.allowed() ? null : verdict.reason();
@@ -46,7 +41,6 @@ public final class BuildManager {
         }
     }
 
-    /** Keep the chunks under this job's live claims loaded. */
     private static void holdClaims(ServerLevel level, WorkJob job) {
         WorkQueue queue = job.queue();
         for (int id : queue.claimedIds()) {

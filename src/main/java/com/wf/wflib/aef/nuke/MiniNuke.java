@@ -10,10 +10,6 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.UUID;
 
-/**
- * The mini-nuke ("muke") system, a compact nuclear blast: a fire-leaving, drop-free crater, an obstruction-checked
- * entity kill radius, and a small mushroom cloud.
- */
 public final class MiniNuke {
 
     private MiniNuke() {
@@ -23,16 +19,12 @@ public final class MiniNuke {
         detonate(level, center, p, null);
     }
 
-    /**
-     * @param igniterFaction the WarForge faction the blast is attributed to (a missile's {@code teamId}), or
-     *      {@code null} when unattributed: see {@link ExplosionAEF#igniterFaction}.
-     */
+    /** {@code igniterFaction}: missile's {@code teamId}, or null when unattributed. */
     public static void detonate(Level level, Vec3 center, MukeParams p, UUID igniterFaction) {
         if (level.isClientSide) {
             return;
         }
 
-        // The "fatman" variant is a full-size nuke: hand off to the threaded MK5 + Torex path.
         if (!p.miniNuke) {
             Nuke.detonate(level, center, (int) p.blastRadius);
             return;
@@ -50,7 +42,6 @@ public final class MiniNuke {
                     .explode();
         }
 
-        // Entity kill radius (obstruction-checked, like the big nuke's damage pass).
         if (p.killRadius > 0) {
             ExplosionNukeGeneric.dealDamage(level, center, p.killRadius);
         }
@@ -58,11 +49,8 @@ public final class MiniNuke {
         level.addFreshEntity(new EntityNukeTorex(level, center.add(0.0, 1.5, 0.0), p.blastRadius));
     }
 
-    // --- HBM MukeParams presets (radiation + shrapnel dropped; resolution lowered for the synchronous pass) ---
+    // Ported from HBM: radiation + shrapnel dropped; resolution lowered (synchronous pass).
 
-    /**
-     * Tiny "tots" charge.
-     */
     public static MukeParams tots() {
         MukeParams p = new MukeParams();
         p.blastRadius = 10F;
@@ -71,9 +59,6 @@ public final class MiniNuke {
         return p;
     }
 
-    /**
-     * Low-yield mini nuke.
-     */
     public static MukeParams low() {
         MukeParams p = new MukeParams();
         p.blastRadius = 15F;
@@ -81,9 +66,7 @@ public final class MiniNuke {
         return p;
     }
 
-    /**
-     * Medium-yield mini nuke (the default missile warhead uses this).
-     */
+    /** Wired to {@code WarheadRegistry.MININUKE}. */
     public static MukeParams medium() {
         MukeParams p = new MukeParams();
         p.blastRadius = 20F;
@@ -91,9 +74,6 @@ public final class MiniNuke {
         return p;
     }
 
-    /**
-     * Damage + visual only, no terrain damage.
-     */
     public static MukeParams safe() {
         MukeParams p = new MukeParams();
         p.safe = true;
@@ -101,9 +81,6 @@ public final class MiniNuke {
         return p;
     }
 
-    /**
-     * Full-size "fatman": delegates to the threaded {@link Nuke} + Torex.
-     */
     public static MukeParams fatman() {
         MukeParams p = new MukeParams();
         p.miniNuke = false;
@@ -111,33 +88,19 @@ public final class MiniNuke {
         return p;
     }
 
-    /**
-     * Tunables for a mini-nuke blast (WF port of HBM's {@code MukeParams}).
-     */
+    /** Tunables for a mini-nuke blast; WF port of HBM's {@code MukeParams}. */
     public static class MukeParams {
-        /**
-         * {@code false} = full-size "fatman" nuke (delegates to {@link Nuke#detonate}).
-         */
+        /** {@code false}: full-size "fatman", delegates to {@link Nuke#detonate}. */
         public boolean miniNuke = true;
-        /**
-         * {@code true} = no terrain destruction (kill radius + visual only).
-         */
+        /** {@code true}: no terrain destruction, kill radius + visual only. */
         public boolean safe = false;
-        /**
-         * Crater power, in vanilla explosion units.
-         */
+        /** Crater power, vanilla explosion units. */
         public float blastRadius = 15F;
-        /**
-         * Entity kill radius, in blocks.
-         */
+        /** Blocks. */
         public float killRadius = 45F;
-        /**
-         * Leave fire in the cleared crater.
-         */
+        /** Leave fire in the cleared crater. */
         public boolean fire = true;
-        /**
-         * Block-allocator ray resolution; higher = smoother sphere but a heavier synchronous pass.
-         */
+        /** Block-allocator ray resolution; higher = smoother sphere, heavier synchronous pass. */
         public int resolution = 32;
     }
 }

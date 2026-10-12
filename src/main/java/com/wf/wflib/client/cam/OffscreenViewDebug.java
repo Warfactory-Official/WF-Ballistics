@@ -33,7 +33,7 @@ public final class OffscreenViewDebug {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "offscreen_debug");
     /** GPU timestamp pairs, read {@code FRAMES-1} frames late => no stall. GL_TIME_ELAPSED FORBIDDEN: vanilla
-     *  {@code TimerQuery} (F3 / metrics recording) holds one open across the frame => begin fails, end closes theirs. */
+     * {@code TimerQuery} (F3 / metrics recording) holds one open across the frame => begin fails, end closes theirs. */
     private static final int FRAMES = 4;
 
     @Nullable

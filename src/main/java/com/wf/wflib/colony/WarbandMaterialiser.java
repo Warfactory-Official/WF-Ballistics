@@ -19,24 +19,19 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 
-/**
- * Turns a warband record into actual glyphids when somebody is there to be attacked by them: the T2 -> T0 step, and
- * the one place in the colony simulation where numbers can go wrong.
- */
+/** Warband record -> real glyphids once somebody is there to be attacked; T2 -> T0 step. */
 public final class WarbandMaterialiser {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /** Placement attempts per glyphid. Failing them all leaves it owed and retried, which is fine. */
+    /** Exhausting these leaves a glyphid owed, retried next tick. */
     private static final int PLACEMENT_ATTEMPTS = 12;
 
-    /** How far bodies scatter around the record, so a warband arrives as a swarm and not as a column. */
     private static final int SCATTER = 8;
 
     private WarbandMaterialiser() {
     }
 
-    /** Materialise whatever is owed in this dimension. */
     public static void tick(ServerLevel level) {
         ColonyRegistry registry = ColonyRegistry.get(level);
         if (registry.warbands().isEmpty()) {
@@ -47,7 +42,7 @@ public final class WarbandMaterialiser {
             return;
         }
 
-        // Copied because a warband spent down to nothing removes itself from the list.
+        // Copy: materialise() can remove a warband mid-iteration.
         for (Warband warband : new ArrayList<>(registry.warbands())) {
             if (budget <= 0) {
                 break;
@@ -59,13 +54,10 @@ public final class WarbandMaterialiser {
         }
     }
 
-    /**
-     * @return true if this warband is somewhere a glyphid could be seen, and somewhere one could be placed.
-     */
     private static boolean shouldMaterialise(ServerLevel level, Warband warband) {
         int chunkX = (int) Math.floor(warband.x) >> 4;
         int chunkZ = (int) Math.floor(warband.z) >> 4;
-        // No chunk, no ground to stand on, and loading one to find out would defeat the whole design.
+        // Chunk must already be loaded; loading one here defeats lazy materialisation.
         if (!level.hasChunk(chunkX, chunkZ)) {
             return false;
         }
@@ -81,11 +73,7 @@ public final class WarbandMaterialiser {
         return false;
     }
 
-    /**
-     * Place up to {@code budget} of this warband's glyphids in the world.
-     *
-     * @return how many actually reached it, which is exactly how many the record was debited
-     */
+    /** @return glyphids actually placed; also exactly what the record is debited. */
     public static int materialise(ServerLevel level, ColonyRegistry registry, Warband warband, int budget) {
         int wanted = Math.min(budget, warband.count);
         if (wanted <= 0) {
@@ -113,11 +101,6 @@ public final class WarbandMaterialiser {
         return spawned;
     }
 
-    /**
-     * Put one glyphid on real ground near the warband.
-     *
-     * @return true if it made it into the world
-     */
     private static boolean place(ServerLevel level, Warband warband, @Nullable Colony origin) {
         RandomSource random = level.random;
         int centerX = (int) Math.floor(warband.x);
@@ -145,7 +128,7 @@ public final class WarbandMaterialiser {
 
             if (!warband.flying) {
                 BlockPos ground = new BlockPos(x, y - 1, z);
-                // Nothing stands on water or in lava; the surface height alone rules out neither.
+                // Surface height alone doesn't rule out water/lava; check the fluid directly.
                 if (!level.getFluidState(ground).isEmpty() || !level.getFluidState(ground.above()).isEmpty()) {
                     continue;
                 }
@@ -171,7 +154,6 @@ public final class WarbandMaterialiser {
         return false;
     }
 
-    /** Give a placed glyphid what makes it part of an attack: somewhere to fall back to, somewhere to go. */
     private static void orient(EntityGlyphid glyphid, Warband warband, @Nullable Colony origin, int y) {
         glyphid.setCanFly(warband.flying);
         if (warband.flying) {
@@ -187,7 +169,7 @@ public final class WarbandMaterialiser {
         glyphid.taskZ = warband.targetZ;
         glyphid.setCurrentTask(GlyphidTasks.TASK_FOLLOW, null);
 
-        // Placed in the air, so it must be flying before its first tick or it falls out of the sky.
+        // setAirborne before first tick; placed mid-air, it falls otherwise.
         if (warband.flying) {
             glyphid.setAirborne(true);
             glyphid.setFlightTarget(

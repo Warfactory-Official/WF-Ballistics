@@ -13,7 +13,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 
-/** Debug overlay: the last few blasts, as the rays they actually marched. */
+/** Debug: last blasts' actual marched rays. */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class ExplosionTraceRenderer {
 
@@ -82,7 +82,7 @@ public final class ExplosionTraceRenderer {
                 case OUTSIDE_CONE -> new float[]{1.0f, 0.2f, 0.2f};
             };
             DebugLines.cross(pose, lines, victim.pos(), 0.6, c[0], c[1], c[2], fade);
-            // A line back to the charge pairs each verdict with the blast that produced it.
+            // Pairs verdict with the blast that produced it, when traces overlap.
             DebugLines.line(pose, lines, trace.origin(), victim.pos(), c[0], c[1], c[2], 0.5f * fade);
         }
     }

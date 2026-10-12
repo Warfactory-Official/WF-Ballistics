@@ -23,6 +23,9 @@ public final class ProbeRegistry {
             new ArrayList<>();
     private static final List<Entry<Predicate<Entity>, ProbeDataProvider.Entities>> ENTITY_DATA =
             new ArrayList<>();
+    private static final List<Entry<Predicate<Entity>, ProbeProvider.EntityNodes>> ENTITY_NODES = new ArrayList<>();
+    private static final List<Entry<Predicate<BlockEntity>, ProbeProvider.BlockNodes>> BLOCK_NODES =
+            new ArrayList<>();
 
     /** The priority a "describe anything" provider registers at. */
     public static final int DEFAULT_PRIORITY = Integer.MIN_VALUE / 2;
@@ -66,6 +69,57 @@ public final class ProbeRegistry {
 
     public static void addAnyEntity(ProbeProvider.Entities provider, int priority) {
         addEntities(entity -> true, provider, priority);
+    }
+
+    /** Target with nodes => no crosshair panel: its nodes carry everything. */
+    public static void addEntityNodes(Predicate<Entity> test, ProbeProvider.EntityNodes provider, int priority) {
+        insert(ENTITY_NODES, test, provider, priority);
+    }
+
+    /** @see #addEntityNodes */
+    public static void addBlockNodes(Predicate<BlockEntity> test, ProbeProvider.BlockNodes provider, int priority) {
+        insert(BLOCK_NODES, test, provider, priority);
+    }
+
+    public static boolean hasNodes(Entity entity) {
+        for (Entry<Predicate<Entity>, ProbeProvider.EntityNodes> entry : ENTITY_NODES) {
+            if (entry.test().test(entity)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean hasNodes(@Nullable BlockEntity blockEntity) {
+        if (blockEntity == null) {
+            return false;
+        }
+        for (Entry<Predicate<BlockEntity>, ProbeProvider.BlockNodes> entry : BLOCK_NODES) {
+            if (entry.test().test(blockEntity)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean anyBlockNodes() {
+        return !BLOCK_NODES.isEmpty();
+    }
+
+    public static void collectNodes(List<ProbeNode> out, ProbeContext ctx, Entity entity) {
+        for (Entry<Predicate<Entity>, ProbeProvider.EntityNodes> entry : ENTITY_NODES) {
+            if (entry.test().test(entity)) {
+                entry.provider().nodes(out, ctx, entity);
+            }
+        }
+    }
+
+    public static void collectNodes(List<ProbeNode> out, ProbeContext ctx, BlockEntity blockEntity) {
+        for (Entry<Predicate<BlockEntity>, ProbeProvider.BlockNodes> entry : BLOCK_NODES) {
+            if (entry.test().test(blockEntity)) {
+                entry.provider().nodes(out, ctx, blockEntity);
+            }
+        }
     }
 
     // --- server side -----------------------------------------------------------------------------

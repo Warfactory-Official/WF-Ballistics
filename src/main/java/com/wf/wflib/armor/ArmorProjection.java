@@ -14,11 +14,9 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Optional;
 
 /**
- * Wound axis to protection axis, the many-to-one projection. Deliberately outside the pure core: the
- * core is free of Minecraft types and must stay that way, and this is nothing but Minecraft types.
- *
- * <p>Returning null is a real answer and not a failure. Starvation, the void and the world border
- * have no protection type because no material answers them, which is the axis split doing its job.
+ * {@code DamageSource} -> {@link ProtectionType}, many-to-one. Kept outside the pure core (core stays
+ * free of Minecraft types). null is a valid answer: starvation, void, world border have no material
+ * that could ever answer them.
  */
 public final class ArmorProjection {
 
@@ -41,7 +39,7 @@ public final class ArmorProjection {
             }
         }
 
-        // Tags next, for damage types this mod has never heard of.
+        // Fallback for damage types without a named key.
         if (source.is(DamageTypeTags.IS_LIGHTNING)) {
             return ProtectionType.ELECTRIC;
         }
@@ -52,24 +50,20 @@ public final class ArmorProjection {
             return ProtectionType.THERMAL;
         }
         if (source.is(DamageTypeTags.IS_FALL)) {
-            // Left unprotectable on purpose. Mapping it to IMPACT is defensible (jump boots), but it
-            // invites an armour set that makes falling free, and this is the wrong place to decide that.
+            // Deliberately unprotectable: IMPACT mapping would let armour alone negate fall damage.
             return null;
         }
         if (source.is(DamageTypeTags.IS_PROJECTILE)) {
             return ProtectionType.KINETIC;
         }
 
-        // Anything still unaccounted for is somebody else's damage type. A mod that says its damage
-        // ignores armour is taken at its word; otherwise a hit is a hit, and blunt is the safe reading,
-        // because treating unknown damage as unprotectable would quietly make armour useless against
-        // every modded mob in the pack.
+        // Unknown type: default to IMPACT rather than null, else armour would quietly do nothing
+        // against unrecognized modded damage; BYPASSES_ARMOR is still honored.
         return source.is(DamageTypeTags.BYPASSES_ARMOR) ? null : ProtectionType.IMPACT;
     }
 
     @Nullable
     private static ProtectionType byKey(ResourceKey<DamageType> key, DamageSource source) {
-        // This mod's own, first: they are the ones with a deliberate answer.
         if (key == WFDamageTypes.PHYSICAL) {
             return ProtectionType.KINETIC;
         }
@@ -79,13 +73,12 @@ public final class ArmorProjection {
         if (key == WFDamageTypes.ELECTRIC) {
             return ProtectionType.ELECTRIC;
         }
-        // A laser burns. A reflective coat and a fire-resistant weave are the same answer, and the
-        // thing rubber insulation does against a taser is not it, which is why ENERGY had to split.
+        // Laser -> THERMAL not ELECTRIC: same countermeasure as fire, unlike actual electric shock.
         if (key == WFDamageTypes.FIRE || key == WFDamageTypes.LASER) {
             return ProtectionType.THERMAL;
         }
-        // Gas is tagged bypasses_armor because vanilla armour has no business stopping it. A sealed
-        // suit does, so the explicit mapping is checked before the tag.
+        // Gas/acid tagged BYPASSES_ARMOR for vanilla armour, but a sealed suit should defend; hence
+        // explicit CHEMICAL mapping here, checked before the tag in typeFor.
         if (key == WFDamageTypes.GAS || key == WFDamageTypes.ACID) {
             return ProtectionType.CHEMICAL;
         }
@@ -114,10 +107,7 @@ public final class ArmorProjection {
         return null;
     }
 
-    /**
-     * A knife and a bayonet make different wounds and are defeated by the same weave, which is the
-     * clearest case for the two axes; a fist and a club are not, and get padding instead.
-     */
+    /** Edged weapons (sword/axe/pickaxe) -> SHARP; blunt (fist, club) -> IMPACT. */
     private static ProtectionType meleeType(DamageSource source) {
         if (source.getDirectEntity() instanceof LivingEntity attacker) {
             ItemStack weapon = attacker.getMainHandItem();

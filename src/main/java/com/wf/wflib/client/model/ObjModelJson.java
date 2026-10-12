@@ -11,16 +11,10 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-/**
- * The two things a {@code neoforge:obj} model json says that a rig needs: which mesh it draws and which texture it
- * wears.
- */
+/** {@code neoforge:obj} model json: mesh + skin it names. */
 public record ObjModelJson(ResourceLocation obj, ResourceLocation texture) {
 
-    /**
-     * @param modelId a model id as the registries hold it, e.g. {@code wflib:entity/missiles/v2}
-     * @throws IOException if the json is missing, is not an obj model, or names no texture
-     */
+    /** @param modelId registry id, e.g. {@code wflib:entity/missiles/v2} */
     public static ObjModelJson read(ResourceLocation modelId) throws IOException {
         ResourceLocation path = ResourceLocation.fromNamespaceAndPath(modelId.getNamespace(),
                 "models/" + modelId.getPath() + ".json");
@@ -44,7 +38,7 @@ public record ObjModelJson(ResourceLocation obj, ResourceLocation texture) {
                 .getAsString()), texture(json, path));
     }
 
-    /** The skin, expanded from the shorthand a model json uses into the full path of the png. */
+    /** Prefers the non-particle texture entry; falls back to particle if that's the only one named. */
     private static ResourceLocation texture(JsonObject json, ResourceLocation path) throws IOException {
         if (!json.has("textures")) {
             throw new IOException(path + " names no textures");

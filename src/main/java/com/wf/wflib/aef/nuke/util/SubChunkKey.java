@@ -2,11 +2,6 @@ package com.wf.wflib.aef.nuke.util;
 
 import net.minecraft.world.level.ChunkPos;
 
-/**
- * Unique identifier for sub-chunks.
- *
- * @author mlbv
- */
 public class SubChunkKey {
 
     private int chunkX;
@@ -22,6 +17,7 @@ public class SubChunkKey {
         this.update(pos.x, pos.z, sy);
     }
 
+    /** Mutates hash; never call while {@code this} is a live hash-collection key. */
     public SubChunkKey update(int cx, int cz, int sy) {
         this.chunkX = cx;
         this.chunkZ = cz;

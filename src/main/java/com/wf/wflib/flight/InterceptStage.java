@@ -45,7 +45,10 @@ public final class InterceptStage implements FlightStage {
     @Override
     public Vec3 guide(MissileEntity missile, FlightContext ctx) {
         if (missile.flight().getPhase() == MissileEntity.Phase.ASCEND) {
-            return new Vec3(0.0, missile.flight().getCruiseSpeed(), 0.0);
+            // Launched with a velocity (a laid rack) => boost along it; at rest => straight up.
+            Vec3 v = missile.getDeltaMovement();
+            return v.lengthSqr() > 1.0E-6 ? v.normalize().scale(missile.flight().getCruiseSpeed())
+                    : new Vec3(0.0, missile.flight().getCruiseSpeed(), 0.0);
         }
         Vec3 to = ctx.target().subtract(ctx.position());
         double len = to.length();

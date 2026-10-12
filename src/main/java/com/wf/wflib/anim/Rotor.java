@@ -6,12 +6,9 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 
 /**
- * One turning disc: what it is called, which way and how fast it goes round, and where it pivots.
- *
- * @param model the disc's identity: a mesh for a missile prop, a piece id for a drone rotor
- * @param node  the glTF node the disc is, for an airframe drawn from a node graph; null for a missile
- *              prop, which is a loose mesh with no graph to name a node in
- * @param pivot where it turns about, model units, or null to read it back off {@code model}'s own mesh
+ * @param model mesh id (missile prop) or piece id (drone rotor)
+ * @param node null => missile prop (loose mesh, no node graph)
+ * @param pivot null => read off {@code model}'s own mesh bounds
  */
 public record Rotor(ResourceLocation model, @Nullable String node, Vector3f axis, float degreesPerTick,
                     @Nullable Vector3f pivot) {
@@ -36,10 +33,7 @@ public record Rotor(ResourceLocation model, @Nullable String node, Vector3f axis
         return new Rotor(model, node, axis, degreesPerTick, new Vector3f(x, y, z));
     }
 
-    /**
-     * Name the node this disc is and where it turns, which for a model with a hierarchy are one fact: the
-     * hub node's own origin is the pivot, because that is what the blades were parented to.
-     */
+    /** Hub node's own origin doubles as pivot: blades are parented to it. */
     public Rotor at(String node, float x, float y, float z) {
         return new Rotor(model, node, axis, degreesPerTick, new Vector3f(x, y, z));
     }

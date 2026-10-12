@@ -12,7 +12,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-/** The two kinds of job the build system creates, and the shape of the detail tag each carries. */
 public final class BuildJobs {
 
     public static final ResourceLocation CONSTRUCT = rl("construct");
@@ -30,10 +29,7 @@ public final class BuildJobs {
         return ResourceLocation.fromNamespaceAndPath(WFLib.MODID, path);
     }
 
-    /**
-     * @param blueprint the blueprint's file name, so a job reloaded from disk can find it again
-     * @param supply station code to draw materials from, or null to leave it to whoever works the job
-     */
+    /** {@code supply}: station code to draw from, or null to let the worker pick. */
     public static WorkJob construct(ServerLevel level, WorkPlan plan, String blueprint,
                                     @Nullable String supply, @Nullable UUID faction) {
         CompoundTag detail = new CompoundTag();
@@ -48,10 +44,7 @@ public final class BuildJobs {
                 "build " + blueprint, level.getGameTime(), WorkQueue.of(plan.orders()), detail);
     }
 
-    /**
-     * @param depot station code to bring the recovered material back to, or null for whatever the worker
-     *      calls home
-     */
+    /** {@code depot}: station code to return material to, or null for whatever the worker calls home. */
     public static WorkJob salvage(ServerLevel level, WorkPlan plan, @Nullable String depot,
                                   @Nullable UUID faction) {
         CompoundTag detail = new CompoundTag();
@@ -66,12 +59,7 @@ public final class BuildJobs {
                 "salvage " + where, level.getGameTime(), WorkQueue.of(plan.orders()), detail);
     }
 
-    /**
-     * A blank assignment for a drone joining {@code jobId}: no order, no station.
-     *
-     * @return null if there is no such job, so a mission saved across a reload that outlived its job simply
-     *      flies as an ordinary one instead of chasing a ghost
-     */
+    /** Null: no such job (a mission saved across a reload that outlived its job flies as an ordinary one). */
     @Nullable
     public static WorkAssignment joining(UUID jobId, ServerLevel level) {
         WorkJob job = WorkRegistry.get(level).byId(jobId);
@@ -79,28 +67,19 @@ public final class BuildJobs {
                 : new WorkAssignment(jobId, job.kind(), -1, null, 0, null, job.workable());
     }
 
-    /**
-     * @return the blueprint a construction job builds, or null if this is not one.
-     */
     @Nullable
     public static String blueprintOf(WorkJob job) {
         return job.kind().equals(CONSTRUCT) && job.detail().contains(BLUEPRINT)
                 ? job.detail().getString(BLUEPRINT) : null;
     }
 
-    /**
-     * @return the station this job draws materials from, or returns them to, or null if it was not given one.
-     */
     @Nullable
     public static String stationOf(WorkJob job) {
         String key = job.kind().equals(CONSTRUCT) ? SUPPLY : DEPOT;
         return job.detail().contains(key) ? job.detail().getString(key) : null;
     }
 
-    /**
-     * @return the faction this job is being done on behalf of, or null if it was started by somebody with no
-     *      faction, or from the console, which has none.
-     */
+    /** Null: console-started, or started by someone with no faction. */
     @Nullable
     public static UUID factionOf(WorkJob job) {
         return job.detail().hasUUID(FACTION) ? job.detail().getUUID(FACTION) : null;

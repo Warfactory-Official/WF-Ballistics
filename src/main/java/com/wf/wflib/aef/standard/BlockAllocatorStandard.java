@@ -11,11 +11,6 @@ import net.minecraft.world.level.material.FluidState;
 import java.util.HashSet;
 import java.util.Set;
 
-/**
- * The vanilla explosion ray-march, reproduced exactly: fire rays from the centre through every cell on the surface
- * of a {@code resolution³} cube and march each ray outward in 0.3-block steps, draining the ray's (randomised)
- * power by each block's explosion resistance until it runs out.
- */
 public class BlockAllocatorStandard implements IBlockAllocator {
 
     protected final int resolution;
@@ -36,7 +31,7 @@ public class BlockAllocatorStandard implements IBlockAllocator {
         for (int i = 0; i < resolution; ++i) {
             for (int j = 0; j < resolution; ++j) {
                 for (int k = 0; k < resolution; ++k) {
-                    // Only walk the shell of the cube; interior cells would just re-trace the same rays.
+                    // Shell cells only; interior would retrace existing rays.
                     if (i != 0 && i != resolution - 1 && j != 0 && j != resolution - 1 && k != 0 && k != resolution - 1) {
                         continue;
                     }
@@ -79,10 +74,6 @@ public class BlockAllocatorStandard implements IBlockAllocator {
         return affectedBlocks;
     }
 
-    /**
-     * Resistance the exploder sees for this block (lets a custom exploder override per-block resistance).
-     */
-    /** How much this block resists being blown up. */
     protected float blockResistance(ExplosionAEF explosion, Level level, BlockPos pos, BlockState state, float power) {
         FluidState fluid = state.getFluidState();
         float resistance = Math.max(state.getExplosionResistance(level, pos, explosion.compat),

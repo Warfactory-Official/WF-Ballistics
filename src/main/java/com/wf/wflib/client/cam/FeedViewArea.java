@@ -13,7 +13,6 @@ import java.util.List;
 /** A section grid of a feed's own, centred on the drone instead of the player. */
 public final class FeedViewArea extends ViewArea {
 
-    /** Every feed grid in play. */
     private static final List<FeedViewArea> LIVE = new ArrayList<>(4);
 
     FeedViewArea(SectionRenderDispatcher dispatcher, Level level, int viewDistance, LevelRenderer renderer) {
@@ -27,7 +26,6 @@ public final class FeedViewArea extends ViewArea {
         }
     }
 
-    /** Mark a section dirty, but only if this grid is actually holding it. */
     private void setDirtyIfPresent(int sectionX, int sectionY, int sectionZ, boolean reRenderOnMainThread) {
         if (getRenderSectionAt(new BlockPos(SectionPos.sectionToBlockCoord(sectionX),
                 SectionPos.sectionToBlockCoord(sectionY),
@@ -36,7 +34,6 @@ public final class FeedViewArea extends ViewArea {
         }
     }
 
-    /** Give the GPU buffers back and stop listening. */
     void release() {
         LIVE.remove(this);
         releaseAllBuffers();

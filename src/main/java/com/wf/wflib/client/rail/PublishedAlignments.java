@@ -10,15 +10,10 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/**
- * The routes this client has been told about.
- *
- * <p>Everything here arrived from the server, which has already decided what this player may see, so
- * there is no filtering to do on arrival. What is not in this list was never sent.</p>
- */
+/** Routes this client has been told about; server already filtered by visibility, absence = never sent. */
 public final class PublishedAlignments {
 
-    /** Told when the set changes, so the map layer and the editor can both react. */
+    /** Fires on every change; map layer and editor both react. */
     public interface Listener {
         void onAlignments(ResourceKey<Level> dimension, List<AlignmentView> alignments);
     }
@@ -57,7 +52,7 @@ public final class PublishedAlignments {
         return null;
     }
 
-    /** Register a listener, replaying whatever has already arrived so a late one is not empty. */
+    /** Replays current state immediately, so a late listener isn't empty. */
     public static void addListener(Listener next) {
         if (next == null || LISTENERS.contains(next)) {
             return;

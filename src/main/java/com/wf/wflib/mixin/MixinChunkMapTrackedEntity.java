@@ -83,4 +83,9 @@ public abstract class MixinChunkMapTrackedEntity implements StreamTracked {
     public void wfUpdatePlayer(ServerPlayer player) {
         updatePlayer(player);
     }
+
+    @Override
+    public boolean wfSeenBy(ServerPlayer player) {
+        return this.seenBy.contains(player.connection);
+    }
 }

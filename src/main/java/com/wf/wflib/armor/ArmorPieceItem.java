@@ -35,11 +35,7 @@ public class ArmorPieceItem extends ArmorItem {
         super.appendHoverText(stack, context, tooltip, flag);
     }
 
-    /**
-     * Fitting and pulling a plate, the same gesture a bundle uses: right-click an insert onto the
-     * garment in an inventory to fit it, right-click the garment with an empty cursor to take the last
-     * one back out. No screen, and the menu already makes it server-authoritative.
-     */
+    /** Right-click insert onto garment = fit; right-click garment with empty cursor = pop last insert. Bundle-style gesture, no screen; menu click handling is already server-authoritative. */
     @Override
     public boolean overrideOtherStackedOnMe(ItemStack stack, ItemStack other, Slot slot, ClickAction action,
                                             Player player, SlotAccess access) {

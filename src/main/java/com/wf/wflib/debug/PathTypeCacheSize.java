@@ -1,16 +1,11 @@
 package com.wf.wflib.debug;
 
-/** How big vanilla's shared path-type cache should be. */
 public final class PathTypeCacheSize {
 
-    /**
-     * Bytes per entry: one {@code long} position plus one {@code PathType} reference.
-     */
+    /** Bytes/entry: one {@code long} position + one {@code PathType} ref. */
     private static final int BYTES_PER_ENTRY = 12;
 
-    /**
-     * Vanilla's size, kept as the floor so a silly config cannot make things worse than not patching at all.
-     */
+    /** Floor: config can't regress below unpatched vanilla. */
     public static final int VANILLA_ENTRIES = 4096;
 
     private static volatile int entries = entriesForMegabytes(1);
@@ -23,10 +18,7 @@ public final class PathTypeCacheSize {
         return entries;
     }
 
-    /**
-     * Read on the hot path by the mixin's replacement index function, so it is a plain field read rather than
-     * anything cleverer.
-     */
+    /** Hot-path read (mixin's index fn): keep plain field read, nothing cleverer. */
     public static int mask() {
         return mask;
     }
@@ -44,9 +36,7 @@ public final class PathTypeCacheSize {
         return (double) entries * BYTES_PER_ENTRY / (1024.0 * 1024.0);
     }
 
-    /**
-     * @return the entry count actually adopted, which is the requested size rounded down to a power of two
-     */
+    /** @return entries actually adopted (requested size rounded down to pow2) */
     public static int setMegabytes(double megabytes) {
         int size = entriesForMegabytes(megabytes);
         entries = size;

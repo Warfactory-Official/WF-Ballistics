@@ -18,7 +18,7 @@ class RoundArcTest {
     private static void assertBitEqual(KineticPreset p, double x, double y, double z, double vx, double vy,
                                        double vz, int life, double voidY, int ticks, int expectedSteps) {
         double[] out = new double[3 * ticks];
-        int n = RoundArc.predict(p, x, y, z, vx, vy, vz, life, voidY, ticks, out);
+        int n = RoundArc.predict(p, x, y, z, vx, vy, vz, life, voidY, false, ticks, out);
         assertEquals(expectedSteps, n, "steps");
         for (int k = 0; k < n; k++) {
             x += vx;

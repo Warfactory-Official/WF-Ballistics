@@ -11,7 +11,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** A block chip as a Flywheel model: the block's own particle icon, drawn as a quad out of the terrain atlas. */
+/** Sprite-keyed cache, plain map not {@link FlywheelModels}'s {@code RendererReloadCache}: no reload hook => entries leak across resource reloads. */
 public final class BlockChipModels {
 
     private static final Map<TextureAtlasSprite, Model> CHIPS = new ConcurrentHashMap<>();

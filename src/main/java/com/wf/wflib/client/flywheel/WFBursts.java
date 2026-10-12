@@ -4,7 +4,24 @@ import com.wf.gemrender.particle.GemRenderParticleTypes;
 import com.wf.gemrender.particle.LevelContactProbe;
 import com.wf.gemrender.particle.ParticleCollision;
 import com.wf.gemrender.particle.ParticleInstance;
+import com.wf.gemrender.particle.ParticleLook;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.HitResult;
+import net.minecraft.core.Direction;
 import com.wf.gemrender.particle.ParticleModels;
+import com.wf.gemrender.particle.ParticleQuad;
+import dev.engine_room.flywheel.api.material.CardinalLightingMode;
+import dev.engine_room.flywheel.api.material.Transparency;
+import dev.engine_room.flywheel.api.material.WriteMask;
+import dev.engine_room.flywheel.api.model.Model;
+import dev.engine_room.flywheel.lib.material.CutoutShaders;
+import dev.engine_room.flywheel.lib.material.FogShaders;
+import dev.engine_room.flywheel.lib.material.SimpleMaterial;
+import dev.engine_room.flywheel.lib.model.SingleMeshModel;
 import com.wf.gemrender.particle.ParticleBuffer;
 import com.wf.gemrender.particle.ParticleStyle;
 import com.wf.wflib.client.fx.ParticleLight;
@@ -18,20 +35,36 @@ import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 
-/** The four hand-ticked particle bursts, as {@link InstancedBurst}es. */
 public final class WFBursts {
 
     private static final float TAU = Mth.TWO_PI;
 
-    /** Per-second velocities from per-tick ones. */
+    /** Ticks/sec: converts legacy per-tick velocities to per-second. */
     private static final double PER_SECOND = 20.0;
 
-    /** One instance type per kind of particle, built once. */
     private static final InstanceType<ParticleInstance> ASH = GemRenderParticleTypes.custom(
             WFParticleTextures.ASH_VERTEX, WFParticleTextures.BILLBOARD_CULL);
 
     private static final InstanceType<ParticleInstance> CHUNK = GemRenderParticleTypes.custom(
             WFParticleTextures.DEBRIS_VERTEX, WFParticleTextures.MESH_CULL);
+
+    public static final InstanceType<ParticleInstance> SMOKE = GemRenderParticleTypes.custom(
+            WFParticleTextures.SMOKE_VERTEX, WFParticleTextures.BILLBOARD_CULL);
+
+    /** {@link ParticleModels#absorbance} without texture filtering: 8x8 flake keeps its pixels. */
+    private static final Model ASH_MODEL = new SingleMeshModel(ParticleQuad.INSTANCE, SimpleMaterial.builder()
+            .texture(WFParticleTextures.PARTICLE_BASE)
+            .transparency(Transparency.ORDER_INDEPENDENT)
+            .cutout(CutoutShaders.OFF)
+            .shaders(ParticleModels.ABSORBANCE_SHADERS)
+            .writeMask(WriteMask.COLOR)
+            .useOverlay(false)
+            .fog(FogShaders.NONE)
+            .blur(false)
+            .backfaceCulling(false)
+            .cardinalLightingMode(CardinalLightingMode.OFF)
+            .mipmap(false)
+            .build());
 
     private static final InstanceType<ParticleInstance> FOAM = GemRenderParticleTypes.custom(
             WFParticleTextures.FOAM_VERTEX, WFParticleTextures.FOAM_CULL);
@@ -39,53 +72,108 @@ public final class WFBursts {
     private WFBursts() {
     }
 
-    /** The fireball an explosion throws up: {@code RocketFlameParticle} as spawned by {@code explosionLarge}. */
-    public static InstancedBurst cloud(Level level, double x, double y, double z, int count, float scale,
-                                       float speed, RandomSource random) {
+    /** {@code speed} blocks/tick, {@code width} blocks wide. */
+    public static InstancedBurst bloodSpray(Level level, double x, double y, double z, float width, float speed,
+                                            RandomSource random) {
+        int count = Mth.clamp((int) (width * 30 + speed * 25), 16, 90);
+        ParticleCollision.Probe probe = LevelContactProbe.of(level);
+        int look = level instanceof ClientLevel client
+                ? ParticleLook.lit(client, x, y + 0.5, z,
+                ParticleLook.WHITE)
+                : ParticleLook.WHITE;
         return new InstancedBurst(level, GemRenderParticleTypes.BILLBOARD,
-                ParticleModels.translucent(WFParticleTextures.MIST_SOFT),
-                WFParticleStyles.cloud(), count, x, y, z,
-                emitter -> {
+                ParticleModels.translucent(WFParticleTextures.BLOOD_DROP), WFParticleStyles.bloodDrop(), count,
+                x, y, z, emitter -> {
                     float longest = 0.0f;
+                    double up = 2.5 + speed * 6.0;
                     for (int i = 0; i < count; i++) {
-                        float life = (220.0f + random.nextInt(80)) / 20.0f;
+                        float life = 4.0f + random.nextFloat() * 3.0f;
                         longest = Math.max(longest, life);
-
-                        emitter.spawn(x, y, z,
-                                random.nextGaussian() * 0.5 * speed * PER_SECOND,
-                                random.nextDouble() * 3.0 * speed * PER_SECOND,
-                                random.nextGaussian() * 0.5 * speed * PER_SECOND,
-                                life, 2.0f * scale);
+                        double a = random.nextDouble() * TAU;
+                        double out = (1.0 + random.nextDouble() * 3.0) * (0.6 + speed * 1.5);
+                        emitter.spawn(probe, x + Math.cos(a) * width * 0.4, y + 0.2, z + Math.sin(a) * width * 0.4,
+                                Math.cos(a) * out, up * (0.3 + random.nextDouble()), Math.sin(a) * out,
+                                life, 0.08f + random.nextFloat() * 0.14f, 0.0f, 1.0f, 0.0f, look);
                     }
                     return longest;
                 });
     }
 
-    /**
-     * The column a blast throws off a water surface: droplets, launched fastest at the centre and outward at the
-     * rim, which is what makes it a plume rather than a sphere.
-     *
-     * @param surface the water surface the blast broke, which is where the spray leaves from
-     * @param radius the blast's reach in blocks; sets both how wide the column is and how high it goes
-     */
+    /** Skips a splat where the raycast finds no up-facing surface within 3 blocks below. */
+    public static InstancedBurst bloodPool(Level level, double x, double y, double z, float width,
+                                           RandomSource random) {
+        int count = 1 + Mth.clamp((int) (width * 4), 2, 6);
+        return new InstancedBurst(level, GemRenderParticleTypes.DECAL,
+                ParticleModels.decal(WFParticleTextures.BLOOD_SPLAT), WFParticleStyles.bloodDecal(), count, x, y, z,
+                emitter -> {
+                    float life = 90.0f;
+                    for (int i = 0; i < count; i++) {
+                        double r = i == 0 ? 0.0 : width * (0.5 + random.nextDouble() * 1.2);
+                        double a = random.nextDouble() * TAU;
+                        double px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+                        BlockHitResult hit = level.clip(new ClipContext(
+                                new Vec3(px, y + 1.0, pz),
+                                new Vec3(px, y - 3.0, pz),
+                                ClipContext.Block.COLLIDER,
+                                ClipContext.Fluid.NONE,
+                                CollisionContext.empty()));
+                        if (hit.getType() == HitResult.Type.MISS
+                                || hit.getDirection() != Direction.UP) {
+                            continue;
+                        }
+                        float size = i == 0 ? Mth.clamp(width * 2.2f, 1.0f, 3.5f) : 0.3f + random.nextFloat() * 0.6f;
+                        int look = level instanceof ClientLevel client
+                                ? ParticleLook.lit(client, px, hit.getLocation().y + 0.5, pz,
+                                ParticleLook.WHITE)
+                                : ParticleLook.WHITE;
+                        emitter.spawnDecal(px, hit.getLocation().y, pz, 0.0, 1.0, 0.0, life, size,
+                                random.nextFloat() * TAU, look);
+                    }
+                    return life;
+                });
+    }
+
+    /** The fireball an explosion throws up: {@code RocketFlameParticle} as spawned by {@code explosionLarge}; {@code vent}: +y -> open side. */
+    public static InstancedBurst cloud(Level level, double x, double y, double z, int count, float scale,
+                                       float speed, org.joml.Quaternionf vent, RandomSource random) {
+        return new InstancedBurst(level, SMOKE,
+                ParticleModels.glowing(WFParticleTextures.SMOKE),
+                WFParticleStyles.cloud(), count, x, y, z,
+                emitter -> {
+                    float longest = 0.0f;
+                    Vector3f v = new Vector3f();
+                    for (int i = 0; i < count; i++) {
+                        float life = (220.0f + random.nextInt(80)) / 20.0f;
+                        longest = Math.max(longest, life);
+
+                        vent.transform(v.set(random.nextGaussian() * 0.5, random.nextDouble() * 3.0,
+                                random.nextGaussian() * 0.5).mul((float) (speed * PER_SECOND)));
+                        emitter.spawn(x, y, z, v.x, v.y, v.z,
+                                life, 2.0f * scale * (0.75f + random.nextFloat() * 0.5f),
+                                random.nextFloat() * TAU, 0.85f + random.nextFloat() * 0.3f);
+                    }
+                    return longest;
+                });
+    }
+
+    /** Centre rises fastest, rim goes outward: plume, not sphere. {@code radius} blocks. */
     public static InstancedBurst foamPlume(Level level, double x, double surface, double z, int count,
                                            float radius, RandomSource random) {
         int packed = ParticleLight.surface(level, x, surface + 1.0, z);
         float reach = Math.max(1.0f, radius);
         float mouth = Math.max(0.6f, reach * 0.35f);
-        // The column is sized by where it is meant to top out, not by a velocity: pick the height and the
-        // launch speed follows, so a bigger blast throws a taller plume instead of one off the screen.
+        // Peak height picked first, launch speed derived from it => scales with blast size, not off-screen.
         double fastest = Math.sqrt(2.0 * WFParticleStyles.SPRAY_GRAVITY * reach * 2.6);
 
         return new InstancedBurst(level, FOAM,
-                ParticleModels.translucent(WFParticleTextures.FOAM),
+                ParticleModels.absorbance(WFParticleTextures.FOAM),
                 WFParticleStyles.foamPlume(LightTexture.block(packed), LightTexture.sky(packed)),
                 count, x, surface, z,
                 emitter -> {
                     float longest = 0.0f;
                     for (int i = 0; i < count; i++) {
                         double angle = random.nextDouble() * TAU;
-                        // Biased inward, so most of the spray is in the column rather than on its collar.
+                        // Biased inward: fills the column, not its collar.
                         double dist = mouth * Math.pow(random.nextDouble(), 1.5);
                         double cos = Math.cos(angle);
                         double sin = Math.sin(angle);
@@ -94,8 +182,7 @@ public final class WFBursts {
                         double up = fastest * (0.32 + 0.68 * core);
                         double out = (0.5 + 1.8 * (1.0 - core)) * reach;
 
-                        // A droplet lives as long as its own arc, so it goes out at the water rather than
-                        // in mid-air, and the rim does not hang after it has already come down.
+                        // Life = ballistic time of flight: dies at the water, not mid-air or hanging after landing.
                         float life = (float) (2.0 * up / WFParticleStyles.SPRAY_GRAVITY)
                                 * (1.0f + random.nextFloat() * 0.35f);
                         longest = Math.max(longest, life);
@@ -120,7 +207,7 @@ public final class WFBursts {
         float reach = Math.max(1.0f, radius);
 
         return new InstancedBurst(level, FOAM,
-                ParticleModels.translucent(WFParticleTextures.FOAM),
+                ParticleModels.absorbance(WFParticleTextures.FOAM),
                 WFParticleStyles.foamSurge(LightTexture.block(packed), LightTexture.sky(packed)),
                 count, x, surface, z,
                 emitter -> {
@@ -152,13 +239,11 @@ public final class WFBursts {
         int packed = ParticleLight.surface(level, x, y, z);
         ParticleCollision.Probe probe = LevelContactProbe.of(level);
 
-        return new InstancedBurst(level, ASH,
-                ParticleModels.translucent(WFParticleTextures.PARTICLE_BASE),
+        return new InstancedBurst(level, ASH, ASH_MODEL,
                 WFParticleStyles.ash(LightTexture.block(packed), LightTexture.sky(packed)), count, x, y, z,
                 emitter -> {
                     float longest = 0.0f;
                     for (int i = 0; i < count; i++) {
-                        // The burst is a small sphere about the point, as the old one was.
                         double ox = x + (random.nextDouble() - 0.5) * 0.8;
                         double oy = y + (random.nextDouble() - 0.5) * 0.8;
                         double oz = z + (random.nextDouble() - 0.5) * 0.8;
@@ -173,7 +258,7 @@ public final class WFBursts {
                                 life,
                                 2.0f * (scale * 0.9f + random.nextFloat() * 0.2f),
                                 random.nextFloat() * TAU,
-                                // The flake's own grey, which the old particle set as a colour directly.
+                                // tintScale on white base => grey, not a hue
                                 0.1f + random.nextFloat() * 0.1f,
                                 0.0f);
                     }
@@ -209,22 +294,19 @@ public final class WFBursts {
                 });
     }
 
-    /**
-     * The smoke a mining charge leaves hanging: {@code SmokePlumeParticle} as spawned by {@code MiningExplosion},
-     * whose loop this is.
-     */
+    /** {@code SmokePlumeParticle}'s loop, as spawned by {@code MiningExplosion}. */
     public static InstancedBurst plume(Level level, double x, double y, double z, int count, float radius,
                                        RandomSource random) {
         int packed = ParticleLight.surface(level, x, y, z);
 
-        return new InstancedBurst(level, GemRenderParticleTypes.BILLBOARD,
-                ParticleModels.translucent(WFParticleTextures.MIST_SOFT),
+        return new InstancedBurst(level, SMOKE,
+                ParticleModels.absorbance(WFParticleTextures.SMOKE),
                 WFParticleStyles.plume(LightTexture.block(packed), LightTexture.sky(packed)),
                 count, x, y, z,
                 emitter -> {
                     float longest = 0.0f;
                     for (int i = 0; i < count; i++) {
-                        // A uniformly random direction over the whole sphere, as the server loop drew it.
+                        // Matches upstream's direction draw.
                         double dx = random.nextGaussian();
                         double dy = random.nextGaussian();
                         double dz = random.nextGaussian();
@@ -241,7 +323,7 @@ public final class WFBursts {
 
                         double dist = random.nextDouble() * radius * 0.6;
                         double speed = 0.45 + random.nextDouble() * 0.4;
-                        // Plumes flung downward had their Y heavily damped, so they slow almost at once.
+                        // Matches upstream's downward-only damping.
                         double vy = uy < 0.0 ? uy * 0.2 : uy;
 
                         float life = (160.0f + random.nextInt(140)) / 20.0f;
@@ -262,11 +344,7 @@ public final class WFBursts {
                 });
     }
 
-    /**
-     * Flying copies of a broken block: {@code BlockDebrisParticle} as thrown by a mining charge.
-     *
-     * @return the burst, or {@code null} if the block has no model to throw
-     */
+    /** {@code BlockDebrisParticle}, thrown by a mining charge; null if the block has no model to throw. */
     public static InstancedBurst blockChunks(Level level, double x, double y, double z, int count, float spread,
                                              float speed, BlockState state, RandomSource random,
                                              ParticleCollision.Probe probe) {

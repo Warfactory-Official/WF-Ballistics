@@ -14,6 +14,7 @@ import net.neoforged.neoforge.energy.IEnergyStorage;
 
 import java.util.Set;
 
+/** Non-destructive: drains block-entity energy / stuns GT machines, never removes blocks. */
 public class BlockProcessorEMP implements IBlockProcessor {
 
     private static final Direction[] SIDES = Direction.values();
@@ -76,6 +77,6 @@ public class BlockProcessorEMP implements IBlockProcessor {
             }
         }
 
-        affectedBlocks.clear();
+        affectedBlocks.clear(); // clears => standard SFX skips per-block debris particles
     }
 }

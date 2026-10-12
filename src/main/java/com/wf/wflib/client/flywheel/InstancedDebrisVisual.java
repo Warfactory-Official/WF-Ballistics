@@ -9,7 +9,7 @@ import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.visual.AbstractVisual;
 import net.minecraft.world.level.Level;
 
-/** The Flywheel visual for an {@link InstancedDebrisEffect}: one instance per chunk of ground, written once. */
+/** Visual for {@link InstancedDebrisEffect}: one 16-byte {@code ParticleInstance} per chunk, written once. */
 public class InstancedDebrisVisual extends AbstractVisual implements EffectVisual<InstancedDebrisEffect> {
 
     private static final InstanceType<ParticleInstance> DEBRIS = GemRenderParticleTypes.custom(

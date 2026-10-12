@@ -40,7 +40,7 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
 
     private static final float ONE_THIRD = 1F / 3F;
 
-    // NEW_ENTITY vertex format: pos(12) + color(4) + uv0(8) + uv1(4) + uv2(4) + normal(3) + padding(1) = 36
+    /** {@code NEW_ENTITY} layout: pos12+color4+uv0(8)+uv1(4)+uv2(4)+normal3+pad1. */
     private static final int VERTEX_STRIDE = 36;
     private static final int QUAD_STRIDE = VERTEX_STRIDE * 4;
 
@@ -61,8 +61,6 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         }
         return 1F;
     }
-
-    // --- CE static helpers ---
 
     private static float getCloudletLifeFrac(Cloudlet cloudlet) {
         return (float) cloudlet.age / (float) cloudlet.cloudletLife;
@@ -119,8 +117,6 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         return (float) (Mth.lerp(partialTick, prevPos, pos) - cloudPos);
     }
 
-    // --- Main render entry ---
-
     private static void writeVertex(long a, float x, float y, float z,
                                     int color, float u, float v,
                                     int overlay, int lightmap, int normal) {
@@ -136,14 +132,11 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
     }
 
     /**
-     * Packs a float normal component into a signed byte, matching the format written by {@link BufferBuilder}
-     * internally (previously exposed as {@code BufferVertexConsumer.normalIntValue}).
+     * Matches {@link BufferBuilder}'s internal packing; replaces removed {@code BufferVertexConsumer.normalIntValue}.
      */
     private static byte normalIntValue(float value) {
         return (byte) ((int) (Mth.clamp(value, -1.0F, 1.0F) * 127.0F) & 0xFF);
     }
-
-    // --- Cloudlet rendering ---
 
     @Override
     public ResourceLocation getTextureLocation(EntityNukeTorex pEntity) {
@@ -246,7 +239,7 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         dba.hbm$ensureCapacity(totalBytes);
         long baseAddr = dba.hbm$bufferAddress() + dba.hbm$nextElementByte();
 
-        // Pre-transform camera basis through pose's 3x3 (direction-only, no translation)
+        // Basis transformed as direction (3x3 only); center below needs full affine incl. translation.
         float crx = cameraRight.x(), cry = cameraRight.y(), crz = cameraRight.z();
         float cux = cameraUp.x(), cuy = cameraUp.y(), cuz = cameraUp.z();
         float trRx = pose.m00() * crx + pose.m10() * cry + pose.m20() * crz;
@@ -300,11 +293,9 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
             int packedColor = (red & 0xFF) | ((green & 0xFF) << 8) | ((blue & 0xFF) << 16) | ((alphaByte & 0xFF) << 24);
             int packedLightmap = br | (br << 16);
 
-            // Scaled pre-transformed right/up
             float srx = trRx * scale, sry = trRy * scale, srz = trRz * scale;
             float sux = trUx * scale, suy = trUy * scale, suz = trUz * scale;
 
-            // Transform center through full affine pose
             float cx = getCloudletRenderPos(cloudlet.prevPosX, cloudlet.posX, cloudOriginX, partialTick);
             float cy = getCloudletRenderPos(cloudlet.prevPosY, cloudlet.posY, cloudOriginY, partialTick);
             float cz = getCloudletRenderPos(cloudlet.prevPosZ, cloudlet.posZ, cloudOriginZ, partialTick);
@@ -312,19 +303,15 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
             float tcy = p01 * cx + p11 * cy + p21 * cz + p31;
             float tcz = p02 * cx + p12 * cy + p22 * cz + p32;
 
-            // v0: center - right - up  (u=1, v=1)
             writeVertex(addr,
                     tcx - srx - sux, tcy - sry - suy, tcz - srz - suz,
                     packedColor, 1f, 1f, overlay, packedLightmap, packedNormal);
-            // v1: center - right + up  (u=1, v=0)
             writeVertex(addr + VERTEX_STRIDE,
                     tcx - srx + sux, tcy - sry + suy, tcz - srz + suz,
                     packedColor, 1f, 0f, overlay, packedLightmap, packedNormal);
-            // v2: center + right + up  (u=0, v=0)
             writeVertex(addr + VERTEX_STRIDE * 2L,
                     tcx + srx + sux, tcy + sry + suy, tcz + srz + suz,
                     packedColor, 0f, 0f, overlay, packedLightmap, packedNormal);
-            // v3: center + right - up  (u=0, v=1)
             writeVertex(addr + VERTEX_STRIDE * 3L,
                     tcx + srx - sux, tcy + sry - suy, tcz + srz - suz,
                     packedColor, 0f, 1f, overlay, packedLightmap, packedNormal);
@@ -386,8 +373,6 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
                 .setNormal(pose, 0.0F, 1.0F, 0.0F);
     }
 
-    // --- Flare rendering ---
-
     private void flareWrapper(EntityNukeTorex cloud, PoseStack pPoseStack, float partialTick, float flareDuration) {
         Camera camera = Minecraft.getInstance().gameRenderer.getMainCamera();
         Quaternionf rotation = camera.rotation();
@@ -436,8 +421,6 @@ public class EntityTorexRender extends EntityRenderer<EntityNukeTorex> {
         RenderSystem.disableBlend();
         RenderSystem.defaultBlendFunc();
     }
-
-    // --- Flash rendering ---
 
     private void flashWrapper(EntityNukeTorex cloud, PoseStack pPoseStack, float partialTick, float flashDuration) {
         if (cloud.effectiveAge < flashDuration) {

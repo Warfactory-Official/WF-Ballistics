@@ -27,7 +27,6 @@ public class BenchPlayer extends FakePlayer {
         super(level, profile);
     }
 
-    /** Stand a bench player at a position, replacing any of the same name. */
     public static BenchPlayer place(ServerLevel level, String name, Vec3 at) {
         remove(name);
         UUID id = UUID.nameUUIDFromBytes(("WFBenchPlayer:" + name).getBytes(StandardCharsets.UTF_8));
@@ -40,7 +39,6 @@ public class BenchPlayer extends FakePlayer {
         return player;
     }
 
-    /** Counted, not applied. */
     @Override
     public boolean hurt(DamageSource source, float amount) {
         hits++;
@@ -77,7 +75,6 @@ public class BenchPlayer extends FakePlayer {
         }
     }
 
-    /** Take every bench player back out of the world. */
     public static int clear() {
         int removed = PLACED.size();
         for (BenchPlayer player : PLACED) {
@@ -88,8 +85,6 @@ public class BenchPlayer extends FakePlayer {
         PLACED.clear();
         return removed;
     }
-
-    // --- commands ---
 
     public static int add(CommandSourceStack source, String name, Vec3 at) {
         BenchPlayer player = place(source.getLevel(), name, at);

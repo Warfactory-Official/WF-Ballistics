@@ -1,11 +1,6 @@
 package com.wf.wflib.client.fx;
 
-import com.wf.wflib.WFSounds;
 import com.wf.wflib.client.particle.*;
-import com.wf.wflib.client.wiaj.Debris;
-import com.wf.wflib.client.wiaj.JarModels;
-import com.wf.wflib.client.wiaj.DebrisManager;
-import com.wf.wflib.client.wiaj.WorldInAJar;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.particle.ParticleEngine;
@@ -14,15 +9,13 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.particles.BlockParticleOption;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.sounds.SoundEvent;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
-/** Client-side registry of named, multi-particle effects. */
 public final class WFEffects {
 
     private WFEffects() {
@@ -39,33 +32,26 @@ public final class WFEffects {
             case "emp" -> emp(level, x, y, z, data);
             case "emp_stun" -> empStun(level, x, y, z, data);
             case "mining_blast" -> miningBlast(level, x, y, z, data);
-            default -> { /* unknown effect id, ignore */ }
+            case "splatter" -> splatter(level, x, y, z, data);
+            default -> {}
         }
     }
 
-    /**
-     * Same blast as {@link #explosionSmall}, but the smoke cloud is rendered as Flywheel GPU instances when the
-     * Flywheel backend is active (one instanced draw for the whole cloud).
-     */
-    /** How many instanced puffs to draw for each puff the vanilla fallback would have drawn. */
+    /** Multiplier on the fallback's puff count. */
     private static final int INSTANCED_SMOKE_DENSITY = 9;
 
-    /** The same for the fireball a large blast throws up. */
+    /** Multiplier on the fallback's cloud-puff count (large blast). */
     private static final int INSTANCED_CLOUD_DENSITY = 5;
 
-    /** How far below a surface a blast still vents through it. */
     private static final int FOAM_MAX_DEPTH = 24;
 
-    /** Foam particles per block of the blast's reach, in the column and in the surge. */
     private static final int FOAM_PLUME_PER_BLOCK = 26;
     private static final int FOAM_SURGE_PER_BLOCK = 20;
 
-    /** How many instanced chunks of debris to throw for each one the hand-ticked fallback would have thrown. */
+    /** Multiplier on {@code debrisCount} (destroyed 2x2x2 cells). */
     private static final int INSTANCED_DEBRIS_DENSITY = 3;
 
-    /** Distinct jars one blast cuts its debris from. */
-    private static final int DEBRIS_JARS = 4;
-
+    /** Same blast as {@link #explosionSmall}, but the cloud is drawn as one Flywheel GPU-instanced batch. */
     private static void instancedSmoke(ClientLevel level, double x, double y, double z, CompoundTag data) {
         int count = data.getInt("count");
         float scale = data.contains("scale") ? data.getFloat("scale") : 2F;
@@ -75,20 +61,17 @@ public final class WFEffects {
             if (!waterFoam(level, x, y, z, scale * 1.5F)) {
                 com.wf.wflib.client.flywheel.FlywheelEffectManager.spawn(
                         new com.wf.wflib.client.flywheel.InstancedParticleEffect(
-                                level, x, y, z, count * INSTANCED_SMOKE_DENSITY, scale, speed));
+                                level, x, y, z, count * INSTANCED_SMOKE_DENSITY, scale, speed, BlastFrame.of(level, x, y, z)));
             }
-            spawnDebrisAndSound(level, x, y, z, data); // debris + audio still via the normal path
+            spawnDebris(level, x, y, z, data); // smoke is instanced; debris stays on the normal path
         } else {
             explosionSmall(level, x, y, z, data);
         }
     }
 
     /**
-     * The foam a blast throws off a water surface, if it broke one: a column of spray and the surge that spreads
-     * out from its foot.
-     *
-     * @param reach the blast's reach in blocks, which sets how much water it moves
-     * @return whether the charge itself went off under water, where there is no fireball to draw
+     * @param reach blast reach, blocks; sets how much water it moves
+     * @return true if the charge went off underwater (no fireball to draw above)
      */
     private static boolean waterFoam(ClientLevel level, double x, double y, double z, float reach) {
         if (!com.wf.wflib.client.flywheel.FlywheelEffectManager.isAvailable(level)) {
@@ -104,7 +87,7 @@ public final class WFEffects {
             return false;
         }
 
-        // A deep charge vents less of itself through the surface than one at the waterline.
+        // 0.35 floor: a deep charge still vents some foam.
         float vented = reach * (float) Mth.clamp(1.0 - depth / (FOAM_MAX_DEPTH * 1.5), 0.35, 1.0);
         int plume = Math.max(24, Math.round(vented * FOAM_PLUME_PER_BLOCK));
         int surge = Math.max(20, Math.round(vented * FOAM_SURGE_PER_BLOCK));
@@ -118,26 +101,28 @@ public final class WFEffects {
         return depth > 0.2;
     }
 
-    /**
-     * A compact blast: a cluster of hot puffs plus a spray of block debris from a nearby surface.
-     */
     private static void explosionSmall(ClientLevel level, double x, double y, double z, CompoundTag data) {
         int count = data.getInt("count");
         float scale = data.contains("scale") ? data.getFloat("scale") : 2F;
         float speed = data.contains("speed") ? data.getFloat("speed") : 0.5F;
 
         boolean submerged = waterFoam(level, x, y, z, scale * 1.5F);
+        Quaternionf vent = BlastFrame.of(level, x, y, z);
+        if (!submerged) {
+            WFLights.blast(x, y, z, vent, 6 + 4 * scale, 6);
+        }
 
         ParticleEngine engine = Minecraft.getInstance().particleEngine;
         if (!submerged && WFParticleSprites.explosionSmall != null) {
             for (int i = 0; i < count; i++) {
                 ExplosionSmallParticle particle = new ExplosionSmallParticle(level, x, y, z, scale, speed);
+                particle.vent(vent);
                 particle.pickSprite(WFParticleSprites.explosionSmall);
                 engine.add(particle);
             }
         }
 
-        spawnDebrisAndSound(level, x, y, z, data);
+        spawnDebris(level, x, y, z, data);
     }
 
     private static void explosionLarge(ClientLevel level, double x, double y, double z, CompoundTag data) {
@@ -147,63 +132,46 @@ public final class WFEffects {
         float waveScale = data.contains("waveScale") ? data.getFloat("waveScale") : 45F;
         int debrisCount = data.getInt("debrisCount");
         float debrisVelocity = data.contains("debrisVelocity") ? data.getFloat("debrisVelocity") : 1F;
-        float debrisHDev = data.contains("debrisHDev") ? data.getFloat("debrisHDev") : 3F;
-        float debrisVOff = data.contains("debrisVOff") ? data.getFloat("debrisVOff") : -2F;
-        float soundRange = data.contains("soundRange") ? data.getFloat("soundRange") : 300F;
 
         ParticleEngine engine = Minecraft.getInstance().particleEngine;
         RandomSource rand = level.random;
+        Quaternionf vent = BlastFrame.of(level, x, y, z);
 
         if (waveScale > 0F) {
             int waveAge = Math.max(1, (int) (25F * waveScale / 45F));
-            engine.add(new ShockwaveParticle(level, x, y + 2, z, waveScale, waveAge));
+            Vector3f ring = vent.transform(new Vector3f(0, 2, 0));
+            engine.add(new ShockwaveParticle(level, x + ring.x, y + ring.y, z + ring.z, waveScale, waveAge, vent));
         }
 
         boolean submerged = waterFoam(level, x, y, z, (float) Mth.clamp(waveScale * 0.2, 3.0, 24.0));
 
+        if (!submerged) {
+            WFLights.blast(x, y, z, vent, Mth.clamp(waveScale * 0.9F, 16, 64), 12);
+        }
         if (submerged) {
-            // Nothing to draw above the water: the fireball is a bubble, and the foam is what is seen of it.
+            // Submerged: no fireball draw; the foam is what's visible of it.
         } else if (com.wf.wflib.client.flywheel.FlywheelEffectManager.isAvailable(level)) {
             com.wf.wflib.client.flywheel.FlywheelEffectManager.spawn(
                     com.wf.wflib.client.flywheel.WFBursts.cloud(level, x, y, z,
-                            cloudCount * INSTANCED_CLOUD_DENSITY, cloudScale, cloudSpeed, rand));
+                            cloudCount * INSTANCED_CLOUD_DENSITY, cloudScale, cloudSpeed, vent, rand));
         } else if (WFParticleSprites.rocketFlame != null) {
             for (int i = 0; i < cloudCount; i++) {
                 RocketFlameParticle p = new RocketFlameParticle(level, x, y, z, cloudScale);
                 p.setLifetime(70 + rand.nextInt(20));
                 p.setCollision(false);
-                p.setParticleSpeed(rand.nextGaussian() * 0.5 * cloudSpeed,
-                        rand.nextDouble() * 3.0 * cloudSpeed,
-                        rand.nextGaussian() * 0.5 * cloudSpeed);
+                Vector3f v = vent.transform(new Vector3f((float) (rand.nextGaussian() * 0.5),
+                        (float) (rand.nextDouble() * 3.0), (float) (rand.nextGaussian() * 0.5)).mul(cloudSpeed));
+                p.setParticleSpeed(v.x, v.y, v.z);
                 p.pickSprite(WFParticleSprites.rocketFlame);
                 engine.add(p);
             }
         }
 
-        int debrisSize = data.contains("debrisSize") ? data.getInt("debrisSize") : 8;
-        int debrisRetry = data.contains("debrisRetry") ? data.getInt("debrisRetry") : 20;
-        if (com.wf.wflib.client.flywheel.FlywheelEffectManager.isAvailable(level)) {
-            instancedDebris(level, x, y, z, debrisCount * INSTANCED_DEBRIS_DENSITY, debrisSize, debrisRetry,
-                    debrisVelocity, debrisHDev, debrisVOff, rand);
-        } else {
-            handTickedDebris(level, x, y, z, debrisCount, debrisSize, debrisRetry, debrisVelocity, debrisHDev,
-                    debrisVOff, rand);
-        }
+        com.wf.wflib.client.wiaj.BlastDebris.schedule(level, x, y, z, debrisCount * INSTANCED_DEBRIS_DENSITY,
+                debrisVelocity, vent);
 
-        Player player = Minecraft.getInstance().player;
-        if (player != null) {
-            double dist = Math.sqrt(player.distanceToSqr(x, y, z));
-            if (dist <= soundRange) {
-                boolean near = dist <= soundRange * 0.4;
-                SoundEvent sound = (near ? WFSounds.EXPLOSION_LARGE_NEAR : WFSounds.EXPLOSION_LARGE_FAR).get();
-                float pitch = 0.9F + rand.nextFloat() * 0.2F;
-                ClientSoundScheduler.playDelayed(x, y, z, sound, SoundSource.BLOCKS,
-                        near ? 8.0F : 16.0F, pitch, ClientSoundScheduler.soundDelay(dist));
-            }
-        }
     }
 
-    /** A mining charge's smoke and flying chunks. */
     private static void miningBlast(ClientLevel level, double x, double y, double z, CompoundTag data) {
         int radius = data.getInt("radius");
         int[] debris = data.getIntArray("debris");
@@ -211,6 +179,7 @@ public final class WFEffects {
                 + Double.doubleToLongBits(y) * 17L + Double.doubleToLongBits(z));
 
         int plumes = 30 + radius * 12;
+        WFLights.blast(x, y, z, 6 + 2 * radius, 5);
         boolean instanced = com.wf.wflib.client.flywheel.FlywheelEffectManager.isAvailable(level);
 
         if (instanced) {
@@ -250,7 +219,6 @@ public final class WFEffects {
         }
     }
 
-    /** The same smoke on the CPU, for when the Flywheel backend is off. */
     private static void handTickedPlume(ClientLevel level, double x, double y, double z, int count,
                                         float radius, RandomSource rand) {
         for (int i = 0; i < count; i++) {
@@ -276,7 +244,6 @@ public final class WFEffects {
         }
     }
 
-    /** The same chunks on the CPU, for when the Flywheel backend is off. */
     private static void handTickedChunks(ClientLevel level, double x, double y, double z, int count,
                                          float spread, BlockState state, RandomSource rand) {
         BlockParticleOption option = new BlockParticleOption(WFParticles.BLOCK_DEBRIS.get(), state);
@@ -293,18 +260,8 @@ public final class WFEffects {
         float waveScale = data.contains("waveScale") ? data.getFloat("waveScale") : 12F;
         int waveAge = Math.max(1, (int) (12F * waveScale / 45F));
         Minecraft.getInstance().particleEngine.add(new ShockwaveParticle(level, x, y, z, waveScale, waveAge));
-
-        Player player = Minecraft.getInstance().player;
-        if (player != null) {
-            double dist = Math.sqrt(player.distanceToSqr(x, y, z));
-            if (dist <= 256) {
-                ClientSoundScheduler.playDelayed(x, y, z, WFSounds.SONIC_BOOM.get(), SoundSource.BLOCKS,
-                        6.0F, 0.8F + level.random.nextFloat() * 0.2F, ClientSoundScheduler.soundDelay(dist));
-            }
-        }
     }
 
-    /** The cremation skeleton: a biped bone pile rendered as Flywheel instances ({@link SkeletonBoneEffect}). */
     private static void skeleton(ClientLevel level, double x, double y, double z, CompoundTag data) {
         if (!com.wf.wflib.client.flywheel.FlywheelEffectManager.isAvailable(level)) return;
         float bodyYaw = data.getFloat("bodyYaw");
@@ -315,63 +272,7 @@ public final class WFEffects {
                 com.wf.wflib.client.flywheel.SkeletonBoneEffect.biped(level, x, y, z, bodyYaw, headYaw, height, brightness));
     }
 
-    /**
-     * Block-shrapnel particles from a nearby surface plus the distance-picked explosion crack.
-     */
-    /** Chunks of ground through GemRender's particle instancer. */
-    private static void instancedDebris(ClientLevel level, double x, double y, double z, int count, int size,
-                                        int retry, float velocity, float hDev, float vOff, RandomSource rand) {
-        int jars = Math.min(DEBRIS_JARS, count);
-        if (jars <= 0) {
-            return;
-        }
-
-        com.wf.gemrender.particle.ParticleCollision.Probe probe =
-                com.wf.gemrender.particle.LevelContactProbe.of(level);
-
-        for (int j = 0; j < jars; j++) {
-            int share = count / jars + (j < count % jars ? 1 : 0);
-            if (share <= 0) {
-                continue;
-            }
-
-            int cX = (int) Math.floor(x + rand.nextGaussian() * hDev + 0.5);
-            int cY = (int) Math.floor(y + vOff + 0.5);
-            int cZ = (int) Math.floor(z + rand.nextGaussian() * hDev + 0.5);
-
-            WorldInAJar jar = WorldInAJar.fromLevel(level, cX, cY, cZ, size, retry, rand);
-            JarModels.Rubble rubble = JarModels.bake(jar);
-            if (rubble == null) {
-                continue; // the sample was all air, which happens over water and off a cliff edge
-            }
-
-            com.wf.wflib.client.flywheel.FlywheelEffectManager.spawn(
-                    new com.wf.wflib.client.flywheel.InstancedDebrisEffect(level, x, y, z, rubble,
-                            share, velocity, rand, probe));
-        }
-    }
-
-    /** The same debris on the CPU, for when the Flywheel backend is off. */
-    private static void handTickedDebris(ClientLevel level, double x, double y, double z, int count, int size,
-                                         int retry, float velocity, float hDev, float vOff, RandomSource rand) {
-        for (int i = 0; i < count; i++) {
-            int cX = (int) Math.floor(x + rand.nextGaussian() * hDev + 0.5);
-            int cY = (int) Math.floor(y + vOff + 0.5);
-            int cZ = (int) Math.floor(z + rand.nextGaussian() * hDev + 0.5);
-
-            double elev = Math.toRadians(45.0 + rand.nextDouble() * 25.0);
-            double az = rand.nextDouble() * Math.PI * 2.0;
-            double horiz = velocity * Math.cos(elev);
-            double vx = horiz * Math.cos(az);
-            double vy = velocity * Math.sin(elev);
-            double vz = -horiz * Math.sin(az);
-
-            WorldInAJar jar = WorldInAJar.fromLevel(level, cX, cY, cZ, size, retry, rand);
-            DebrisManager.add(new Debris(rand, x, y, z, vx, vy, vz, jar));
-        }
-    }
-
-    private static void spawnDebrisAndSound(ClientLevel level, double x, double y, double z, CompoundTag data) {
+    private static void spawnDebris(ClientLevel level, double x, double y, double z, CompoundTag data) {
         BlockState surface = nearbySurface(level, x, y, z);
         if (surface != null && !surface.isAir()) {
             int debris = data.contains("debris") ? data.getInt("debris") : 15;
@@ -389,22 +290,12 @@ public final class WFEffects {
                 }
             }
         }
-
-        Player player = Minecraft.getInstance().player;
-        if (player != null) {
-            double dist = Math.sqrt(player.distanceToSqr(x, y, z));
-            if (dist <= 200) {
-                boolean near = dist < 80;
-                SoundEvent sound = (near ? WFSounds.EXPLOSION_SMALL_NEAR : WFSounds.EXPLOSION_SMALL_FAR).get();
-                ClientSoundScheduler.playDelayed(x, y, z, sound, SoundSource.BLOCKS,
-                        near ? 1.0F : 4.0F, 1.0F, ClientSoundScheduler.soundDelay(dist));
-            }
-        }
     }
 
     private static void emp(ClientLevel level, double x, double y, double z, CompoundTag data) {
         int radius = data.contains("radius") ? data.getInt("radius") : 48;
         EMPBeams.spawnBurst(x, y, z, radius, level.random);
+        WFLights.flash(x, y + WFLights.FLASH_LIFT, z, 24, WFLights.EMP_RGB, 24 * 24 * 0.5F, 8);
 
         for (int i = 0; i < 40; i++) {
             double a = level.random.nextDouble() * Math.PI * 2.0;
@@ -412,6 +303,20 @@ public final class WFEffects {
             level.addParticle(ParticleTypes.ELECTRIC_SPARK,
                     x + Math.cos(a) * rr, y + (level.random.nextDouble() - 0.5) * 4.0, z + Math.sin(a) * rr,
                     Math.cos(a) * 0.3, level.random.nextGaussian() * 0.1, Math.sin(a) * 0.3);
+        }
+    }
+
+    /** Invoked by {@code BlastCorpses}. */
+    private static void splatter(ClientLevel level, double x, double y, double z, CompoundTag data) {
+        if (!com.wf.wflib.client.flywheel.FlywheelEffectManager.isAvailable(level)) {
+            return;
+        }
+        float width = data.getFloat("width");
+        com.wf.wflib.client.flywheel.FlywheelEffectManager.spawn(com.wf.wflib.client.flywheel.WFBursts.bloodSpray(
+                level, x, y, z, width, data.getFloat("speed"), level.random));
+        if (!data.getBoolean("water")) {
+            com.wf.wflib.client.flywheel.FlywheelEffectManager.spawn(
+                    com.wf.wflib.client.flywheel.WFBursts.bloodPool(level, x, y, z, width, level.random));
         }
     }
 
@@ -428,9 +333,6 @@ public final class WFEffects {
         }
     }
 
-    /**
-     * The cremation burst: a sphere of settling ash flakes laced with vanilla flame.
-     */
     private static void ashes(ClientLevel level, double x, double y, double z, CompoundTag data) {
         int count = data.getInt("count");
         float scale = data.contains("scale") ? data.getFloat("scale") : 0.125F;
@@ -465,10 +367,6 @@ public final class WFEffects {
         }
     }
 
-    /**
-     * A block near the point to texture explosion debris: first a non-air neighbour, otherwise the nearest ground
-     * within a few blocks below.
-     */
     private static BlockState nearbySurface(ClientLevel level, double x, double y, double z) {
         BlockPos base = BlockPos.containing(x, y, z);
         for (Direction dir : Direction.values()) {
@@ -484,7 +382,7 @@ public final class WFEffects {
         return null;
     }
 
-    /** Chips come off something solid: a liquid is not a surface to break one off. */
+    /** Liquid != solid: no debris from it. */
     private static boolean isSolid(BlockState state) {
         return !state.isAir() && state.getFluidState().isEmpty();
     }

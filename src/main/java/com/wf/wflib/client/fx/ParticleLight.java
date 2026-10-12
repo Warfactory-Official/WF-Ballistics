@@ -5,12 +5,12 @@ import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockAndTintGetter;
 
-//Unfucks light
 public final class ParticleLight {
 
     private ParticleLight() {
     }
 
+    /** Max with light at {@code pos.above()}: avoids black particles sitting on a block's top face. */
     public static int surface(BlockAndTintGetter level, double x, double y, double z) {
         BlockPos pos = BlockPos.containing(x, y, z);
         int here = LevelRenderer.getLightColor(level, pos);

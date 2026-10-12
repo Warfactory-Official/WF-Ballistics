@@ -18,6 +18,13 @@ public interface RoundObserver {
     }
 
     /**
+     * Round skipped off a block, water or armour ({@code ricochet.surface()}); a local prediction's own block / water
+     * ricochets come from its client flight (then not again from the server). Before that round's next {@link #tick}.
+     */
+    default void ricocheted(RoundNetwork.Ricochet ricochet) {
+    }
+
+    /**
      * Client state corrected: server resync (pierce, landing) snapped {@code round} from {@code before}, or an adopted
      * prediction re-aimed onto its server round (eased from {@code before} over the next ticks).
      */

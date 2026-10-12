@@ -7,11 +7,7 @@ import net.minecraft.world.item.TooltipFlag;
 
 import java.util.List;
 
-/**
- * A plate, a liner or a filter. Goes into a garment rather than onto the body, and wears out on its
- * own account: if the steel plate ate the rifle round then the steel plate is what needs replacing,
- * not the carrier it was in.
- */
+/** Insert item (plate/liner/filter): wears on its own condition, independent of the carrier it's fitted to. */
 public class ArmorInsertItem extends Item {
 
     private final ArmorPreset preset;

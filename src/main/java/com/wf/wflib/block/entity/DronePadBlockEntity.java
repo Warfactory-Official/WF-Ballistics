@@ -47,30 +47,18 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * The pad's state: the cargo waiting to be flown out, the mission it will be flown on, and the recharging of drones
- * parked on top.
- */
 public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
 
-    /**
-     * Matches {@link CrateEntity#SLOTS} so a full pad loads exactly one full crate.
-     */
+    /** = {@link CrateEntity#SLOTS}: full pad maps to one full crate. */
     public static final int CARGO_SLOTS = CrateEntity.SLOTS;
-    /**
-     * Charge per tick returned to a drone idling on the pad. A full battery takes a couple of minutes.
-     */
+    /** Per tick; full charge in a couple of minutes. */
     public static final double RECHARGE_RATE = 30.0;
-    /**
-     * How far above the pad a drone counts as parked on it.
-     */
     private static final double PAD_RADIUS = 2.5;
     private static final int RECHARGE_INTERVAL = 10;
 
     private final NonNullList<ItemStack> cargo = NonNullList.withSize(CARGO_SLOTS, ItemStack.EMPTY);
     private DroneMission mission = new DroneMission();
     private boolean wasPowered;
-    /** This pad's own station code. */
     @Nullable
     private String stationCode;
 
@@ -97,10 +85,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         pad.rechargeParked(serverLevel, pos);
     }
 
-    /**
-     * Top up any drone sitting idle on the pad, which is what closes the delivery loop: a drone that comes home
-     * flat can fly again without being rebuilt.
-     */
+    /** Closes delivery loop: idle drone recharges without rebuild. */
     private void rechargeParked(ServerLevel level, BlockPos pos) {
         Vec3 centre = Vec3.atCenterOf(pos.above());
         for (DroneEntity drone : DroneTracker.drones(level)) {
@@ -122,7 +107,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         this.mission = mission;
         this.setChanged();
         if (this.level != null && !this.level.isClientSide) {
-            // Push it to the client so the config screen reopens showing what is actually stored.
+            // Sync: config screen reopens showing stored state.
             this.level.sendBlockUpdated(this.worldPosition, getBlockState(), getBlockState(), Block.UPDATE_CLIENTS);
         }
     }
@@ -140,11 +125,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         this.setChanged();
     }
 
-    /**
-     * Send the stored mission.
-     *
-     * @return null on success, or why the dispatch was refused
-     */
+    /** @return null on success, else refusal reason. */
     @Nullable
     public String dispatch() {
         if (!(this.level instanceof ServerLevel serverLevel)) {
@@ -186,11 +167,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         return this.cargo.stream().allMatch(ItemStack::isEmpty);
     }
 
-    // --- exchange ---
-
-    /**
-     * @return this pad's station code, registering it on first use.
-     */
+    /** @return station code, registers on first use. */
     public String stationCode(ServerLevel level) {
         if (this.stationCode == null) {
             this.stationCode = StationRegistry.get(level).register(level, this.worldPosition);
@@ -200,20 +177,13 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         return this.stationCode;
     }
 
-    /**
-     * @return the code as the client knows it. Its own code is the one thing about the exchange system a
-     *      client is meant to see: you have to be able to read it off the screen to give it to a trading partner.
-     */
+    /** Own code only: the one exchange fact a client is meant to see, to read off-screen to a partner. */
     @Nullable
     public String knownStationCode() {
         return this.stationCode;
     }
 
-    /**
-     * Arrange the meeting and point the mission at it.
-     *
-     * @return null on success, or a reason that reveals nothing
-     */
+    /** @return null on success, else a reason that reveals nothing. */
     @Nullable
     private String arrangeHandshake(ServerLevel level) {
         String recipient = this.mission.recipientCode;
@@ -238,11 +208,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         return null;
     }
 
-    /**
-     * Send a drone out to collect what the far side left at the rendezvous.
-     *
-     * @return null on success, or why no drone went
-     */
+    /** @return null on success, else why no drone went. */
     @Nullable
     public String dispatchCollection(Exchange exchange, StationRecord station) {
         if (!(this.level instanceof ServerLevel serverLevel)) {
@@ -267,11 +233,6 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         return result.ok() ? null : result.error();
     }
 
-    /**
-     * Order every drone this pad can see home.
-     *
-     * @return how many drones were recalled
-     */
     public int recall(ServerLevel level) {
         Vec3 home = Vec3.atCenterOf(this.worldPosition.above());
         int count = 0;
@@ -293,11 +254,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
         return count;
     }
 
-    /**
-     * Wipe this dimension's drones, crates and off-world records, so a test can be re-run from clean.
-     *
-     * @return how many entities were removed
-     */
+    /** Test reset: wipes drones/crates/off-world records so a run can repeat from clean. */
     public int clearDrones(ServerLevel level) {
         int count = 0;
         for (DroneEntity drone : new ArrayList<>(DroneTracker.drones(level))) {
@@ -332,7 +289,7 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
                 Component.translatable("block.wflib.drone_pad")));
     }
 
-    /** The pad's own store, for a drone to draw building materials from or hand a demolition's recovery into. */
+    /** Dual use: drone building-materials source, demolition recovery sink. */
     public NonNullList<ItemStack> cargoItems() {
         return this.cargo;
     }

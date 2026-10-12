@@ -47,7 +47,7 @@ public class GlyphidSpawnerBlock extends BaseEntityBlock {
                         GlyphidSpawnerBlockEntity::serverTick);
     }
 
-    /** Tell the colony it just lost a chamber. */
+    /** Notifies the colony record, not just this chamber's own state. */
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moved) {
         if (!state.is(newState.getBlock()) && level instanceof ServerLevel server

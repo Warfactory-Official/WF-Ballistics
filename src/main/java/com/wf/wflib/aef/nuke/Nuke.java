@@ -5,22 +5,12 @@ import com.wf.wflib.entity.EntityNukeTorex;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 
-/**
- * One-call entry point for a full nuclear detonation: the crater-carving ray explosion plus the rising Torex
- * mushroom cloud.
- *
- * @see EntityNukeExplosionMK5 the multi-tick ray-traced block destruction + damage
- * @see EntityNukeTorex the toroidal convection mushroom cloud effect
- */
 public final class Nuke {
 
     private Nuke() {
     }
 
-    /**
-     * @param radius nuke radius parameter (drives strength/speed/crater size, and the cloud scale); the
-     *      explosion's actual block radius scales with this
-     */
+    /** {@code radius}: not the literal block radius; also scales speed + cloud size. */
     public static void detonate(Level level, Vec3 center, int radius) {
         if (level.isClientSide) return;
         level.addFreshEntity(EntityNukeExplosionMK5.statFac(level, radius, center));

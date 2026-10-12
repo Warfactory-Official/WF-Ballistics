@@ -11,22 +11,14 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-/**
- * The armour this mod ships, and the worked examples for the model.
- *
- * <p>Three things are being demonstrated here rather than balanced: a garment that is good at what
- * soft armour is good at and bad at what it is not; an insert that fills exactly that gap and is a
- * cheap consumable in front of an expensive base; and a suit whose whole value is a tier rating that
- * makes a hazard survivable indefinitely rather than merely survivable for longer.
- */
+/** Shipped armour, as worked examples for the model (not balance-tuned): soft-armour niche, a cheap insert filling its gap, a hazmat suit whose tier rating makes a hazard survivable indefinitely. */
 public final class ArmorPresets {
 
     private static final Map<ResourceLocation, ArmorPreset> PRESETS = new LinkedHashMap<>();
     private static boolean registered;
 
     static {
-        // A vest: stabs and blunt force, which is what a weave and padding are for. Nearly useless
-        // against rifle fire on its own, and that is the point of the pockets on the front of it.
+        // Vest: weave+padding -> sharp/impact; weak vs kinetic alone by design, pockets exist for plates.
         add(ArmorPreset.piece("plate_carrier", ArmorItem.Type.CHESTPLATE, 600)
                 .row(ProtectionType.SHARP, 4.0D, 0.45D, 3.0D, 0.0D)
                 .row(ProtectionType.IMPACT, 2.0D, 0.35D, 2.0D, 0.0D)
@@ -36,26 +28,22 @@ public final class ArmorPresets {
                 .wornFloor(0.10D)
                 .build());
 
-        // Steel: a real threshold, and hard enough that buckshot marks it rather than grinding it down.
-        // Wears slowly and keeps working when it is spent, because it is still steel afterwards.
+        // Steel: high hardness threshold (buckshot marks, doesn't grind); high wornFloor, still steel once spent.
         add(ArmorPreset.insert("steel_plate", 3000)
                 .row(ProtectionType.KINETIC, 20.0D, 0.50D, 15.0D, 0.0D)
                 .row(ProtectionType.BLAST, 6.0D, 0.25D, 8.0D, 0.0D)
                 .wornFloor(0.60D)
                 .build());
 
-        // Ceramic: stops more than steel and dies doing it. Same two numbers, opposite material.
+        // Ceramic: higher DT/DR than steel, wornFloor 0 (shatters).
         add(ArmorPreset.insert("ceramic_plate", 1200)
                 .row(ProtectionType.KINETIC, 28.0D, 0.55D, 12.0D, 0.0D)
                 .row(ProtectionType.BLAST, 4.0D, 0.20D, 6.0D, 0.0D)
                 .wornFloor(0.0D)
                 .build());
 
-        // A sealed suit. Its whole value is the tier: a field it is rated for is survivable forever in
-        // it, which is not something a percentage can express. Stops nothing at all that arrives as a
-        // bullet. The tiers are in condition points per exposure interval, the same units the hazards
-        // are authored in, so 200 means "stands in anything up to a full-strength gas cloud" and 80
-        // means "will not catch fire, but lava is still lava".
+        // Sealed suit: value is tier, not DT/DR (near-zero vs bullets). tier=200 chemical -> shrugs a
+        // full-strength gas cloud; tier=80 thermal -> fire-immune, lava still hurts.
         add(ArmorPreset.piece("hazmat_suit", ArmorItem.Type.CHESTPLATE, 400)
                 .row(ProtectionType.CHEMICAL, 0.0D, 0.85D, 0.0D, 200.0D)
                 .row(ProtectionType.THERMAL, 0.0D, 0.20D, 0.0D, 80.0D)
@@ -69,6 +57,10 @@ public final class ArmorPresets {
                 .row(ProtectionType.BLAST, 2.0D, 0.20D, 2.0D, 0.0D)
                 .wornFloor(0.25D)
                 .build());
+
+        if (!net.neoforged.fml.loading.FMLEnvironment.production) {
+            MwTestArmor.addTo(PRESETS);
+        }
     }
 
     private ArmorPresets() {
@@ -96,9 +88,9 @@ public final class ArmorPresets {
     }
 
     /**
-     * Hands every preset's spec to {@link ArmorProfiles}, once the items exist. Separate from the
-     * static block above on purpose: that one runs while the item registry is still being built, and
-     * a profile needs the item it belongs to.
+     * Registers each preset's spec with {@link ArmorProfiles}, once items exist. Separate from the
+     * static initializer above: that one runs during item-registry construction, before any item
+     * object exists to register a profile against.
      */
     public static void bootstrap() {
         if (registered) {

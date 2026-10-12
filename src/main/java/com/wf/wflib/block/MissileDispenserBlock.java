@@ -16,10 +16,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Debug block: right-click to open a simple GUI that configures and launches a {@link
- * com.wf.wflib.MissileEntity} from the block's position.
- */
+/** Debug block: right-click opens a GUI to configure and launch a {@link com.wf.wflib.MissileEntity}. */
 public class MissileDispenserBlock extends BaseEntityBlock {
     public static final MapCodec<MissileDispenserBlock> CODEC = simpleCodec(MissileDispenserBlock::new);
 
@@ -49,7 +46,7 @@ public class MissileDispenserBlock extends BaseEntityBlock {
         if (!level.isClientSide) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MenuProvider provider && player instanceof ServerPlayer serverPlayer) {
-                // Hands the block pos to the client menu constructor (read back in MissileDispenserMenu).
+                // buf read back in MissileDispenserMenu's client constructor.
                 serverPlayer.openMenu(provider, buf -> buf.writeBlockPos(pos));
             }
         }

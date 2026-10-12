@@ -9,10 +9,7 @@ import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.Set;
 
-/**
- * A non-destructive processor: it leaves every block intact but still runs an optional {@link IBlockMutator} over
- * the allocated area.
- */
+/** Leaves every block intact; still runs the optional {@link IBlockMutator}. */
 public class BlockProcessorNoDamage implements IBlockProcessor {
 
     protected IBlockMutator convert;
@@ -41,6 +38,6 @@ public class BlockProcessorNoDamage implements IBlockProcessor {
             }
         }
 
-        affectedBlocks.clear(); // suppresses the standard SFX's block-debris particles
+        affectedBlocks.clear(); // clears => standard SFX skips per-block debris particles
     }
 }

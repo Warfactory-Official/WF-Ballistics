@@ -44,12 +44,12 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     private static final String[] PROFILE_VALUES = {"SPEED", "BALANCED", "LOFT"};
 
     private static final int PAD = 8;
-    private static final int W_FULL = 204;               // imageWidth - 2*PAD
-    private static final int GAP = 6;                    // gap between columns
-    private static final int ROW_GAP = 4;                // gap between rows
+    private static final int W_FULL = 204;               // imageWidth - 2*PAD, not computed
+    private static final int GAP = 6;                    // between columns
+    private static final int ROW_GAP = 4;                // between rows
     private static final int BTN_H = 18;
     private static final int BOX_H = 16;
-    private static final int LABEL_H = 10;               // room reserved above a labelled box row
+    private static final int LABEL_H = 10;               // above a labelled box row
     private static final int START_Y = 16;               // first widget, below the title bar
     private static final int THIRD = (W_FULL - 2 * GAP) / 3;
     private static final int HALF = (W_FULL - GAP) / 2;
@@ -60,11 +60,11 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
     private int modelIndex;
     private int warheadIndex;
     private int cruiseIndex; // 0 = terrain follow, 1 = high altitude
-    private int ascentStageIndex; // index into ASCENT_STAGES (0 = the phase default)
+    private int ascentStageIndex; // 0 = the phase default
     private int cruiseStageIndex;
     private int attackStageIndex;
     private int attackDirIndex; // 0 = Auto, else index into ATTACK_DIR_LABELS/ATTACK_DIRS
-    private int profileIndex; // index into PROFILE_LABELS/PROFILE_VALUES
+    private int profileIndex;
     private boolean startInCruise;
     private boolean startArmed;
 
@@ -223,7 +223,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         }).bounds(x + 2 * (THIRD + GAP), y, THIRD, BTN_H).build());
         y += BTN_H + ROW_GAP;
 
-        // Target row (three boxes). Default to a stored config, else the player's rounded position.
+        // Defaults: stored config, else the player's rounded position.
         BlockPos self = menu.pos();
         String defX = prev(targetX, Integer.toString(self.getX()));
         String defY = prev(targetY, Integer.toString(self.getY()));
@@ -259,7 +259,6 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         fuelBox = makeBox(x + 2 * (THIRD + GAP), y, THIRD, prev(fuelBox, seed != null ? Integer.toString(seed.fuelTicks) : "0"), "Fuel (0=auto)");
         y += BOX_H + ROW_GAP;
 
-        // Directional strike (side to approach from) + terminal attack profile, sharing one row.
         attackDirButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
             attackDirIndex = (attackDirIndex + 1) % ATTACK_DIR_LABELS.length;
             refreshButtonLabels();
@@ -270,7 +269,6 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         }).bounds(x + HALF + GAP, y, HALF, BTN_H).build());
         y += BTN_H + ROW_GAP;
 
-        // Toggle row.
         inCruiseButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
             startInCruise = !startInCruise;
             refreshButtonLabels();
@@ -346,9 +344,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         WFNetwork.sendToServer(new SpawnMissilePacket(menu.pos(), buildConfig(), false));
     }
 
-    /**
-     * Estimated flight time from this dispenser to the entered target with the current speed/altitude/stages.
-     */
+    /** ETA to the entered target at current speed/altitude/stages. */
     private String etaText() {
         if (targetX == null) {
             return "";
@@ -369,10 +365,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         return String.format("ETA ~%.1fs", ticks / 20.0);
     }
 
-    /**
-     * Honest fuel check: with an explicit (non-auto) fuel value, warn when the powered range falls short of the
-     * target so the ETA above isn't promising an arrival the tank can't pay for.
-     */
+    /** Explicit (non-auto) fuel: warns if powered range falls short of target, so the ETA isn't a false promise. */
     private String fuelWarning() {
         if (targetX == null || fuelBox == null) {
             return "";
@@ -405,7 +398,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
 
     @Override
     protected void renderLabels(GuiGraphics gg, int mouseX, int mouseY) {
-        // Suppressed default (no "Inventory" label); title + hints are drawn in render() at absolute coords.
+        // Suppressed: title + hints drawn in render() at absolute coords instead.
     }
 
     @Override
@@ -428,8 +421,6 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         this.renderTooltip(gg, mouseX, mouseY);
     }
 
-    // --- keep typing inside edit boxes from triggering the inventory-close key -------------------------
-
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == 256) { // ESC always closes
@@ -439,7 +430,7 @@ public class MissileDispenserScreen extends AbstractContainerScreen<MissileDispe
         for (EditBox box : editBoxes) {
             if (box.isFocused()) {
                 box.keyPressed(keyCode, scanCode, modifiers);
-                return true; // swallow so 'e' etc. don't close the screen while typing
+                return true; // swallow: 'e' etc. must not close the screen while typing
             }
         }
         return super.keyPressed(keyCode, scanCode, modifiers);

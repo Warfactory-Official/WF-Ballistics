@@ -120,7 +120,6 @@ public class ModBlocks {
             ITEMS.register("glyphid_nest", () ->
                     new BlockItem(GLYPHID_NEST.get(), new Item.Properties()));
 
-    /** The same flesh, hardened, laid once the world has evolved past {@code colonies.reinforcedEvolution}. */
     public static final DeferredHolder<Block, Block> GLYPHID_NEST_REINFORCED =
             BLOCKS.register("glyphid_nest_reinforced", () -> new GlyphidNestBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_BROWN)
@@ -185,8 +184,6 @@ public class ModBlocks {
 
     static {
         for (ProbeKind kind : ProbeKind.values()) {
-            // The hydrophone waterlogs and the other four do not, which is the only thing the kinds differ by
-            // beyond their numbers.
             DeferredHolder<Block, Block> block = BLOCKS.register(kind.blockName(), () -> {
                 BlockBehaviour.Properties props = BlockBehaviour.Properties.of()
                         .mapColor(kind.underwater() ? MapColor.WATER : MapColor.METAL).strength(2.5f);

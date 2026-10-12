@@ -8,7 +8,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import org.jetbrains.annotations.Nullable;
 
-/** One flywheel effect for the whole sim tier, rather than one per glyphid. */
+/** One flywheel effect per sim tier, not per glyphid. */
 public final class SimGlyphidEffect implements WFFlywheelEffect {
 
     private static @Nullable SimGlyphidEffect live;
@@ -20,9 +20,6 @@ public final class SimGlyphidEffect implements WFFlywheelEffect {
         this.level = level;
     }
 
-    /**
-     * Make sure this level has an effect drawing its records, creating one if the last was retired.
-     */
     public static void ensureLive(Level level) {
         SimGlyphidEffect current = live;
         if (current != null && !current.expired && current.level == level) {

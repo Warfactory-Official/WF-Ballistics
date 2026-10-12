@@ -12,9 +12,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Creative FE source for the probe grid. See {@link GridPowerCellBlockEntity} for why it exists.
- */
+/** Creative FE source for the probe grid; see {@link GridPowerCellBlockEntity} for why it exists. */
 public class GridPowerCellBlock extends BaseEntityBlock {
 
     public static final MapCodec<GridPowerCellBlock> CODEC = simpleCodec(GridPowerCellBlock::new);

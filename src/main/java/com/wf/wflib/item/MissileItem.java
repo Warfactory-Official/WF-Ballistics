@@ -1,6 +1,7 @@
 package com.wf.wflib.item;
 
 import com.wf.wflib.MissileEntity;
+import com.wf.wflib.intercept.InterceptBattery;
 import com.wf.wflib.compat.WarforgeCompat;
 import com.wf.wflib.sim.MissileSimConfig;
 import com.wf.wflib.warhead.WarheadRegistry;
@@ -32,6 +33,8 @@ import java.util.function.Consumer;
 public class MissileItem extends Item implements ModelledItem {
 
     private static final double AIM_RANGE = 256.0;
+    /** Radians off the look ray. */
+    private static final double LOCK_CONE = Math.toRadians(2.0);
     private static final int LAUNCH_COOLDOWN = 20;
 
     private final MissilePreset preset;
@@ -51,28 +54,6 @@ public class MissileItem extends Item implements ModelledItem {
                 ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, player));
         return hit.getType() == HitResult.Type.BLOCK ? hit.getLocation() : end;
     }
-
-    @Nullable
-    private static MissileEntity lockCandidate(Level level, Player player) {
-        Vec3 eye = player.getEyePosition();
-        Vec3 end = eye.add(player.getLookAngle().scale(AIM_RANGE));
-        AABB search = new AABB(eye, end).inflate(1.0);
-        MissileEntity best = null;
-        double bestSq = Double.MAX_VALUE;
-        for (MissileEntity m : level.getEntitiesOfClass(MissileEntity.class, search,
-                e -> e.isAlive() && !e.interceptor().isActive())) {
-            Optional<Vec3> clip = m.getBoundingBox().inflate(m.getPickRadius()).clip(eye, end);
-            if (clip.isPresent()) {
-                double d = clip.get().distanceToSqr(eye);
-                if (d < bestSq) {
-                    bestSq = d;
-                    best = m;
-                }
-            }
-        }
-        return best;
-    }
-
 
     @Nullable
     private static Entity aimEntity(Level level, Player player) {
@@ -119,9 +100,11 @@ public class MissileItem extends Item implements ModelledItem {
             Vec3 target = aimTarget(level, player);
             MissileEntity missile = preset.build(level, target);
             missile.setControlId(player.getUUID());
+            missile.setOperatorId(player.getUUID());
             missile.setTeamId(com.wf.wflib.recon.ReconOwners.owningEntity(player));
             if (preset.isInterceptor()) {
-                MissileEntity locked = lockCandidate(level, player);
+                Entity locked = InterceptBattery.lockCandidate(level, player.getEyePosition(), player.getLookAngle(),
+                        AIM_RANGE, LOCK_CONE, e -> true);
                 if (locked != null) {
                     missile.interceptor().setLock(locked.getUUID());
                 }

@@ -34,7 +34,7 @@ public final class WarforgeApi {
         return (claim == null || claim.equals(NULL_UUID)) ? null : claim;
     }
 
-    /** Whether {@code faction} may have a drone change blocks in this chunk. */
+    /** Can a drone owned by {@code faction} edit blocks here. */
     public static TerritoryVerdict buildVerdict(Level level, UUID faction, BlockPos pos) {
         DimChunkPos chunk = new DimChunkPos(level.dimension(), pos);
         FactionStorage.SiegeZoneResult siege = WarForgeMod.FACTIONS.getSiegeZone(chunk);
@@ -55,7 +55,7 @@ public final class WarforgeApi {
             return TerritoryVerdict.WAR_ZONE;
         }
         if (faction == null || faction.equals(NULL_UUID)) {
-            // Somebody with no faction, on somebody's claim. There is no standing to appeal to.
+            // No faction => no standing against any claim.
             return TerritoryVerdict.FOREIGN_CLAIM;
         }
         if (claim.equals(faction) || areFactionsFriendly(faction, claim)) {
@@ -64,14 +64,7 @@ public final class WarforgeApi {
         return TerritoryVerdict.FOREIGN_CLAIM;
     }
 
-    /**
-     * Who owns each of these chunks, in one pass.
-     *
-     * <p>The shape a route wants: a long alignment crosses a thousand chunk columns and is asked again
-     * on every edit, so a call per chunk is the wrong granularity.</p>
-     *
-     * @return claimed chunks only; an unclaimed chunk is absent rather than mapped to null
-     */
+    /** Batched owner lookup for a route re-asked every edit. Unclaimed chunk: absent, not null-mapped. */
     public static Map<ChunkPos, UUID> ownersAlong(Level level, Collection<ChunkPos> chunks) {
         Map<ChunkPos, UUID> out = new LinkedHashMap<>();
         for (ChunkPos chunk : chunks) {
@@ -83,27 +76,26 @@ public final class WarforgeApi {
         return out;
     }
 
-    /** Whether this player may place this block in this chunk, by the rule that cancels the event. */
+    /** Same rule the block-place event cancels on. */
     public static boolean mayPlaceAt(Level level, UUID playerId, ChunkPos chunk, Block block) {
         return WarforgeAPI.mayPlace(playerId, new DimChunkPos(level.dimension(), chunk.x, chunk.z), block);
     }
 
-    /** A faction's chosen colour as 0xRRGGBB, or {@code fallback} when there is no such faction. */
+    /** 0xRRGGBB; {@code fallback} if no such faction. */
     public static int factionColour(UUID factionId, int fallback) {
         return WarforgeAPI.factionColour(factionId, fallback);
     }
 
-    /** A faction's display name, or null. */
+    /** Null: no such faction. */
     public static String factionName(UUID factionId) {
         return WarforgeAPI.factionName(factionId);
     }
 
-    /** Allied, or the same faction. Not a truce: a ceasefire is not a reason to share a map. */
+    /** Same faction or allied; truce != ally, no map sharing on a ceasefire. */
     public static boolean areFactionsAllied(UUID a, UUID b) {
         return WarforgeAPI.areAllied(a, b);
     }
 
-    /** Whether a player may be shown something owned by a faction. */
     public static boolean maySeeFactionContent(UUID playerId, UUID ownerFaction) {
         return WarforgeAPI.maySeeFactionContent(playerId, ownerFaction);
     }
@@ -111,6 +103,10 @@ public final class WarforgeApi {
     public static boolean areFactionsFriendly(UUID a, UUID b) {
         Faction fa = WarForgeMod.FACTIONS.getFaction(a);
         return fa != null && (fa.isAllyOf(b) || fa.isInTruceWith(b));
+    }
+
+    public static boolean claimProtected(Level level, UUID player, BlockPos pos) {
+        return ExplosionProtection.isProtected(level, player, pos);
     }
 
     public static void filterClaimProtected(Level level, UUID igniterFaction, Collection<BlockPos> positions) {

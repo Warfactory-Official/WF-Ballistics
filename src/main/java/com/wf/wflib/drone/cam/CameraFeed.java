@@ -5,7 +5,7 @@ package com.wf.wflib.drone.cam;
  *
  * @param feedId the drone's entity id. Transient by design: a feed is a live thing, and a monitor that
  *      outlives its drone should say so rather than quietly bind to whatever reused the id
- * @param kind {@link #DRONE}, {@link #FIXED} or {@link #GUIDED}; picks the OSD
+ * @param kind {@link #DRONE}, {@link #FIXED}, {@link #GUIDED} or {@link #MOUNTED}; picks the OSD
  * @param yaw absolute gimbal heading in degrees, already clamped and slewed by the server
  * @param fov vertical field of view in degrees, after zoom
  * @param fovDeg the optic's field of view at 1x, and {@code maxZoom} how far it stops down. The pair is
@@ -31,6 +31,8 @@ public record CameraFeed(int feedId, byte kind, double x, double y, double z,
     public static final byte FIXED = 1;
     /** TV round: battery = fuel; burnt out != blind. */
     public static final byte GUIDED = 2;
+    /** Lens = published eye (no boom): camera on a vehicle's hull, eye outside it. */
+    public static final byte MOUNTED = 3;
     /** Link at or below => signal-loss card; a TV round stops obeying its operator. */
     public static final float USABLE_LINK = 0.05f;
 

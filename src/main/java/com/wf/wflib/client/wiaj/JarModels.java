@@ -22,13 +22,9 @@ public final class JarModels {
     private JarModels() {
     }
 
-    /**
-     * @return the jar as a model, or {@code null} if it holds nothing that draws
-     */
-    /** One block, as a jar of one: what a mining charge throws, as opposed to a scoop of terrain. */
     private static final Map<BlockState, Rubble> SINGLES = new ConcurrentHashMap<>();
 
-    /** A single block as a model, cached per state. */
+    /** 1x1x1 jar per state, cached: single-block debris, vs {@link #bake} for a multi-block scoop. */
     @Nullable
     public static Rubble ofBlock(BlockState state) {
         if (state == null || state.isAir()) {
@@ -41,11 +37,11 @@ public final class JarModels {
         });
     }
 
+    /** @return jar as model; null if it holds nothing that draws. */
     @Nullable
     public static Rubble bake(WorldInAJar jar) {
         List<BlockPos> filled = new ArrayList<>();
-        float centreY = jar.sizeY / 2.0f;
-        double spread = 0.0;
+        float reach = 0.0f;
 
         for (int x = 0; x < jar.sizeX; x++) {
             for (int y = 0; y < jar.sizeY; y++) {
@@ -55,8 +51,9 @@ public final class JarModels {
                         continue;
                     }
                     filled.add(new BlockPos(x, y, z));
-                    double below = y + 0.5f - centreY;
-                    spread += below * below;
+                    reach = Math.max(reach, Math.max(Math.abs(x + 0.5f - jar.sizeX / 2.0f),
+                            Math.max(Math.abs(y + 0.5f - jar.sizeY / 2.0f), Math.abs(z + 0.5f - jar.sizeZ / 2.0f)))
+                            + 0.5f);
                 }
             }
         }
@@ -71,14 +68,10 @@ public final class JarModels {
         Model model = new BlockModelBuilder(jar, filled).poseStack(pose)
                 .build();
 
-        float radius = Math.max(MIN_RADIUS, (float) Math.sqrt(spread / filled.size()));
-        return new Rubble(model, radius);
+        return new Rubble(model, Math.max(MIN_RADIUS, reach));
     }
 
-    /**
-     * @param radius how far the model reaches below its own centre, which is how far short of a surface the
-     *      particle has to stop to look like it is lying on it
-     */
+    /** @param radius farthest filled block face from the centre on any axis: the sweep's extent */
     public record Rubble(Model model, float radius) {
     }
 }

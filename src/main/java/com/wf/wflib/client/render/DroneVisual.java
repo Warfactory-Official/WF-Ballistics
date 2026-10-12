@@ -38,31 +38,22 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
-/**
- * Draws a drone: the airframe in the attitude it is actually flying in, its rotor discs turning at the speed its
- * throttle implies, its grippers shut around whatever it is holding, and the crate itself.
- */
 public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements DynamicVisual {
 
-    /** How quickly the drawn attitude chases the synced one. */
     private static final float ATTITUDE_SMOOTHING = 0.35f;
-    /** How fast the rotors spool toward the speed the throttle calls for. */
     private static final float SPOOL_RATE = 0.12f;
-    /** Half the crate's height. */
     private static final float CRATE_HALF = CrateEntity.SIZE / 2.0f;
-    /** Half a bomblet, so it hangs clamped at its middle rather than balanced on the mount. */
+    /** Matches {@code BombletRenderer.HALF}; centres the hang under the mount instead of by its top. */
     private static final float BOMB_DROP = 0.15f;
 
-    /** How many mines off a rack are actually drawn, and how many of them stand side by side. */
     private static final int MINES_DRAWN = 4;
     private static final int MINES_ABREAST = 2;
-    /** Gap between two mines on the rack, as a fraction of a mine's own footprint. */
     private static final float MINE_PITCH = 1.15f;
 
     private static final int SPIN_LAYER = 0;
     private static final int STOW_LAYER = 1;
 
-    /** The bound of the model as it was last posed, in model space, and whether it has been posed at all. */
+    /** Last-posed bound, model space; valid only once {@code bounded}. */
     private final Vector4f bound = new Vector4f();
     private boolean bounded;
 
@@ -70,11 +61,8 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
     private GemRenderInstance body;
     private PartRigs.Rig rig;
 
-    /** The carried crate. */
     private final TransformedInstance crate;
-    /** The slung warhead. */
     private final TransformedInstance bomb;
-    /** The mines on the rack. */
     private final GemRenderInstance[] mines = new GemRenderInstance[MINES_DRAWN];
     private GemRenderGltfModel mineModel;
     private Vec3 mineSize = new Vec3(1.0, 1.0, 1.0);
@@ -82,7 +70,7 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
     private final Vector3f mount;
     private final MissileAttitude attitude;
     private final Airframe airframe;
-    /** Per-frame scratch. */
+    // Reused per frame; avoids per-frame allocation.
     private final Vector3f heading = new Vector3f();
     private final Quaternionf orientation = new Quaternionf();
     private final Quaternionf lean = new Quaternionf();
@@ -98,11 +86,11 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
     private float curYaw;
     private float roll;
     private float pitch;
-    /** Continuous rotor phase, in ticks of turning. */
+    /** Rotor phase; ticks of turning. */
     private float rotorPhase;
     private float rotorScale;
     private float lastPartialTick;
-    /** State resampled once a tick rather than once a frame, in {@link #sampleTick}. */
+    /** Refreshed once per tick (see {@link #sampleTick}), not per frame. */
     private int sampledTick = Integer.MIN_VALUE;
     private int packedLight;
     private float targetRoll;
@@ -142,7 +130,6 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
         updatePose(0.0f);
     }
 
-    /** Re-read everything that only moves on a tick boundary. */
     private void sampleTick() {
         sampledTick = entity.tickCount;
         targetRoll = entity.flight().getRoll();
@@ -249,7 +236,6 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
         updateMines(matrix, packedLight);
     }
 
-    /** Hang the crate off the airframe's payload mount, or zero the instance out when there is nothing to draw. */
     private void updateCrate(Matrix4f body, int packedLight) {
         if (!carryingCrate) {
             this.crate.setZeroTransform();
@@ -262,7 +248,6 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
         this.crate.setChanged();
     }
 
-    /** Hang the warhead off the same mount the crate uses, or zero it out. */
     private void updateBomb(Matrix4f body, int packedLight) {
         if (!carryingBomb) {
             this.bomb.setZeroTransform();
@@ -275,7 +260,6 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
         this.bomb.setChanged();
     }
 
-    /** Hang the rack's mines under the airframe, as many as are left on it up to {@link #MINES_DRAWN}. */
     private void updateMines(Matrix4f body, int packedLight) {
         ResourceLocation id = mineModelId;
         GemRenderGltfModel current = id == null ? null : MineRigs.model(id);
@@ -353,7 +337,6 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
         }
     }
 
-    /** Whether the drone is on screen, tested against the model rather than against its hitbox. */
     @Override
     public boolean isVisible(FrustumIntersection frustum) {
         return super.isVisible(frustum) || (bounded && PosedBound.test(frustum, pose, bound));

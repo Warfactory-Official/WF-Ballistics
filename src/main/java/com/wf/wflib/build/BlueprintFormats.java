@@ -10,10 +10,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Registry of {@link BlueprintFormat}s, in the same shape as {@code Formations} and {@code CoordinationModels}: add
- * one by implementing the interface and calling {@link #register}.
- */
+/** {@link BlueprintFormat} registry; same shape as {@code Formations}/{@code CoordinationModels}. */
 public final class BlueprintFormats {
 
     private static final Map<ResourceLocation, BlueprintFormat> BY_ID = new LinkedHashMap<>();
@@ -41,9 +38,6 @@ public final class BlueprintFormats {
         return id == null ? null : BY_ID.get(id);
     }
 
-    /**
-     * @return the format that reads this file name, or null if nothing does.
-     */
     @Nullable
     public static BlueprintFormat forFile(String fileName) {
         int dot = fileName.lastIndexOf('.');

@@ -9,10 +9,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.neoforge.capabilities.Capabilities;
 import net.neoforged.neoforge.energy.IEnergyStorage;
 
-/** A creative power source, so the grid can be built and tested without a generator. */
+/** Creative source: unlimited, for grid testing without a generator. */
 public class GridPowerCellBlockEntity extends BlockEntity {
 
-    /** FE per face per tick. Comfortably more than the heaviest probe draws, so a cell can feed a cluster. */
+    /** FE/face/tick; exceeds heaviest probe draw, feeds a cluster. */
     private static final int OUTPUT = 512;
 
     public GridPowerCellBlockEntity(BlockPos pos, BlockState state) {

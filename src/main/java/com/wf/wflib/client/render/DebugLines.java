@@ -5,7 +5,6 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
-/** The handful of wire shapes the debug overlays draw. */
 public final class DebugLines {
 
     private DebugLines() {
@@ -40,16 +39,12 @@ public final class DebugLines {
         line(pose, buffer, from.x, from.y, from.z, to.x, to.y, to.z, r, g, b, a);
     }
 
-    /** A horizontal ring centred on {@code (cx, y, cz)}. */
     public static void circle(PoseStack pose, VertexConsumer buffer, double cx, double y, double cz,
                               double radius, int segments, float r, float g, float b, float a) {
         arc(pose, buffer, cx, y, cz, radius, 0.0, Math.PI * 2.0, segments, r, g, b, a);
     }
 
-    /**
-     * A horizontal arc from {@code fromRad} through {@code sweepRad}, measured the way a yaw is: 0 along +Z,
-     * turning towards -X, so it lines up with {@link net.minecraft.world.entity.Entity#getYRot()}.
-     */
+    /** Angle convention: 0 along +Z, + turns toward -X; matches {@link net.minecraft.world.entity.Entity#getYRot()}. */
     public static void arc(PoseStack pose, VertexConsumer buffer, double cx, double y, double cz,
                            double radius, double fromRad, double sweepRad, int segments,
                            float r, float g, float b, float a) {
@@ -67,10 +62,6 @@ public final class DebugLines {
         }
     }
 
-    /**
-     * A wedge: the two edges of a {@code sweepRad}-wide sector centred on {@code centreRad}, joined by the arc at
-     * {@code radius}.
-     */
     public static void wedge(PoseStack pose, VertexConsumer buffer, double cx, double y, double cz,
                              double radius, double centreRad, double sweepRad, int segments,
                              float r, float g, float b, float a) {
@@ -83,7 +74,6 @@ public final class DebugLines {
         arc(pose, buffer, cx, y, cz, radius, from, sweepRad, segments, r, g, b, a);
     }
 
-    /** A cone of the given half-angle about {@code axis}, drawn as ribs plus a rim. */
     public static void cone(PoseStack pose, VertexConsumer buffer, Vec3 apex, Vec3 axis,
                             double halfAngleRad, double length, int ribs,
                             float r, float g, float b, float a) {
@@ -113,11 +103,10 @@ public final class DebugLines {
         if (prev != null && first != null) {
             line(pose, buffer, prev, first, r, g, b, a);
         }
-        // The axis itself, so the direction reads at a glance even edge-on.
+        // Draw axis too: direction reads edge-on.
         line(pose, buffer, apex, apex.add(unit.scale(length)), r, g, b, a);
     }
 
-    /** A small axis cross, for marking a point. */
     public static void cross(PoseStack pose, VertexConsumer buffer, Vec3 at, double size,
                              float r, float g, float b, float a) {
         cross(pose, buffer, at.x, at.y, at.z, size, r, g, b, a);

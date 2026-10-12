@@ -52,9 +52,8 @@ public class ModelGalleryScreen extends Screen {
     private boolean cull = true;
     private Mode mode = Mode.TEXTURED;
 
-    /** Whether the turntable runs. */
     private boolean turning = true;
-    /** Whether the selected clip runs. Stopped, the arrow keys scrub it by hand. */
+    /** Stopped: arrow keys scrub the clip by hand. */
     private boolean playing = true;
     private float scrub;
     private int clip;
@@ -134,9 +133,6 @@ public class ModelGalleryScreen extends Screen {
         return Component.literal("Cull: " + (this.cull ? "on" : "off"));
     }
 
-    // --- layout ------------------------------------------------------------------------------------
-
-    /** Lays the tab chips out left to right, wrapping, and returns the y just below the last row. */
     private int tabBottom() {
         int x = PAD;
         int y = BAR;
@@ -160,15 +156,13 @@ public class ModelGalleryScreen extends Screen {
         return this.font.width(text) + 10;
     }
 
-    /** @return the text, shortened with an ellipsis until it fits in {@code width} pixels. */
+    /** Text shortened with an ellipsis until it fits in {@code width} px. */
     private String clip(String text, int width) {
         if (this.font.width(text) <= width) {
             return text;
         }
         return this.font.plainSubstrByWidth(text, width - this.font.width("...")) + "...";
     }
-
-    // --- render ------------------------------------------------------------------------------------
 
     @Override
     public void render(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
@@ -221,7 +215,7 @@ public class ModelGalleryScreen extends Screen {
         }
     }
 
-    /** @return where a grid index is drawn, or null if it is on a page that is not showing. */
+    /** Where a grid index draws; null if its page isn't showing. */
     @Nullable
     private int[] cellPos(int index) {
         int cols = columns();
@@ -379,8 +373,6 @@ public class ModelGalleryScreen extends Screen {
         this.hits.add(new Hit(x, y, width, CHIP_H, action));
     }
 
-    // --- animation ---------------------------------------------------------------------------------
-
     private float spin() {
         return this.turning ? (float) (Util.getMillis() % SPIN_MS) / SPIN_MS * 360.0f : this.yaw;
     }
@@ -388,8 +380,6 @@ public class ModelGalleryScreen extends Screen {
     private float phase() {
         return this.playing ? (float) (Util.getMillis() % CLIP_MS) / CLIP_MS : this.scrub;
     }
-
-    // --- input -------------------------------------------------------------------------------------
 
     private void select(int index) {
         if (this.categories.isEmpty()) {
@@ -413,7 +403,7 @@ public class ModelGalleryScreen extends Screen {
         rebuildWidgets();
     }
 
-    /** Walks the grid, paging it so the cell stays on screen. */
+    /** Grid walk; pages so the cell stays on screen. */
     private void moveCursor(int dx, int dy) {
         List<GalleryEntry> entries = entries();
         if (entries.isEmpty()) {
@@ -462,7 +452,7 @@ public class ModelGalleryScreen extends Screen {
             return true;
         }
         if (button == 0) {
-            // Walked backwards so the chip drawn last (the one on top, if two ever overlap) wins.
+            // Walk backwards: last-drawn chip (the one on top) wins on overlap.
             for (int i = this.hits.size() - 1; i >= 0; i--) {
                 Hit hit = this.hits.get(i);
                 if (hit.covers(mouseX, mouseY)) {
@@ -539,7 +529,7 @@ public class ModelGalleryScreen extends Screen {
                 return true;
             }
             case GLFW.GLFW_KEY_P -> {
-                // Stopping the clock keeps whatever it was showing, so pausing never jumps the pose.
+                // Capture current phase before pausing, so toggling off doesn't jump the pose.
                 if (this.playing) {
                     this.scrub = phase();
                 }
@@ -586,7 +576,7 @@ public class ModelGalleryScreen extends Screen {
 
     private boolean turn(float yawBy, float pitchBy) {
         if (this.turning) {
-            // Take over from wherever the turntable had got to rather than snapping back to the start.
+            // Picks up from wherever the turntable was, instead of snapping to start.
             this.yaw = spin();
             this.turning = false;
         }

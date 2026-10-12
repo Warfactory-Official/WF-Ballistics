@@ -16,6 +16,9 @@ public final class RocketClient extends EntityRenderer<RocketEntity> {
     }
 
     public static void tick(RocketEntity rocket) {
+        if (rocket.tickCount == 1) {
+            com.wf.wflib.ammo.client.LookRockets.launched(rocket);
+        }
         RoundRenderer renderer = rocket.preset() == null ? null : RoundRenderers.get(rocket.preset().id());
         if (renderer == null) {
             return;

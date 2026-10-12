@@ -27,9 +27,7 @@ public class ExplosionAEF {
     public final double posY;
     public final double posZ;
     public final float size;
-    /**
-     * The entity that caused the blast, or {@code null} for an unattributed/world explosion.
-     */
+    /** The entity that caused the blast, or {@code null} for an unattributed/world explosion. */
     public final Entity exploder;
     /** A throwaway vanilla {@link Explosion} carrying this blast's parameters. */
     public final Explosion compat;
@@ -49,9 +47,7 @@ public class ExplosionAEF {
         this(level, x, y, z, size, null);
     }
 
-    /**
-     * Convenience: detonate at the centre of a block.
-     */
+    /** Convenience: detonate at the centre of a block. */
     public ExplosionAEF(Level level, BlockPos pos, float size) {
         this(level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, size, null);
     }
@@ -79,7 +75,6 @@ public class ExplosionAEF {
                 || cross.withinShape(this, point.x, point.y, point.z, posX, posY, posZ);
     }
 
-    /** Runs the configured pipeline. */
     public void explode() {
         ExplosionAEF outer = RUNNING.get();
         RUNNING.set(this);
@@ -153,9 +148,7 @@ public class ExplosionAEF {
         return this;
     }
 
-    /**
-     * When true, this blast ignores WarForge land claims and destroys protected blocks anyway
-     */
+    /** True: blast ignores WarForge land claims, destroys protected blocks anyway. */
     public ExplosionAEF bypassClaims(boolean bypassClaims) {
         this.bypassClaims = bypassClaims;
         return this;

@@ -10,18 +10,15 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Turns a volume of world into work: one order per block to take down, ordered top-down so nothing is being stood
- * on when it goes.
- */
+/** Turns a volume of world into work, ordered top-down so nothing is stood on when it goes. */
 public final class SalvagePlan {
 
     private SalvagePlan() {
     }
 
     /**
-     * @param box the volume to strip, inclusive
-     * @throws IllegalArgumentException if the volume is larger than {@code Blueprint.MAX_VOLUME}
+     * @param box inclusive volume to strip.
+     * @throws IllegalArgumentException over {@link Blueprint#MAX_VOLUME}.
      */
     public static WorkPlan of(LevelReader level, BoundingBox box) {
         long volume = (long) box.getXSpan() * box.getYSpan() * box.getZSpan();
@@ -47,7 +44,7 @@ public final class SalvagePlan {
                         continue;
                     }
                     if (Placement.derived(state)) {
-                        // Breaking the other half takes this with it, exactly as when building.
+                        // Breaking the other half takes this with it, same as building.
                         skipped++;
                         continue;
                     }

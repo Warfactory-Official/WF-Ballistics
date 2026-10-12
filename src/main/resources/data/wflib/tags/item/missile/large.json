@@ -1,0 +1,15 @@
+{
+  "replace": false,
+  "values": [
+    "wflib:missile_ballistic",
+    "wflib:missile_supersonic",
+    "wflib:missile_supersonic_cruise",
+    "wflib:missile_cluster",
+    "wflib:missile_interceptor_hypersonic",
+    "wflib:missile_kh_31",
+    "wflib:missile_aim_120",
+    "wflib:missile_mica",
+    "wflib:missile_r_77",
+    "wflib:missile_pl_12"
+  ]
+}

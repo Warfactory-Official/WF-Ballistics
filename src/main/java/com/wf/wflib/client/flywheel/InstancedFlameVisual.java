@@ -10,7 +10,6 @@ import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.visual.AbstractVisual;
 import net.minecraft.world.level.Level;
 
-/** The Flywheel visual for an {@link InstancedFlameEffect}. */
 public class InstancedFlameVisual extends AbstractVisual implements EffectVisual<InstancedFlameEffect> {
 
     private static final InstanceType<ParticleInstance> FLAME = GemRenderParticleTypes.custom(
@@ -21,7 +20,7 @@ public class InstancedFlameVisual extends AbstractVisual implements EffectVisual
     public InstancedFlameVisual(VisualizationContext ctx, InstancedFlameEffect effect, float partialTick) {
         super(ctx, (Level) effect.level(), partialTick);
         this.pool = new ParticlePool(ctx, effect.emitter(), FLAME,
-                ParticleModels.additive(WFParticleTextures.PARTICLE_BASE));
+                ParticleModels.glowing(WFParticleTextures.FLAME));
     }
 
     @Override

@@ -13,25 +13,17 @@ import java.util.UUID;
 /** Whether a job is allowed to happen where it is. */
 public final class SiteRules {
 
-    /** How often a running job re-checks the ground it is standing on, in ticks. */
     public static final int RECHECK_TICKS = 200;
 
     private SiteRules() {
     }
 
-    /**
-     * Survey a whole volume.
-     *
-     * @return the first refusal found, or {@link TerritoryVerdict#ALLOWED}
-     */
+    /** First refusal found, or {@link TerritoryVerdict#ALLOWED}. */
     public static TerritoryVerdict survey(ServerLevel level, @Nullable UUID faction, BoundingBox box) {
         return at(level, faction, box, null);
     }
 
-    /**
-     * @param where filled in with the first refused position, if given. The operator being told a build was
-     *      refused deserves to be told which corner of it was the problem
-     */
+    /** @param where set to the first refused position, if given: so the refusal can say where. */
     public static TerritoryVerdict survey(ServerLevel level, @Nullable UUID faction, BoundingBox box,
                                           BlockPos.MutableBlockPos where) {
         return at(level, faction, box, where);
@@ -46,9 +38,9 @@ public final class SiteRules {
     }
 
     /**
-     * Walk the chunks a box touches, asking {@code probe} about one position in each.
+     * Samples one position per touched chunk, not the whole volume.
      *
-     * @param where filled in with the first refused position, if given
+     * @param where set to the first refused position, if given.
      */
     static TerritoryVerdict walk(BoundingBox box, @Nullable BlockPos.MutableBlockPos where,
                                  java.util.function.Function<BlockPos, TerritoryVerdict> probe) {
@@ -73,9 +65,7 @@ public final class SiteRules {
         return TerritoryVerdict.ALLOWED;
     }
 
-    /**
-     * The single-block backstop, asked immediately before a drone changes anything.
-     */
+    /** Single-block backstop, asked immediately before a drone changes anything. */
     public static TerritoryVerdict mayTouch(ServerLevel level, @Nullable UUID faction, BlockPos pos) {
         return WarforgeCompat.buildVerdict(level, faction, pos);
     }

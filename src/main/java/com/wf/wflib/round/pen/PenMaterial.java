@@ -17,26 +17,40 @@ import java.util.Map;
 
 /**
  * Penetration class: {@link PenTable} fallback for blocks without a data map value. {@link #resistance} = mm
- * steel-eq per metre. Order: {@code wflib:penetration/<name>} tag (most resistant wins) > unbreakable > blast
+ * steel-eq per metre; {@link #ricochet} = critical grazing angle, deg (estimates: hard surfaces skip rounds at
+ * steeper angles; tune per pack). Order: {@code wflib:penetration/<name>} tag (most resistant wins) > unbreakable > blast
  * resistance >= 600 > vanilla/common tags > sound type > blast resistance bands.
  */
 public enum PenMaterial {
-    GLASS(0.3f),
-    SOFT(1.5f),
-    WOOD(6.0f),
-    EARTH(25.0f),
-    STONE(60.0f),
-    METAL(250.0f),
-    ARMOR(1000.0f),
-    IMPENETRABLE(Float.POSITIVE_INFINITY);
+    /** Any impulse shatters. */
+    GLASS(0.3f, 0.0f, 0.0f),
+    SOFT(1.5f, 0.0f),
+    WOOD(6.0f, 5.0f),
+    EARTH(25.0f, 10.0f),
+    STONE(60.0f, 20.0f),
+    METAL(250.0f, 30.0f),
+    ARMOR(1000.0f, 35.0f),
+    IMPENETRABLE(Float.POSITIVE_INFINITY, 35.0f);
 
     public static final PenMaterial[] VALUES = values();
 
+    /** kg m/s per mm/m. Stone 360: ~110 stopped 5.56 ball (3.2 kg m/s), ~27 12 ga slugs (13.4). */
+    public static final float TOUGHNESS_PER_RESISTANCE = 6.0f;
+
     public final float resistance;
+    /** Round impulse that destroys it, kg m/s. */
+    public final float toughness;
+    public final float ricochet;
     public final TagKey<Block> tag;
 
-    PenMaterial(float resistance) {
+    PenMaterial(float resistance, float ricochet) {
+        this(resistance, TOUGHNESS_PER_RESISTANCE * resistance, ricochet);
+    }
+
+    PenMaterial(float resistance, float toughness, float ricochet) {
         this.resistance = resistance;
+        this.toughness = toughness;
+        this.ricochet = ricochet;
         this.tag = TagKey.create(Registries.BLOCK,
                 ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "penetration/" + name().toLowerCase()));
     }

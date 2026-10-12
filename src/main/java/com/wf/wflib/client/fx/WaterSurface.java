@@ -5,12 +5,9 @@ import net.minecraft.core.Direction;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.world.level.BlockGetter;
 
-/**
- * Where the water is around a blast, so foam knows what surface it broke.
- */
+/** Water surface near a point, so foam knows what it broke through. */
 public final class WaterSurface {
 
-    /** How far a water column is followed up to its surface, and how far below a blast is looked for. */
     private static final int UP = 32;
     private static final int DOWN = 6;
 
@@ -25,7 +22,7 @@ public final class WaterSurface {
         BlockPos.MutableBlockPos scan = BlockPos.containing(x, y, z).mutable();
 
         if (!isWater(level, scan)) {
-            // A charge fusing just above the surface still churns it.
+            // Charge fusing just above the surface still counts as having churned it.
             for (int i = 0; i < DOWN && !isWater(level, scan); i++) {
                 scan.move(Direction.DOWN);
             }

@@ -45,10 +45,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 
-/**
- * Checks for the construction foundations: the blueprint readers, the work queue's sharing rules, and the ordering
- * the plans impose.
- */
+/** Self-tests: blueprint readers, work-queue sharing rules, plan ordering. */
 public final class BuildSelfTest {
 
     private BuildSelfTest() {
@@ -66,7 +63,7 @@ public final class BuildSelfTest {
         return out;
     }
 
-    // --- the territory gate ---
+    // ------------------------------------------------------------------ territory
 
     private static void territory(List<Result> out) {
         BoundingBox anywhere = new BoundingBox(0, 60, 0, 32, 80, 32);
@@ -114,7 +111,7 @@ public final class BuildSelfTest {
         out.add(new Result("territory/samples-land-inside-the-job", inside,
                 inside ? "every sample within the bounds" : "a sample fell outside the job"));
 
-        // The first refusal is the one reported, and it reports where.
+        // walk() reports the first refusal, not the last.
         BlockPos.MutableBlockPos where = new BlockPos.MutableBlockPos();
         TerritoryVerdict refused = SiteRules.walk(straddling, where,
                 pos -> pos.getX() > 0 ? TerritoryVerdict.WAR_ZONE : TerritoryVerdict.ALLOWED);
@@ -124,7 +121,7 @@ public final class BuildSelfTest {
                 refused + " at " + where.toShortString()));
     }
 
-    // --- the drone's side of a job ---
+    // ------------------------------------------------------------------ drone side of a job
 
     private static void working(List<Result> out) {
         UUID job = UUID.nameUUIDFromBytes(new byte[]{9});
@@ -191,9 +188,6 @@ public final class BuildSelfTest {
         return jobDrone(work).arrivalState();
     }
 
-    /**
-     * A snapshot of a follower drone in transit, with or without a job.
-     */
     private static DroneSnapshot jobDrone(WorkAssignment work) {
         return new DroneSnapshot(UUID.nameUUIDFromBytes(new byte[]{(byte) 0x5b}), false,
                 new Vec3(0, 80, 0), Vec3.ZERO, 0.0f, FlightAttitude.LEVEL, Airframe.AMAZOG,
@@ -212,7 +206,7 @@ public final class BuildSelfTest {
                 List.of(leader, member));
     }
 
-    // --- blueprint formats ---
+    // ------------------------------------------------------------------ blueprint formats
 
     private static void litematica(List<Result> out) {
         CompoundTag root = litematic(region(1, 1, 0, -2, -2, 1,
@@ -256,7 +250,7 @@ public final class BuildSelfTest {
             out.add(new Result("blueprint/palette-zero-is-air", false, e.getMessage()));
         }
 
-        // A file claiming a schema nobody has implemented is refused rather than read as garbage.
+        // Unimplemented schema version => refused, not read as garbage.
         CompoundTag future = litematic(region(0, 0, 0, 1, 1, 1,
                 new String[]{"minecraft:air", "minecraft:stone"}, new int[]{1}));
         future.putInt("Version", 99);
@@ -285,7 +279,7 @@ public final class BuildSelfTest {
         root.put("blocks", blocks);
         try {
             Blueprint bp = StructureNbtFormat.INSTANCE.read(root, BlueprintLibrary.blocks(), "test");
-            // structure_void is "leave it alone", so it must not become an order.
+            // structure_void = "leave it alone": not an order.
             out.add(new Result("blueprint/structure-void-is-empty",
                     bp.blocks() == 1 && bp.at(0, 0, 0).is(Blocks.STONE) && bp.at(1, 0, 0).isAir(),
                     bp.blocks() + " block(s) of 2 cells"));
@@ -294,7 +288,7 @@ public final class BuildSelfTest {
         }
     }
 
-    // --- the work queue ---
+    // ------------------------------------------------------------------ work queue
 
     private static void queue(List<Result> out) {
         UUID alice = UUID.nameUUIDFromBytes(new byte[]{1});
@@ -316,7 +310,7 @@ public final class BuildSelfTest {
                 allLow ? "held the upper layer back until the lower one was claimed"
                         : "handed out an order past the lookahead"));
 
-        // ...and lets go once the frontier moves.
+        // Frontier advances once the lower layer is claimed through.
         for (int id = 0; id < 4; id++) {
             gated.complete(alice, id);
         }
@@ -348,7 +342,7 @@ public final class BuildSelfTest {
                 afterAbandon == 0 && afterLapse == 1,
                 "attempts after abandon " + afterAbandon + ", after lapse " + afterLapse));
 
-        // Retried to the limit, an order is written off rather than handed out forever.
+        // Past MAX_ATTEMPTS, BLOCKED: not handed out forever.
         WorkQueue stubborn = WorkQueue.of(List.of(new WorkOrder(0, BlockPos.ZERO, 0, 0)));
         for (int i = 0; i < WorkQueue.MAX_ATTEMPTS; i++) {
             WorkOrder got = stubborn.claim(alice, Vec3.ZERO, 0.75, i);
@@ -362,7 +356,7 @@ public final class BuildSelfTest {
                 "status " + stubborn.statusOf(0) + ", finished " + stubborn.finished()
                         + ", done " + stubborn.done()));
 
-        // Two workers standing on the same spot must not be sent to the same corner of the site.
+        // Same-spot claims repel: CLAIM_SPACING keeps workers off each other's corner.
         List<WorkOrder> spread = new ArrayList<>();
         for (int i = 0; i < 40; i++) {
             spread.add(new WorkOrder(0, new BlockPos(i, 0, 0), 0, 0));
@@ -383,7 +377,7 @@ public final class BuildSelfTest {
         out.add(new Result("work/only-the-holder-completes", !stranger && holder,
                 "stranger accepted: " + stranger + ", holder accepted: " + holder));
 
-        // Round-trip, including a live claim. A build outlives a session.
+        // A live claim must survive the round-trip: a build outlives a session.
         WorkQueue saved = WorkQueue.of(spread);
         saved.claim(alice, Vec3.ZERO, 0.75, 50);
         saved.complete(alice, saved.claimsOf(alice).get(0));
@@ -404,13 +398,13 @@ public final class BuildSelfTest {
                 recovered.pending() + " pending, " + recovered.claimed() + " claimed"));
     }
 
-    // --- plans ---
+    // ------------------------------------------------------------------ plans
 
     private static void plans(List<Result> out) {
         BlockState stone = Blocks.STONE.defaultBlockState();
         BlockState torch = Blocks.TORCH.defaultBlockState();
 
-        // Within one layer, structure before the things that hang off it.
+        // Same layer: structure sequenced before what hangs off it.
         Blueprint sideBySide = new Blueprint("t", new Vec3i(2, 1, 1),
                 List.of(Blocks.AIR.defaultBlockState(), stone, torch), new int[]{1, 2}, 0, 0);
         WorkPlan flat = ConstructionPlan.of(sideBySide, BlockPos.ZERO);
@@ -419,7 +413,7 @@ public final class BuildSelfTest {
         out.add(new Result("plan/attachments-follow-structure", stoneSeq < torchSeq,
                 "stone at sequence " + stoneSeq + ", torch at " + torchSeq));
 
-        // ...and layers ascend regardless.
+        // Layers ascend regardless.
         Blueprint stacked = new Blueprint("t", new Vec3i(1, 3, 1),
                 List.of(Blocks.AIR.defaultBlockState(), stone), new int[]{1, 1, 1}, 0, 0);
         WorkPlan tower = ConstructionPlan.of(stacked, BlockPos.ZERO);
@@ -428,7 +422,7 @@ public final class BuildSelfTest {
         out.add(new Result("plan/layers-ascend", ascending && tower.size() == 3,
                 tower.size() + " orders, ascending " + ascending));
 
-        // A door is one order and one item, not two of each: placing the bottom half creates the top.
+        // A door is one order, one item: placing the bottom half creates the top.
         BlockState lower = Blocks.OAK_DOOR.defaultBlockState()
                 .setValue(BlockStateProperties.DOUBLE_BLOCK_HALF, DoubleBlockHalf.LOWER);
         BlockState upper = Blocks.OAK_DOOR.defaultBlockState()
@@ -449,14 +443,14 @@ public final class BuildSelfTest {
                 stones != null && stones == billed.size() && stones == 8,
                 billed.size() + " orders, bill " + stones));
 
-        // Orders land where the origin says, not at the blueprint's own coordinates.
+        // Orders land at the origin, not at the blueprint's own coordinates.
         WorkPlan offset = ConstructionPlan.of(stacked, new BlockPos(100, 64, -200));
         boolean placed = offset.orders().stream()
                 .anyMatch(o -> o.at().equals(new BlockPos(100, 66, -200)));
         out.add(new Result("plan/origin-offsets-orders", placed,
                 placed ? "top of the tower at 100, 66, -200" : "orders are not at the origin"));
 
-        // Salvage is the mirror in both axes: down the layers, and attachments off before their support.
+        // Salvage mirrors both axes: down the layers, attachments off before their support.
         int topStructure = Placement.salvageSequence(10, 10, stone);
         int topTorch = Placement.salvageSequence(10, 10, torch);
         int lowStructure = Placement.salvageSequence(0, 10, stone);
@@ -491,12 +485,12 @@ public final class BuildSelfTest {
         return -1;
     }
 
-    // --- station roles ---
+    // ------------------------------------------------------------------ station roles
 
     private static void roles(List<Result> out) {
         ResourceKey<Level> overworld = Level.OVERWORLD;
 
-        // A station saved before roles existed did everything, and must keep doing everything.
+        // Pre-roles save: must load with every role, for back-compat.
         StationRecord legacy = new StationRecord("AAAAAAAAAAAA", overworld, BlockPos.ZERO, 0L);
         CompoundTag old = legacy.save();
         old.remove("Roles");
@@ -505,14 +499,14 @@ public final class BuildSelfTest {
                 loaded.roles().equals(StationKind.STATION.roles()),
                 "loaded as " + loaded.kind()));
 
-        // Deliberately turning everything off is not the same as never having been asked.
+        // Empty roles (deliberate) != unset (never asked).
         StationRecord inert = new StationRecord("BBBBBBBBBBBB", overworld, BlockPos.ZERO, 0L);
         inert.setRoles(EnumSet.noneOf(StationRole.class));
         StationRecord inertBack = StationRecord.load(inert.save());
         out.add(new Result("station/empty-roles-survive-a-save",
                 inertBack.roles().isEmpty(), "loaded as " + inertBack.kind()));
 
-        // The preset is a name for a set, not a type: set the roles by hand and the name follows.
+        // Preset is a name for a role set, not a stored type: the name follows hand-set roles.
         StationRecord provider = new StationRecord("CCCCCCCCCCCC", overworld, BlockPos.ZERO, 0L);
         provider.setRoles(StationKind.PROVIDER.roles());
         StationRecord providerBack = StationRecord.load(provider.save());
@@ -522,7 +516,7 @@ public final class BuildSelfTest {
                 supplies && !receives && "provider".equals(providerBack.kind()),
                 "kind " + providerBack.kind() + ", materials " + supplies + ", depot " + receives));
 
-        // An unnamed combination is a legitimate station, not a broken one.
+        // Unnamed role combinations are legal, not broken.
         StationRecord custom = new StationRecord("DDDDDDDDDDDD", overworld, BlockPos.ZERO, 0L);
         custom.setRoles(EnumSet.of(StationRole.MATERIALS, StationRole.RECHARGE));
         out.add(new Result("station/custom-role-sets-are-legal",
@@ -530,7 +524,7 @@ public final class BuildSelfTest {
                 "kind " + custom.kind()));
     }
 
-    // --- tag builders ---
+    // ------------------------------------------------------------------ tag builders
 
     private static CompoundTag litematic(CompoundTag... regions) {
         CompoundTag root = new CompoundTag();
@@ -546,9 +540,8 @@ public final class BuildSelfTest {
     }
 
     /**
-     * @param sizeX signed extents, exactly as Litematica writes them: negative means the region runs back
-     *      from {@code posX}
-     * @param cells palette indices in the region's own y/z/x order, from its <em>minimum</em> corner
+     * @param sizeX signed, as Litematica writes it: negative runs back from {@code posX}.
+     * @param cells palette indices in y/z/x order, from the region's minimum corner.
      */
     private static CompoundTag region(int posX, int posY, int posZ, int sizeX, int sizeY, int sizeZ,
                                       String[] names, int[] cells) {

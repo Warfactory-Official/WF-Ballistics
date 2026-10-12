@@ -145,14 +145,12 @@ public class RadarScopeScreen extends Screen {
         }
     }
 
-    /**
-     * @return the row after the last one drawn.
-     */
+    /** Row after the last one drawn. */
     private int contacts(GuiGraphics g, int x, int y, ScopeFrame frame, int room) {
         this.heading(g, x, y, "TYPE", "RNG", "ALT", "TRK", "SRC", null);
         int row = y + ROW;
 
-        // Nearest first: on a warning set the thing that matters is what is closest, not what was found first.
+        // Nearest first: closest matters on a warning set, not discovery order.
         List<ScopeFrame.Blip> sorted = new ArrayList<>(frame.blips());
         sorted.sort(Comparator.comparingDouble(b -> range(b, frame)));
         if (sorted.isEmpty()) {
@@ -229,9 +227,7 @@ public class RadarScopeScreen extends Screen {
         g.fill(x, y + ROW - 3, x + PANEL, y + ROW - 2, RULE);
     }
 
-    /**
-     * Draw right-aligned to {@code rightX}. The whole reason the columns line up.
-     */
+    /** Right-aligned to {@code rightX}; the whole reason columns line up. */
     private void right(GuiGraphics g, String text, int rightX, int y, int colour) {
         g.drawString(this.font, text, rightX - this.font.width(text), y, colour, false);
     }
@@ -245,26 +241,18 @@ public class RadarScopeScreen extends Screen {
         };
     }
 
-    /**
-     * @return the same three-glyph scale for how many stations contributed to a fix.
-     */
+    /** Three-glyph scale for how many stations contributed to a fix. */
     private static String bars(int stations) {
         return stations >= 3 ? "###" : stations == 2 ? "##" : "#";
     }
 
-    /**
-     * @return compass bearing in degrees, zero north and rising clockwise: the convention the game's own
-     *      readouts use, so it can be walked without conversion.
-     */
+    /** Compass bearing: 0 = north, clockwise+, matching the game's own readout convention. */
     private static double bearing(double dx, double dz) {
         double degrees = Math.toDegrees(Math.atan2(dx, -dz));
         return degrees < 0.0 ? degrees + 360.0 : degrees;
     }
 
-    /**
-     * @return an age a person reads at a glance. Seconds up to a minute, then minutes, then hours: the log
-     *      spans however long the hub has been running, and "4380s" is a number nobody converts in their head.
-     */
+    /** Glanceable age: s, then m, then h; a raw second count nobody converts in their head. */
     private static String age(int seconds) {
         if (seconds < 60) {
             return seconds + "s";
@@ -275,10 +263,7 @@ public class RadarScopeScreen extends Screen {
         return (seconds / 3600) + "h";
     }
 
-    /**
-     * @return the colour scaled toward black, so an old event dims without shifting hue into a colour that
-     *      means something else.
-     */
+    /** Colour scaled toward black; avoids dimming into a hue that means something else. */
     private static int tint(int colour, float factor) {
         int r = (int) (((colour >>> 16) & 0xFF) * factor);
         int g = (int) (((colour >>> 8) & 0xFF) * factor);
@@ -292,10 +277,7 @@ public class RadarScopeScreen extends Screen {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
-    /**
-     * @return where this screen's owner sits, so a caller can centre something on it later. Kept because the
-     *      origin is what makes two screens on one net agree about which way is north.
-     */
+    /** Owner's position; two screens on one net must agree which way is north. */
     public double originX() {
         return Mth.floor(originX);
     }

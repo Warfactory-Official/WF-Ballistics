@@ -12,6 +12,8 @@ public enum ImpactTrigger {
     PIERCE_IN("pierceIn"),
     /** {@code blockPen} exited a loaded block. */
     PIERCE_OUT("pierceOut"),
+    /** Skipped off a loaded block, water or armour; context velocity = outgoing. */
+    RICOCHET("ricochet"),
     /** Round ended at a loaded point, impact not owed to a {@code DeferredImpact}; rocket detonated. */
     END("end");
 

@@ -14,14 +14,12 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import java.util.ArrayList;
 import java.util.List;
 
-/** The crack burst a flying chunk of block leaves where it hits. */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class ShatterScheduler {
 
-    /** Crack particles one shattering chunk is worth, as {@code BlockDebrisParticle.shatter} spent them. */
+    /** Must match the count {@code BlockDebrisParticle.shatter} spends per chunk. */
     private static final int CRACKS_PER_CHUNK = 16;
 
-    /** How many shatters may be outstanding at once. */
     private static final int MAX_PENDING = 300;
 
     private static final List<Pending> PENDING = new ArrayList<>();
@@ -29,9 +27,7 @@ public final class ShatterScheduler {
     private ShatterScheduler() {
     }
 
-    /**
-     * @param delayTicks when the chunk gets there, from now
-     */
+    /** @param delayTicks ticks from now, not an absolute tick */
     public static void shatterAt(double x, double y, double z, BlockState state, int delayTicks) {
         if (state == null || state.isAir()) {
             return;
@@ -57,7 +53,7 @@ public final class ShatterScheduler {
             double vx = (level.random.nextDouble() - 0.5) * 0.2;
             double vy = level.random.nextDouble() * 0.2;
             double vz = (level.random.nextDouble() - 0.5) * 0.2;
-            // Forced, because a mining blast is watched from well outside vanilla's 32-block particle cull.
+            // force=true: mining blasts watched from past vanilla's 32-block particle cull.
             level.addParticle(crack, true, x, y, z, vx, vy, vz);
         }
     }

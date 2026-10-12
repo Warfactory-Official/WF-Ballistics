@@ -20,20 +20,13 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.joml.Matrix4f;
 
-/**
- * Draws a drone feed across the front of a monitor: one quad, three blocks wide and two high, from the origin cell
- * of the screen.
- */
 public class CameraMonitorRenderer implements BlockEntityRenderer<CameraMonitorBlockEntity> {
 
-    /** Blocks past which a monitor stops drawing entirely. Matches the governor's falloff distance. */
     private static final double DRAW_DISTANCE = CameraFeedCache.FALLOFF_DISTANCE;
     private static final float STANDOFF = 0.001f;
     private static final float INSET = 0.0625f;
 
-    /** Width of the glass, in blocks, after the bezel. */
     private static final float SCREEN_W = CameraMonitorBlock.WIDTH - INSET * 2.0f;
-    /** Height of the glass. The picture is 16:9, so it letterboxes inside this rather than filling it. */
     private static final float SCREEN_H = CameraMonitorBlock.HEIGHT - INSET * 2.0f;
 
     public CameraMonitorRenderer(BlockEntityRendererProvider.Context context) {
@@ -84,9 +77,6 @@ public class CameraMonitorRenderer implements BlockEntityRenderer<CameraMonitorB
         pose.popPose();
     }
 
-    /**
-     * @return how many pixels wide this monitor's screen is on the viewer's display right now.
-     */
     private static int projectedPixels(Minecraft mc, double distance) {
         double fov = Math.toRadians(Math.max(30, mc.options.fov().get()));
         double halfExtent = Math.tan(fov * 0.5) * Math.max(0.5, distance);
@@ -99,7 +89,7 @@ public class CameraMonitorRenderer implements BlockEntityRenderer<CameraMonitorB
         return (int) DRAW_DISTANCE + 16;
     }
 
-    /** The whole screen, not the origin cell. */
+    /** Spans the whole screen; default per-cell BB would let frustum cull a visible screen. */
     @Override
     public AABB getRenderBoundingBox(CameraMonitorBlockEntity monitor) {
         BlockState state = monitor.getBlockState();

@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "wflib:bomb_mk_82",
+    "wflib:bomb_fab_250",
+    "wflib:bomb_cbu_87",
+    "wflib:bomb_gbu_12"
+  ]
+}

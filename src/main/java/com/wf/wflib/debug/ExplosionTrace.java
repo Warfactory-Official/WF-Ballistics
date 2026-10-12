@@ -10,19 +10,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/**
- * Records what an {@link com.wf.wflib.aef.ExplosionAEF} actually did, so it can be drawn instead of guessed
- * at: every ray the block allocator marched and where it ran out of power, the jet axis and cone of a directional
- * charge, and (the part that matters when a warhead "does no damage") every entity the blast considered together
- * with the reason it was spared.
- */
+/** Captures {@link com.wf.wflib.aef.ExplosionAEF} rays/cone/victim verdicts for render; built for "warhead does no damage" reports. */
 public final class ExplosionTrace {
 
-    /** How many finished blasts to keep. */
     public static final int HISTORY = 4;
-    /** Ticks a recorded blast stays drawable, so the view clears itself instead of accumulating. */
+    /** Auto-expire so the view self-clears instead of accumulating. */
     public static final int TTL_TICKS = 600;
-    /** Ceiling on rays kept per blast: a spherical allocator marches thousands and they draw as mush. */
+    /** Cap: spherical allocator marches thousands; more draws as mush. */
     private static final int MAX_RAYS = 640;
 
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -48,7 +42,7 @@ public final class ExplosionTrace {
         }
     }
 
-    /** @return the finished traces, newest last. Safe to iterate from any thread. */
+    /** @return finished traces, newest last; safe to iterate off-thread */
     public static List<Trace> recent() {
         return recent;
     }
@@ -64,7 +58,6 @@ public final class ExplosionTrace {
         current = new Builder(origin, size, gameTime);
     }
 
-    /** Declares the blast directional: a jet {@code axis} and the cone half-angle around it. */
     public static void cone(Vec3 axis, float halfAngleDeg) {
         Builder builder = current;
         if (builder != null) {
@@ -73,19 +66,14 @@ public final class ExplosionTrace {
         }
     }
 
-    /**
-     * One marched ray.
-     *
-     * @param broke whether it destroyed at least one block, which is what separates a ray that did work
-     *      from one that spent its power on air
-     */
+    /** @param broke destroyed >=1 block, vs. spent power on air */
     public static void ray(double fromX, double fromY, double fromZ,
                            double toX, double toY, double toZ, boolean broke) {
         Builder builder = current;
         if (builder == null) {
             return;
         }
-        // Keep a spread of rays rather than the first N, so a truncated trace still shows the whole shape.
+        // Spread sample, not first-N: truncated trace still shows full shape.
         builder.rayCount++;
         if (builder.rays.size() < MAX_RAYS) {
             builder.rays.add(new Ray(new Vec3(fromX, fromY, fromZ), new Vec3(toX, toY, toZ), broke));
@@ -95,7 +83,6 @@ public final class ExplosionTrace {
         }
     }
 
-    /** One entity the blast looked at, and what it decided. */
     public static void victim(Entity entity, Verdict verdict, float damage) {
         Builder builder = current;
         if (builder == null) {
@@ -126,13 +113,10 @@ public final class ExplosionTrace {
                 builder.victims.size(), builder.gameTime);
     }
 
-    /** Why an entity in the blast's search box did or did not take damage. */
     public enum Verdict {
-        /** Took damage. */
         HIT,
-        /** Outside the blast's radius. */
         OUT_OF_RANGE,
-        /** In range, but outside the blast's shape: a shaped charge's cone spares it. */
+        /** In range; outside shaped-charge cone. */
         OUTSIDE_CONE
     }
 
@@ -143,8 +127,8 @@ public final class ExplosionTrace {
     }
 
     /**
-     * @param axis null for a blast with no direction to it
-     * @param recordedRays what {@link #rays} holds, which is capped; {@code totalRays} is what was marched
+     * @param axis null => non-directional blast
+     * @param rays capped/stride-sampled view; {@code totalRays} = actually marched
      */
     public record Trace(long gameTime, Vec3 origin, float size, @Nullable Vec3 axis, float halfAngleDeg,
                         List<Ray> rays, List<Victim> victims, int totalRays) {

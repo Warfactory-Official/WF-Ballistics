@@ -5,11 +5,7 @@ import com.wf.gemrender.gltf.NodeTable;
 import com.wf.gemrender.gltf.PoseDriver;
 import net.minecraft.util.Mth;
 
-/**
- * The mandible snap, as a GemRender pose driver.
- *
- * @param radians how far the plate has swung at full bite; negative swings it the other way
- */
+/** {@code radians}: swing at full bite; negative swings the other way. */
 public record GlyphidBite(int offset, float axisX, float axisY, float axisZ, float radians)
         implements PoseDriver {
 

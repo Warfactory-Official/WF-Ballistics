@@ -317,6 +317,15 @@ dependencies {
         localRuntime "maven.modrinth:journeymap:${journeymap_version}"
     }
 
+    // --- Xaero's World Map + Minimap (compile-only, dev runtime behind -Pxaero) ---------------
+    compileOnly("maven.modrinth:xaeros-world-map:${xaero_worldmap_version}") { transitive = false }
+    compileOnly("maven.modrinth:xaeros-minimap:${xaero_minimap_version}") { transitive = false }
+    compileOnly fileTree('libs') { include 'xaerolib-*.jar' }
+    if (project.hasProperty('xaero')) {
+        localRuntime("maven.modrinth:xaeros-world-map:${xaero_worldmap_version}") { transitive = false }
+        localRuntime("maven.modrinth:xaeros-minimap:${xaero_minimap_version}") { transitive = false }
+    }
+
     // --- WarForge Factions Remaintained (compile-only optional integration) -------------------
     //     Backs compat/warforge/WarforgeApi: faction friend-or-foe and claim-aware explosions.
     //     compileOnly + transitive=false, same rationale as GregTech: WarForge is only present at

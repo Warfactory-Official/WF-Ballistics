@@ -4,7 +4,7 @@ import net.minecraft.world.entity.ai.goal.Goal;
 
 import java.util.EnumSet;
 
-/** Wraps a goal so that any pathfinding it triggers is charged to it by name. */
+/** Pathfinding time inside delegate charged to {@code bucket} via {@code SwarmProfiler}. */
 public final class ProfiledGoal extends Goal {
 
     private final Goal delegate;

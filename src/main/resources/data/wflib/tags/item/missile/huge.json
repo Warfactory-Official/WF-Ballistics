@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "wflib:missile_nuclear",
+    "wflib:missile_hypersonic",
+    "wflib:missile_marv",
+    "wflib:missile_df_41"
+  ]
+}

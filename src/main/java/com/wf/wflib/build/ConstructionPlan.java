@@ -9,18 +9,13 @@ import net.minecraft.world.level.levelgen.structure.BoundingBox;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Turns a {@link Blueprint} into work: one order per block to place, ordered so that nothing is asked for before
- * whatever holds it up exists.
- */
+/** Turns a {@link Blueprint} into work, ordered so nothing is asked for before whatever holds it up exists. */
 public final class ConstructionPlan {
 
     private ConstructionPlan() {
     }
 
-    /**
-     * @param origin where the blueprint's minimum corner goes in the world
-     */
+    /** {@code origin}: where the blueprint's minimum corner lands. */
     public static WorkPlan of(Blueprint blueprint, BlockPos origin) {
         List<WorkOrder> orders = new ArrayList<>();
         WorkPlan.Bill bill = new WorkPlan.Bill();

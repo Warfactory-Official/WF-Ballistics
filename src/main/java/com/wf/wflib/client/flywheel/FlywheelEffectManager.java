@@ -16,7 +16,6 @@ import net.neoforged.neoforge.event.level.LevelEvent;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Owns the lifecycle of every {@link WFFlywheelEffect} (instanced smoke clouds, skeleton bone piles, ...). */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class FlywheelEffectManager {
 
@@ -27,16 +26,11 @@ public final class FlywheelEffectManager {
     private FlywheelEffectManager() {
     }
 
-    /**
-     * @return whether Flywheel can render instances for this level right now
-     */
     public static boolean isAvailable(Level level) {
         return VisualizationManager.supportsVisualization(level);
     }
 
-    /**
-     * Adds an effect to Flywheel and starts ticking it. Assumes {@link #isAvailable} was checked.
-     */
+    /** Caller must have checked {@link #isAvailable}; unenforced here. */
     public static void spawn(WFFlywheelEffect effect) {
         VisualizationHelper.queueAdd(effect);
         ACTIVE.add(effect);

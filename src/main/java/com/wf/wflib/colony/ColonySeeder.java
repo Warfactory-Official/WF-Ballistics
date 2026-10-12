@@ -6,18 +6,15 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.levelgen.Heightmap;
 
-/**
- * Puts the first nests in the world, so a colony is something a player finds rather than commands into existence.
- */
+/** First nests; a colony is something a player finds, not something commanded into existence. */
 public final class ColonySeeder {
 
-    /** How far inside its cell a nest is kept, so two either side of a boundary cannot land side by side. */
+    /** Inset from the cell edge; keeps nests either side of a boundary apart. */
     private static final double MARGIN = 0.2;
 
     private ColonySeeder() {
     }
 
-    /** Found whatever natural colony belongs in this chunk, if any. */
     public static void seed(ServerLevel level, ColonyRegistry registry, ChunkAccess chunk) {
         int spacing = ColonyConfig.naturalSpacing();
         if (spacing <= 0) {
@@ -46,7 +43,7 @@ public final class ColonySeeder {
         if ((x >> 4) != chunk.getPos().x || (z >> 4) != chunk.getPos().z) {
             return;
         }
-        // Consumed on the first look, whatever the answer: see the class note on razing.
+        // Consumed on first look regardless of outcome; raze() never frees it => no natural reseed there.
         if (!registry.consumeCell(cell)) {
             return;
         }
@@ -59,15 +56,12 @@ public final class ColonySeeder {
 
         Colony colony = ColonyManager.found(level, registry, x, z);
         if (colony != null) {
-            // Knowable here and only here: this is the chunk, and it will not load a second time.
+            // Only chance to resolve y: this chunk will not load a second time.
             colony.y = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15) + 1;
         }
     }
 
-    /**
-     * @return whether the surface can hold a mound rather than being open water. Read off the chunk being
-     *      loaded, so nothing else has to be.
-     */
+    /** Fluid check only; reads the loading chunk itself so nothing else needs loading. */
     private static boolean standable(ChunkAccess chunk, int x, int z) {
         int surface = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x & 15, z & 15);
         return chunk.getBlockState(new BlockPos(x, surface - 1, z)).getFluidState().isEmpty();
@@ -77,7 +71,7 @@ public final class ColonySeeder {
         return ((long) cx & 0xFFFFFFFFL) << 32 | ((long) cz & 0xFFFFFFFFL);
     }
 
-    /** A double in [0, 1) from the top bits, which are the well-mixed ones. */
+    /** [0, 1) from the top bits: best-mixed. */
     private static double unit(long hash) {
         return (hash >>> 11) * 0x1.0p-53;
     }

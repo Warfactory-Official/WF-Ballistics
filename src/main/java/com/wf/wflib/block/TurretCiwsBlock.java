@@ -12,10 +12,7 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Close-in weapon system block: hosts a {@link TurretCiwsBlockEntity} that automatically shoots down nearby
- * missiles. Passive/automatic: no player interaction.
- */
+/** CIWS: hosts a {@link TurretCiwsBlockEntity} that auto-shoots down nearby missiles. No player interaction. */
 public class TurretCiwsBlock extends BaseEntityBlock {
     public static final MapCodec<TurretCiwsBlock> CODEC = simpleCodec(TurretCiwsBlock::new);
 

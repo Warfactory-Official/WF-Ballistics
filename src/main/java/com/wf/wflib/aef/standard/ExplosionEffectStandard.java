@@ -1,24 +1,23 @@
 package com.wf.wflib.aef.standard;
 
+import com.wf.wflib.audio.AudioCategory;
+import com.wf.wflib.audio.Blasts;
+import com.wf.wflib.audio.WfAudio;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
 import com.wf.wflib.aef.ExplosionAEF;
 import com.wf.wflib.aef.interfaces.IExplosionSFX;
 import com.wf.wflib.network.ExplosionBlockFXPacket;
 import com.wf.wflib.network.WFNetwork;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
 
 import java.util.List;
 
-/**
- * The default explosion presentation: the bang, a central explosion puff, and a burst of smoke + debris radiating
- * from every block that was broken.
- */
+/** Default explosion FX: bang, central puff, debris radiating from each broken block. */
 public class ExplosionEffectStandard implements IExplosionSFX {
 
-    /** Spawns the explosion particles on the client. */
     public static void performClient(Level level, double x, double y, double z, float size, List<BlockPos> affectedBlocks) {
         if (size >= 2.0F) {
             level.addParticle(ParticleTypes.EXPLOSION_EMITTER, x, y, z, 1.0D, 0.0D, 0.0D);
@@ -54,8 +53,7 @@ public class ExplosionEffectStandard implements IExplosionSFX {
     public void doEffect(ExplosionAEF explosion, Level level, double x, double y, double z, float size) {
         if (level.isClientSide) return;
 
-        float pitch = (1.0F + (level.random.nextFloat() - level.random.nextFloat()) * 0.2F) * 0.7F;
-        level.playSound(null, x, y, z, SoundEvents.GENERIC_EXPLODE, SoundSource.BLOCKS, 4.0F, pitch);
+        WfAudio.at((ServerLevel) level, new Vec3(x, y, z), AudioCategory.EXPLOSIONS, Blasts.small());
 
         WFNetwork.sendToTracking(level, x, z,
                 new ExplosionBlockFXPacket(x, y, z, explosion.size, explosion.compat.getToBlow()));

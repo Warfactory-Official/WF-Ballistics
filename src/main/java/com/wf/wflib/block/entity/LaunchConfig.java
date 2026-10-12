@@ -30,7 +30,7 @@ public final class LaunchConfig {
     public double altitudeParam = 24.0;
     public int fragmentCount = MissileEntity.DEFAULT_FRAGMENT_COUNT;
     public double cruiseSpeed = MissileEntity.CRUISE_SPEED;
-    // Ticks of powered flight. 0 (or less) means auto-size to reach the target under power (see spawn()).
+    // <=0: auto-size to reach target under power (spawn()).
     public int fuelTicks = 0;
     public double turnRate;
     public float health = MissileEntity.DEFAULT_HEALTH;
@@ -39,12 +39,10 @@ public final class LaunchConfig {
     public ResourceLocation ascentStageId;
     public ResourceLocation cruiseStageId;
     public ResourceLocation attackStageId;
-    // Directional strike: horizontal direction from the target toward the approach side. (0,0) = unconstrained.
+    // Horizontal dir, target->approach side; (0,0) = unconstrained.
     public double attackApproachX;
     public double attackApproachZ;
-    // Terminal attack profile name (see AttackProfile): SPEED, BALANCED, or LOFT.
     public String attackProfile = "SPEED";
-    // Per-missile ceiling (blocks) on the directional-strike join distance (see ApproachStage).
     public double approachJoinCap = MissileEntity.DEFAULT_APPROACH_JOIN_CAP;
 
     public void write(FriendlyByteBuf b) {

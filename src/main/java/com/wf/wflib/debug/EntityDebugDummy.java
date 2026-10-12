@@ -34,11 +34,10 @@ public class EntityDebugDummy extends Mob {
         return Mob.createMobAttributes()
                 .add(Attributes.MAX_HEALTH, 1024.0)
                 .add(Attributes.MOVEMENT_SPEED, 0.0)
-                // Nothing looks for a dummy, so follow range only has to be small enough not to matter.
+                // Nothing targets a dummy; FOLLOW_RANGE just needs to be nonzero.
                 .add(Attributes.FOLLOW_RANGE, 1.0);
     }
 
-    /** Send this dummy round a circle of {@code radius} blocks centred where it stands. */
     public void setDrift(float radius) {
         drift = radius;
         homeX = getX();
@@ -70,7 +69,6 @@ public class EntityDebugDummy extends Mob {
         damageTaken = 0.0F;
     }
 
-    /** Records the hit and shrugs it off. */
     @Override
     public boolean hurt(DamageSource source, float amount) {
         if (source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)) {

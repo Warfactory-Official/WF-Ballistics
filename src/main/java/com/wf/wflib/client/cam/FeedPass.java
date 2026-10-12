@@ -1,6 +1,7 @@
 package com.wf.wflib.client.cam;
 
 import com.mojang.blaze3d.pipeline.RenderTarget;
+import com.wf.gemrender.particle.ParticleBuffer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
@@ -24,22 +25,29 @@ public final class FeedPass {
         target = into;
         viewDistance = distance;
         thermal = thermalMode;
+        ParticleBuffer.getInstance().bind();
     }
 
     static void end() {
         origin = null;
         target = null;
         thermal = false;
+        ParticleBuffer.getInstance().bind();
     }
 
     /**
-     * @return whether the pass being drawn is a thermal one. Read by {@code MixinParticleEngine}: a
+     * @return whether the pass being drawn is a thermal one. Via {@link #drawingThermal}: a
      *      microbolometer has nothing to say about a smoke plume, and the colour heuristic reads bright particles
      *      as warm, so a campfire or a damaged drone smears its own picture with false heat. Optical and lowlight
      *      keep their particles, which are worth having on a reconnaissance camera.
      */
     public static boolean thermal() {
         return thermal;
+    }
+
+    /** Thermal picture being drawn: this pass, else the main pass under {@link ScreenSensor}. GemRender particles too. */
+    public static boolean drawingThermal() {
+        return active() ? thermal : ScreenSensor.thermal();
     }
 
     /** @return where the pass's own grid is centred; null => main view or a shared-grid pass. */

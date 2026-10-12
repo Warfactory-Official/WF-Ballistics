@@ -6,10 +6,7 @@ import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.visual.AbstractVisual;
 import net.minecraft.world.level.Level;
 
-/**
- * The Flywheel visual for an {@link InstancedBurst}: one 16-byte instance per particle, written when the burst is
- * created and never rewritten.
- */
+/** Visual for {@link InstancedBurst}: one 16-byte {@code ParticleInstance} per particle, written once at construction. */
 public class InstancedBurstVisual extends AbstractVisual implements EffectVisual<InstancedBurst> {
 
     private final ParticlePool pool;

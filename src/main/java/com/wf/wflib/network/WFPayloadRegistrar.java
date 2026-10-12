@@ -24,6 +24,8 @@ public final class WFPayloadRegistrar {
                 (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleBlockFX(pkt)));
         r.playToClient(AuxParticlePacket.TYPE, AuxParticlePacket.STREAM_CODEC,
                 (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleAuxParticle(pkt)));
+        r.playToClient(SoundAtPacket.TYPE, SoundAtPacket.STREAM_CODEC,
+                (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleSoundAt(pkt)));
         r.playToClient(MissileFlightAudioPacket.TYPE, MissileFlightAudioPacket.STREAM_CODEC,
                 (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleMissileAudio(pkt)));
 
@@ -37,6 +39,9 @@ public final class WFPayloadRegistrar {
                 (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleCameraPanel(pkt)));
         r.playToClient(ReconMapPacket.TYPE, ReconMapPacket.STREAM_CODEC,
                 (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleReconMap(pkt)));
+
+        r.playToClient(TelemetryPacket.TYPE, TelemetryPacket.STREAM_CODEC,
+                (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleTelemetry(pkt)));
 
         r.playToClient(SurveyTilePacket.TYPE, SurveyTilePacket.STREAM_CODEC,
                 (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleSurveyTile(pkt)));

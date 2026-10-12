@@ -12,12 +12,14 @@ public final class WFChunkValidation {
     private WFChunkValidation() {
     }
 
-    /** {@link net.neoforged.neoforge.common.world.chunk.LoadingValidationCallback} implementation. */
+    /**
+     * {@link net.neoforged.neoforge.common.world.chunk.LoadingValidationCallback} implementation.
+     * WF owners (entities, grace holds) are never persisted: every ticket reaching here is orphaned.
+     */
     public static void validateTickets(ServerLevel level, TicketHelper helper) {
         for (Map.Entry<UUID, TicketSet> entry : helper.getEntityTickets().entrySet()) {
             UUID owner = entry.getKey();
             TicketSet set = entry.getValue();
-            // Non-ticking entity chunks are always stale after restart (fan preload).
             for (long chunk : set.nonTicking()) {
                 helper.removeTicket(owner, chunk, false);
             }

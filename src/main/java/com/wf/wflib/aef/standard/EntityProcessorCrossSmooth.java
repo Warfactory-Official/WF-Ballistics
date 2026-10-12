@@ -41,7 +41,7 @@ public class EntityProcessorCrossSmooth extends EntityProcessorCross {
     @Override
     public void attackEntity(Entity entity, ExplosionAEF explosion, float amount) {
         if (!entity.isAlive()) return;
-        if (explosion.exploder == entity) amount *= 0.5F; // half damage to the shooter
+        if (explosion.exploder == entity) amount *= 0.5F; // shooter takes half damage
 
         DamageSource dmg = WFDamageSources.create(explosion.level, clazz, explosion.exploder);
 

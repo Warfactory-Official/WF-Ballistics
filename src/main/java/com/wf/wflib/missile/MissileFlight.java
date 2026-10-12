@@ -52,6 +52,8 @@ public final class MissileFlight {
     private FlightProfile profile = FlightProfile.fromIds(ascentStageId, cruiseStageId, attackStageId);
     private int loiterTicks;
     private boolean diveCommitted;
+    /** Plain aim point: closing seen; then opening => passed (latched until a new aim point). */
+    private boolean closing, passed;
     CruiseMode cruiseMode = CruiseMode.TERRAIN_FOLLOW;
     Medium medium = Medium.AIR;
     private int dryTicks;
@@ -329,7 +331,22 @@ public final class MissileFlight {
     }
 
     public void setTarget(Vec3 target) {
+        if (!target.equals(this.target)) {
+            this.closing = false;
+            this.passed = false;
+        }
         this.target = target;
+    }
+
+    /** {@code los}: to the aim point; {@code v}: velocity. */
+    public boolean passedAimPoint(Vec3 los, Vec3 v) {
+        double closingSpeed = los.dot(v);
+        if (closingSpeed > 0.0) {
+            this.closing = true;
+        } else if (this.closing) {
+            this.passed = true;
+        }
+        return this.passed;
     }
 
     public Phase getPhase() {
@@ -503,6 +520,8 @@ public final class MissileFlight {
         tag.putString("AttackStage", this.attackStageId.toString());
         tag.putInt("LoiterTicks", this.loiterTicks);
         tag.putBoolean("DiveCommitted", this.diveCommitted);
+        tag.putBoolean("Closing", this.closing);
+        tag.putBoolean("PassedAimPoint", this.passed);
         tag.putDouble("CruiseTargetY", this.cruiseTargetY);
         if (this.launchPos != null) {
             tag.putDouble("LaunchX", this.launchPos.x);
@@ -540,6 +559,8 @@ public final class MissileFlight {
         }
         this.loiterTicks = tag.getInt("LoiterTicks");
         this.diveCommitted = tag.getBoolean("DiveCommitted");
+        this.closing = tag.getBoolean("Closing");
+        this.passed = tag.getBoolean("PassedAimPoint");
         this.cruiseTargetY = tag.getDouble("CruiseTargetY");
         this.launchPos = tag.contains("LaunchX")
                 ? new Vec3(tag.getDouble("LaunchX"), tag.getDouble("LaunchY"), tag.getDouble("LaunchZ")) : null;

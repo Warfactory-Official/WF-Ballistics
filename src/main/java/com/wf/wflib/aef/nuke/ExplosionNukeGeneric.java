@@ -9,9 +9,6 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.List;
 
-/**
- * Applies a nuclear blast's area damage to nearby entities (range-falloff damage, fire, and knockback).
- */
 public class ExplosionNukeGeneric {
     public static void dealDamage(Level level, Vec3 pos, double radius) {
         dealDamage(level, pos, radius, 250F);
@@ -25,7 +22,7 @@ public class ExplosionNukeGeneric {
                 Vec3 eyePosition = entity.getEyePosition();
                 if (!isExplosionExempt(entity) && isObstructed(level, pos, eyePosition)) {
                     double damage = maxDamage * (radius - dist) / radius;
-                    // The source mod used a dedicated radiation damage source here; we fall back to generic for now.
+                    // TODO: dedicated radiation damage source (upstream had one); generic for now.
                     entity.hurt(level.damageSources().generic(), (float) damage);
                     entity.igniteForSeconds(5);
                     Vec3 knock = eyePosition.subtract(pos).normalize().scale(0.2D);
@@ -36,7 +33,7 @@ public class ExplosionNukeGeneric {
     }
 
     private static boolean isExplosionExempt(Entity entity) {
-        // 1.21: ignoreExplosion(Explosion) requires an Explosion argument; pass null for no context.
+        // ignoreExplosion(Explosion) needs an argument; no Explosion context here => null.
         return entity.ignoreExplosion(null);
     }
 

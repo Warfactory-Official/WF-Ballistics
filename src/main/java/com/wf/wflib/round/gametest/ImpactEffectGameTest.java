@@ -394,7 +394,7 @@ public class ImpactEffectGameTest {
 
     /**
      * {@code armorPenetrationMm} x {@code |v|^2 / v0^2}: velocity after 0/500/1000 blocks of real flight (drag 0.02,
-     * above the build limit), then a strike at that velocity. Pen read where ywzj's {@code Ballistics.resolve} reads
+     * above the build limit), then a strike at that velocity. Pen read where CombinedAssault's {@code Ballistics.resolve} reads
      * it: {@code StrikeContext.of(damage source)}; strike event agrees.
      */
     @GameTest(template = TEMPLATE)

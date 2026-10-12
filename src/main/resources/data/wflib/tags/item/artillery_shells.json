@@ -1,0 +1,16 @@
+{
+  "replace": false,
+  "values": [
+    "wflib:shell_he",
+    "wflib:shell_ap",
+    "wflib:shell_heat",
+    "wflib:shell_frag",
+    "wflib:shell_incendiary",
+    "wflib:shell_chemical",
+    "wflib:shell_cluster",
+    "wflib:shell_emp",
+    "wflib:shell_rap",
+    "wflib:shell_nuclear",
+    "wflib:shell_practice"
+  ]
+}

@@ -28,6 +28,9 @@ public final class FireLightHandler {
     public static void onLevelUnload(LevelEvent.Unload event) {
         if (event.getLevel().isClientSide()) {
             WFDynamicLight.clear();
+            WFLights.clear();
+            com.wf.wflib.client.wiaj.Removals.clear();
+            com.wf.wflib.client.wiaj.BlastDebris.clear();
         }
     }
 }

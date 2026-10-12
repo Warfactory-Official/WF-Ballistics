@@ -1,9 +1,7 @@
 package com.wf.wflib.probe.client;
 
-import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphics;
+import com.wf.gemrender.ui.Canvas;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.TextColor;
 import net.minecraft.util.FastColor;
 import net.minecraft.util.FormattedCharSequence;
 
@@ -19,31 +17,26 @@ public final class ProbeText {
     private ProbeText() {
     }
 
-    public static void draw(GuiGraphics graphics, Font font, Component text, int x, int y, int argb) {
-        draw(graphics, font, text.getVisualOrderText(), x, y, argb);
+    public static void draw(Canvas canvas, Component text, float x, float y, int argb) {
+        draw(canvas, text.getVisualOrderText(), x, y, argb);
     }
 
-    public static void draw(GuiGraphics graphics, Font font, FormattedCharSequence text, int x, int y,
-                            int argb) {
+    public static void draw(Canvas canvas, FormattedCharSequence text, float x, float y, int argb) {
+        argb = opaque(argb);
         if (!ProbeConfig.TEXT_OUTLINE.get()) {
-            graphics.drawString(font, text, x, y, argb, true);
+            canvas.text(text, x, y, argb, true);
             return;
         }
-        FormattedCharSequence border = uncoloured(text);
         int outline = outline(argb);
         for (int[] offset : AROUND) {
-            graphics.drawString(font, border, x + offset[0], y + offset[1], outline, false);
+            canvas.text(text, x + offset[0], y + offset[1], outline, false, false);
         }
-        graphics.drawString(font, text, x, y, argb, false);
+        canvas.text(text, x, y, argb, false);
     }
 
-    /**
-     * The same glyphs with every style colour stripped out, so the colour handed to the font is the one that
-     * actually lands.
-     */
-    private static FormattedCharSequence uncoloured(FormattedCharSequence text) {
-        return sink -> text.accept((index, style, codePoint) ->
-                sink.accept(index, style.withColor((TextColor) null), codePoint));
+    /** Vanilla {@code Font.adjustColor}: alpha below 4 means "no alpha given" => opaque. */
+    static int opaque(int argb) {
+        return (argb & 0xFC000000) == 0 ? argb | 0xFF000000 : argb;
     }
 
     /** Black at the text's own opacity; anything lighter reads as a blur rather than an edge. */

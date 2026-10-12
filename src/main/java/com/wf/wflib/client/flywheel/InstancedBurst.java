@@ -9,14 +9,10 @@ import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 
-/** A burst of billboards thrown from a point, written once and never touched again. */
+/** Point-burst of billboards; emitter filled once at construction, never rewritten. */
 public final class InstancedBurst implements WFFlywheelEffect {
 
-    /**
-     * Fills a fresh emitter.
-     *
-     * @return the longest life it spawned, in seconds, which is how long the effect has to stay alive
-     */
+    /** @return longest life spawned, in seconds; sets this effect's lifetime. */
     @FunctionalInterface
     public interface Fill {
         float fill(ParticleEmitter emitter);

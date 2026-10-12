@@ -3,7 +3,6 @@ package com.wf.wflib.damage;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.damagesource.DamageType;
 
-/** The type of a hit. */
 public enum DamageClass {
 
     PHYSICAL(WFDamageTypes.PHYSICAL, DamageResistanceHandler.CATEGORY_PHYSICAL),
@@ -20,9 +19,7 @@ public enum DamageClass {
         this.category = category;
     }
 
-    /**
-     * Reverse lookup from a damage type key to the class that produced it, or {@code null} if foreign.
-     */
+    /** Null: {@code type} is not one of ours (foreign). */
     public static DamageClass byType(ResourceKey<DamageType> type) {
         for (DamageClass dc : values()) {
             if (dc.type == type) return dc;

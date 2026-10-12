@@ -16,6 +16,13 @@ void flw_instanceVertex(in FlwInstance i) {
     float turning = min(age, p.restAge);
     float yaw = p.spinPhase + s.spinRate * turning;
     float roll = p.tintScale + s.spinRate * 0.7 * turning;
+    // Settling: ease to the nearest quarter turn over SETTLE s. Rest point swept for the axis-aligned box
+    // (ParticleCollision extent); a tilted chunk would sink its corners into floor and walls.
+    const float QUARTER = 1.5707963;
+    const float SETTLE = 0.15;
+    float settled = smoothstep(0.0, SETTLE, age - p.restAge);
+    yaw = mix(yaw, round(yaw / QUARTER) * QUARTER, settled);
+    roll = mix(roll, round(roll / QUARTER) * QUARTER, settled);
 
     float cosYaw = cos(yaw);
     float sinYaw = sin(yaw);

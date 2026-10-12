@@ -8,7 +8,6 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.Nullable;
 
-/** This drone's place in its squad: id, leadership, formation, coordination model, ordered size. */
 public final class DroneSquadRole {
 
     private final DroneEntity drone;
@@ -45,7 +44,6 @@ public final class DroneSquadRole {
         return this.formationSpacing;
     }
 
-    /** How far apart this drone's squad flies. */
     public void setFormationSpacing(double spacing) {
         this.formationSpacing = Formation.clampSpacing(spacing);
     }

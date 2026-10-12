@@ -19,12 +19,7 @@ public final class RouteOwnership {
         current = packet.rightOfWay();
     }
 
-    /**
-     * Throw the answer away.
-     *
-     * <p>Called the moment the line changes, not when the next answer arrives: a right of way drawn
-     * against a line that has since moved is worse than none, because it looks authoritative.</p>
-     */
+    /** Called the instant the line changes, not on the next answer: a stale right-of-way looks authoritative. */
     public static void clear() {
         current = RightOfWay.EMPTY;
     }

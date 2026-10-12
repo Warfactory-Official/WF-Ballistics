@@ -12,22 +12,16 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * How a piece of armour is drawn.
+ * No {@code model} on a preset => vanilla's humanoid armour model, untouched by GemRender. A rigged
+ * glTF routes through GemRender's {@code getHumanoidArmorModel}, the same hook vanilla's armour uses,
+ * so trims, glint and dyed leather still work.
  *
- * <p>A preset with no {@code model} renders the ordinary way, as a texture on vanilla's humanoid
- * armour model, and never touches GemRender at all. A preset that names a rigged glTF is drawn by
- * GemRender through {@code getHumanoidArmorModel}, which is the same hook vanilla's own armour goes
- * through, so trims, glint and the dyed-leather path all still behave.
+ * <p>{@code HumanoidArmorLayer.renderArmorPiece} calls {@code renderToBuffer} once per material layer
+ * plus once each for trim and glint; a self-drawn model must draw once per {@code prepare} instead, or
+ * enchanted armour costs multiples and composites blended geometry on itself. GemRender's prepare/
+ * render split exists for this.
  *
- * <p>Two things carried in from what is already known about that hook:
- * <ul>
- *   <li>{@code HumanoidArmorLayer.renderArmorPiece} calls {@code renderToBuffer} several times for one
- *       piece: once per material layer, again for a trim, again for the glint. A model that draws
- *       itself whole must draw once per {@code prepare}, not once per {@code renderToBuffer}, or
- *       enchanted armour costs several times what it should and composites blended geometry on top of
- *       itself. GemRender's prepare/render split is shaped for exactly that.</li>
- *   <li>GemRender has to be in the client's mod list, or a glTF piece draws nothing and says so once.</li>
- * </ul>
+ * <p>GemRender missing from the client's mod list => a glTF piece draws nothing and says so once.
  */
 public final class ArmorPieceClient {
 
@@ -41,19 +35,18 @@ public final class ArmorPieceClient {
 
     public static IClientItemExtensions of(ArmorPreset preset) {
         ResourceLocation model = preset.model();
-        // Kept behind the null check so a mod with no glTF armour never classloads GemRender's model
-        // types at all: the holder below is a separate class file and only resolves when it is used.
+        // Null check first: GemRenderArmor only classloads on first use, so a mod with no glTF
+        // armour never touches GemRender's model types at all.
         return model == null ? VANILLA : BY_MODEL.computeIfAbsent(model, GemRenderArmor::new);
     }
 
-    /** The GemRender path. Separate class so the reference above stays lazy. */
     private static final class GemRenderArmor implements IClientItemExtensions {
 
-        private final ResourceLocation model;
+        private final com.wf.gemrender.asset.ModelCache.Handle<com.wf.gemrender.gltf.GemRenderGltfModel> model;
         private com.wf.gemrender.direct.GemRenderArmorModel armorModel;
 
         private GemRenderArmor(ResourceLocation model) {
-            this.model = model;
+            this.model = com.wf.gemrender.asset.GemRenderModels.armor(model);
         }
 
         @Override
@@ -66,7 +59,7 @@ public final class ArmorPieceClient {
         private com.wf.gemrender.direct.GemRenderArmorModel armorModel() {
             if (armorModel == null) {
                 armorModel = new com.wf.gemrender.direct.GemRenderArmorModel(
-                        (entity, stack, slot) -> com.wf.gemrender.asset.GemRenderModels.get(model));
+                        (entity, stack, slot) -> model.get());
             }
             return armorModel;
         }

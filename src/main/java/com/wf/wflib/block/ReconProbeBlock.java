@@ -74,10 +74,7 @@ public class ReconProbeBlock extends BaseEntityBlock {
         return RenderShape.MODEL;
     }
 
-    /**
-     * Comparator output is calibration progress, so a warming probe can drive a light without anybody having to
-     * poll it.
-     */
+    /** Comparator output = calibration progress; drives a light on a warming probe. */
     @Override
     protected boolean hasAnalogOutputSignal(BlockState state) {
         return true;
@@ -149,7 +146,6 @@ public class ReconProbeBlock extends BaseEntityBlock {
         return InteractionResult.SUCCESS;
     }
 
-    /** Which side of the layer this set listens from, and whether it is shouting. */
     private void reportSonar(ServerLevel level, BlockPos pos, ReconProbeBlockEntity probe, Player player) {
         if (!probe.wet()) {
             player.displayClientMessage(Component.literal(
@@ -169,7 +165,6 @@ public class ReconProbeBlock extends BaseEntityBlock {
                 .withStyle(probe.pinging() ? ChatFormatting.GOLD : ChatFormatting.AQUA), false);
     }
 
-    /** What a met station is for, in four lines. */
     private void reportWeather(ServerLevel level, BlockPos pos, ReconProbeBlockEntity probe, Player player) {
         Atmosphere raw = ReconWeather.sample(level);
         Holder<Biome> biome = level.getBiome(pos);

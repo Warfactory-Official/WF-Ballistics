@@ -21,7 +21,6 @@ public final class LitematicaFormat implements BlueprintFormat {
 
     private static final int MIN_SCHEMA = 4;
     private static final int MAX_SCHEMA = 7;
-    /** Most sub-regions one file may have. */
     private static final int MAX_REGIONS = 64;
 
     private LitematicaFormat() {
@@ -69,7 +68,7 @@ public final class LitematicaFormat implements BlueprintFormat {
             throw new BlueprintException("schematic has no regions with any volume");
         }
 
-        // Every region is placed into one array, so the blueprint is the box that encloses all of them.
+        // Regions share one array: blueprint = their enclosing box.
         int minX = Integer.MAX_VALUE;
         int minY = Integer.MAX_VALUE;
         int minZ = Integer.MAX_VALUE;
@@ -131,9 +130,7 @@ public final class LitematicaFormat implements BlueprintFormat {
         return named.isBlank() ? fallback : named;
     }
 
-    /**
-     * One sub-region, with its signs already resolved into a minimum corner and positive extents.
-     */
+    /** Signs already resolved into a minimum corner and positive extents. */
     private static final class Region {
         final int minX;
         final int minY;
@@ -176,19 +173,12 @@ public final class LitematicaFormat implements BlueprintFormat {
                     tag.getList("TileEntities", Tag.TAG_COMPOUND).size());
         }
 
-        /**
-         * @return the lowest coordinate the region covers on one axis. A negative extent runs back from
-         *      {@code position}, so {@code position} is then the <em>last</em> cell rather than the first
-         */
+        /** Negative extent runs back from {@code position}: position is then the last cell, not the first. */
         private static int min(int position, int extent) {
             return extent > 0 ? position : position + extent + 1;
         }
 
-        /**
-         * Resolve this region's palette and fold it into the blueprint's shared one.
-         *
-         * @return region palette index to blueprint palette index, with every air entry mapped to 0
-         */
+        /** Index = this region's palette index; value = shared blueprint index (air => 0). */
         int[] remap(PaletteReader reader, Map<BlockState, Integer> shared) throws BlueprintException {
             int[] remap = new int[this.palette.size()];
             for (int i = 0; i < this.palette.size(); i++) {

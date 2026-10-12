@@ -79,7 +79,6 @@ public class ModBlockEntities {
             BLOCK_ENTITIES.register("recon_hub", () -> BlockEntityType.Builder.of(
                     ReconHubBlockEntity::new, ModBlocks.RECON_HUB.get()).build(null));
 
-    /** One type for every probe. */
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<ReconProbeBlockEntity>> RECON_PROBE =
             BLOCK_ENTITIES.register("recon_probe", () -> BlockEntityType.Builder.of(
                     ReconProbeBlockEntity::new, probeBlocks()).build(null));

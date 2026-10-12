@@ -3,7 +3,7 @@ package com.wf.wflib.attitude;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-/** Multirotor attitude: the airframe stays level and only yaws to face where it is going. */
+/** Multirotor attitude: level airframe, yaws only to face heading. */
 public final class CopterAttitude implements MissileAttitude {
 
     public static final CopterAttitude INSTANCE = new CopterAttitude();
@@ -16,15 +16,12 @@ public final class CopterAttitude implements MissileAttitude {
         return orientation(heading, new Quaternionf());
     }
 
-    /**
-     * Holding the airframe level and yawing it to face the heading <em>is</em> a rotation about {@code +Y}, so that
-     * is what this builds.
-     */
+    /** Level + yaw-to-heading <em>is</em> a rotation about {@code +Y}: builds exactly that. */
     @Override
     public Quaternionf orientation(Vector3f heading, Quaternionf dest) {
         float lenSq = heading.x * heading.x + heading.z * heading.z;
         if (lenSq < 1.0e-8f) {
-            // No horizontal heading to face: level and unturned, matching the old basis fallback of +Z.
+            // No horizontal heading: identity, matching the legacy +Z basis fallback.
             return dest.identity();
         }
         float inv = (float) (1.0 / Math.sqrt(lenSq));

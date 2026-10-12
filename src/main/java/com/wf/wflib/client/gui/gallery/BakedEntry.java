@@ -27,10 +27,7 @@ import org.joml.Matrix4f;
 import java.util.List;
 import java.util.function.Supplier;
 
-/**
- * A model the vanilla model manager baked: a missile airframe, a rotor disc, one of the loose props the effects
- * draw.
- */
+/** A model the vanilla model manager baked: missile airframe, rotor disc, or a loose prop the effects draw. */
 public final class BakedEntry implements GalleryEntry {
 
     private static final RandomSource RANDOM = RandomSource.create();
@@ -84,7 +81,7 @@ public final class BakedEntry implements GalleryEntry {
         }, info, () -> usable(model.get()) != null);
     }
 
-    /** @return the model, or null for one that is missing or has yet to bake, which look the same here. */
+    /** Null: missing model or one that hasn't baked yet; they look the same here. */
     @Nullable
     public static BakedModel usable(@Nullable BakedModel baked) {
         return baked == null || baked == Minecraft.getInstance()

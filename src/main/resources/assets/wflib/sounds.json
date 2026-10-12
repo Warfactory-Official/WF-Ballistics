@@ -215,5 +215,21 @@
     "sounds": [
       "wflib:detonator/detonate"
     ]
+  },
+  "countermeasure.smoke_pop": {
+    "sounds": [
+      "wflib:countermeasure/smoke_pop_01",
+      "wflib:countermeasure/smoke_pop_02",
+      "wflib:countermeasure/smoke_pop_03"
+    ],
+    "subtitle": "subtitles.wflib.countermeasure.smoke_pop"
+  },
+  "countermeasure.flare_burn": {
+    "sounds": [
+      "wflib:countermeasure/flare_burn_01",
+      "wflib:countermeasure/flare_burn_02",
+      "wflib:countermeasure/flare_burn_03"
+    ],
+    "subtitle": "subtitles.wflib.countermeasure.flare_burn"
   }
 }

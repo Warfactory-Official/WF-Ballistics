@@ -34,12 +34,12 @@ public final class ModItems {
         // Presets must exist before we enumerate them into items (both happen before the registry freezes).
         MissilePresetRegistry.bootstrap();
         for (MissilePreset preset : MissilePresetRegistry.all()) {
-            MISSILE_ITEMS.put(preset.id(), ITEMS.register("missile_" + preset.id().getPath(),
+            MISSILE_ITEMS.put(preset.id(), ITEMS.register(preset.itemPath(),
                     () -> new MissileItem(preset, new Item.Properties().stacksTo(16))));
         }
         KineticPresetRegistry.bootstrap();
         for (KineticPreset preset : KineticPresetRegistry.all()) {
-            SHELL_ITEMS.put(preset.id(), ITEMS.register("shell_" + preset.id().getPath(),
+            SHELL_ITEMS.put(preset.id(), ITEMS.register(preset.itemPath(),
                     () -> new KineticShellItem(preset, new Item.Properties().stacksTo(preset.stackSize()))));
         }
         MinePresetRegistry.bootstrap();
@@ -81,6 +81,10 @@ public final class ModItems {
     /** A monitor you can carry: the same bounded channel list, in the hand. */
     public static final DeferredHolder<Item, Item> CAMERA_TABLET =
             ITEMS.register("camera_tablet", () -> new CameraTabletItem(new Item.Properties().stacksTo(1)));
+
+    /** Placeholder datalink receiver: carried => {@link com.wf.wflib.telemetry.TelemetryLink} reports to you. */
+    public static final DeferredHolder<Item, Item> TERMINAL =
+            ITEMS.register("terminal", () -> new Item(new Item.Properties().stacksTo(1)));
 
     private ModItems() {
     }

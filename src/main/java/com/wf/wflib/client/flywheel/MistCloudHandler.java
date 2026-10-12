@@ -4,12 +4,14 @@ import com.wf.wflib.WFLib;
 import com.wf.wflib.config.WFClientConfig;
 import com.wf.wflib.entity.MistEntity;
 import net.minecraft.world.level.material.Fluids;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.level.LevelEvent;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -17,22 +19,16 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 
-/**
- * Gives every {@link MistEntity} something that draws it, mirroring what {@link FireFlameHandler} does for fire.
- */
+/** Mirrors {@link FireFlameHandler} for {@link MistEntity}. */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class MistCloudHandler {
 
-    /** How long to wait for the fluid to sync before building the cloud anyway. */
+    /** Join fires before fluid sync; cap wait then build anyway. */
     private static final int SYNC_WAIT_TICKS = 40;
 
-    /**
-     * Weak so that a level unload, which drops every entity, also drops anything still waiting here without this
-     * handler needing to know the level went away.
-     */
+    /** Weak: level unload drops entities => entries die too, no unload hook needed. */
     private static final Map<MistEntity, Integer> PENDING = new WeakHashMap<>();
 
-    /** Live clusters, held so a newly arrived cell can be offered to them. */
     private static final List<GasVolumeCluster> CLUSTERS = new ArrayList<>();
 
     private MistCloudHandler() {
@@ -81,7 +77,21 @@ public final class MistCloudHandler {
         }
     }
 
-    /** Puts one cell into a cluster, starting a new one if nothing adjacent will take it. */
+    /**
+     * Bounds, not cells: march is full-screen.
+     * Null => none. Gap: overlapping clusters => only first becomes fog.
+     */
+    @Nullable
+    static GasVolumeCluster clusterContaining(Vec3 at) {
+        for (GasVolumeCluster cluster : CLUSTERS) {
+            if (cluster.volume() != null && cluster.bounds()
+                    .contains(at)) {
+                return cluster;
+            }
+        }
+        return null;
+    }
+
     private static void admit(MistEntity cell) {
         for (GasVolumeCluster cluster : CLUSTERS) {
             if (cluster.offer(cell)) {

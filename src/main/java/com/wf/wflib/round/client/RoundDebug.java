@@ -158,7 +158,7 @@ public final class RoundDebug implements RoundObserver {
         t.push(r.x, r.y, r.z);
         ClientLevel level = Minecraft.getInstance().level;
         t.arcCount = r.resting || level == null ? 0 : RoundArc.predict(r.preset, r.x, r.y, r.z, r.vx, r.vy, r.vz,
-                r.life, level.getMinBuildHeight() - Rounds.VOID_DEPTH, ARC_TICKS, t.arc);
+                r.life, level.getMinBuildHeight() - Rounds.VOID_DEPTH, r.ricochets > 0, ARC_TICKS, t.arc);
     }
 
     @Override

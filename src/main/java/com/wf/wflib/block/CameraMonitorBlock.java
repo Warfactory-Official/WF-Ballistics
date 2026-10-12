@@ -44,10 +44,7 @@ public class CameraMonitorBlock extends BaseEntityBlock {
     /** Row, from the bottom. */
     public static final IntegerProperty PART_Y = IntegerProperty.create("part_y", 0, HEIGHT - 1);
 
-    /**
-     * Set while a screen is taking itself apart, so the five {@code setBlock} calls that do it don't each start a
-     * dismantle of their own.
-     */
+    /** Reentrancy guard: dismantle's own {@code setBlock} calls must not each retrigger it. */
     private static final ThreadLocal<Boolean> DISMANTLING = ThreadLocal.withInitial(() -> Boolean.FALSE);
 
     public CameraMonitorBlock(Properties props) {
@@ -68,14 +65,12 @@ public class CameraMonitorBlock extends BaseEntityBlock {
         builder.add(FACING, PART_X, PART_Y);
     }
 
-    // --- geometry -------------------------------------------------------------------------------------
-
-    /** The direction the screen grows in: the viewer's right when standing in front of it. */
+    /** Viewer's right when facing the screen = {@code FACING}'s counter-clockwise side. */
     public static Direction right(BlockState state) {
         return state.getValue(FACING).getCounterClockWise();
     }
 
-    /** @return the bottom-left cell of the screen this block belongs to. */
+    /** Bottom-left cell of this block's screen. */
     public static BlockPos originOf(BlockPos pos, BlockState state) {
         return pos.relative(right(state), -state.getValue(PART_X)).below(state.getValue(PART_Y));
     }
@@ -87,8 +82,6 @@ public class CameraMonitorBlock extends BaseEntityBlock {
     private static BlockPos cell(BlockPos origin, Direction right, int x, int y) {
         return origin.relative(right, x).above(y);
     }
-
-    // --- placement ------------------------------------------------------------------------------------
 
     @Nullable
     @Override
@@ -130,8 +123,6 @@ public class CameraMonitorBlock extends BaseEntityBlock {
             }
         }
     }
-
-    // --- removal --------------------------------------------------------------------------------------
 
     @Override
     public BlockState playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
@@ -176,12 +167,10 @@ public class CameraMonitorBlock extends BaseEntityBlock {
         }
     }
 
-    // --- behaviour ------------------------------------------------------------------------------------
-
     @Nullable
     @Override
     public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        // One screen, one block entity, one registration with the camera net, one render.
+        // One BE per screen: avoids duplicate camera-net registration/render from the other cells.
         return isOrigin(state) ? new CameraMonitorBlockEntity(pos, state) : null;
     }
 

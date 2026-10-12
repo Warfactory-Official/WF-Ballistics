@@ -4,28 +4,25 @@ import com.wf.gemrender.volume.VolumeQuality;
 import com.wf.gemrender.volume.VolumeStyle;
 import com.wf.wflib.config.WFClientConfig;
 
-/**
- * The raymarched counterpart to {@link WFParticleStyles}: what a gas cloud looks like when it is a density field
- * rather than a pile of sprites.
- */
+/** Raymarched counterpart to {@link WFParticleStyles}: density field, not sprites. */
 public final class WFVolumeStyles {
 
-    /** Extinction per block at full density: the number that decides how solid a cloud looks. */
+    /** Extinction/block at full density. */
     private static final float DENSITY = 1.2F;
 
-    /** Noise frequency, in cycles per block, before the shader's own per-octave scaling. */
+    /** Cycles/block, before the shader's own per-octave scaling. */
     private static final float DETAIL = 0.6F;
 
-    /** Blocks per second the field drifts upward, matching the hand-ticked mist's flat {@code yd}. */
+    /** Blocks/sec drift upward; matches the sprite mist's flat {@code yd}. */
     private static final float RISE = 0.4F;
 
     /** Henyey-Greenstein asymmetry. */
     private static final float PHASE = 0.3F;
 
-    /** Floor under the sun march, so the shadowed interior goes dim rather than black. */
+    /** Floor under the sun march: shadowed interior dims, never goes black. */
     private static final float AMBIENT = 0.35F;
 
-    /** Fraction of each half-extent given over to the edge falloff, so the box never shows as a box. */
+    /** Fraction of each half-extent given to edge falloff, so the box never reads as a box. */
     private static final float EDGE = 0.35F;
 
     private WFVolumeStyles() {
@@ -33,9 +30,8 @@ public final class WFVolumeStyles {
 
     /**
      * Gas and mist as a volume.
-     *
-     * @param blockLight block light 0-15 where the cloud sits
-     * @param skyLight sky light 0-15 where the cloud sits
+     * @param blockLight 0-15
+     * @param skyLight 0-15
      */
     public static VolumeStyle mist(int rgb, int blockLight, int skyLight) {
         return VolumeStyle.builder()

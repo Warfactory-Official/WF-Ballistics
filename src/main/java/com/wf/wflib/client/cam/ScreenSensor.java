@@ -17,7 +17,7 @@ import org.slf4j.Logger;
 
 /**
  * A feed's {@link CameraMode} chain over the player's own view: vehicle sights, UAV pilot views.
- * Runs at {@code AFTER_LEVEL} => hand and GUI stay clean. Gated by {@link WFClientConfig#CAMERA_EFFECTS}.
+ * Runs at {@code AFTER_LEVEL} => hand and GUI stay clean.
  */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class ScreenSensor {

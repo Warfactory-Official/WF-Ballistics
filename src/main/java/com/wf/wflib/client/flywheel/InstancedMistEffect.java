@@ -1,6 +1,8 @@
 package com.wf.wflib.client.flywheel;
 
+import com.wf.gemrender.particle.ParticleBuffer;
 import com.wf.gemrender.particle.ParticleEmitter;
+import com.wf.gemrender.particle.ParticleOptics;
 import com.wf.wflib.client.fx.MistClientFX;
 import com.wf.wflib.client.fx.ParticleLight;
 import net.minecraft.client.renderer.LightTexture;
@@ -11,30 +13,38 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import org.jetbrains.annotations.Nullable;
 
-/** A gas or mist cloud, rendered through GemRender. */
+import java.util.ArrayList;
+import java.util.List;
+
 public class InstancedMistEffect implements WFFlywheelEffect {
 
-    /** Particles per block of cloud volume per tick. */
     private static final double PARTICLE_DENSITY = 0.09;
 
-    /** Ceiling per cloud per tick. */
     private static final int MAX_EMIT = 180;
 
     private static final int LIFE_TICKS_MIN = 50;
     private static final int LIFE_TICKS_JITTER = 10;
+    private static final float MEAN_LIFE_TICKS = LIFE_TICKS_MIN + (LIFE_TICKS_JITTER - 1) * 0.5F;
 
+    /** Ring capacity margin over live-particle count, so the cursor can't overwrite one still alive. */
     private static final float RING_HEADROOM = 1.2F;
 
-    /**
-     * Vanilla's {@code getQuadSize} is a half-extent (its quad spans plus and minus that), while GemRender's spans
-     * [-0.5, 0.5] and scales by the full width.
-     */
+    /** Vanilla {@code getQuadSize} is a half-extent (quad spans +-that); GemRender spans [-0.5, 0.5], scaled by full width. */
     private static final float BASE_SIZE = 1.5F;
+
+    /** Live effects, client thread. */
+    private static final List<InstancedMistEffect> LIVE = new ArrayList<>();
 
     private final Level level;
     private final MistEntity source;
     private final ParticleEmitter emitter;
+    private final int style;
+
+    private AABB opticsBox;
+    private float extinction;
 
     private boolean sourceGone = false;
 
@@ -53,8 +63,49 @@ public class InstancedMistEffect implements WFFlywheelEffect {
         int skyLight = LightTexture.sky(packed);
 
         int capacity = (int) (emitFor(box) * (LIFE_TICKS_MIN + LIFE_TICKS_JITTER) * RING_HEADROOM);
-        emitter = ParticleEmitter.create(WFParticleStyles.mist(tint, blockLight, skyLight),
-                capacity, mx, my, mz);
+        style = WFParticleStyles.mist(tint, blockLight, skyLight);
+        emitter = ParticleEmitter.create(style, capacity, mx, my, mz);
+        LIVE.add(this);
+    }
+
+    /** Live effect whose cell holds {@code at}; null => none. */
+    @Nullable
+    static InstancedMistEffect containing(Vec3 at) {
+        for (InstancedMistEffect effect : LIVE) {
+            if (!effect.sourceGone && effect.source.getBoundingBox()
+                    .contains(at)) {
+                return effect;
+            }
+        }
+        return null;
+    }
+
+    /** {@code box} grown by every live cell of the same style touching {@code near}. */
+    static AABB cloud(AABB box, int style, AABB near) {
+        for (InstancedMistEffect effect : LIVE) {
+            AABB cell = effect.source.getBoundingBox();
+            if (effect.style == style && !effect.sourceGone && cell.intersects(near)) {
+                box = box.minmax(cell);
+            }
+        }
+        return box;
+    }
+
+    int style() {
+        return style;
+    }
+
+    /** Steady-state density = emission rate x mean life / cell volume. */
+    float extinction(float[] spriteAlpha) {
+        AABB box = source.getBoundingBox();
+        if (!box.equals(opticsBox)) {
+            double volume = box.getXsize() * box.getYsize() * box.getZsize();
+            float density = (float) (emitFor(box) * MEAN_LIFE_TICKS / volume);
+            extinction = ParticleOptics.extinction(ParticleBuffer.getInstance()
+                    .style(style), BASE_SIZE, density, spriteAlpha);
+            opticsBox = box;
+        }
+        return extinction;
     }
 
     private static int emitFor(AABB box) {
@@ -107,6 +158,7 @@ public class InstancedMistEffect implements WFFlywheelEffect {
 
     @Override
     public void disposeEffect() {
+        LIVE.remove(this);
         emitter.close();
     }
 }

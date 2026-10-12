@@ -19,6 +19,9 @@ public final class ProbeSelection {
     private static List<ProbeAction> actions = List.of();
     private static BlockPos targetPos = BlockPos.ZERO;
     private static int targetEntity = Integer.MIN_VALUE;
+    /** {@link com.wf.wflib.probe.ProbeNode#key()}; null = crosshair panel. */
+    @Nullable
+    private static String targetNode;
     private static int index;
 
     /** Rows the drawing still lags the selection by; zero at rest. */
@@ -30,11 +33,17 @@ public final class ProbeSelection {
 
     /** Called once a frame by the overlay with the list it is about to draw. */
     static void offer(BlockPos pos, int entityId, List<ProbeAction> offered) {
-        boolean sameTarget = entityId == targetEntity && (entityId >= 0 || pos.equals(targetPos));
+        offer(pos, entityId, null, offered);
+    }
+
+    static void offer(BlockPos pos, int entityId, @Nullable String node, List<ProbeAction> offered) {
+        boolean sameTarget = entityId == targetEntity && (entityId >= 0 || pos.equals(targetPos))
+                && java.util.Objects.equals(node, targetNode);
         ProbeAction chosen = sameTarget ? current() : null;
 
         targetPos = pos.immutable();
         targetEntity = entityId;
+        targetNode = node;
         actions = offered;
 
         index = 0;
@@ -51,6 +60,7 @@ public final class ProbeSelection {
     static void clear() {
         actions = List.of();
         targetEntity = Integer.MIN_VALUE;
+        targetNode = null;
         targetPos = BlockPos.ZERO;
         index = 0;
         offset = 0.0f;

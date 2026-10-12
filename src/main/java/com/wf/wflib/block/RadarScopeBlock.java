@@ -22,10 +22,7 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.phys.BlockHitResult;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * A scope display: shows its network's track picture on its front face, and opens the same scope as a screen when
- * right-clicked.
- */
+/** Shows its net's track picture on its front face; right-click opens the same scope as a screen. */
 public class RadarScopeBlock extends BaseEntityBlock {
 
     public static final MapCodec<RadarScopeBlock> CODEC = simpleCodec(RadarScopeBlock::new);

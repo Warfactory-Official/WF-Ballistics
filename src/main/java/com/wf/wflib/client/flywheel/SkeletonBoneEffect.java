@@ -12,10 +12,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * The pile of bones an entity collapses into when cremated, rendered as Flywheel instances of the {@code bone_*}
- * models (skull / torso / limbs) instead of a baked VBO.
- */
+/** Cremation remains: Flywheel instances, not a baked VBO. */
 public class SkeletonBoneEffect implements WFFlywheelEffect {
 
     final List<Bone> bones;
@@ -29,9 +26,7 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
         this.brightness = brightness;
     }
 
-    /**
-     * Generic upright-biped skeleton at {@code (x,y,z)}, sized to {@code height} (1.8 ≈ a player).
-     */
+    /** Upright-biped skeleton at {@code (x,y,z)}; height 1.8 ≈ player. */
     public static SkeletonBoneEffect biped(Level level, double x, double y, double z,
                                            float bodyYaw, float headYaw, float height, float brightness) {
         float h = Math.max(0.25F, height / 1.8F);
@@ -82,14 +77,11 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
 
     public enum BonePart {SKULL, TORSO, LIMB}
 
-    /**
-     * One bone: position, fall/settle state, and a free-axis tumble while airborne.
-     */
     static final class Bone {
         final BonePart part;
         final float scale;
         final float yaw;
-        final float tax, tay, taz; // tumble axis (unit)
+        final float tax, tay, taz; // unit axis
         double x, y, z, px, py, pz, vx, vy, vz;
         float tumble, ptumble, tumbleVel;
         int age, life;
@@ -116,9 +108,7 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
             this.tumbleVel = (level.random.nextFloat() - 0.5F) * 0.6F;
         }
 
-        /**
-         * @return true if the bone landed this tick
-         */
+        /** @return true if landed this tick. */
         boolean tick(Level level) {
             px = x;
             py = y;
@@ -164,9 +154,10 @@ public class SkeletonBoneEffect implements WFFlywheelEffect {
             return ptumble + (tumble - ptumble) * pt;
         }
 
-        float alpha(float pt) {
+        /** 0 -> 1 over the last 40 ticks. */
+        float sink(float pt) {
             float left = life - (age + pt);
-            return left < 40 ? Math.max(0F, left / 40F) : 1F;
+            return left < 40 ? Math.min(1F, 1F - left / 40F) : 0F;
         }
 
         boolean dead() {

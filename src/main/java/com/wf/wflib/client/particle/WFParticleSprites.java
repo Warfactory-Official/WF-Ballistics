@@ -2,7 +2,7 @@ package com.wf.wflib.client.particle;
 
 import net.minecraft.client.particle.SpriteSet;
 
-/** Holds the atlas {@link SpriteSet} for each custom particle, captured when its provider is registered. */
+/** Null until the matching particle's Provider is constructed. */
 public final class WFParticleSprites {
 
     public static SpriteSet explosionSmall;

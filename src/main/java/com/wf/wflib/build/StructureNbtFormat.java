@@ -44,6 +44,7 @@ public final class StructureNbtFormat implements BlueprintFormat {
                     + Blueprint.MAX_VOLUME);
         }
 
+        // Multi-palette (randomized) structures: always palette 0, not vanilla's random pick.
         ListTag paletteTag = root.contains("palette", Tag.TAG_LIST)
                 ? root.getList("palette", Tag.TAG_COMPOUND)
                 : root.getList("palettes", Tag.TAG_LIST).isEmpty()

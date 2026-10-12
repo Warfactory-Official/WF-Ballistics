@@ -1,6 +1,7 @@
 package com.wf.wflib.drone.cam;
 
 import net.minecraft.resources.ResourceLocation;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * What the sensor head is looking through.
@@ -53,6 +54,16 @@ public enum CameraMode {
      */
     public ResourceLocation chain() {
         return ResourceLocation.fromNamespaceAndPath("wflib", "shaders/post/" + this.chain + ".json");
+    }
+
+    /**
+     * @return weapon-sight chain ({@code wf_sight_<id>}: no link compression); null for {@link #OPTICAL} (plain
+     *      picture). Client-side use only.
+     */
+    @Nullable
+    public ResourceLocation sightChain() {
+        return this == OPTICAL ? null
+                : ResourceLocation.fromNamespaceAndPath("wflib", "shaders/post/wf_sight_" + this.id + ".json");
     }
 
     public static CameraMode byOrdinal(int ordinal) {

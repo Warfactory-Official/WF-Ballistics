@@ -45,14 +45,39 @@ public final class RoundNetwork {
         final List<Spawn> spawns = new ArrayList<>();
         final List<End> ends = new ArrayList<>();
         final List<Pierce> pierces = new ArrayList<>();
+        final List<Ricochet> ricochets = new ArrayList<>();
     }
 
     /**
      * @param shooter shooter entity id; -1 none
      * @param seq     {@link Rounds#launch} {@code shooterSeq}; {@link Rounds#NO_SEQ} none
+     * @param ricochets > 0 => tumbling
      */
     public record Spawn(long key, ResourceLocation preset, double x, double y, double z,
-                        double vx, double vy, double vz, int life, boolean resting, int shooter, int seq) {
+                        double vx, double vy, double vz, int life, boolean resting, int shooter, int seq,
+                        int ricochets) {
+    }
+
+    public enum Surface {
+        BLOCK, WATER, ENTITY;
+
+        static final Surface[] VALUES = values();
+    }
+
+    /**
+     * Round skipped off {@code surface} at {@code (x, y, z)}, outward normal {@code n*}; {@code block} = struck block
+     * (BLOCK), water block (WATER), else 0. A re-sync spawn follows in the same packet.
+     */
+    public record Ricochet(long key, double x, double y, double z, float nx, float ny, float nz, Surface surface,
+                           long block) {
+
+        public Vec3 position() {
+            return new Vec3(this.x, this.y, this.z);
+        }
+
+        public Vec3 normal() {
+            return new Vec3(this.nx, this.ny, this.nz);
+        }
     }
 
     public record End(long key, double x, double y, double z, RoundEnd reason) {
@@ -91,11 +116,18 @@ public final class RoundNetwork {
         }
     }
 
-    /** Spawn, or a state change the client cannot predict (landing, burrowing, pierce): replaces its copy. */
+    static void ricocheted(ServerLevel level, RoundBatch b, int i, Vec3 at, Vec3 n, Surface surface, long block) {
+        Ricochet r = new Ricochet(b.key[i], at.x, at.y, at.z, (float) n.x, (float) n.y, (float) n.z, surface, block);
+        for (ServerPlayer player : recipients(level, b, i)) {
+            outbox(level, player).ricochets.add(r);
+        }
+    }
+
+    /** Spawn, or a state change the client cannot predict (landing, burrowing, pierce, ricochet): replaces its copy. */
     static void sync(ServerLevel level, RoundBatch b, int i) {
         KineticPreset preset = b.preset[i];
         Spawn spawn = new Spawn(b.key[i], preset.id(), b.x[i], b.y[i], b.z[i], b.vx[i], b.vy[i], b.vz[i], b.life[i],
-                b.rest[i] >= 0, b.shooter[i], b.seq[i]);
+                b.rest[i] >= 0, b.shooter[i], b.seq[i], b.ricochets[i]);
         List<ServerPlayer> to = recipients(level, b, i);
         UUID[] viewers = new UUID[to.size()];
         for (int k = 0; k < viewers.length; k++) {
@@ -138,13 +170,13 @@ public final class RoundNetwork {
             // Unnegotiated channel => send throws; FakePlayer connection has no netty channel => hasChannel NPEs.
             if (!(e.getKey() instanceof FakePlayer) && e.getKey().connection.hasChannel(RoundPacket.TYPE)) {
                 Outbox box = e.getValue();
-                Rounds.send(e.getKey(), new RoundPacket(box.spawns, box.ends, box.pierces));
+                Rounds.send(e.getKey(), new RoundPacket(box.spawns, box.ends, box.pierces, box.ricochets));
             }
         }
     }
 
     /** Spawns grouped by preset on the wire. */
-    public record RoundPacket(List<Spawn> spawns, List<End> ends, List<Pierce> pierces)
+    public record RoundPacket(List<Spawn> spawns, List<End> ends, List<Pierce> pierces, List<Ricochet> ricochets)
             implements CustomPacketPayload {
 
         public static final Type<RoundPacket> TYPE =
@@ -175,6 +207,7 @@ public final class RoundNetwork {
                     // +1: -1 (none) as a 1-byte varint.
                     buf.writeVarInt(s.shooter() + 1);
                     buf.writeVarInt(s.seq() + 1);
+                    buf.writeByte(s.ricochets());
                 }
             }
             buf.writeVarInt(this.ends.size());
@@ -197,6 +230,18 @@ public final class RoundNetwork {
                 buf.writeDouble(p.py());
                 buf.writeDouble(p.pz());
             }
+            buf.writeVarInt(this.ricochets.size());
+            for (Ricochet r : this.ricochets) {
+                buf.writeLong(r.key());
+                buf.writeDouble(r.x());
+                buf.writeDouble(r.y());
+                buf.writeDouble(r.z());
+                buf.writeFloat(r.nx());
+                buf.writeFloat(r.ny());
+                buf.writeFloat(r.nz());
+                buf.writeByte(r.surface().ordinal());
+                buf.writeLong(r.block());
+            }
         }
 
         private static RoundPacket read(FriendlyByteBuf buf) {
@@ -208,7 +253,7 @@ public final class RoundNetwork {
                 for (int k = 0; k < n; k++) {
                     spawns.add(new Spawn(buf.readLong(), preset, buf.readDouble(), buf.readDouble(), buf.readDouble(),
                             buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readVarInt(), buf.readBoolean(),
-                            buf.readVarInt() - 1, buf.readVarInt() - 1));
+                            buf.readVarInt() - 1, buf.readVarInt() - 1, buf.readByte()));
                 }
             }
             int n = buf.readVarInt();
@@ -229,7 +274,14 @@ public final class RoundNetwork {
                 pierces.add(new Pierce(key, block, x, y, z, Direction.from3DDataValue(flags & 7), buf.readDouble(),
                         buf.readDouble(), buf.readDouble(), (flags & 8) != 0));
             }
-            return new RoundPacket(spawns, ends, pierces);
+            n = buf.readVarInt();
+            List<Ricochet> ricochets = new ArrayList<>(n);
+            for (int k = 0; k < n; k++) {
+                ricochets.add(new Ricochet(buf.readLong(), buf.readDouble(), buf.readDouble(), buf.readDouble(),
+                        buf.readFloat(), buf.readFloat(), buf.readFloat(), Surface.VALUES[buf.readByte()],
+                        buf.readLong()));
+            }
+            return new RoundPacket(spawns, ends, pierces, ricochets);
         }
 
         @Override
@@ -240,7 +292,7 @@ public final class RoundNetwork {
 
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("rounds-5");
+        PayloadRegistrar registrar = event.registrar("rounds-6");
         registrar.playToClient(RoundPacket.TYPE, RoundPacket.STREAM_CODEC,
                 (pkt, ctx) -> ctx.enqueueWork(() -> com.wf.wflib.round.client.ClientRounds.accept(pkt)));
     }

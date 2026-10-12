@@ -25,14 +25,14 @@ public final class FlywheelModels {
                     .materialFunc((renderType, shaded) -> PARTICLE)
                     .build());
 
-    private static final Material TRANSLUCENT = SimpleMaterial.builder()
-            .transparency(Transparency.ORDER_INDEPENDENT)
-            .cutout(CutoutShaders.EPSILON)
+    /** Opaque: ORDER_INDEPENDENT blends alpha-1 texels too => parts show through each other, no depth. */
+    private static final Material CUTOUT = SimpleMaterial.builder()
+            .cutout(CutoutShaders.ONE_TENTH)
             .build();
 
-    private static final RendererReloadCache<PartialModel, Model> TRANSLUCENT_MODEL =
+    private static final RendererReloadCache<PartialModel, Model> CUTOUT_MODEL =
             new RendererReloadCache<>(partial -> new BakedModelBuilder(partial.get())
-                    .materialFunc((renderType, shaded) -> TRANSLUCENT)
+                    .materialFunc((renderType, shaded) -> CUTOUT)
                     .build());
 
     private FlywheelModels() {
@@ -42,7 +42,7 @@ public final class FlywheelModels {
         return PARTICLE_MODEL.get(ModModels.INSTANCED_QUAD);
     }
 
-    public static Model translucent(PartialModel partial) {
-        return TRANSLUCENT_MODEL.get(partial);
+    public static Model cutout(PartialModel partial) {
+        return CUTOUT_MODEL.get(partial);
     }
 }

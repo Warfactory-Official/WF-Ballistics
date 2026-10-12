@@ -6,12 +6,8 @@ import com.wf.gemrender.gltf.PoseDriver;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Draws one node of a model and nothing else, by collapsing every other branch to a point. */
 public record NodeIsolate(int[] hidden) implements PoseDriver {
 
-    /**
-     * @param keep the palette slot of the one node that stays
-     */
     public static NodeIsolate of(NodeTable table, int keep) {
         int count = table.nodeCount();
         boolean[] onPath = new boolean[count];

@@ -298,9 +298,29 @@ public final class WFServerEvents {
                                         com.wf.wflib.kinetic.KineticPresetRegistry.all().stream()
                                                 .map(com.wf.wflib.kinetic.KineticPreset::id), b))
                                 .executes(ctx -> fireRound(ctx.getSource(), net.minecraft.commands.arguments
-                                        .ResourceLocationArgument.getId(ctx, "preset")))))
+                                        .ResourceLocationArgument.getId(ctx, "preset"), -1, 1))
+                                .then(Commands.argument("speed", DoubleArgumentType.doubleArg(0.0, 400.0))
+                                        .executes(ctx -> fireRound(ctx.getSource(), net.minecraft.commands.arguments
+                                                .ResourceLocationArgument.getId(ctx, "preset"),
+                                                DoubleArgumentType.getDouble(ctx, "speed"), 1))
+                                        .then(Commands.argument("count", IntegerArgumentType.integer(1, 4096))
+                                                .executes(ctx -> fireRound(ctx.getSource(), net.minecraft.commands
+                                                        .arguments.ResourceLocationArgument.getId(ctx, "preset"),
+                                                        DoubleArgumentType.getDouble(ctx, "speed"),
+                                                        IntegerArgumentType.getInteger(ctx, "count")))))))
                 .then(Commands.literal("boom")
                         .executes(ctx -> boom(ctx.getSource(), "standard"))
+                        .then(Commands.literal("fire")
+                                .executes(ctx -> {
+                                    Vec3 at = ctx.getSource().getPosition();
+                                    com.wf.wflib.entity.FireLingeringEntity.spawn(ctx.getSource().getLevel(), at.x, at.y,
+                                            at.z, 3.0f, 2.0f, 300, com.wf.wflib.fire.FireType.NORMAL);
+                                    return 1;
+                                }))
+                        .then(Commands.literal("real")
+                                .then(Commands.argument("size", DoubleArgumentType.doubleArg(1.0, 30.0))
+                                        .executes(ctx -> realBoom(ctx.getSource(),
+                                                (float) DoubleArgumentType.getDouble(ctx, "size")))))
                         .then(Commands.argument("preset", StringArgumentType.word())
                                 .suggests((ctx, b) -> SharedSuggestionProvider.suggest(
                                         new String[]{"small", "standard", "large"}, b))
@@ -2593,14 +2613,33 @@ public final class WFServerEvents {
      * flying something into the sea first.
      */
     /** Kinetic round from the source position along its rotation (`execute anchored eyes positioned ^ ^ ^` = eye). */
-    private static int fireRound(CommandSourceStack src, ResourceLocation id) {
+    /**
+     * {@code speed} blocks/tick, < 0 => muzzle speed; motor => {@code RocketEntity}. {@code count > 1}: headings spread
+     * +-15 deg (look bench).
+     */
+    private static int fireRound(CommandSourceStack src, ResourceLocation id, double speed, int count) {
         com.wf.wflib.kinetic.KineticPreset preset = com.wf.wflib.kinetic.KineticPresetRegistry.get(id);
         if (preset == null) {
             src.sendFailure(Component.literal("No round " + id));
             return 0;
         }
-        long key = com.wf.wflib.round.Rounds.fire(src.getLevel(), preset, src.getPosition(),
-                Vec3.directionFromRotation(src.getRotation()), 0.0f, Vec3.ZERO, src.getEntity(), null);
+        Vec3 dir = Vec3.directionFromRotation(src.getRotation());
+        if (preset.motorAccel() > 0) {
+            int rid = com.wf.wflib.round.RocketEntity.fire(src.getLevel(), preset, src.getPosition(), dir, 0.0f,
+                    Vec3.ZERO, src.getEntity(), null, null).getId();
+            src.sendSuccess(() -> Component.literal("Rocket " + rid + " (" + id + ")"), false);
+            return 1;
+        }
+        long key = speed < 0 ? com.wf.wflib.round.Rounds.fire(src.getLevel(), preset, src.getPosition(), dir, 0.0f,
+                Vec3.ZERO, src.getEntity(), null)
+                : com.wf.wflib.round.Rounds.launch(src.getLevel(), preset, src.getPosition(), dir.scale(speed),
+                src.getEntity(), null);
+        for (int i = 1; i < count; i++) {
+            Vec3 d = Vec3.directionFromRotation(src.getRotation().x + (src.getLevel().random.nextFloat() - 0.5f) * 30,
+                    src.getRotation().y + (src.getLevel().random.nextFloat() - 0.5f) * 30);
+            com.wf.wflib.round.Rounds.launch(src.getLevel(), preset, src.getPosition(),
+                    d.scale(speed < 0 ? preset.muzzleSpeed() : speed), src.getEntity(), null);
+        }
         src.sendSuccess(() -> Component.literal("Round " + key + " (" + id + ")"), false);
         return 1;
     }
@@ -2615,6 +2654,25 @@ public final class WFServerEvents {
         }
         src.sendSuccess(() -> Component.literal("Blast effect (" + preset + ") at "
                 + BlockPos.containing(pos)), true);
+        return 1;
+    }
+
+    /** Standard warhead blast of {@code size} at the source: blocks, entities, effect. */
+    private static int realBoom(CommandSourceStack src, float size) {
+        Vec3 pos = src.getPosition();
+        ServerLevel level = src.getLevel();
+        var xnt = new com.wf.wflib.aef.ExplosionAEF(level, pos.x, pos.y, pos.z, size, src.getEntity());
+        xnt.setBlockAllocator(new com.wf.wflib.aef.standard.BlockAllocatorStandard(size < 8 ? 16 : 32));
+        xnt.setBlockProcessor(new com.wf.wflib.aef.standard.BlockProcessorStandard().setNoDrop());
+        xnt.setEntityProcessor(new com.wf.wflib.aef.standard.EntityProcessorCross());
+        xnt.setPlayerProcessor(new com.wf.wflib.aef.standard.PlayerProcessorStandard());
+        xnt.explode();
+        if (size >= com.wf.wflib.warhead.WarheadRegistry.STANDARD_BLAST_SIZE * 0.5f) {
+            ExplosionCreator.composeEffectLarge(level, pos.x, pos.y, pos.z);
+        } else {
+            ExplosionCreator.composeEffectSmall(level, pos.x, pos.y, pos.z);
+        }
+        src.sendSuccess(() -> Component.literal("Blast " + size + " at " + BlockPos.containing(pos)), true);
         return 1;
     }
 
@@ -2812,6 +2870,7 @@ public final class WFServerEvents {
         for (int i = 0; i < count; i++) {
             MissileEntity m = preset.build(level, target);
             m.setControlId(player.getUUID());
+            m.setOperatorId(player.getUUID());
             m.setTeamId(team);
             m.swarm().setSwarmId(swarmId);
             if (i == 0) {
@@ -2859,6 +2918,7 @@ public final class WFServerEvents {
         MissilePreset preset = MissilePresetRegistry.get(MissilePresetRegistry.rl("interceptor"));
         MissileEntity m = preset.build(level, spawn);
         m.setControlId(player.getUUID());
+        m.setOperatorId(player.getUUID());
         m.setTeamId(com.wf.wflib.recon.ReconOwners.owningEntity(player));
         if (lock != null) {
             m.interceptor().setLock(lock);

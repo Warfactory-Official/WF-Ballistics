@@ -7,7 +7,7 @@ import org.jetbrains.annotations.Nullable;
 /** A launcher projecting a guidance beam (SACLOS / beam riding): the round flies onto the line. */
 public interface BeamSource {
 
-    /** @return the beam for {@code missile} now; null = no beam (round flies on). */
+    /** @return null = no beam; round flies on. */
     @Nullable
     Beam guidanceBeam(Entity missile);
 

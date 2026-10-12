@@ -8,7 +8,7 @@ import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import dev.engine_room.flywheel.lib.visual.AbstractVisual;
 import net.minecraft.world.level.Level;
 
-/** The Flywheel visual for an {@link InstancedMistEffect}: the billboard path for one gas cell. */
+/** Billboard path for one gas cell (cf. {@link GasVolumeClusterVisual}'s merged volumetric path). */
 public class InstancedMistVisual extends AbstractVisual implements EffectVisual<InstancedMistEffect> {
 
     private final ParticlePool pool;

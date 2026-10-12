@@ -4,17 +4,13 @@ import dev.engine_room.flywheel.api.visual.Effect;
 
 public interface WFFlywheelEffect extends Effect {
 
-    /**
-     * Advance the simulation one client tick.
-     */
+    /** One client tick. */
     void tickEffect();
 
-    /**
-     * @return true once the effect has finished and should be removed from Flywheel
-     */
+    /** @return true once finished; caller removes it. */
     boolean isExpired();
 
-    /** Release anything the effect owns outside Flywheel, once it will never be ticked again. */
+    /** Called once, after the last tick; releases resources owned outside Flywheel. */
     default void disposeEffect() {
     }
 }

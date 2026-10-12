@@ -1,0 +1,24 @@
+{
+  "replace": false,
+  "values": [
+    "wflib:missile_cruise",
+    "wflib:missile_fragmentation",
+    "wflib:missile_incendiary",
+    "wflib:missile_chemical",
+    "wflib:missile_emp",
+    "wflib:missile_stealth",
+    "wflib:missile_interceptor_supersonic",
+    "wflib:missile_torpedo",
+    "wflib:missile_torpedo_bottom",
+    "wflib:missile_torpedo_fast",
+    "wflib:missile_interceptor",
+    "wflib:missile_loiter",
+    "wflib:missile_agm_65",
+    "wflib:missile_fb_10",
+    "wflib:missile_aim_9",
+    "wflib:missile_aim_132",
+    "wflib:missile_magic",
+    "wflib:missile_r_73",
+    "wflib:missile_pl_8"
+  ]
+}

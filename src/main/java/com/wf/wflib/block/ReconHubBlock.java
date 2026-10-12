@@ -50,10 +50,7 @@ public class ReconHubBlock extends BaseEntityBlock {
         return RenderShape.MODEL;
     }
 
-    /**
-     * Comparator output is the fraction of the grid that is online, so a hub can drive a warning light when a relay
-     * is cut without anybody writing a redstone contraption to notice.
-     */
+    /** Comparator output = fraction of the grid online; drives a warning light on a cut relay. */
     @Override
     protected boolean hasAnalogOutputSignal(BlockState state) {
         return true;

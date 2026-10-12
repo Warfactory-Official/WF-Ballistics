@@ -29,21 +29,15 @@ import org.jetbrains.annotations.Nullable;
 import java.util.List;
 import java.util.UUID;
 
-/** A surveillance radar that is not attached to a gun. */
 public class RadarSurveillanceBlockEntity extends BlockEntity implements ReconBound {
 
-    /** Detection range against a reference signature of 1.0. */
     public static final double RANGE = 512.0;
-    /** A tall mast. */
     public static final double MAST = 12.0;
-    /** A slow sweep, because this is a warning set rather than a tracking one. */
     public static final int SWEEP_TICKS = 20;
-    /** Ticks an alert holds the redstone line up. */
     public static final int ALERT_HOLD_TICKS = 60;
 
     private UUID cachedTeamId;
     private int teamRefresh;
-    /** Whose net this set answers to, when the claim is not the answer. See {@link ReconBound}. */
     @Nullable
     private UUID bound;
     private int signal;
@@ -76,7 +70,6 @@ public class RadarSurveillanceBlockEntity extends BlockEntity implements ReconBo
         }
     }
 
-    /** Send this network's picture to the players who might be looking at a display for it. */
     private void broadcast(ServerLevel sl, TrackPicture picture) {
         if (picture.gameTime() == this.sentAt || !this.isFrameSender(sl)) {
             return;
@@ -89,9 +82,7 @@ public class RadarSurveillanceBlockEntity extends BlockEntity implements ReconBo
                 new ScopeFramePacket(frame));
     }
 
-    /**
-     * @return true if this is the lowest-positioned sensor on its network, and so the one that speaks for it.
-     */
+    /** @return true if lowest-positioned sensor on its net (speaks for it). */
     private boolean isFrameSender(ServerLevel sl) {
         ReconNetwork net = ReconNet.existing(sl, ReconNet.netId(this.cachedTeamId));
         if (net == null) {
@@ -109,7 +100,6 @@ public class RadarSurveillanceBlockEntity extends BlockEntity implements ReconBo
         return true;
     }
 
-    /** Raise the line to the strongest alert in this picture, and hold it. */
     private void consumeAlerts(ServerLevel sl, List<Alert> alerts) {
         int strongest = 0;
         for (int i = 0; i < alerts.size(); i++) {
@@ -143,16 +133,13 @@ public class RadarSurveillanceBlockEntity extends BlockEntity implements ReconBo
         return this.signal;
     }
 
-    /**
-     * @return the picture this set feeds, for the block's right-click report.
-     */
+    /** @return this set's picture; {@link #nearest()} draws from it for the right-click report. */
     public TrackPicture picture() {
         return this.level instanceof ServerLevel sl
                 ? ReconNet.picture(sl, ReconNet.netId(this.cachedTeamId))
                 : TrackPicture.EMPTY;
     }
 
-    /** Work out whose set this is: the binding if it has one, and otherwise whoever claims the ground under it. */
     private void resolve(ServerLevel sl) {
         this.cachedTeamId = this.bound != null ? this.bound
                 : ReconOwners.owningAt(sl, this.worldPosition);
@@ -200,10 +187,7 @@ public class RadarSurveillanceBlockEntity extends BlockEntity implements ReconBo
         return this.trackCount;
     }
 
-    /**
-     * @return the nearest track this set holds, or null. Here so the block can name something in chat without
-     *      every caller having to know how a picture is queried.
-     */
+    /** @return nearest track, or null; spares callers from querying {@link #picture()} directly. */
     public Track nearest() {
         return this.picture().nearest(this.worldPosition.getX() + 0.5, this.worldPosition.getY() + MAST,
                 this.worldPosition.getZ() + 0.5, RANGE, t -> true);

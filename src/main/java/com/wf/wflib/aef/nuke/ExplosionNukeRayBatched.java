@@ -10,18 +10,18 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 
-/**
- * Carries out a nuclear blast as a batched, multi-tick ray-march: rays are cast outward on a generalized
- * spiral, the blocks each ray reaches are recorded, then those blocks are cleared chunk-by-chunk so the
- * cost is spread across several ticks instead of stalling one.
- */
+/** Ported from HBM; magic constants below unexplained upstream. */
 public class ExplosionNukeRayBatched implements IExplosionRay {
-    // Blocks queued for removal, grouped by chunk: key = chunk position, value = ray endpoints in that chunk.
-    private final HashMap<ChunkPos, List<Vec3>> perChunk = new HashMap<>(); //for future: optimize blockmap further by using sub-chunks instead of chunks
+    // TODO: sub-chunks instead of chunks.
+    /**
+     * Value: one shared endpoint {@link Vec3} per ray, pushed into every chunk the ray crosses (may sit outside
+     * it); {@link #processChunk} re-derives + re-walks the ray per chunk.
+     */
+    private final HashMap<ChunkPos, List<Vec3>> perChunk = new HashMap<>();
     private final List<ChunkPos> orderedChunks = new ArrayList<>();
     private final CoordComparator comparator = new CoordComparator();
-    private final BlockPos pos;       // blast center (the explosion entity's position)
-    private final ChunkPos chunkPos;  // chunk containing the blast center
+    private final BlockPos pos;
+    private final ChunkPos chunkPos;
 
     private final Level level;
 
@@ -32,7 +32,7 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
     int collectTipCnt = 0;
     int processChunkCnt = 0;
     private int gspNum;
-    // Spherical angles of the current ray (theta = polar, phi = azimuth).
+    /** theta: polar; phi: azimuthal. */
     private double theta;
     private double phi;
     private boolean isAusf3Complete = false;
@@ -44,11 +44,9 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
         this.strength = strength;
         this.radius = radius;
         this.speed = speed;
-        // Total number of points
         this.gspNumMax = (int) (2.5 * Math.PI * Math.pow(this.strength, 2));
         this.gspNum = 1;
 
-        // The beginning of the generalized spiral points
         this.theta = Math.PI;
         this.phi = 0.0;
     }
@@ -68,26 +66,22 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
     public void collectTip(int count) {
         int amountProcessed = 0;
         while (this.gspNumMax >= this.gspNum) {
-            // Convert the spherical angles into a Cartesian direction vector.
             Vec3 vec = spherical2cartesian(new Vec2((float) theta, (float) phi));
 
             int length = (int) Math.ceil(strength);
-            // Remaining shockwave intensity along this ray, depleted as it passes through blocks.
+            // res: remaining shockwave intensity, depleted per block.
             float res = strength;
-            // Farthest block this ray reaches (its endpoint).
             Vec3 endPoint = null;
             HashSet<ChunkPos> chunkCoords = new HashSet();
-            // March outward from the center along vec, one block at a time, up to `length` blocks.
             for (int i = 0; i < length && i < this.radius && res > 0; i++) {
-                // Position i blocks out from the center along vec.
                 Vec3 dirVec = new Vec3(pos.getX(), pos.getY(), pos.getZ()).add(vec.scale(i));
                 BlockPos dirPos = new BlockPos((int) Math.floor(dirVec.x), (int) Math.floor(dirVec.y), (int) Math.floor(dirVec.z));
                 BlockState blockState = level.getBlockState(dirPos);
-                // Shockwave falloff with distance from the center.
+                // fac: resistance-exponent falloff curve; magic constants ported from HBM.
                 double fac = 100 - ((double) i) / ((double) length) * 100;
                 fac *= 0.07D;
 
-                // Uses the block's default explosion resistance; replaceable blocks (grass, plants, ...) are cleared outright.
+                // FIXME: clears `pos` (blast center), not `dirPos` (this ray cell); looks wrong, preserved as-is.
                 if (blockState.canBeReplaced()) level.setBlock(pos, Blocks.AIR.defaultBlockState(), 2, 0);
                 if (!blockState.liquid())
                     res -= (float) Math.pow(blockState.getBlock().getExplosionResistance(), 7.5D - fac);
@@ -100,11 +94,9 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
 
             for (ChunkPos pos : chunkCoords) {
                 List<Vec3> endList = perChunk.computeIfAbsent(pos, k -> new ArrayList<>());
-                // Chunks reuse the same endpoint, which may fall outside the chunk; that is resolved in the removal phase.
                 endList.add(endPoint);
             }
 
-            // Raise one generalized spiral points
             this.generateGspUp();
 
             if (++amountProcessed >= count)
@@ -122,10 +114,11 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
 
         ChunkPos coord = orderedChunks.get(0);
         List<Vec3> list = perChunk.get(coord);
-        HashSet<BlockPos> toRem = new HashSet<>();      // blocks to remove in this chunk
-        HashSet<BlockPos> toRemTips = new HashSet<>();  // blocks to remove that sit at a ray's endpoint (edge tips)
+        HashSet<BlockPos> toRem = new HashSet<>();
+        HashSet<BlockPos> toRemTips = new HashSet<>();
 
-        int enter = Math.min(Math.abs(pos.getX() - (coord.x << 4)), Math.abs(pos.getZ() - (coord.z << 4))) - 16; //jump ahead to cut back on NOPs
+        // enter: skips ray cells that can't reach this chunk yet (avoids no-op iterations).
+        int enter = Math.min(Math.abs(pos.getX() - (coord.x << 4)), Math.abs(pos.getZ() - (coord.z << 4))) - 16;
 
         enter = Math.max(enter, 0);
 
@@ -156,6 +149,7 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
             }
         }
 
+        // Bulk clear: flag 2, no recursion (0) => no neighbor-update cascade across the mass removal.
         for (BlockPos pos : toRem) {
             if (toRemTips.contains(pos)) {
                 this.handleTip(pos);
@@ -168,11 +162,11 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
         orderedChunks.remove(0);
     }
 
+    /** Tip (ray endpoint): flag 3, full neighbor update, unlike the bulk clear's flag 2. */
     protected void handleTip(BlockPos blockPos) {
         level.setBlock(blockPos, Blocks.AIR.defaultBlockState(), 3);
     }
 
-    // Advances theta/phi to the next point on the generalized spiral.
     private void generateGspUp() {
         if (this.gspNum < this.gspNumMax) {
             int k = this.gspNum + 1;
@@ -192,7 +186,7 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
     @Override
     public void cacheChunksTick(int processTimeMs) {
         if (!isAusf3Complete) {
-            // time ignored here since collectTip() did not implement a time limit
+            // processTimeMs ignored: collectTip has no time limit.
             collectTip(speed * 10);
         }
     }
@@ -217,7 +211,7 @@ public class ExplosionNukeRayBatched implements IExplosionRay {
         return isAusf3Complete && perChunk.isEmpty();
     }
 
-    // Orders chunks by Manhattan distance from the blast center so nearer chunks are cleared first.
+    /** Manhattan distance to the blast center, ascending: nearer chunks cleared first. */
     public class CoordComparator implements Comparator<ChunkPos> {
         @Override
         public int compare(ChunkPos o1, ChunkPos o2) {

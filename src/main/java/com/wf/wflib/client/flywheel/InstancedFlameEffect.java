@@ -9,19 +9,18 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.phys.AABB;
 
-/** The flames of a {@link FireLingeringEntity}, rendered through GemRender's particle instancer. */
 public class InstancedFlameEffect implements WFFlywheelEffect {
 
-    /** Flames emitted per block of footprint per tick. Was 2.0 when every flame cost a matrix per frame. */
-    private static final float FLAMES_PER_BLOCK = 6.0F;
+    /** Per block of footprint per tick. */
+    private static final float FLAMES_PER_BLOCK = 3.0F;
 
-    /** Ceiling on one fire's emission rate. Was 256. */
+    /** Was 256. */
     private static final int MAX_EMIT = 768;
 
-    /** Longest a flame lives, in ticks. Sets how many ring slots the emission rate needs. */
+    /** Ticks; with {@link #emitPerTick} sizes the emitter's ring capacity. */
     private static final int MAX_LIFE = 16;
 
-    /** Spare ring capacity, so the cursor does not overwrite flames that are still burning. */
+    /** Ring capacity margin over live-flame count, so the cursor can't overwrite a still-burning flame. */
     private static final float RING_HEADROOM = 1.2F;
 
     private final Level level;
@@ -92,13 +91,15 @@ public class InstancedFlameEffect implements WFFlywheelEffect {
             double pz = minZ + level.random.nextDouble() * spanZ;
             double py = baseY + level.random.nextDouble() * 0.3;
 
-            // Per-second velocities: the hand-ticked flame used xd = +-0.01 and yd = 0.02..0.05 per tick.
+            // Per-second velocities; hand-ticked FlameParticle used per-tick xd=+-0.01, yd=0.02..0.05.
             emitter.spawn(px, py, pz,
                     (level.random.nextDouble() - 0.5) * 0.4,
                     0.4 + level.random.nextDouble() * 0.6,
                     (level.random.nextDouble() - 0.5) * 0.4,
                     (8 + level.random.nextInt(MAX_LIFE - 8)) / 20F,
-                    0.4F + level.random.nextFloat() * 0.3F);
+                    0.5F + level.random.nextFloat() * 0.5F,
+                    level.random.nextFloat() * Mth.TWO_PI,
+                    0.8F + level.random.nextFloat() * 0.4F);
         }
     }
 

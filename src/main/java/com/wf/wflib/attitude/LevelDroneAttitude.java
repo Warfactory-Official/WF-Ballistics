@@ -5,17 +5,14 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
- * Winged-drone attitude: the nose (model {@code +Y}) follows the heading (so the drone pitches to climb/dive), but
- * the airframe is held upright: its dorsal (top) side is kept pointing at world-up, so the wings stay level and the
- * belly stays down instead of the free roll a missile takes.
+ * Winged-drone attitude: nose (model {@code +Y}) follows heading (pitches to climb/dive), airframe
+ * held upright via dorsal-side alignment to world-up (wings level, belly down) instead of a missile's
+ * free roll.
  */
 public final class LevelDroneAttitude implements MissileAttitude {
 
     public static final LevelDroneAttitude INSTANCE = new LevelDroneAttitude();
 
-    /**
-     * The model's dorsal ("up") axis in local space, held toward world-up (see class doc).
-     */
     private static final Vector3f MODEL_UP = new Vector3f(0.0f, 0.0f, -1.0f);
     private static final Vector3f WORLD_UP = new Vector3f(0.0f, 1.0f, 0.0f);
 
@@ -24,8 +21,7 @@ public final class LevelDroneAttitude implements MissileAttitude {
 
     @Override
     public Quaternionf orientation(Vector3f heading) {
-        Vector3f forward = new Vector3f(heading); // already normalized
-        // World-up made perpendicular to the heading = the direction the model's dorsal should point.
+        Vector3f forward = new Vector3f(heading);
         float align = WORLD_UP.dot(forward);
         Vector3f up;
         if (Math.abs(align) > 0.999f) {
@@ -39,7 +35,7 @@ public final class LevelDroneAttitude implements MissileAttitude {
         }
 
         Vector3f colY = new Vector3f(forward);
-        Vector3f colZ = new Vector3f(up).negate();          // model +Z -> -up  (=> -Z -> up)
+        Vector3f colZ = new Vector3f(up).negate();          // model +Z -> -up (=> -Z -> up)
         Vector3f colX = new Vector3f(colY).cross(colZ);      // colY x colZ = -(forward x up)
         Matrix3f basis = new Matrix3f(colX, colY, colZ);
         return new Quaternionf().setFromNormalized(basis);

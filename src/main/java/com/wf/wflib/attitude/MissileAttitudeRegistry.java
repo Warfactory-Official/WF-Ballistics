@@ -3,7 +3,6 @@ package com.wf.wflib.attitude;
 import java.util.HashMap;
 import java.util.Map;
 
-/** Registry of {@link MissileAttitude}s keyed by a short stable id. */
 public final class MissileAttitudeRegistry {
 
     public static final String DEFAULT_ID = "missile";
@@ -23,9 +22,6 @@ public final class MissileAttitudeRegistry {
         BY_ID.put(id, attitude);
     }
 
-    /**
-     * @return the attitude for {@code id}, falling back to nose-to-velocity when unknown.
-     */
     public static MissileAttitude get(String id) {
         return BY_ID.getOrDefault(id, NoseToVelocityAttitude.INSTANCE);
     }

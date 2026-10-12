@@ -22,7 +22,9 @@ public class ProjectileStrikeEvent extends Event {
         /** Fuze failed: no damage, no detonation. A missile drops as a dud; a shell is lost. */
         DUD,
         /** Nothing solid in the path after all: keep flying. */
-        PASS
+        PASS,
+        /** Skipped off the armour: no damage, flies on at {@link #ricochet()} from {@link #location}. */
+        RICOCHET
     }
 
     @Nullable
@@ -37,6 +39,11 @@ public class ProjectileStrikeEvent extends Event {
     private Outcome outcome = Outcome.PROCEED;
     @Nullable
     private Vec3 detonation;
+    private boolean canRicochet;
+    @Nullable
+    private Entity shooter;
+    @Nullable
+    private Vec3 ricochet;
 
     public ProjectileStrikeEvent(Entity projectile, Entity target, Vec3 location, Vec3 velocity, Threat threat) {
         this(projectile, projectile, target, location, velocity, threat);
@@ -97,8 +104,47 @@ public class ProjectileStrikeEvent extends Event {
         return outcome;
     }
 
+    /** {@link Outcome#RICOCHET} => {@link #ricochet(Vec3)}. */
     public void setOutcome(Outcome outcome) {
+        if (outcome == Outcome.RICOCHET) {
+            throw new IllegalArgumentException("ricochet(velocity)");
+        }
         this.outcome = outcome;
+    }
+
+    /** Striker flies on after a ricochet (WFLib rounds under their per-round cap); else {@link #ricochet} refuses. */
+    public boolean canRicochet() {
+        return canRicochet;
+    }
+
+    public ProjectileStrikeEvent allowRicochet() {
+        this.canRicochet = true;
+        return this;
+    }
+
+    /** Who fired it (WFLib rounds), when known: a listener answering without damage (ricochet) owes them a readout. */
+    @Nullable
+    public Entity shooter() {
+        return shooter;
+    }
+
+    public ProjectileStrikeEvent withShooter(@Nullable Entity shooter) {
+        this.shooter = shooter;
+        return this;
+    }
+
+    /** {@link Outcome#RICOCHET} at {@code velocity} (blocks/tick; {@code Ricochet.off}). */
+    public void ricochet(Vec3 velocity) {
+        if (!canRicochet) {
+            throw new IllegalStateException("striker cannot ricochet");
+        }
+        this.outcome = Outcome.RICOCHET;
+        this.ricochet = velocity;
+    }
+
+    @Nullable
+    public Vec3 ricochet() {
+        return ricochet;
     }
 
     /** Where the warhead functioned when a listener moved it off {@link #location} (a cage, a brick); else null. */

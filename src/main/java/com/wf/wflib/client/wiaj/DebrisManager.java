@@ -21,14 +21,10 @@ import java.util.List;
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT, bus = EventBusSubscriber.Bus.GAME)
 public final class DebrisManager {
 
-    /**
-     * Safety cap so a barrage of explosions can't pile up unbounded debris.
-     */
+    /** Safety cap: a barrage of explosions can't pile up unbounded debris. */
     private static final int MAX_ACTIVE = 256;
 
-    /**
-     * Max chunks to tessellate per frame: spreads a burst of debris over a few frames instead of one hitch.
-     */
+    /** Chunks tessellated per frame; spreads a burst over frames instead of one hitch. */
     private static final int BAKE_BUDGET_PER_FRAME = 4;
 
     private static final List<Debris> ACTIVE = new ArrayList<>();
@@ -45,6 +41,9 @@ public final class DebrisManager {
 
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
+        if (!Minecraft.getInstance().isPaused()) {
+            BlastDebris.tick();
+        }
         if (ACTIVE.isEmpty()) {
             return;
         }
@@ -57,7 +56,7 @@ public final class DebrisManager {
             debris.tick(mc.level);
             if (debris.isExpired()) {
                 ACTIVE.remove(i);
-                PENDING_CLOSE.add(debris); // GL buffer closed on the render thread next frame
+                PENDING_CLOSE.add(debris); // GL close needs render thread; queue instead of closing here
             }
         }
     }
@@ -95,7 +94,7 @@ public final class DebrisManager {
         for (Debris debris : ACTIVE) {
             if (!debris.isBaked()) {
                 if (bakeBudget <= 0) {
-                    continue; // defer this chunk's tessellation to a later frame (it just appears a tick late)
+                    continue; // defer bake to a later frame; chunk appears a tick late
                 }
                 debris.bake();
                 bakeBudget--;
@@ -112,7 +111,7 @@ public final class DebrisManager {
         if (!event.getLevel().isClientSide()) {
             return;
         }
-        // Defer the actual GL disposal to the next render pass (render thread).
+        // Same render-thread deferral as onClientTick.
         PENDING_CLOSE.addAll(ACTIVE);
         ACTIVE.clear();
     }

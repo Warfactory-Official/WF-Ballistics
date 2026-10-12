@@ -23,7 +23,7 @@ public class SecurityCameraBlock extends Block {
     public static final MapCodec<SecurityCameraBlock> CODEC = simpleCodec(SecurityCameraBlock::new);
     public static final DirectionProperty FACING = BlockStateProperties.HORIZONTAL_FACING;
 
-    // The housing sits against the wall behind the lens, so the box is on the side away from FACING.
+    /** Housing sits against the wall behind the lens: box on the side away from {@code FACING}. */
     private static final VoxelShape NORTH = Block.box(5.0, 5.0, 8.0, 11.0, 11.0, 16.0);
     private static final VoxelShape SOUTH = Block.box(5.0, 5.0, 0.0, 11.0, 11.0, 8.0);
     private static final VoxelShape WEST = Block.box(8.0, 5.0, 5.0, 16.0, 11.0, 11.0);
@@ -52,7 +52,6 @@ public class SecurityCameraBlock extends Block {
         return this.defaultBlockState().setValue(FACING, facing);
     }
 
-    /** Tell the feed system this camera is gone. */
     @Override
     protected void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState,
                             boolean movedByPiston) {

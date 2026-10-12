@@ -2,6 +2,8 @@ package com.wf.wflib;
 
 import com.mojang.logging.LogUtils;
 import com.wf.wflib.client.gui.DronePadScreen;
+import com.wf.gemrender.particle.ParticleBuffer;
+import com.wf.wflib.client.cam.FeedPass;
 import com.wf.wflib.client.gui.MissileDispenserScreen;
 import com.wf.wflib.block.ModBlockEntities;
 import com.wf.wflib.client.render.BombletRenderer;
@@ -45,7 +47,6 @@ import org.slf4j.Logger;
 
 import java.util.Map;
 
-// This annotation tells NeoForge to only execute this class on the physical Client game instance
 @EventBusSubscriber(modid = WFLib.MODID, bus = EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class WFLibClient {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -54,6 +55,10 @@ public class WFLibClient {
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.STEALTH_MISSILE.get(), MissileRenderer::new);
         event.registerEntityRenderer(ModEntities.ROCKET.get(), com.wf.wflib.round.client.RocketClient::new);
+        event.registerEntityRenderer(com.wf.wflib.countermeasure.Countermeasures.FLARE.get(),
+                com.wf.wflib.countermeasure.client.FlareRenderer::new);
+        event.registerEntityRenderer(com.wf.wflib.countermeasure.Countermeasures.SMOKE_GRENADE.get(), NoopRenderer::new);
+        event.registerEntityRenderer(com.wf.wflib.countermeasure.Countermeasures.APS_GRENADE.get(), NoopRenderer::new);
         // Drawn by its Flywheel visual; vanilla still needs a renderer or the dispatcher NPEs.
 
         // Bomblets are simple tumbling orange cubes (fragmentation payload).
@@ -141,10 +146,23 @@ public class WFLibClient {
     public static void onClientSetup(final FMLClientSetupEvent event) {
 
         event.enqueueWork(() -> {
+            ParticleBuffer.getInstance().hideWhen(FeedPass::drawingThermal);
+            com.wf.wflib.client.fx.WFLights.register();
             PartRigs.init();
             MineRigs.init();
             MineItemRenderers.init();
             GlyphidModel.init();
+            com.wf.wflib.client.recon.ReconMapLayer.register();
+            com.wf.wflib.client.cam.CameraOsd.register();
+            com.wf.wflib.tv.client.TvHud.register();
+            com.wf.wflib.client.rail.AlignmentMapLayer.register();
+            com.wf.wflib.client.map.WFMaps.addTool(new com.wf.wflib.client.rail.RailMapEditor());
+            if (net.neoforged.fml.ModList.get().isLoaded("xaeroworldmap")) {
+                com.wf.wflib.client.map.xaero.XaeroWorldMapHost.attach();
+            }
+            if (net.neoforged.fml.ModList.get().isLoaded("xaerominimap")) {
+                com.wf.wflib.client.map.xaero.XaeroMinimapHost.attach();
+            }
 
             EntityVisualizer<MissileEntity> visualizer = new EntityVisualizer<MissileEntity>() {
                 @Override
@@ -208,10 +226,6 @@ public class WFLibClient {
         });
     }
 
-    /**
-     * The mod's first {@link net.minecraft.client.renderer.blockentity.BlockEntityRenderer}: the in-world scope
-     * display.
-     */
     @SubscribeEvent
     public static void registerBlockEntityRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(ModBlockEntities.RADAR_SCOPE.get(), RadarScopeRenderer::new);

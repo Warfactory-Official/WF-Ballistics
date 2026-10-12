@@ -16,39 +16,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Standing in the fire, the gas or the field.
- *
- * <p>STALKER is the reference and it is less harsh than it first looks: it expects the player to
- * spend minutes or hours in dangerous places, so there is no lingering charge and nothing to drain.
- * Two paths, and the split is the whole mechanic:
- *
- * <ul>
- *   <li><b>Acute.</b> Walking into it costs a flat share of maximum condition, at once. A percentage
- *       rather than points, so it costs a cheap vest and steel power armour alike: heavy armour is
- *       not the universal answer, it laughs at bullets and still dissolves.</li>
- *   <li><b>Sustained.</b> Staying in it costs a flat number of condition points per interval, for as
- *       long as contact lasts. That number is the hazard's tier, and the suit's tier for the type is
- *       subtracted from it, so a hazard at or below what the suit is rated for costs nothing at all,
- *       indefinitely. That last clause is the entire reason to own a good suit.</li>
- * </ul>
- *
- * <p>The interval is five ticks, a quarter of a second, which is roughly how fast a person reacts:
- * finer would charge damage nobody could have avoided, coarser would charge a player who did get out in
- * time for the part of the interval they were already clear of.
- *
- * <p>Accrual and persistence run at different rates on purpose. Accrual is integer, into a transient
- * field, every {@link ArmorConfig#exposureIntervalTicks}; the write to the stacks is far coarser,
- * because a component written on a worn stack is an equipment-sync packet and that packet, not the
- * allocation, is what a per-tick write actually costs. Since accrual is exact, coarsening the write
- * loses nothing.
+ * Fire/gas/field contact tracking. Reference: STALKER (no lingering drain; acute splash on contact +
+ * sustained cost while contact holds, see {@link ArmorResolver#acuteWear} / {@link ArmorResolver#sustainedWear}).
  */
 public final class ArmorExposure {
 
-    /** Something that can say how hard a hazard is working on an entity right now. */
+    /** A hazard, queried per entity per interval. */
     public interface Source {
         /**
-         * @return what {@code type} costs this entity, in condition points per exposure interval, before
-         *         the armour's own rating for that type is subtracted. 0 for none
+         * @return cost of {@code type} to this entity, condition points per exposure interval, before the
+         *         suit's own tier is subtracted; 0 = none
          */
         double tier(LivingEntity entity, ProtectionType type);
     }
@@ -68,7 +45,7 @@ public final class ArmorExposure {
         SOURCES.add(source);
     }
 
-    /** Registers the built-in hazards: being on fire, and standing in lava. Idempotent. */
+    /** Registers fire/lava hazards. Idempotent. */
     public static void bootstrap() {
         if (bootstrapped) {
             return;
@@ -86,13 +63,10 @@ public final class ArmorExposure {
     }
 
     /**
-     * Declares that {@code entity} is in this hazard right now, at this rate. Pushed rather than polled
-     * because the thing that knows is the cloud, and asking every cloud about every entity every
-     * interval would be the wrong way round.
+     * Push model, not poll: the hazard (e.g. a cloud) knows who's in it; polling every hazard against
+     * every entity every interval would invert that.
      *
-     * @param tier what the hazard deals, in condition points per exposure interval. Not per tick and not
-     *             per second: the interval is the unit, which is what keeps this a flat integer with no
-     *             conversion anywhere between the cloud and the durability bar
+     * @param tier hazard's rate, condition points per exposure interval (not per tick or per second)
      */
     public static void contact(LivingEntity entity, ProtectionType type, double tier) {
         if (entity == null || type == null || tier <= 0.0D || !type.takesExposure()) {
@@ -105,7 +79,6 @@ public final class ArmorExposure {
         contact.pushed.merge(type, tier, Math::max);
     }
 
-    /** One server tick. Does nothing on most of them. */
     public static void tick(MinecraftServer server) {
         if (!ArmorConfig.enabled) {
             return;
@@ -118,9 +91,7 @@ public final class ArmorExposure {
         }
 
         if (accrue) {
-            // Players are polled whether or not anything has pushed for them, because standing in a
-            // fire that is doing no damage yet still ruins a suit. Everything else is covered by a
-            // push: a mob only appears here once a cloud or a burn has said so.
+            // Players always tracked even with nothing pushed yet; others only enter via push/track.
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 CONTACTS.computeIfAbsent(player, e -> new Contact());
             }
@@ -147,12 +118,7 @@ public final class ArmorExposure {
         }
     }
 
-    /**
-     * Starts watching an entity without claiming a hazard of its own, so the polled sources get a
-     * chance at it. This is how a burning mob is covered: nothing pushes for it, but it is taking fire
-     * damage, and that is enough of a hint to start looking. An entity that turns out not to be in
-     * anything is dropped again a few intervals later.
-     */
+    /** Watches {@code entity} with no hazard of its own yet, so polled sources (e.g. fire) can find it. Dropped after {@link #IDLE_INTERVALS_TO_FORGET} idle intervals if nothing matches. */
     public static void track(LivingEntity entity) {
         if (entity == null || entity.level().isClientSide || !ArmorConfig.enabled) {
             return;
@@ -161,13 +127,9 @@ public final class ArmorExposure {
     }
 
     /**
-     * Writes anything owed, and <b>keeps watching</b>.
-     *
-     * <p>Keeping the entry is load-bearing, not tidiness. Writing wear changes a worn stack, which
-     * fires {@code LivingEquipmentChangeEvent}, which flushes: if a flush also forgot what the entity
-     * was standing in, the next interval would read as first contact and charge the splash again. That
-     * compounds, and a hazmat suit standing in a mild cloud loses a percent of itself every interval
-     * forever instead of nothing at all.
+     * Writes owed wear and keeps watching. Must not forget: writing wear changes the stack, which fires
+     * {@code LivingEquipmentChangeEvent}, which re-enters here; forgetting contact would re-charge the
+     * acute splash every interval forever.
      */
     public static void flush(LivingEntity entity) {
         Contact contact = CONTACTS.get(entity);
@@ -176,7 +138,7 @@ public final class ArmorExposure {
         }
     }
 
-    /** Writes anything owed and stops watching. For death and logout, where there is no next interval. */
+    /** Writes owed wear and stops watching; death/logout have no next interval. */
     public static void forget(LivingEntity entity) {
         Contact contact = CONTACTS.remove(entity);
         if (contact != null) {
@@ -185,12 +147,9 @@ public final class ArmorExposure {
     }
 
     /**
-     * Throws away what one slot owed, without writing it.
-     *
-     * <p>For a piece that has actually left: the points were accrued against the thing that was being
-     * worn, and {@code LivingEquipmentChangeEvent} fires after the swap, so the old stack is already
-     * gone and what the event hands back is a copy of it. Writing them to its replacement would be
-     * worse than losing them, and what is lost is at most one persistence interval of contact.
+     * Drops owed wear for a slot without writing it: {@code LivingEquipmentChangeEvent} fires after the
+     * swap, so the old stack is already gone and the event hands back only a copy. Loses at most one
+     * persist interval.
      */
     public static void discard(LivingEntity entity, EquipmentSlot slot) {
         Contact contact = CONTACTS.get(entity);
@@ -219,8 +178,7 @@ public final class ArmorExposure {
             }
             active.add(type);
             if (!contact.lastActive.contains(type)) {
-                // First contact is the splash, and it is charged straight away rather than accrued:
-                // it is rare, and a percentage of maximum is not the sort of thing to leave owed.
+                // First contact = acute splash, charged immediately, not accrued.
                 ArmorSystem.acute(entity, type, ArmorConfig.acuteFraction);
                 continue;
             }

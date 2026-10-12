@@ -1,9 +1,14 @@
 package com.wf.wflib.fx;
 
+import com.wf.wflib.audio.AudioCategory;
+import com.wf.wflib.audio.Blasts;
+import com.wf.wflib.audio.WfAudio;
 import com.wf.wflib.network.AuxParticlePacket;
 import com.wf.wflib.network.WFNetwork;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.Vec3;
 
 
 public final class ExplosionSmallCreator {
@@ -30,5 +35,6 @@ public final class ExplosionSmallCreator {
         data.putInt("debris", DEBRIS);
 
         WFNetwork.sendToAllAround(level, x, y, z, 200.0, new AuxParticlePacket("explosion_small", x, y, z, data));
+        WfAudio.at((ServerLevel) level, new Vec3(x, y, z), AudioCategory.EXPLOSIONS, Blasts.small());
     }
 }

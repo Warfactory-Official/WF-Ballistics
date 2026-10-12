@@ -28,10 +28,7 @@ import org.joml.Vector3f;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * A chunk of flying debris: a small tumbling copy of the block it came from, built each frame on the shared terrain
- * particle buffer (a tiny per-particle "VBO").
- */
+/** Tumbling copy of its source block: quads baked once, rotated + translated per frame thereafter. */
 public class BlockDebrisParticle extends Particle {
 
     private static final float TWO_PI = (float) (Math.PI * 2.0);
@@ -39,7 +36,7 @@ public class BlockDebrisParticle extends Particle {
             Direction.WEST, Direction.EAST, null };
 
     private final BlockState state;
-    // Pre-baked, pre-scaled quads relative to the chunk centre. Each entry is 4 verts * (x,y,z,u,v,r,g,b).
+    /** Per-quad float[32]: 4 verts * (x,y,z,u,v,r,g,b), centred on the chunk, pre-scaled. */
     private final List<float[]> quads;
     private final float axisX;
     private final float axisY;
@@ -56,7 +53,7 @@ public class BlockDebrisParticle extends Particle {
         this.zd = dz * 1.4D;
         this.gravity = 1.3F;
         this.lifetime = 32 + this.random.nextInt(34);
-        // Near full-block-sized chunks.
+        // halfSize ~0.4-0.52: near full block.
         float halfSize = 0.4F + this.random.nextFloat() * 0.12F;
         this.setSize(halfSize, halfSize);
         this.roll = this.random.nextFloat() * TWO_PI;
@@ -80,7 +77,7 @@ public class BlockDebrisParticle extends Particle {
         this.quads = bake(state, level, BlockPos.containing(x, y, z), halfSize * 2.0F);
     }
 
-    /** Extract the block model's quads into camera-space-ready, tinted, scaled geometry. */
+    /** Bakes model quads once: tinted, scaled, chunk-centred; render() only rotates/translates afterward. */
     private static List<float[]> bake(BlockState state, ClientLevel level, BlockPos pos, float scale) {
         Minecraft mc = Minecraft.getInstance();
         BlockColors blockColors = mc.getBlockColors();
@@ -88,14 +85,14 @@ public class BlockDebrisParticle extends Particle {
         RandomSource rand = RandomSource.create();
         List<float[]> out = new ArrayList<>();
 
-        // Walk every render layer so split base/overlay models (e.g. solid stone + cutout ore) are fully covered.
+        // all render layers; split base/overlay models (solid + cutout) need each one baked.
         List<RenderType> layers = new ArrayList<>();
         ChunkRenderTypeSet renderTypes = model.getRenderTypes(state, RandomSource.create(0L), ModelData.EMPTY);
         for (RenderType rt : renderTypes) {
             layers.add(rt);
         }
         if (layers.isEmpty()) {
-            layers.add(null); // fall back to the model's full quad list
+            layers.add(null); // null layer => model.getQuads returns the full list
         }
 
         for (RenderType layer : layers) {
@@ -110,7 +107,7 @@ public class BlockDebrisParticle extends Particle {
                     Direction dir = quad.getDirection();
                     float shade = shadeFor(dir);
 
-                    // Push tinted overlay layers a hair outward along their normal to avoid z-fighting the base.
+                    // epsilon push along normal on tinted layers: avoids z-fighting the base.
                     float eps = tint != -1 && dir != null ? 0.0016F : 0.0F;
                     float nx = dir == null ? 0.0F : eps * dir.getStepX();
                     float ny = dir == null ? 0.0F : eps * dir.getStepY();
@@ -124,7 +121,7 @@ public class BlockDebrisParticle extends Particle {
                         float px = Float.intBitsToFloat(v[b]);
                         float py = Float.intBitsToFloat(v[b + 1]);
                         float pz = Float.intBitsToFloat(v[b + 2]);
-                        int vc = v[b + 3]; // baked vertex colour, RGBA little-endian
+                        int vc = v[b + 3]; // vertex colour, RGBA little-endian
                         float vr = (vc & 0xFF) / 255.0F;
                         float vg = (vc >> 8 & 0xFF) / 255.0F;
                         float vb = (vc >> 16 & 0xFF) / 255.0F;
@@ -148,7 +145,7 @@ public class BlockDebrisParticle extends Particle {
         return out;
     }
 
-    /** True when an axis tried to move but collision swallowed most of it. */
+    /** True when collision swallowed most of an axis's intended motion. */
     private static boolean blocked(double intended, double actual) {
         return Math.abs(intended) > 1.0e-5D && Math.abs(actual - intended) > 1.0e-4D;
     }
@@ -161,7 +158,7 @@ public class BlockDebrisParticle extends Particle {
             case UP -> 1.0F;
             case DOWN -> 0.5F;
             case NORTH, SOUTH -> 0.8F;
-            default -> 0.6F; // EAST / WEST
+            default -> 0.6F;
         };
     }
 
@@ -185,7 +182,7 @@ public class BlockDebrisParticle extends Particle {
         double intendedY = this.yd;
         double intendedZ = this.zd;
         this.move(this.xd, this.yd, this.zd);
-        // If collision clamped the movement on any axis, the chunk struck something: shatter, don't bounce.
+        // clamped motion on any axis => struck something: shatter, not bounce.
         boolean hit = this.onGround || blocked(intendedX, this.x - this.xo) || blocked(intendedY, this.y - this.yo) ||
                 blocked(intendedZ, this.z - this.zo);
         if (hit) {
@@ -198,7 +195,7 @@ public class BlockDebrisParticle extends Particle {
         this.roll += this.spin;
     }
 
-    /** Vanish and leave behind the vanilla block-break crack particles for this block. */
+    /** Leaves vanilla block-break crack particles, then removes self. */
     private void shatter() {
         if (!this.state.isAir()) {
             BlockParticleOption crack = new BlockParticleOption(ParticleTypes.BLOCK, this.state);

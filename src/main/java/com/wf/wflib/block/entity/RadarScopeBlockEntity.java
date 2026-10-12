@@ -19,15 +19,13 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-/** An in-world display for a sensor network. */
 public class RadarScopeBlockEntity extends BlockEntity implements ReconBound {
 
-    /** Ticks between faction re-checks. Claims move rarely; a screen that lags one behind is harmless. */
+    /** Claims move rarely; one-interval-stale screen harmless. */
     private static final int TEAM_REFRESH = 100;
 
     private long netId;
     private int teamRefresh;
-    /** Which net to show, when the claim is not the answer. See {@link ReconBound}. */
     @Nullable
     private UUID bound;
 
@@ -89,7 +87,7 @@ public class RadarScopeBlockEntity extends BlockEntity implements ReconBound {
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         this.netId = tag.getLong("NetId");
-        // Not in getUpdateTag: the client is sent the resolved net and has no use for how it was arrived at.
+        // Omitted from getUpdateTag: client needs the resolved net only.
         this.bound = tag.hasUUID("BoundNet") ? tag.getUUID("BoundNet") : null;
     }
 

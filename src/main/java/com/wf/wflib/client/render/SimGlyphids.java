@@ -13,18 +13,15 @@ import org.jetbrains.annotations.Nullable;
 import java.util.HashMap;
 import java.util.Map;
 
-/** What the client knows about the glyphids that have no entity. */
+/** Client-side state for sim-tier (entity-less) glyphids. */
 public final class SimGlyphids {
 
-    /** Ticks with nothing to draw before the flywheel effect is retired. */
+    /** Idle ticks before flywheel effect retires. */
     private static final int IDLE_TICKS = 60;
 
     /**
-     * One glyphid, as the client sees it.
-     *
-     * @param walk the walk cycle's accumulated phase, carried across updates from the previous ghost with
-     *      the same id. Vanilla keeps this on the entity as {@code walkAnimation}; here it is derived
-     *      from how far the record actually moved, which is the same input
+     * @param walk accumulated walk phase, carried across updates by id. Vanilla: entity field
+     *      {@code walkAnimation}; here derived from distance moved (same input).
      */
     public record Ghost(int id, GlyphidCaste caste,
                         double prevX, double prevY, double prevZ,
@@ -50,14 +47,10 @@ public final class SimGlyphids {
 
     private static final Ghost[] NONE = new Ghost[0];
 
-    /**
-     * Volatile because it is written on the client thread and read from flywheel's workers.
-     */
+    /** Volatile: written on client thread, read by flywheel workers. */
     private static volatile Ghost[] ghosts = NONE;
     private static @Nullable Level level;
-    /**
-     * Client ticks since the last update, for the interpolation between two of them.
-     */
+    /** Ticks since last update; interpolation denominator. */
     private static volatile int sinceUpdate;
     private static int idle;
 
@@ -68,17 +61,12 @@ public final class SimGlyphids {
         return ghosts;
     }
 
-    /**
-     * @return how far between the last two updates this frame is, clamped so a dropped packet leaves the
-     *      swarm standing where it was rather than extrapolating it into the distance.
-     */
+    /** @return interpolation frac, clamped to 1: dropped packet freezes swarm instead of extrapolating. */
     public static float alpha(float partialTick) {
         return Math.min(1.0f, (sinceUpdate + partialTick) / SimGlyphidSyncPacket.INTERVAL);
     }
 
-    /**
-     * Take one update. Called on the client thread from the payload handler.
-     */
+    /** Client thread only; called from payload handler. */
     public static void accept(SimGlyphidSyncPacket packet) {
         Minecraft mc = Minecraft.getInstance();
         Level clientLevel = mc.level;
@@ -133,7 +121,6 @@ public final class SimGlyphids {
         return map;
     }
 
-    /** Advance the interpolation clock. */
     public static void tick() {
         sinceUpdate++;
         if (ghosts.length == 0) {
@@ -154,8 +141,8 @@ public final class SimGlyphids {
     }
 
     /**
-     * @return true if flywheel can draw these at all. With the backend off they are not drawn, which is the
-     *      same trade the entity tier already makes: {@code skipVanillaRender} is set there too.
+     * @return false with flywheel backend off (not drawn); entity tier makes same trade via
+     *      {@code skipVanillaRender}.
      */
     public static boolean drawable(Level candidate) {
         return FlywheelEffectManager.isAvailable(candidate);

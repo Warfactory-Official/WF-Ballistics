@@ -26,6 +26,7 @@ public final class MissilePreset {
     private final ResourceLocation id;
     private final ResourceLocation modelId;
     private final ResourceLocation warheadId;
+    private final String itemPath;
     private final boolean highAltitude;
     private final double altitudeParam; // cruiseAltitude (high) or terrainClearance (terrain follow)
     private final double terrainClearance; // NaN = whatever the cruise mode implies; set to split the two
@@ -67,6 +68,7 @@ public final class MissilePreset {
     private final SeekerMode seekerMode;
     private final float seekerFov;
     private final double radarRange;
+    private final float decoyChance;
     private final float proximity;
     private final float impactDamage;
     private final ThreatKind threatKind;
@@ -83,6 +85,7 @@ public final class MissilePreset {
         this.id = b.id;
         this.modelId = b.modelId;
         this.warheadId = b.warheadId;
+        this.itemPath = b.itemPath != null ? b.itemPath : "missile_" + b.id.getPath();
         this.highAltitude = b.highAltitude;
         this.altitudeParam = b.altitudeParam;
         this.terrainClearance = b.terrainClearance;
@@ -124,6 +127,7 @@ public final class MissilePreset {
         this.seekerMode = b.seekerMode;
         this.seekerFov = b.seekerFov;
         this.radarRange = b.radarRange;
+        this.decoyChance = b.decoyChance;
         this.proximity = b.proximity;
         this.impactDamage = b.impactDamage;
         this.threatKind = b.threatKind;
@@ -147,6 +151,16 @@ public final class MissilePreset {
 
     public ResourceLocation modelId() {
         return modelId;
+    }
+
+    /** Registry path of this preset's item. */
+    public String itemPath() {
+        return itemPath;
+    }
+
+    /** Seeker cone half-angle, degrees. */
+    public float seekerFov() {
+        return seekerFov;
     }
 
     public ResourceLocation warheadId() {
@@ -373,7 +387,7 @@ public final class MissilePreset {
         if (seeker != null) {
             b.seeker(seeker);
         }
-        b.seekerMode(seekerMode, seekerFov, radarRange);
+        b.seekerMode(seekerMode, seekerFov, radarRange).decoyChance(decoyChance);
         b.proximity(proximity).impactDamage(impactDamage).threat(threatKind, caliber, penetration)
                 .blast(blastSize, breaksBlocks).drag(dragK, glides);
         if (gLimit > 0.0) {
@@ -415,6 +429,7 @@ public final class MissilePreset {
         private final ResourceLocation id;
         private final ResourceLocation modelId;
         private final ResourceLocation warheadId;
+        private String itemPath;
         private boolean highAltitude = false;
         private double altitudeParam = 24.0;
         private double terrainClearance = Double.NaN;
@@ -456,6 +471,7 @@ public final class MissilePreset {
         private SeekerMode seekerMode = SeekerMode.DESIGNATED;
         private float seekerFov = 30.0f;
         private double radarRange = 1024.0;
+        private float decoyChance = Float.NaN;
         private float proximity = 0.0f;
         private float impactDamage = 0.0f;
         private ThreatKind threatKind = null;
@@ -747,11 +763,23 @@ public final class MissilePreset {
             return this;
         }
 
+        /** Item registry path; default {@code missile_<id path>}. */
+        public Builder item(String path) {
+            this.itemPath = path;
+            return this;
+        }
+
         /** See {@link MissileBuilder#seekerMode}. */
         public Builder seekerMode(SeekerMode mode, float fov, double radarRange) {
             this.seekerMode = mode;
             this.seekerFov = fov;
             this.radarRange = radarRange;
+            return this;
+        }
+
+        /** See {@link MissileBuilder#decoyChance}. */
+        public Builder decoyChance(float chance) {
+            this.decoyChance = chance;
             return this;
         }
 

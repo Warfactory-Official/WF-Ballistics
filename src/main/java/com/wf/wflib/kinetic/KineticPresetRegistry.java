@@ -118,5 +118,7 @@ public final class KineticPresetRegistry {
 
         register(KineticPreset.builder(rl("practice"), MissileModels.rl("micro"), WarheadRegistry.rl("inert"))
                 .speed(6.0).mass(20.0).build());
+
+        com.wf.wflib.ordnance.VehicleOrdnance.registerKinetic();
     }
 }

@@ -48,7 +48,7 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
 
     private static final int SPIN_LAYER = 0;
 
-    /** The bound of the model as it was last posed, in model space, and whether it has been posed at all. */
+    /** Model-space bound as last posed; {@code bounded} = posed at least once. */
     private final Vector4f bound = new Vector4f();
     private boolean bounded;
 
@@ -116,9 +116,7 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
         return renderer != null && renderer.hasLook();
     }
 
-    /**
-     * Wraps an angle (radians) into [-PI, PI] so a yaw delta across the +/-PI seam stays small.
-     */
+    /** Wraps an angle (radians) into [-PI, PI] so a yaw delta across the +/-PI seam stays small. */
     private static float wrapRadians(float angle) {
         float twoPi = (float) (Math.PI * 2.0);
         angle %= twoPi;
@@ -270,7 +268,7 @@ public class MissileVisual extends AbstractEntityVisual<Projectile> implements D
 
     @Override
     protected void _delete() {
-        // Clean up the instance when the entity despawns or explodes
+        // Entity despawn/explosion hook.
         if (this.instance != null) {
             this.instance.delete();
             this.instance = null;

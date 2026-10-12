@@ -21,11 +21,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Debug block that acts as a missile listener (via its block entity) and, on right-click, launches a
- * simulated interceptor at the nearest simulated missile: a test harness for both listener respawns
- * and simulated interception.
- */
+/** Debug: BE tests listener respawn; right-click launches a sim interceptor at the nearest sim missile. */
 public class MissileListenerDebugBlock extends BaseEntityBlock {
     public static final MapCodec<MissileListenerDebugBlock> CODEC = simpleCodec(MissileListenerDebugBlock::new);
 

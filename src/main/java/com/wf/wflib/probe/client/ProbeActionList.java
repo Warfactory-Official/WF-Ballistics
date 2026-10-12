@@ -1,6 +1,6 @@
 package com.wf.wflib.probe.client;
 
-import com.mojang.blaze3d.vertex.PoseStack;
+import com.wf.gemrender.ui.Canvas;
 import com.wf.wflib.probe.ProbeAction;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -26,9 +26,10 @@ public final class ProbeActionList {
     private static final float BELOW = 0.9f;
 
     private static final int LINE = 9;
-    private static final int GAP = 1;
+    private static final int GAP = 3;
     private static final int ICON_GAP = 3;
     private static final float HINT_SCALE = 0.8f;
+    private static final int HINT_GAP = 3;
 
     private ProbeActionList() {
     }
@@ -38,7 +39,8 @@ public final class ProbeActionList {
     }
 
     /** Widest the list gets, so the panel can be sized before anything is drawn. */
-    public static int width(List<ProbeAction> actions, int selected) {
+    /** @param node node panel: hint names the use key too ({@link ProbeNodes}) */
+    public static int width(List<ProbeAction> actions, int selected, boolean node) {
         Font font = Minecraft.getInstance().font;
         int widest = 0;
         int shown = rows(actions.size());
@@ -46,24 +48,24 @@ public final class ProbeActionList {
             ProbeAction action = actions.get(Math.floorMod(selected + row, actions.size()));
             widest = Math.max(widest, Math.round(rowWidth(font, action) * SCALE[row]));
         }
-        return Math.max(widest, hintWidth(font, actions.size()));
+        return Math.max(widest, hintWidth(font, actions.size(), node));
     }
 
     public static int height(List<ProbeAction> actions) {
         int shown = rows(actions.size());
-        return top(shown, shown) + Math.round(LINE * HINT_SCALE) + 2;
+        return top(shown, shown) + HINT_GAP + Math.round(LINE * HINT_SCALE) + 2;
     }
 
     /**
      * @param offset how far the drawing lags the selection, in rows; see {@link ProbeSelection#offset}.
      */
-    public static void draw(GuiGraphics graphics, List<ProbeAction> actions, int selected, int x, int y,
-                            int width, float offset, float partialTick) {
+    public static void draw(Canvas canvas, GuiGraphics graphics, List<ProbeAction> actions, int selected, int x, int y,
+                            int width, float offset, float partialTick, boolean node) {
         Font font = Minecraft.getInstance().font;
         int shown = rows(actions.size());
 
         if (ProbeInput.scrolling()) {
-            graphics.fill(x - 2, y - 1, x + width + 2, y + Math.round(LINE * SCALE[0]) + 1, 0x40FFFFFF);
+            canvas.fill(x - 2, y - 1, x + width + 2, y + Math.round(LINE * SCALE[0]) + 1, 0x40FFFFFF);
         }
 
         // One row past each end of the list either way, which is where a row on its way in or out is.
@@ -76,30 +78,21 @@ public final class ProbeActionList {
             float scale = scaleAt(slot, shown);
             float alpha = alphaAt(slot, shown);
 
-            PoseStack pose = graphics.pose();
-            pose.pushPose();
-            pose.translate(x, y + topAt(slot, shown), 0);
-            pose.scale(scale, scale, 1.0f);
-
+            canvas.push().translate(x, y + topAt(slot, shown)).scale(scale);
             int textX = iconWidth(action);
             if (textX > 0) {
-                graphics.setColor(1.0f, 1.0f, 1.0f, alpha);
-                ProbeRender.draw(graphics, action.icon(), 0, -1, textX, partialTick);
-                graphics.setColor(1.0f, 1.0f, 1.0f, 1.0f);
+                ProbeRender.draw(canvas, graphics, action.icon(), 0, -1, textX, partialTick, alpha);
                 textX += ICON_GAP;
             }
-            ProbeText.draw(graphics, font, label(action), textX, 0, colour(action, alpha));
-            pose.popPose();
+            ProbeText.draw(canvas, label(action), textX, 0, colour(action, alpha));
+            canvas.pop();
         }
 
-        Component hint = hint(actions.size());
+        Component hint = hint(actions.size(), node);
         if (hint != null) {
-            PoseStack pose = graphics.pose();
-            pose.pushPose();
-            pose.translate(x, y + top(shown, shown) + 1, 0);
-            pose.scale(HINT_SCALE, HINT_SCALE, 1.0f);
-            ProbeText.draw(graphics, font, hint, 0, 0, 0xC0909090);
-            pose.popPose();
+            canvas.push().translate(x, y + top(shown, shown) + HINT_GAP).scale(HINT_SCALE);
+            ProbeText.draw(canvas, hint, 0, 0, 0xC0909090);
+            canvas.pop();
         }
     }
 
@@ -176,18 +169,21 @@ public final class ProbeActionList {
                 ? 0 : ProbeRender.width(action.icon(), 64);
     }
 
-    private static int hintWidth(Font font, int count) {
-        Component hint = hint(count);
+    private static int hintWidth(Font font, int count, boolean node) {
+        Component hint = hint(count, node);
         return hint == null ? 0 : Math.round(font.width(hint) * HINT_SCALE);
     }
 
     /** Names the actual bound keys, because the defaults are the first thing a player rebinds. */
-    private static Component hint(int count) {
+    private static Component hint(int count, boolean node) {
         if (count == 0) {
             return null;
         }
-        Component activate = Component.translatable("probe.wflib.hint.activate",
-                ProbeKeys.ACTIVATE.getTranslatedKeyMessage());
+        Component activate = node
+                ? Component.translatable("probe.wflib.hint.activate_node",
+                        Minecraft.getInstance().options.keyUse.getTranslatedKeyMessage(),
+                        ProbeKeys.ACTIVATE.getTranslatedKeyMessage())
+                : Component.translatable("probe.wflib.hint.activate", ProbeKeys.ACTIVATE.getTranslatedKeyMessage());
         if (count < 2) {
             return activate;
         }

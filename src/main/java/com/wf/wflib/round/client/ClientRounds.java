@@ -9,6 +9,7 @@ import com.wf.wflib.round.RoundNetwork;
 import com.wf.wflib.round.Rounds;
 import com.wf.wflib.round.pen.BlockPen;
 import com.wf.wflib.round.pen.PenTable;
+import com.wf.wflib.round.pen.Ricochet;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
@@ -22,6 +23,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -71,6 +73,8 @@ public final class ClientRounds {
         boolean ended;
         /** Ticks stepped. */
         int age;
+        /** > 0 => tumbling. */
+        int ricochets;
         /** Launch velocity (a prediction's direction vs its server round's). */
         final double ivx, ivy, ivz;
         /** Position correction per tick for {@link #corrTicks} more ticks (prediction re-aimed onto its server round). */
@@ -115,6 +119,7 @@ public final class ClientRounds {
             this.vz = s.vz();
             this.life = s.life();
             this.resting = s.resting();
+            this.ricochets = s.ricochets();
         }
 
         public long key() {
@@ -152,15 +157,29 @@ public final class ClientRounds {
             return this.resting;
         }
 
-        double ix(float pt) {
+        public boolean ended() {
+            return this.ended;
+        }
+
+        /** Client ticks flown. */
+        public int age() {
+            return this.age;
+        }
+
+        /** > 0 => tumbling. */
+        public int ricochets() {
+            return this.ricochets;
+        }
+
+        public double ix(float pt) {
             return this.px + (this.x - this.px) * pt;
         }
 
-        double iy(float pt) {
+        public double iy(float pt) {
             return this.py + (this.y - this.py) * pt;
         }
 
-        double iz(float pt) {
+        public double iz(float pt) {
             return this.pz + (this.z - this.pz) * pt;
         }
     }
@@ -246,7 +265,7 @@ public final class ClientRounds {
             x += vx;
             y += vy;
             z += vz;
-            double decay = r.preset.decay(Math.sqrt(vx * vx + vy * vy + vz * vz));
+            double decay = Ricochet.decay(r.preset, Math.sqrt(vx * vx + vy * vy + vz * vz), s.ricochets() > 0);
             vx *= decay;
             vy = vy * decay - r.preset.gravity();
             vz *= decay;
@@ -281,13 +300,23 @@ public final class ClientRounds {
     }
 
     static void apply(RoundNetwork.RoundPacket pkt) {
+        LongOpenHashSet glanced = null;
+        for (RoundNetwork.Ricochet rc : pkt.ricochets()) {
+            if (rc.surface() == RoundNetwork.Surface.ENTITY) {
+                if (glanced == null) {
+                    glanced = new LongOpenHashSet();
+                }
+                glanced.add(rc.key());
+            }
+        }
         for (RoundNetwork.Spawn s : pkt.spawns()) {
             if (ENDED_LOCALLY.contains(s.key())) {
                 continue;
             }
             Round known = LIVE.get(s.key());
             if (known != null) {
-                if (!known.local) {
+                // Local rounds fly blocks themselves; entities (armour glances) are the server's alone.
+                if (!known.local || glanced != null && glanced.contains(s.key())) {
                     Vec3 before = known.position();
                     known.sync(s);
                     resynced(known, before);
@@ -313,6 +342,18 @@ public final class ClientRounds {
                 }
             }
         }
+        for (RoundNetwork.Ricochet rc : pkt.ricochets()) {
+            if (ENDED_LOCALLY.contains(rc.key())) {
+                revive(pkt, rc.key());
+            }
+            Round known = LIVE.get(rc.key());
+            if (!ENDED_LOCALLY.contains(rc.key())
+                    && (known == null || !known.local || rc.surface() == RoundNetwork.Surface.ENTITY)) {
+                for (RoundObserver o : OBSERVERS) {
+                    o.ricocheted(rc);
+                }
+            }
+        }
         for (RoundNetwork.End e : pkt.ends()) {
             if (ENDED_LOCALLY.remove(e.key())) {
                 continue;
@@ -330,7 +371,7 @@ public final class ClientRounds {
         }
     }
 
-    /** Prediction stopped on a block the server round went through: its latest spawn becomes a plain round. */
+    /** Prediction stopped where its server round went on (pierced, skipped): latest spawn => plain round. */
     private static void revive(RoundNetwork.RoundPacket pkt, long key) {
         for (int k = pkt.spawns().size() - 1; k >= 0; k--) {
             RoundNetwork.Spawn s = pkt.spawns().get(k);
@@ -354,7 +395,7 @@ public final class ClientRounds {
         return LIVE.get(key);
     }
 
-    static Collection<Round> live() {
+    public static Collection<Round> live() {
         return LIVE.values();
     }
 
@@ -369,7 +410,7 @@ public final class ClientRounds {
             clear();
             return;
         }
-        if (mc.isPaused()) {
+        if (mc.isPaused() || !mc.level.tickRateManager().runsNormally()) {
             return;
         }
         tick(mc.level);
@@ -475,7 +516,7 @@ public final class ClientRounds {
         }
         boolean wet = !level.getFluidState(BlockPos.containing(r.x, r.y, r.z)).isEmpty();
         if (r.local) {
-            Vec3 stop = fly(level, r);
+            Vec3 stop = fly(level, r, wet);
             if (stop != null) {
                 return stop;
             }
@@ -484,7 +525,8 @@ public final class ClientRounds {
             r.y += r.vy;
             r.z += r.vz;
         }
-        double decay = r.preset.decay(Math.sqrt(r.vx * r.vx + r.vy * r.vy + r.vz * r.vz));
+        double decay = Ricochet.decay(r.preset, Math.sqrt(r.vx * r.vx + r.vy * r.vy + r.vz * r.vz),
+                r.ricochets > 0);
         float gravity = r.preset.gravity();
         if (wet) {
             decay = (double) (1.0f - Math.max(r.preset.waterDrag(), 0.0f));
@@ -497,18 +539,38 @@ public final class ClientRounds {
     }
 
     /**
-     * Local round's segment against loaded blocks, pierced as the server does ({@code Rounds}: same
-     * {@link BlockPen#pass}, shot seed). @return block stop point; null => moved (velocity replaced on a pierce)
+     * Local round's segment against loaded blocks, pierced and skipped ({@link Ricochet}: water, blocks) as the server
+     * does ({@code Rounds}: same {@link BlockPen#pass}, shot seed). @return block stop point; null => moved (velocity
+     * replaced on a pierce / ricochet)
      */
     @Nullable
-    private static Vec3 fly(ClientLevel level, Round r) {
+    private static Vec3 fly(ClientLevel level, Round r, boolean wet) {
         Vec3 from = new Vec3(r.x, r.y, r.z);
         Vec3 v = new Vec3(r.vx, r.vy, r.vz);
         Vec3 to = from.add(v);
+        long shot = BlockPen.shot(r.shooter, r.seq);
+        boolean skips = r.preset.blockPen() > 0.0f && r.preset.penetration() == 0;
         int pierced = 0;
+        boolean moved = false;
         while (true) {
             BlockHitResult hit = level.clip(new ClipContext(from, to, ClipContext.Block.COLLIDER,
                     ClipContext.Fluid.NONE, CollisionContext.empty()));
+            if (skips && !wet && v.y < 0.0 && r.ricochets < Ricochet.MAX) {
+                BlockHitResult water = Ricochet.water(level, from,
+                        hit.getType() == HitResult.Type.BLOCK ? hit.getLocation() : to);
+                Vec3 out = water == null ? null : Ricochet.bounce(v, Ricochet.UP, Ricochet.WATER, true,
+                        BlockPen.seed(shot, water.getBlockPos()));
+                if (out != null) {
+                    bounced(r, water.getLocation(), Ricochet.UP, RoundNetwork.Surface.WATER, water.getBlockPos());
+                    double left = Math.max(0.0, from.distanceTo(to) - from.distanceTo(water.getLocation()))
+                            / v.length();
+                    v = out;
+                    from = water.getLocation().add(Ricochet.UP.scale(Ricochet.OFF));
+                    to = from.add(v.scale(left));
+                    moved = true;
+                    continue;
+                }
+            }
             if (hit.getType() != HitResult.Type.BLOCK) {
                 break;
             }
@@ -517,9 +579,26 @@ public final class ClientRounds {
             }
             BlockPos pos = hit.getBlockPos();
             BlockState state = level.getBlockState(pos);
-            BlockPen.Pass pass = BlockPen.pass(state.getCollisionShape(level, pos), pos, hit.getLocation(), v,
-                    PenTable.resistance(state), BlockPen.capacity(r.preset.blockPen(), r.preset.muzzleSpeed(),
-                            v.length()), BlockPen.seed(BlockPen.shot(r.shooter, r.seq), pos));
+            VoxelShape shape = state.getCollisionShape(level, pos);
+            double capacity = BlockPen.capacity(r.preset.blockPen() * (r.ricochets > 0 ? Ricochet.TUMBLE_PEN : 1.0f),
+                    r.preset.muzzleSpeed(), v.length());
+            if (skips && r.ricochets < Ricochet.MAX
+                    && (pierced == 0 || from.distanceTo(hit.getLocation()) > Ricochet.OFF)
+                    && Ricochet.holds(capacity, PenTable.resistance(state), shape, hit.getDirection(), v)) {
+                Vec3 n = Vec3.atLowerCornerOf(hit.getDirection().getNormal());
+                Vec3 out = Ricochet.bounce(v, n, PenTable.ricochet(state), false, BlockPen.seed(shot, pos));
+                if (out != null) {
+                    bounced(r, hit.getLocation(), n, RoundNetwork.Surface.BLOCK, pos);
+                    double left = Math.max(0.0, from.distanceTo(to) - from.distanceTo(hit.getLocation())) / v.length();
+                    v = out;
+                    from = hit.getLocation().add(n.scale(Ricochet.OFF));
+                    to = from.add(v.scale(left));
+                    moved = true;
+                    continue;
+                }
+            }
+            BlockPen.Pass pass = BlockPen.pass(shape, pos, hit.getLocation(), v, PenTable.resistance(state), capacity,
+                    BlockPen.seed(shot, pos));
             RoundNetwork.Pierce event = new RoundNetwork.Pierce(r.key, pos.asLong(), hit.getLocation().x,
                     hit.getLocation().y, hit.getLocation().z, hit.getDirection(), pass.point().x, pass.point().y,
                     pass.point().z, pass.exited());
@@ -534,8 +613,9 @@ public final class ClientRounds {
             from = BlockPen.resume(pass.point(), v);
             to = from.add(v.scale(left));
             pierced++;
+            moved = true;
         }
-        if (pierced > 0) {
+        if (moved) {
             r.x = to.x;
             r.y = to.y;
             r.z = to.z;
@@ -548,6 +628,15 @@ public final class ClientRounds {
             r.z += r.vz;
         }
         return null;
+    }
+
+    private static void bounced(Round r, Vec3 at, Vec3 n, RoundNetwork.Surface surface, BlockPos pos) {
+        r.ricochets++;
+        RoundNetwork.Ricochet event = new RoundNetwork.Ricochet(r.key, at.x, at.y, at.z, (float) n.x, (float) n.y,
+                (float) n.z, surface, pos.asLong());
+        for (RoundObserver o : OBSERVERS) {
+            o.ricocheted(event);
+        }
     }
 
     @SubscribeEvent

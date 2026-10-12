@@ -11,10 +11,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.core.registries.BuiltInRegistries;
 
-/**
- * Fills cleared positions that border surviving solid terrain with a "debris" block (rubble/scorched stone), giving
- * craters a ragged lining instead of a clean spherical cut.
- */
+/** Debris only at cells bordering solid terrain: ragged crater edge, not a full fill. */
 public class BlockMutatorDebris implements IBlockMutator {
 
     protected final BlockState debris;
@@ -27,9 +24,7 @@ public class BlockMutatorDebris implements IBlockMutator {
         this.debris = debris;
     }
 
-    /**
-     * Resolves a block by registry id, falling back to stone if the id is unknown.
-     */
+    /** Unknown id falls back to stone. */
     public BlockMutatorDebris(ResourceLocation id) {
         Block block = BuiltInRegistries.BLOCK.get(id);
         this.debris = (block != null ? block : Blocks.STONE).defaultBlockState();

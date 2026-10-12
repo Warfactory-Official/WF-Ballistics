@@ -6,12 +6,9 @@ import net.minecraft.world.item.ArmorItem;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * One authored piece: a garment on a slot, or an insert that goes into one. The same shape as the
- * mod's missile and mine presets, so armour is made the same way everything else here is made.
- *
- * <p>Durability is the single number saying how much the piece can take. Condition is that number at
- * a hundred points to one, so the spec is rebased onto it at registration rather than carrying a
- * second figure that could disagree with it.
+ * Authored piece (garment or insert); same preset shape as this mod's missile/mine presets.
+ * {@code durability} is the single source of truth; the spec is rebased onto it (100x) at
+ * registration rather than carrying an independent figure.
  *
  * @param type  the slot this goes on, or null for an insert
  * @param model a rigged glTF for GemRender to draw, or null to render as a vanilla armour texture
@@ -37,12 +34,10 @@ public record ArmorPreset(ResourceLocation id, @Nullable ArmorItem.Type type, in
         return ResourceLocation.fromNamespaceAndPath(WFLib.MODID, path);
     }
 
-    /** A garment worn on {@code type}. */
     public static Builder piece(String path, ArmorItem.Type type, int durability) {
         return new Builder(path, type, durability);
     }
 
-    /** A plate, a liner or a filter that goes into one. */
     public static Builder insert(String path, int durability) {
         return new Builder(path, null, durability);
     }

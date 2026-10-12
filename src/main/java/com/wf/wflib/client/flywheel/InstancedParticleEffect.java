@@ -6,8 +6,9 @@ import dev.engine_room.flywheel.api.visualization.VisualizationContext;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
+import org.joml.Quaternionf;
+import org.joml.Vector3f;
 
-/** A burst of hot puffs (the cloud an explosion throws out) rendered through GemRender's particle instancer. */
 public class InstancedParticleEffect implements WFFlywheelEffect {
 
     private static final float LIFE_TICKS_MIN = 150F;
@@ -22,7 +23,9 @@ public class InstancedParticleEffect implements WFFlywheelEffect {
 
     private float age;
 
-    public InstancedParticleEffect(Level level, double x, double y, double z, int count, float scale, float speed) {
+    /** {@code vent}: +y -> open side. */
+    public InstancedParticleEffect(Level level, double x, double y, double z, int count, float scale, float speed,
+                                   Quaternionf vent) {
         this.level = level;
         this.cx = x;
         this.cy = y;
@@ -30,14 +33,14 @@ public class InstancedParticleEffect implements WFFlywheelEffect {
         this.emitter = ParticleEmitter.create(WFParticleStyles.puff(), count, x, y, z);
 
         float longest = 0F;
+        Vector3f v = new Vector3f();
         for (int i = 0; i < count; i++) {
             float life = (LIFE_TICKS_MIN + level.random.nextFloat() * LIFE_TICKS_JITTER) / 20F;
             longest = Math.max(longest, life);
 
-            emitter.spawn(x, y, z,
-                    level.random.nextGaussian() * speed * 20.0,
-                    level.random.nextDouble() * 1.0,
-                    level.random.nextGaussian() * speed * 20.0,
+            vent.transform(v.set(level.random.nextGaussian() * speed * 20.0, level.random.nextDouble() * 1.0,
+                    level.random.nextGaussian() * speed * 20.0));
+            emitter.spawn(x, y, z, v.x, v.y, v.z,
                     life,
                     scale * (0.9F + level.random.nextFloat() * 0.2F),
                     level.random.nextFloat() * Mth.TWO_PI,

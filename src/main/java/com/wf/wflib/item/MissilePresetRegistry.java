@@ -136,6 +136,17 @@ public final class MissilePresetRegistry {
                 .ascentStage(FlightStageRegistry.rl("air_launch")).attackStage(FlightStageRegistry.rl("direct"))
                 .seeker(CameraSpec.TV_SEEKER).build());
 
+        // MLRS pod rounds (M142/M270): GPS to the point, steep terminal dive.
+        register(MissilePreset.builder(rl("gmlrs"), MissileModels.rl("guided_rocket"), WarheadRegistry.rl("standard"))
+                .highAltitude(200.0).cruiseSpeed(6.0).turnRate(0.25).health(20.0f)
+                .accel(0.5, 0.6).fuel(MissileEntity.FuelType.SOLID, 1400).build());
+
+        register(MissilePreset.builder(rl("gmlrs_aw"), MissileModels.rl("guided_rocket"),
+                        WarheadRegistry.rl("fragmentation"))
+                .highAltitude(200.0).cruiseSpeed(6.0).turnRate(0.25).health(20.0f)
+                .accel(0.5, 0.6).fuel(MissileEntity.FuelType.SOLID, 1400)
+                .explosionOffset(8.0f).fragmentCount(48).build());
+
         register(MissilePreset.builder(rl("torpedo"), MissileModels.rl("micro"), TorpedoWarhead.ID)
                 .torpedo().highAltitude(8.0).clearance(4.0).cruiseSpeed(0.35).turnRate(0.1)
                 .health(20.0f).accel(0.05, 0.05).fuel(MissileEntity.FuelType.SOLID, 1400).build());
@@ -171,5 +182,7 @@ public final class MissilePresetRegistry {
                 .health(20.0f)
                 .interceptor(MissileSimConfig.DEFAULT_INTERCEPT_CHANCE)
                 .accel(1.3, 1.3).fuel(MissileEntity.FuelType.SOLID, 800).build());
+
+        com.wf.wflib.ordnance.VehicleOrdnance.registerMissiles();
     }
 }

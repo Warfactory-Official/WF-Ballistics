@@ -10,6 +10,7 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import com.mojang.blaze3d.vertex.VertexSorting;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.particle.Particle;
@@ -82,6 +83,11 @@ final class CameraHeatMask {
         RenderSystem.polygonOffset(-1.0f, -10.0f);
         RenderSystem.enablePolygonOffset();
 
+        // The pass restored the caller's projection; a sight's few-degree FOV under it shrinks every body to a speck.
+        Matrix4f savedProjection = RenderSystem.getProjectionMatrix();
+        VertexSorting savedSorting = RenderSystem.getVertexSorting();
+        RenderSystem.setProjectionMatrix(projection, VertexSorting.DISTANCE_TO_ORIGIN);
+
         Frustum frustum = new Frustum(frustumMatrix, projection);
         Vec3 eye = camera.getPosition();
         frustum.prepare(eye.x, eye.y, eye.z);
@@ -116,6 +122,7 @@ final class CameraHeatMask {
             RenderSystem.polygonOffset(0.0f, 0.0f);
             RenderSystem.disablePolygonOffset();
             RenderSystem.depthMask(true);
+            RenderSystem.setProjectionMatrix(savedProjection, savedSorting);
             feed.bindWrite(true);
         }
         return true;
@@ -269,8 +276,19 @@ final class CameraHeatMask {
         b.addVertex(m, dx, dy, dz);
     }
 
+    /**
+     * Feed with a stencil (PiP sight targets; NeoForge gives the chain's targets one too) => depth+stencil image
+     * attached whole: depth from one image + stencil from another = unsupported FBO, every draw discarded.
+     */
     private static void borrowDepthFrom(RenderTarget feed) {
-        GlStateManager._glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
-                GL30.GL_TEXTURE_2D, feed.getDepthTextureId(), 0);
+        if (feed.isStencilEnabled()) {
+            GlStateManager._glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_STENCIL_ATTACHMENT,
+                    GL30.GL_TEXTURE_2D, feed.getDepthTextureId(), 0);
+        } else {
+            GlStateManager._glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_STENCIL_ATTACHMENT,
+                    GL30.GL_TEXTURE_2D, 0, 0);
+            GlStateManager._glFramebufferTexture2D(GL30.GL_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
+                    GL30.GL_TEXTURE_2D, feed.getDepthTextureId(), 0);
+        }
     }
 }

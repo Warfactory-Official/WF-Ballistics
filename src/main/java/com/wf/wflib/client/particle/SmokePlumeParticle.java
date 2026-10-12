@@ -69,18 +69,16 @@ public class SmokePlumeParticle extends TextureSheetParticle {
         super.tick();
         this.roll += this.spin;
         updateSprite();
-        // Full cloud -> less opaque as it ages.
         this.alpha = Math.max(0.0F, 1.0F - (float) this.age / (float) this.lifetime);
     }
 
-    /** Run the sprite animation in reverse: start on the fullest frame, end on the smallest/wispiest. */
+    /** Reverse playback: index lifetime-age => starts full-size, ends smallest/wispiest. */
     private void updateSprite() {
         this.setSprite(this.sprites.get(this.lifetime - this.age, this.lifetime));
     }
 
     @Override
     public float getQuadSize(float partialTicks) {
-        // Full cloud -> smaller as it ages.
         float progress = (this.age + partialTicks) / this.lifetime;
         return this.quadSize * Math.max(0.35F, 1.0F - 0.6F * progress);
     }
@@ -97,6 +95,27 @@ public class SmokePlumeParticle extends TextureSheetParticle {
         public Particle createParticle(SimpleParticleType type, ClientLevel level, double x, double y, double z,
                                        double dx, double dy, double dz) {
             return new SmokePlumeParticle(level, x, y, z, dx, dy, dz, this.sprites);
+        }
+    }
+
+    /** White, 20-40 ticks: smoke-grenade screen. */
+    public static class Screen implements ParticleProvider<SimpleParticleType> {
+
+        private final SpriteSet sprites;
+
+        public Screen(SpriteSet sprites) {
+            this.sprites = sprites;
+        }
+
+        @Override
+        public Particle createParticle(SimpleParticleType type, ClientLevel level, double x, double y, double z,
+                                       double dx, double dy, double dz) {
+            SmokePlumeParticle p = new SmokePlumeParticle(level, x, y, z, dx, dy, dz, this.sprites);
+            float grey = 0.85F + p.random.nextFloat() * 0.15F;
+            p.setColor(grey, grey, grey);
+            p.setLifetime(20 + p.random.nextInt(20));
+            p.gravity = 0.0F;
+            return p;
         }
     }
 }

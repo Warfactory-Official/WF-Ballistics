@@ -10,6 +10,7 @@ import com.wf.wflib.round.DeferredImpacts;
 import com.wf.wflib.round.RoundImpactEvent;
 import com.wf.wflib.round.RoundPierceEvent;
 import com.wf.wflib.round.Rounds;
+import com.wf.wflib.round.pen.BlockDamage;
 import com.wf.wflib.round.pen.BlockPen;
 import com.wf.wflib.round.pen.PenMaterial;
 import com.wf.wflib.util.ForcedChunks;
@@ -154,7 +155,7 @@ public class BlockPenGameTest {
         helper.succeed();
     }
 
-    /** 0.3 mm/m: 97% of the energy through. */
+    /** 0.3 mm/m: 97% of the energy through; toughness 0 => shattered. */
     @GameTest(template = TEMPLATE)
     public static void glassBarelySlowsIt(GameTestHelper helper) {
         Shot s = shoot(helper, Blocks.GLASS);
@@ -162,7 +163,7 @@ public class BlockPenGameTest {
         double ratio = s.velocity.length() / SPEED;
         LOGGER.info("pen: glass speed ratio {}", ratio);
         helper.assertTrue(ratio > 0.98 && ratio < 1.0, "speed ratio " + ratio);
-        helper.assertTrue(s.intact, "glass destroyed");
+        helper.assertFalse(s.intact, "glass intact");
         helper.succeed();
     }
 
@@ -263,7 +264,7 @@ public class BlockPenGameTest {
 
     /**
      * Step cost, 500 rounds x 1 step each, 7 reps: through one plank vs the same segment clear vs stopped in stone.
-     * Logs only.
+     * Damage tracked, never breaks. Logs only.
      */
     @GameTest(template = TEMPLATE, required = false, batch = "wflib_bench", timeoutTicks = 400)
     public static void pierceCost(GameTestHelper helper) {
@@ -271,6 +272,8 @@ public class BlockPenGameTest {
         BlockPos wall = BlockPos.containing(centre(helper, 10.0));
         KineticPreset rifle = KineticPresetRegistry.get(RIFLE);
         StringBuilder out = new StringBuilder();
+        float scale = BlockDamage.toughnessScale;
+        BlockDamage.toughnessScale = 1.0e9f;
         for (Block block : new Block[]{Blocks.AIR, Blocks.OAK_PLANKS, Blocks.STONE, Blocks.AIR, Blocks.OAK_PLANKS,
                 Blocks.STONE}) {
             level.setBlockAndUpdate(wall, block.defaultBlockState());
@@ -287,6 +290,7 @@ public class BlockPenGameTest {
             }
             out.append(String.format(java.util.Locale.ROOT, " %s %.0f ns;", block.getDescriptionId(), best));
         }
+        BlockDamage.toughnessScale = scale;
         level.setBlockAndUpdate(wall, Blocks.AIR.defaultBlockState());
         PIERCES.clear();
         IMPACTS.clear();

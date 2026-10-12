@@ -11,9 +11,6 @@ import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
 /** What a block state means for the order work gets done in, and whether it needs an order at all. */
 public final class Placement {
 
-    /**
-     * How many ordering steps one layer occupies. Two: structure, then the things that hang off it.
-     */
     public static final int TIERS = 2;
     public static final int TIER_STRUCTURAL = 0;
     public static final int TIER_ATTACHMENT = 1;
@@ -21,10 +18,7 @@ public final class Placement {
     private Placement() {
     }
 
-    /**
-     * @return true if this cell should be left out of the plan entirely because building something else
-     *      creates it.
-     */
+    /** True: building something else already creates this cell; left out of the plan entirely. */
     public static boolean derived(BlockState state) {
         if (state.hasProperty(BlockStateProperties.DOUBLE_BLOCK_HALF)
                 && state.getValue(BlockStateProperties.DOUBLE_BLOCK_HALF) == DoubleBlockHalf.UPPER) {
@@ -37,9 +31,7 @@ public final class Placement {
         return state.is(Blocks.PISTON_HEAD) || state.is(Blocks.MOVING_PISTON);
     }
 
-    /**
-     * @return which pass within its layer this state belongs in.
-     */
+    /** Heuristic: no collision shape => attachment (torches, signs, ...), else structural. */
     public static int tier(BlockState state) {
         try {
             return state.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).isEmpty()
@@ -49,17 +41,12 @@ public final class Placement {
         }
     }
 
-    /**
-     * @return the ordering key for building this state at height {@code y}, relative to the bottom of the
-     *      job. Layers ascend, and within a layer the structure goes up before anything hangs off it
-     */
+    /** Layers ascend; within a layer, structure before what hangs off it. */
     public static int buildSequence(int y, BlockState state) {
         return y * TIERS + tier(state);
     }
 
-    /**
-     * @return the ordering key for taking this state down, in a job whose top layer is {@code topY}.
-     */
+    /** Mirror of {@link #buildSequence}: descending from {@code topY}, attachments before structure. */
     public static int salvageSequence(int y, int topY, BlockState state) {
         return (topY - y) * TIERS + (tier(state) == TIER_ATTACHMENT ? TIER_STRUCTURAL : TIER_ATTACHMENT);
     }

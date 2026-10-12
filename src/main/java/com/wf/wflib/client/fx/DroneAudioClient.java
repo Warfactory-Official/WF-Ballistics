@@ -17,14 +17,12 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 
-/** Keeps each drone the client can hear supplied with a rotor loop. */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class DroneAudioClient {
 
-    /** How far off a drone gets a loop started for it. */
-    private static final double AUDIBLE_RANGE = 64.0;
+    private static final double AUDIBLE_RANGE = DroneRotorSound.RANGE;
+    /** +8 margin: covers drone/listener drift across the sweep gap. */
     private static final double START_RANGE_SQR = (AUDIBLE_RANGE + 8.0) * (AUDIBLE_RANGE + 8.0);
-    /** Ticks between sweeps. */
     private static final int SWEEP_INTERVAL = 10;
 
     private static final Set<DroneEntity> DRONES = new HashSet<>();

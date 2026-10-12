@@ -15,12 +15,10 @@ import net.minecraft.world.level.material.Fluids;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * The hydrophone probe. The only one that is waterlogged, because it is the only one that has to be in the
- * water to do anything, and mounting it mid-column rather than on the bottom is how a player picks which side
- * of the thermocline it listens from.
+ * Only waterlogged probe (only one that must be in water). Mid-column vs bottom placement is how a player
+ * picks which side of the thermocline it listens from.
  *
- * <p>A subclass rather than a property on {@link ReconProbeBlock} so the other four keep the blockstate files
- * they already have.
+ * <p>Subclass rather than a {@link ReconProbeBlock} property: keeps the other four kinds' existing blockstate files.
  */
 public class SonarProbeBlock extends ReconProbeBlock implements SimpleWaterloggedBlock {
 

@@ -50,10 +50,7 @@ public class ModModels {
         return partial;
     }
 
-    /**
-     * @return the loose models above (the billboards, the bones, the crate, the bomblet), by model id,
-     *      in the order they are declared. For the model gallery; nothing in the game looks a prop up by id.
-     */
+    /** @return props above, by id, declared order; gallery only, nothing looks a prop up by id. */
     public static Map<ResourceLocation, PartialModel> props() {
         return Collections.unmodifiableMap(PROPS);
     }
@@ -63,17 +60,12 @@ public class ModModels {
         return Collections.unmodifiableMap(PARTS);
     }
 
-    /**
-     * @return whether this missile's <em>own</em> model baked.
-     */
+    /** @return true if this id's own model baked (no {@link MissileModels#DEFAULT} fallback). */
     public static boolean baked(ResourceLocation id) {
         return usableBaked(MISSILES.get(id)) != null;
     }
 
-    /**
-     * @return the baked model for a missile id, falling back to {@link MissileModels#DEFAULT} when the id is
-     *      unknown or its own model failed to bake (missing/unbaked).
-     */
+    /** @return baked model for the id, or {@link MissileModels#DEFAULT} if unknown/unbaked. */
     public static PartialModel missile(ResourceLocation id) {
         PartialModel partial = MISSILES.get(id);
         return usableBaked(partial) != null ? partial : MISSILES.get(MissileModels.DEFAULT);
@@ -101,9 +93,7 @@ public class ModModels {
     public record RenderModel(BakedModel baked, double length, Vec3 center) {
     }
 
-    /**
-     * @return the baked model for a moving part (rotor disc, gripper jaw) or null if it wasn't registered.
-     */
+    /** @return baked model for a moving part (rotor disc, gripper jaw), or null if unregistered. */
     public static PartialModel part(ResourceLocation model) {
         return PARTS.get(model);
     }

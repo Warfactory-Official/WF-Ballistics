@@ -11,9 +11,7 @@ import net.minecraft.world.entity.LivingEntity;
 
 public class CustomDamageHandlerAmat implements ICustomDamageHandler {
 
-    /**
-     * Balefire duration (ticks) applied at the epicentre; falls off to 0 at the blast edge.
-     */
+    /** {@code strength}: fire-ignition ticks at the epicentre. */
     private final float strength;
 
     public CustomDamageHandlerAmat(float strength) {

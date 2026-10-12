@@ -42,18 +42,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
-/**
- * Does the armour system do in the world what the arithmetic says it does?
- *
- * <p>The pure resolver is pinned by {@code ArmorResolverTest} under plain JUnit and needs no game at
- * all. What needs a game is everything around it: that vanilla's armour attributes really are gone
- * so nothing is counted twice, that wear really lands on the plate rather than the carrier it was
- * fitted to, that a helmet really does not protect a shin, and that a hit resolves before anything
- * else reads the damage amount.
- *
- * <p>Victims are villagers with no free will and no gravity: they do not burn in daylight, do not
- * wander out of a three-block arena, and take fall damage from nothing.
- */
+/** Armour system in the world; pure resolver math is {@code ArmorResolverTest} under plain JUnit. */
 @GameTestHolder(WFLib.MODID)
 @PrefixGameTestTemplate(false)
 public class ArmorGameTest {
@@ -63,9 +52,8 @@ public class ArmorGameTest {
     private static final int CARRIER_MAX = 600 * ArmorUnits.POINTS_PER_DAMAGE;
     private static final int STEEL_MAX = 3000 * ArmorUnits.POINTS_PER_DAMAGE;
 
-    // --- wiring ---------------------------------------------------------------------------------
+    // ------------------------------------------------------------------ wiring
 
-    /** Armour nobody can wear is armour nobody can test. */
     @GameTest(template = TEMPLATE)
     public static void everyPresetHasAnItemAndAProfile(GameTestHelper helper) {
         for (ArmorPreset preset : ArmorPresets.all()) {
@@ -90,8 +78,6 @@ public class ArmorGameTest {
                 helper.fail(preset.id() + " does not start pristine");
                 return;
             }
-            // The materials declare iron-grade defense so the master switch has something to fall back
-            // to. While the system is on, none of it may survive as far as a damage calculation.
             for (ItemAttributeModifiers.Entry entry : stack.getAttributeModifiers().modifiers()) {
                 if (entry.attribute() == Attributes.ARMOR || entry.attribute() == Attributes.ARMOR_TOUGHNESS) {
                     helper.fail(preset.id() + " still carries a vanilla " + entry.attribute()
@@ -103,11 +89,6 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
-    /**
-     * Derive-then-strip. Foreign armour gets a profile from its own vanilla numbers, and those numbers
-     * are then taken off it: {@code LivingIncomingDamageEvent} fires before vanilla's armour absorb, so
-     * a piece left holding both would be counted twice.
-     */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void vanillaArmourIsDerivedAndThenStripped(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -150,12 +131,8 @@ public class ArmorGameTest {
         }).thenSucceed();
     }
 
-    // --- where the hit landed --------------------------------------------------------------------
+    // ------------------------------------------------------------------ where the hit landed
 
-    /**
-     * The bug this replaced summed every worn piece regardless of where the hit landed, so a helmet
-     * protected a shin. Per slot, it protects a head and nothing else.
-     */
     @GameTest(template = TEMPLATE)
     public static void aHelmetDoesNotProtectAShin(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -176,10 +153,6 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
-    /**
-     * The whole-entity door has nobody to tell it where the hit landed, so every piece is worth its
-     * share of a body. A lone helmet is an eighth of a set, not the whole of one.
-     */
     @GameTest(template = TEMPLATE)
     public static void theWholeEntityDoorWeightsByCoverage(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -205,9 +178,8 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
-    // --- inserts ---------------------------------------------------------------------------------
+    // ------------------------------------------------------------------ inserts
 
-    /** The plate that ate the round is the thing that wears out, not the carrier it was fitted to. */
     @GameTest(template = TEMPLATE)
     public static void theInsertWearsRatherThanTheCarrier(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -241,11 +213,6 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
-    /**
-     * Hardness, and the reason it exists. A fully stopped hit hands all of its energy to the armour, so
-     * volume fire would otherwise be the cheapest way through expensive plate. Below hardness a hit
-     * marks the plate instead of biting it, so grapeshot cannot grind down steel it cannot defeat.
-     */
     @GameTest(template = TEMPLATE)
     public static void hardnessStopsVolumeFireGrindingDownPlate(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -254,7 +221,7 @@ public class ArmorGameTest {
         victim.setItemSlot(EquipmentSlot.CHEST, carrier);
         DamageSource kinetic = source(helper, WFDamageTypes.PHYSICAL);
 
-        // Eight pellets of four: thirty-two points of incoming damage, none of it through.
+        // 8x4 = 32 incoming, all stopped (below hardness).
         for (int i = 0; i < 8; i++) {
             ArmorResult pellet = ArmorSystem.resolveSlot(victim, EquipmentSlot.CHEST, kinetic, 4.0F, true);
             if (pellet.outcome() != ArmorOutcome.STOPPED) {
@@ -264,7 +231,7 @@ public class ArmorGameTest {
         }
         int plateFromBuckshot = STEEL_MAX - condition(ArmorStacks.inserts(carrier).get(0));
 
-        // One round of thirty, which is less incoming damage and more than five times the wear.
+        // One 30 round: less total incoming, far more wear than the volley.
         ItemStack fresh = stack("plate_carrier");
         ArmorStacks.setInserts(fresh, List.of(stack("steel_plate")));
         victim.setItemSlot(EquipmentSlot.CHEST, fresh);
@@ -289,11 +256,6 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
-    /**
-     * A plate that shatters stops working and stays where it is. Ceramic has no worn floor, so a dead
-     * one contributes nothing at all, and the carrier is back to being a vest. It is not ejected: a
-     * plate that fell into the world mid-firefight would be a silently lost item.
-     */
     @GameTest(template = TEMPLATE)
     public static void aDeadCeramicPlateStopsWorkingAndStaysIn(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -317,12 +279,8 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
-    // --- storage ----------------------------------------------------------------------------------
+    // ------------------------------------------------------------------ storage
 
-    /**
-     * Condition is inflated a hundred to one and still lives in vanilla durability, so the bar moves
-     * and the anvil works. The round trip through that has to be exact.
-     */
     @GameTest(template = TEMPLATE)
     public static void conditionSurvivesTheRoundTripThroughDurability(GameTestHelper helper) {
         ItemStack plate = stack("steel_plate");
@@ -336,7 +294,7 @@ public class ArmorGameTest {
                 return;
             }
         }
-        // Wearing in small steps must land in the same place as wearing in one.
+        // 37 small wears == one big wear: no rounding drift.
         ItemStack a = stack("steel_plate");
         ItemStack b = stack("steel_plate");
         for (int i = 0; i < 37; i++) {
@@ -350,13 +308,8 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
-    // --- the damage pipeline ----------------------------------------------------------------------
+    // ------------------------------------------------------------------ the damage pipeline
 
-    /**
-     * The ordering fix, pinned. Both mods used to sit at {@code NORMAL} on this event, so which one saw
-     * the raw damage was decided by mod load order, and WFMedical reads that amount as wound energy.
-     * Armour resolves at {@code HIGH} now, so a listener at {@code NORMAL} sees what got through.
-     */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void armourResolvesBeforeAnyoneReadsTheAmount(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -395,11 +348,6 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
-    /**
-     * Vanilla charges a quarter of the incoming damage to armour durability per hit; this system
-     * charges what the armour actually absorbed, per layer. Leaving both on would wear a plate out at
-     * roughly twice the rate and the halves would disagree about which layer did the work.
-     */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void vanillaDoesNotAlsoChargeDurability(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -432,11 +380,6 @@ public class ArmorGameTest {
         }).thenSucceed();
     }
 
-    /**
-     * Sustained fire is the second way through armour, and the reason an ineffective gun is tactical
-     * rather than broken: condition scales the threshold, so emptying a magazine into steel is doing
-     * durability and then it is doing damage.
-     */
     @GameTest(template = TEMPLATE)
     public static void aSpentPlateStopsStoppingThings(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -472,13 +415,8 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
-    // --- exposure ---------------------------------------------------------------------------------
+    // ------------------------------------------------------------------ exposure
 
-    /**
-     * Walking into the gas is a splash and costs a share of maximum condition at once; staying in it is
-     * a timed decay; and a hazard at or below the suit's tier for that type costs nothing at all, for as
-     * long as you like. That last clause is the whole reason to own a sealed suit.
-     */
     @GameTest(template = TEMPLATE, timeoutTicks = 300)
     public static void aRatedSuitShrugsOffGasThatRuinsAVest(GameTestHelper helper) {
         LivingEntity inVest = victim(helper, 1);
@@ -489,9 +427,6 @@ public class ArmorGameTest {
         inSuit.setItemSlot(EquipmentSlot.CHEST, suit);
         int suitMax = ArmorProfiles.specFor(suit).maxCondition();
 
-        // A cloud dealing 150 condition points an interval, against a hazmat rating of 200. Under the
-        // rating, so the suit accrues nothing at all however long it stands there; the vest, rated for
-        // nothing, pays all 150 of it every interval.
         helper.startSequence()
                 .thenExecuteFor(120, () -> {
                     ArmorExposure.contact(inVest, ProtectionType.CHEMICAL, 150.0D);
@@ -525,7 +460,6 @@ public class ArmorGameTest {
                 .thenSucceed();
     }
 
-    /** Being on fire is contact too, and nothing had to be told about it: the built-in source polls it. */
     @GameTest(template = TEMPLATE, timeoutTicks = 300)
     public static void burningEatsArmourWithNobodyPushingIt(GameTestHelper helper) {
         LivingEntity victim = victim(helper, 1);
@@ -547,12 +481,8 @@ public class ArmorGameTest {
                 .thenSucceed();
     }
 
-    // --- fixtures ---------------------------------------------------------------------------------
+    // ------------------------------------------------------------------ fixtures
 
-    /**
-     * A villager with no free will and no gravity: it does not burn in daylight the way a zombie does,
-     * does not wander out of a three-block arena, and cannot fall out of one either.
-     */
     private static LivingEntity victim(GameTestHelper helper, int x) {
         Villager villager = helper.spawnWithNoFreeWill(EntityType.VILLAGER, new BlockPos(x, 2, 1));
         villager.setNoGravity(true);

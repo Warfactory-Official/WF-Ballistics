@@ -12,13 +12,8 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.material.Fluid;
 import net.neoforged.neoforge.client.extensions.common.IClientFluidTypeExtensions;
 
-/**
- * Client-only renderer of a {@link MistEntity}: fills its bounding box with tinted {@link MistParticle}s every
- * tick.
- */
 public final class MistClientFX {
 
-    /** Particles per block of cloud volume per tick, and the per-entity cap. */
     private static final double PARTICLE_DENSITY = 0.06;
     private static final int MAX_PARTICLES = 120;
 
@@ -60,6 +55,6 @@ public final class MistClientFX {
     private static int fluidTint(Fluid fluid) {
         int argb = IClientFluidTypeExtensions.of(fluid).getTintColor();
         int rgb = argb & 0xFFFFFF;
-        return rgb == 0xFFFFFF ? 0xC0C0C0 : rgb; // grey fallback for untinted fluids
+        return rgb == 0xFFFFFF ? 0xC0C0C0 : rgb; // untinted (white) => grey, not white
     }
 }

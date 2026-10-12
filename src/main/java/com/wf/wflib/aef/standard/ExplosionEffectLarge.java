@@ -20,15 +20,11 @@ public class ExplosionEffectLarge implements IExplosionSFX {
         float cloudSpeed = Mth.clamp(size * 0.04F, 0.5F, 2F);
         float waveScale = Mth.clamp(size, 25F, 65F);
         int debrisCount = (int) Mth.clamp(size * 0.5F, 5F, 25F);
-        int debrisSize = (int) Mth.clamp(size, 8F, 16F); // hard cap: WorldInAJar is debrisSize^3 blocks
-        int debrisRetry = 50;
         float debrisVelocity = Mth.clamp(size * 0.06F, 0.75F, 1.25F);
-        float debrisHDev = Mth.clamp(size * 0.12F, 1F, 3F);
-        float debrisVOff = -2F;
         float soundRange = Mth.clamp(size * 4F, 150F, 350F);
 
         ExplosionCreator.composeEffect(level, x, y, z,
                 cloudCount, cloudScale, cloudSpeed, waveScale,
-                debrisCount, debrisSize, debrisRetry, debrisVelocity, debrisHDev, debrisVOff, soundRange);
+                debrisCount, debrisVelocity, soundRange);
     }
 }

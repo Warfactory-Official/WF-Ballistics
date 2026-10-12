@@ -12,23 +12,16 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 
 import java.util.List;
 
-/** Area damage against the glyphids that have no entity to be found by an entity query. */
+/** Blast damage against simulated glyphids; they have no entity, so an entity query misses them. */
 public final class SimGlyphidBlast {
 
-    /**
-     * Height above the record's feet the cover ray is aimed at, roughly where a glyphid's back is.
-     */
+    /** LOS target height above feet (~glyphid's back). */
     private static final double EYE = 0.6;
 
     private SimGlyphidBlast() {
     }
 
-    /**
-     * Damage the records this blast reaches.
-     *
-     * @param processor the blast's own entity processor, so the falloff curve, the range mutator and the
-     *      blast shape are the ones it would have used on an entity
-     */
+    /** @param processor source of falloff curve, range mutator, blast shape (parity with a real-entity hit) */
     public static void damage(EntityProcessorCross processor, ExplosionAEF explosion, Level level,
                               double x, double y, double z, float size) {
         if (!(level instanceof ServerLevel server)) {
@@ -72,9 +65,7 @@ public final class SimGlyphidBlast {
         SimGlyphidManager.tier(server).setDirty();
     }
 
-    /**
-     * @return 1 with a clear line to the record, 0 with a block in the way.
-     */
+    /** @return 1 clear line to the record, 0 if blocked (binary, unlike real-entity density). */
     private static double seen(ServerLevel level, Vec3 centre, SimGlyphid sim) {
         Vec3 target = new Vec3(sim.x, sim.y + EYE, sim.z);
         return level.clip(new ClipContext(centre, target, ClipContext.Block.COLLIDER,

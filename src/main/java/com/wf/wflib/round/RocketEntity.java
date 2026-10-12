@@ -131,7 +131,7 @@ public class RocketEntity extends Entity implements InterceptTarget, ThreatSourc
         Vec3 end = block.getType() == HitResult.Type.MISS ? to : block.getLocation();
         for (Rounds.EntityHit eh : Rounds.entityHits(level, from, end, canHit, RoundDamageSource.LIVE)) {
             ProjectileStrikeEvent strike = Rounds.strike(level, this.preset, this, this, eh, from, end, v,
-                    this.shooter, this.faction, 1.0f);
+                    this.shooter, this.faction, 1.0f, false, false);
             if (this.isRemoved()) {
                 return;
             }

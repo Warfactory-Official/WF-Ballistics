@@ -40,16 +40,16 @@ class ClientRoundsTest {
     }
 
     private static RoundNetwork.Spawn spawn(long key, double y, boolean resting) {
-        return new RoundNetwork.Spawn(key, PRESET, 0.0, y, 0.0, 0.0, -1.0, 0.0, 40, resting, 7, (int) key);
+        return new RoundNetwork.Spawn(key, PRESET, 0.0, y, 0.0, 0.0, -1.0, 0.0, 40, resting, 7, (int) key, 0);
     }
 
     /** Spawn and end in separate packets, both before a client tick: one tick to the end point, then the end. */
     @Test
     void anEndBeforeTheFirstTickIsReplayed() {
         EVENTS.clear();
-        ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(spawn(101, 10.0, false)), List.of(), List.of()));
+        ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(spawn(101, 10.0, false)), List.of(), List.of(), List.of()));
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(),
-                List.of(new RoundNetwork.End(101, 0.0, 9.0, 0.0, RoundEnd.BLOCK)), List.of()));
+                List.of(new RoundNetwork.End(101, 0.0, 9.0, 0.0, RoundEnd.BLOCK)), List.of(), List.of()));
         assertEquals(List.of(), EVENTS, "ended before any tick");
         ClientRounds.tick(null);
         assertEquals(List.of("tick 101 (0.0, 9.0, 0.0)", "end 101 BLOCK"), EVENTS);
@@ -59,14 +59,14 @@ class ClientRoundsTest {
     @Test
     void aResyncKeepsTheRoundObject() {
         EVENTS.clear();
-        ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(spawn(102, 10.0, true)), List.of(), List.of()));
+        ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(spawn(102, 10.0, true)), List.of(), List.of(), List.of()));
         ClientRounds.tick(null);
         ClientRounds.Round held = ClientRounds.byShot(7, 102).get(0);
-        ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(spawn(102, 5.0, true)), List.of(), List.of()));
+        ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(spawn(102, 5.0, true)), List.of(), List.of(), List.of()));
         assertSame(held, ClientRounds.byShot(7, 102).get(0));
         assertEquals(5.0, held.position().y);
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(),
-                List.of(new RoundNetwork.End(102, 0.0, 5.0, 0.0, RoundEnd.FUSE)), List.of()));
+                List.of(new RoundNetwork.End(102, 0.0, 5.0, 0.0, RoundEnd.FUSE)), List.of(), List.of()));
         assertEquals(List.of(), ClientRounds.byShot(7, 102));
         assertEquals("end 102 FUSE", EVENTS.get(EVENTS.size() - 1));
     }
@@ -79,14 +79,14 @@ class ClientRoundsTest {
         ClientRounds.Round predicted = ClientRounds.byShot(7, 500).get(0);
         assertEquals(true, predicted.key() < 0, "local key");
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(
-                new RoundNetwork.Spawn(9001, PRESET, 0.0, 50.0, 0.0, 0.0, 0.0, 4.0, 40, false, 7, 500)), List.of(), List.of()));
+                new RoundNetwork.Spawn(9001, PRESET, 0.0, 50.0, 0.0, 0.0, 0.0, 4.0, 40, false, 7, 500, 0)), List.of(), List.of(), List.of()));
         List<ClientRounds.Round> shot = ClientRounds.byShot(7, 500);
         assertEquals(1, shot.size(), "server copy drawn beside the prediction");
         assertSame(predicted, shot.get(0));
         assertEquals(9001, predicted.key());
         assertEquals(new Vec3(1, 2, 3), predicted.position(), "prediction snapped to the lagging server state");
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(),
-                List.of(new RoundNetwork.End(9001, 0.0, 9.0, 0.0, RoundEnd.ENTITY)), List.of()));
+                List.of(new RoundNetwork.End(9001, 0.0, 9.0, 0.0, RoundEnd.ENTITY)), List.of(), List.of()));
         ClientRounds.tick(null);
         assertEquals(List.of(), ClientRounds.byShot(7, 500));
         assertEquals("end 9001 ENTITY", EVENTS.get(EVENTS.size() - 1));
@@ -99,14 +99,14 @@ class ClientRoundsTest {
         ClientRounds.predict(PRESET, 7, 700, new Vec3(1, 2, 3), new Vec3(0, 0, 4), 5);
         ClientRounds.Round predicted = ClientRounds.byShot(7, 700).get(0);
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(
-                new RoundNetwork.Spawn(9003, PRESET, 1.0, 2.0, 3.0, 0.4, 0.0, 4.0, 40, false, 7, 700)), List.of(), List.of()));
+                new RoundNetwork.Spawn(9003, PRESET, 1.0, 2.0, 3.0, 0.4, 0.0, 4.0, 40, false, 7, 700, 0)), List.of(), List.of(), List.of()));
         List<ClientRounds.Round> shot = ClientRounds.byShot(7, 700);
         assertEquals(1, shot.size());
         assertSame(predicted, shot.get(0));
         assertEquals(new Vec3(0.4, 0.0, 4.0), predicted.velocity(), "server direction taken");
         assertEquals(ClientRounds.CORRECT_TICKS, predicted.corrTicks);
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(),
-                List.of(new RoundNetwork.End(9003, 0.0, 9.0, 0.0, RoundEnd.ENTITY)), List.of()));
+                List.of(new RoundNetwork.End(9003, 0.0, 9.0, 0.0, RoundEnd.ENTITY)), List.of(), List.of()));
         ClientRounds.tick(null);
         assertEquals("end 9003 ENTITY", EVENTS.get(EVENTS.size() - 1), "server end kept");
     }
@@ -120,11 +120,11 @@ class ClientRoundsTest {
         predicted.ended = true;
         ClientRounds.live().remove(predicted);
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(
-                new RoundNetwork.Spawn(9004, PRESET, 0.0, 0.0, 0.0, 0.4, 0.0, 4.0, 40, true, 7, 800)), List.of(), List.of()));
+                new RoundNetwork.Spawn(9004, PRESET, 0.0, 0.0, 0.0, 0.4, 0.0, 4.0, 40, true, 7, 800, 0)), List.of(), List.of(), List.of()));
         List<ClientRounds.Round> shot = ClientRounds.byShot(7, 800);
         assertTrue(shot.size() == 1 && shot.get(0).key() == 9004, "server round swallowed: " + shot);
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(),
-                List.of(new RoundNetwork.End(9004, 0.0, 9.0, 0.0, RoundEnd.ENTITY)), List.of()));
+                List.of(new RoundNetwork.End(9004, 0.0, 9.0, 0.0, RoundEnd.ENTITY)), List.of(), List.of()));
         ClientRounds.tick(null);
         assertEquals("end 9004 ENTITY", EVENTS.get(EVENTS.size() - 1));
     }
@@ -139,10 +139,10 @@ class ClientRoundsTest {
         assertEquals(1, EVENTS.size());
         assertTrue(EVENTS.get(0).startsWith("end -") && EVENTS.get(0).endsWith(" CLEARED"), EVENTS.get(0));
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(
-                new RoundNetwork.Spawn(9002, PRESET, 0.0, 50.0, 0.0, 0.0, 0.0, 4.0, 40, true, 7, 600)), List.of(), List.of()));
+                new RoundNetwork.Spawn(9002, PRESET, 0.0, 50.0, 0.0, 0.0, 0.0, 4.0, 40, true, 7, 600, 0)), List.of(), List.of(), List.of()));
         assertEquals(9002, ClientRounds.byShot(7, 600).get(0).key());
         ClientRounds.apply(new RoundNetwork.RoundPacket(List.of(),
-                List.of(new RoundNetwork.End(9002, 0.0, 9.0, 0.0, RoundEnd.ENTITY)), List.of()));
+                List.of(new RoundNetwork.End(9002, 0.0, 9.0, 0.0, RoundEnd.ENTITY)), List.of(), List.of()));
         ClientRounds.tick(null);
     }
 }

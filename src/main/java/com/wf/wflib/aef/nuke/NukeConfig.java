@@ -1,27 +1,21 @@
 package com.wf.wflib.aef.nuke;
 
-/** Tunables for the multi-tick nuclear explosion (ported from HBM's {@code ConfigBomb}). */
+/** Tunables for the multi-tick nuclear explosion, ported from HBM's {@code ConfigBomb}. */
 public final class NukeConfig {
 
     /**
-     * Which ray algorithm {@link com.wf.wflib.entity.EntityNukeExplosionMK5} uses: {@code 0} = legacy
-     * batched, {@code 1} = threaded DDA, {@code 2} = threaded DDA + damage accumulation.
+     * {@link com.wf.wflib.entity.EntityNukeExplosionMK5} ray algorithm: {@code 0} legacy batched, {@code 1}
+     * threaded DDA, {@code 2} threaded DDA + damage accumulation.
      */
     public static int explosionAlgorithm = 2;
 
-    /**
-     * Allow the parallelized algorithm to snapshot (and generate) not-yet-loaded chunks.
-     */
+    /** Parallelized algorithm: snapshot + generate not-yet-loaded chunks. */
     public static boolean chunkloading = false;
 
-    /**
-     * Blocks cleared per destruction-tick budget (parallelized algorithm).
-     */
+    /** Parallelized algorithm: blocks cleared per destruction-tick budget. */
     public static int blastSpeed = 1024;
 
-    /**
-     * Milliseconds per tick budgeted to the parallelized algorithm's caching + destruction work.
-     */
+    /** Parallelized algorithm: ms/tick budgeted to caching + destruction. */
     public static int mk5BlastTime = 50;
 
     private NukeConfig() {

@@ -1,11 +1,8 @@
 package com.wf.wflib.client.fx;
 
 import com.wf.wflib.WFLib;
-import com.wf.wflib.WFSounds;
 import com.wf.wflib.network.MissileFlightAudioPacket;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.sounds.SoundEvent;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -24,18 +21,14 @@ public final class MissileAudioClient {
     private MissileAudioClient() {
     }
 
-    /** Start or refresh the loop for the missile in this heartbeat. Runs on the client main thread. */
+    /** Client main thread only; {@code ACTIVE} isn't synchronized. */
     public static void upsert(MissileFlightAudioPacket pkt) {
         RemoteMissileFlightSound existing = ACTIVE.get(pkt.id());
         if (existing != null && !existing.isDone()) {
             existing.update(pkt);
             return;
         }
-        SoundEvent sound = BuiltInRegistries.SOUND_EVENT.getOptional(pkt.sound()).orElse(null);
-        if (sound == null) {
-            sound = WFSounds.MISSILE_FLIGHT.get();
-        }
-        RemoteMissileFlightSound instance = new RemoteMissileFlightSound(sound, pkt);
+        RemoteMissileFlightSound instance = new RemoteMissileFlightSound(pkt);
         ACTIVE.put(pkt.id(), instance);
         Minecraft.getInstance().getSoundManager().play(instance);
     }
@@ -49,7 +42,6 @@ public final class MissileAudioClient {
             ACTIVE.clear();
             return;
         }
-        // Drop loops that have stopped (timed out on their own tick, or were culled by the sound engine).
         Iterator<Map.Entry<UUID, RemoteMissileFlightSound>> it = ACTIVE.entrySet().iterator();
         while (it.hasNext()) {
             if (it.next().getValue().isDone()) {

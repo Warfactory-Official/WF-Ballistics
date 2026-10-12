@@ -39,6 +39,8 @@ final class RoundBatch {
     UUID[][] viewers = new UUID[64][];
     /** Last step flew a segment over unloaded chunks only. */
     boolean[] dark = new boolean[64];
+    /** Ricochets so far; > 0 => tumbling. */
+    byte[] ricochets = new byte[64];
 
     int add(long key, KineticPreset preset, double x, double y, double z, double vx, double vy, double vz,
             int shooter, @Nullable UUID faction, float damageScale, int rewind, int seq) {
@@ -64,6 +66,7 @@ final class RoundBatch {
             this.seq = Arrays.copyOf(this.seq, n);
             this.viewers = Arrays.copyOf(this.viewers, n);
             this.dark = Arrays.copyOf(this.dark, n);
+            this.ricochets = Arrays.copyOf(this.ricochets, n);
         }
         int i = this.size++;
         this.key[i] = key;
@@ -86,6 +89,7 @@ final class RoundBatch {
         this.seq[i] = seq;
         this.viewers[i] = NO_VIEWERS;
         this.dark[i] = false;
+        this.ricochets[i] = 0;
         return i;
     }
 
@@ -112,6 +116,7 @@ final class RoundBatch {
             this.seq[i] = this.seq[last];
             this.viewers[i] = this.viewers[last];
             this.dark[i] = this.dark[last];
+            this.ricochets[i] = this.ricochets[last];
         }
         this.preset[last] = null;
         this.faction[last] = null;

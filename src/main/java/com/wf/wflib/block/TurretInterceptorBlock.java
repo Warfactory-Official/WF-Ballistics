@@ -16,10 +16,6 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
-/**
- * Auto-defense interceptor battery block: hosts a {@link TurretInterceptorBlockEntity} that automatically launches
- * guided interceptor missiles at nearby hostile missiles.
- */
 public class TurretInterceptorBlock extends BaseEntityBlock {
 
     public static final MapCodec<TurretInterceptorBlock> CODEC = RecordCodecBuilder.mapCodec(inst -> inst.group(

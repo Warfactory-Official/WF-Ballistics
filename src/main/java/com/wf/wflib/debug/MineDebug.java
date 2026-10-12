@@ -1,9 +1,6 @@
 package com.wf.wflib.debug;
 
-/**
- * Toggle for the mine overlay: the trigger volume each mine is actually watching, the shorter one a crouching
- * approach gets, and (for a directional fuse) the wedge and the way it is pointing.
- */
+/** Mine overlay: per-mine trigger volume, crouch-shrunk volume, directional-fuse wedge + facing. */
 public final class MineDebug {
 
     private static volatile boolean renderAreas = false;

@@ -42,7 +42,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
     private static final List<ResourceLocation> FORMATIONS = new ArrayList<>(Formations.ids());
     private static final List<ResourceLocation> COORDINATION = new ArrayList<>(CoordinationModels.ids());
     private static final List<ResourceLocation> WARHEADS = new ArrayList<>(WarheadRegistry.ids());
-    /** The mines a rack can be loaded with, air-delivered first. */
+    /** Mines a rack can load; air-delivered first. */
     private static final List<ResourceLocation> MINES = mineChoices();
     private static final String[] KIND_LABELS = {"Delivery (crate)", "Strike (warhead)", "Minelay (rack)"};
 
@@ -125,10 +125,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         return box != null ? box.getValue() : fallback;
     }
 
-    /**
-     * Load whatever the pad already has stored, so reopening the screen shows the real mission rather than
-     * defaults.
-     */
+    /** Loads the pad's stored mission; reopening shows real state, not defaults. */
     private void seed() {
         if (this.seeded || this.minecraft == null || this.minecraft.level == null) {
             return;
@@ -150,10 +147,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         }
     }
 
-    /**
-     * @return where a freshly added program step should default to: whatever destination is currently typed
-     *      in, falling back to the pad itself. Saves retyping a coordinate that is already on screen.
-     */
+    /** New program step defaults to the typed destination, else the pad; avoids retyping it. */
     private Vec3 destinationOrPad() {
         if (destX != null) {
             return new Vec3(parseDouble(destX.getValue(), menu.pos().getX()),
@@ -210,12 +204,12 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
 
         modeButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
             mode = mode.next();
-            // The layout changes with the mode, so rebuild rather than trying to toggle widgets in place.
+            // Layout depends on mode => rebuild rather than toggle widgets in place.
             this.rebuildWidgets();
         }).bounds(x, y, W_FULL, BTN_H).build());
         y += BTN_H + ROW_GAP;
 
-        // Destination: defaults to the pad's own position so a fresh pad is obviously unconfigured.
+        // Defaults to the pad's own position: a fresh pad reads as obviously unconfigured.
         BlockPos self = menu.pos();
         String defX = prev(destX, Integer.toString(self.getX()));
         String defY = prev(destY, Integer.toString(self.getY()));
@@ -326,7 +320,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
             warheadButton.setMessage(Component.literal("Mine: "
                     + MINES.get(Math.floorMod(mineIndex, MINES.size())).getPath()));
         } else {
-            // Greyed rather than hidden on a delivery, so the layout doesn't jump when the kind is toggled.
+            // Greyed not hidden on delivery: layout doesn't jump when kind toggles.
             warheadButton.setMessage(Component.literal((isStrike() ? "Warhead: " : "(warhead) ")
                     + WARHEADS.get(Math.floorMod(warheadIndex, WARHEADS.size())).getPath()));
         }
@@ -384,9 +378,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
         WFNetwork.sendToServer(new DronePadConfigPacket(menu.pos(), buildMission(), action));
     }
 
-    /**
-     * The debug readout: what this mission will actually do, computed with the flight's own maths.
-     */
+    /** Debug readout: mission outcome via DroneFlight's own math, so the preview stays honest. */
     private List<Component> readout() {
         List<Component> lines = new ArrayList<>(4);
         DroneMission m = buildMission();
@@ -437,7 +429,7 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
                             (int) (lead + m.mines.laneLength() * 0.5)))
                     .withStyle(s -> s.withColor(0xC0A0E0)));
         } else if (isStrike()) {
-            // Show the actual release solution the attack run will use, from cruise altitude at release speed.
+            // Release solution the actual attack run uses: cruise altitude, release speed.
             double lead = Steering.ballisticLead(m.cruiseAltitude, 0.0, m.releaseSpeed, Tuning.PAYLOAD_GRAVITY);
             lines.add(Component.literal(String.format("Release %dm short of target, %d bomb(s) of %s",
                             (int) lead, m.count, m.payloadId.getPath()))
@@ -508,8 +500,6 @@ public class DronePadScreen extends AbstractContainerScreen<DronePadMenu> {
 
         this.renderTooltip(gg, mouseX, mouseY);
     }
-
-    // --- keep typing inside edit boxes from triggering the inventory-close key ---
 
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {

@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
 import java.util.List;
 import java.util.Set;
 
-/** Gates the mod's mixins that are incompatible with third-party chunk renderers. */
+/** Gates mixins incompatible with third-party chunk renderers, and those targeting optional mods. */
 public class WFMixinPlugin implements IMixinConfigPlugin {
 
     private static boolean isSodiumFamilyLoaded() {
@@ -39,6 +39,12 @@ public class WFMixinPlugin implements IMixinConfigPlugin {
         }
         if (mixinClassName.contains(".gt.")) {
             return isModLoaded("gtceu");
+        }
+        if (mixinClassName.contains(".xaero.worldmap.")) {
+            return isModLoaded("xaeroworldmap");
+        }
+        if (mixinClassName.contains(".xaero.minimap.")) {
+            return isModLoaded("xaerominimap");
         }
         return true;
     }

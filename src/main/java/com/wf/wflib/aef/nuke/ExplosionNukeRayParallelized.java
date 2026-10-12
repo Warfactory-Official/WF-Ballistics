@@ -23,18 +23,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.DoubleAdder;
 
 /**
- * Fast raytracing explosion for mk5
- *
- * @author mlbv
+ * {@link NukeConfig#explosionAlgorithm} 1 (immediate) and 2 (damage-accumulated, see {@link #runConsolidation}) both
+ * run here, branched in {@link RayTask#trace}; {@code 0} is {@link ExplosionNukeRayBatched}.
  */
 public class ExplosionNukeRayParallelized implements IExplosionRay {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
     private static final float NUKE_RESISTANCE_CUTOFF = 2_000_000F;
-    private static final float INITIAL_ENERGY_FACTOR = 0.3F; // Scales the initial energy of the explosion, affects crater size
-    private static final double RESOLUTION_FACTOR = 1.0; // Scales ray density, affects performance and fidelity
-    private static final int BLOCK_TIME_CHECK_INTERVAL = 256;
+    private static final float INITIAL_ENERGY_FACTOR = 0.3F; // Crater size.
+    private static final double RESOLUTION_FACTOR = 1.0; // Ray density: perf vs fidelity.
+    private static final int BLOCK_TIME_CHECK_INTERVAL = 256; // Power of two: used below as a bitmask, not a modulo.
     private static final int CLIENT_CHUNK_UPDATES_PER_TICK = 8;
 
     private final int minY;
@@ -102,7 +101,7 @@ public class ExplosionNukeRayParallelized implements IExplosionRay {
 
         this.rayQueue = new LinkedBlockingQueue<>();
 
-        int workers = Math.max(1, Math.min(6, Runtime.getRuntime().availableProcessors() - 2));
+        int workers = Math.max(1, Math.min(6, Runtime.getRuntime().availableProcessors() - 2)); // Leaves 2 cores free.
         this.pool = Executors.newWorkStealingPool(workers);
 
         for (int i = 0; i < workers; i++) pool.submit(new Worker());
@@ -193,6 +192,7 @@ public class ExplosionNukeRayParallelized implements IExplosionRay {
         if (waiters != null) rayQueue.addAll(waiters);
     }
 
+    /** Block removal time-budgeted per tick; client light/chunk flush separately throttled by {@code maxChunks}. */
     @Override
     public void destructionTick(int timeBudgetMs) {
         if (!collectFinished || !consolidationFinished || destroyFinished) return;
@@ -448,9 +448,11 @@ public class ExplosionNukeRayParallelized implements IExplosionRay {
         }
     }
 
+    /** 3D DDA (Amanatides-Woo fast voxel traversal); {@code tMax}/{@code tDelta}/{@code step} are its names. */
     private class RayTask {
         private static final double RAY_DIRECTION_EPSILON = 1e-6;
         private static final double PROCESSING_EPSILON = 1e-9;
+        // At dist=0 the loss exponent is 0 => zero damage regardless of resistance; floored away from 0.
         private static final float MIN_EFFECTIVE_DIST_FOR_ENERGY_CALC = 0.01f;
 
         final int dirIndex;
@@ -518,6 +520,7 @@ public class ExplosionNukeRayParallelized implements IExplosionRay {
 
                     SubChunkSnapshot snap = snapshots.get(currentSubChunkKey);
                     if (snap == null) {
+                        // isPaused => latch not decremented (finally block below); resumed via rayQueue once cached.
                         isPaused = true;
                         final boolean[] amFirst = {false};
                         ConcurrentLinkedQueue<RayTask> waiters = waitingRoom.computeIfAbsent(currentSubChunkKey, k -> {
@@ -597,6 +600,7 @@ public class ExplosionNukeRayParallelized implements IExplosionRay {
             }
         }
 
+        /** True: ray exhausted at {@code radius}. False: advanced past the empty subchunk, continue tracing. */
         private boolean skipEmptySubChunk() {
             double tExit = radius;
 

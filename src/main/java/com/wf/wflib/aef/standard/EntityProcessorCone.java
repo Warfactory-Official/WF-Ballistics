@@ -16,9 +16,9 @@ public class EntityProcessorCone extends EntityProcessorCross {
     }
 
     /**
-     * @param direction the jet axis (round's travel/impact direction); {@code (0,-1,0)} if zero-length
-     * @param halfAngleDeg cone half-angle in degrees, clamped to [1, 89]
-     * @param nodeDist line-of-sight sample spacing, forwarded to {@link EntityProcessorCross}
+     * @param direction jet axis (round's travel direction); {@code (0,-1,0)} if zero-length
+     * @param halfAngleDeg cone half-angle, degrees, clamped to [1, 89]
+     * @param nodeDist LOS sample spacing, forwarded to {@link EntityProcessorCross}
      */
     public EntityProcessorCone(Vec3 direction, float halfAngleDeg, double nodeDist) {
         super(nodeDist);
@@ -31,7 +31,7 @@ public class EntityProcessorCone extends EntityProcessorCross {
                                          double x, double y, double z) {
         Vec3 toTarget = new Vec3(px - x, py - y, pz - z);
         double lenSqr = toTarget.lengthSqr();
-        if (lenSqr < 1.0e-6) return true; // point-blank on the charge: always caught
+        if (lenSqr < 1.0e-6) return true; // zero-length: direction undefined, treat as inside
         return toTarget.dot(axis) / Math.sqrt(lenSqr) >= cosHalfAngle;
     }
 }

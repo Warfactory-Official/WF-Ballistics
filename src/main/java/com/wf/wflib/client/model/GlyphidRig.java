@@ -45,10 +45,7 @@ public final class GlyphidRig {
     private static final double JAW_SNAP = 20.0;
     private static final double HEAD_TILT = 30.0;
 
-    /**
-     * One walk cycle is one unit of clip-local time, so the drives that scrub it are in whole strides and the pose
-     * cache's buckets fall across a cycle rather than across a second.
-     */
+    /** 1 unit = 1 walk cycle (whole strides); pose cache buckets fall across a cycle, not a second. */
     private static final float CYCLE = 1.0f;
 
     private static final float TAU = (float) (Math.PI * 2.0);
@@ -59,13 +56,12 @@ public final class GlyphidRig {
     private GlyphidRig() {
     }
 
-    /** Read the mesh, hang it on the skeleton, and hand back a model wearing {@code material}. */
     public static GemRenderGltfModel build(String name, Material material) throws IOException {
         return build(name, material, null, List.of());
     }
 
     /**
-     * The rig wearing every skin at once: one mesh, one instancer, one draw for the whole swarm.
+     * One mesh, one instancer, one draw for the whole swarm.
      *
      * @param skins one texture per caste, in {@code GlyphidCaste} order, or empty for the plain rig
      */
@@ -81,7 +77,7 @@ public final class GlyphidRig {
 
         int body = rig.bone("body", RigBuilder.ROOT, 0.0f, 0.0f, 0.0f);
 
-        // The head is a joint with no geometry: the bite tilts it, and all three plates ride it.
+        // No geometry of its own: the bite tilts it, all three plates ride it.
         int head = rig.bone("head", body, 0.0f, 0.5f, 0.25f);
         int jawTop = rig.bone("jaw_top", head, 0.0f, 0.0f, 0.0f);
         int jawLeft = rig.bone("jaw_left", head, 0.0f, 0.0f, 0.0f);
@@ -144,10 +140,7 @@ public final class GlyphidRig {
         return rig.build(material, clips);
     }
 
-    /**
-     * The walk cycle: eight limbs on one clock at eight different phases, which is the whole of what makes six legs
-     * read as walking rather than twitching in unison.
-     */
+    /** 8 limbs, one clock, 8 phases: the phase offsets alone make six legs read as walking, not twitching. */
     private static GltfAnimation walk(NodeTable table, int leftUpper, int leftMid, int leftLower,
                                       int rightUpper, int rightMid, int rightLower,
                                       int[] legUpper, int[] legLower) {
@@ -164,7 +157,7 @@ public final class GlyphidRig {
                 CYCLE, leftElbow[1]));
         drivers.add(swing(table, leftLower, 1.0f, 0.0f, 0.0f, 90.0, -ARM_FOLD, 0.0f));
 
-        // Right arm, half a cycle out of step with the left.
+        // Half a cycle out of step with the left.
         drivers.add(NodeOscillate.fixed(table, rightUpper, 0.0f, 1.0f, 0.0f, rad(-10.0)));
         drivers.add(swing(table, rightUpper, 1.0f, 0.0f, 0.0f, 35.0, ARM_SWING, trail));
         float[] rightElbow = combine(-ARM_SWING, trail, ARM_SWING, follow);
@@ -187,10 +180,10 @@ public final class GlyphidRig {
         return GltfAnimation.procedural(WALK, CYCLE, drivers.toArray(new PoseDriver[0]));
     }
 
-    /** The bite: the head dips through the swing while the three plates snap shut on the second half of it. */
+    /** Head dips through the swing; all three plates snap shut on the second half of it. */
     private static GltfAnimation bite(NodeTable table, int head, int jawTop, int jawLeft, int jawRight) {
         return GltfAnimation.procedural(BITE, 1.0f,
-                // sin(pi * t) over the one unit the bite lasts: up and back down, peaking mid-swing.
+                // sin(pi*t) over the bite's one unit: up then down, peak mid-swing.
                 NodeOscillate.about(table, head, 0.0f, 0.0f, 1.0f, 0.0f, rad(HEAD_TILT), 2.0f, 0.0f),
                 GlyphidBite.about(table, jawTop, 1.0f, 0.0f, 0.0f, rad(-JAW_SNAP)),
                 GlyphidBite.about(table, jawLeft, 0.0f, 1.0f, 0.0f, rad(JAW_SNAP)),
@@ -199,10 +192,7 @@ public final class GlyphidRig {
                 GlyphidBite.about(table, jawRight, 1.0f, 0.0f, 0.0f, rad(JAW_SNAP)));
     }
 
-    /**
-     * One clip per combination of plates still attached, keyed by the same bits {@link EntityGlyphid#armor()}
-     * carries.
-     */
+    /** One clip per combination of plates still attached, keyed by {@link EntityGlyphid#armor()}'s bits. */
     private static void armour(NodeTable table, Map<String, GltfAnimation> clips, int armorFront,
                                int armorLeft, int armorRight, int leftArmor, int rightArmor) {
         int[] plates = { armorFront, armorLeft, armorRight, leftArmor, rightArmor };
@@ -219,12 +209,12 @@ public final class GlyphidRig {
         }
     }
 
-    /** The clip name for a set of armour bits; {@link EntityGlyphid#FULL_ARMOR} has none. */
+    /** No clip at {@link EntityGlyphid#FULL_ARMOR}. */
     public static String armour(int bits) {
         return "armor" + bits;
     }
 
-    /** Move a body transform into the mesh's own frame. */
+    /** Body transform -> mesh's own frame. */
     public static Matrix4f mount(Matrix4f matrix, float scale) {
         return matrix.translate(0.0f, -1.5078125f, 0.0f)
                 .rotateX((float) Math.PI)
@@ -238,10 +228,7 @@ public final class GlyphidRig {
                 rad(amplitudeDegrees), CYCLE, phaseTurns);
     }
 
-    /**
-     * Two sinusoids of one frequency are a third: {@code A sin(t + a) + B sin(t + b)} written back as an amplitude
-     * and a phase, both in the units the drivers take (degrees and turns).
-     */
+    /** {@code A sin(t+a) + B sin(t+b)} -> one (amplitude, phase) pair, degrees and turns. */
     private static float[] combine(double ampA, float turnsA, double ampB, float turnsB) {
         double sine = ampA * Math.cos(TAU * turnsA) + ampB * Math.cos(TAU * turnsB);
         double cosine = ampA * Math.sin(TAU * turnsA) + ampB * Math.sin(TAU * turnsB);

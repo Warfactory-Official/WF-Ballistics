@@ -23,9 +23,7 @@ public enum WFEventType {
     POWER_LOW,
     POWER_OUT,
     SPOTTED,
-    /**
-     * A squad member took over after its leader was lost.
-     */
+    /** Squad member took over after its leader was lost. */
     PROMOTED,
     /** TV round: operator took over ("on") or let go (detail = what the seeker locked). */
     OPERATOR

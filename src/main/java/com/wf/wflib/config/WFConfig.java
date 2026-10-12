@@ -13,20 +13,13 @@ import net.neoforged.neoforge.common.ModConfigSpec;
 
 import java.util.List;
 
-/**
- * Server/common config for the tunables most worth adjusting without recompiling: the WarForge integration toggles,
- * the interceptor combat numbers, and default fuel.
- */
 public final class WFConfig {
 
     public static final ModConfigSpec SPEC;
 
-    // --- WarForge integration ---
     public static final ModConfigSpec.BooleanValue WARFORGE_FACTION_FOF;
     public static final ModConfigSpec.BooleanValue WARFORGE_CLAIM_PROTECTION;
-    // --- Orbital ---
     public static final ModConfigSpec.BooleanValue REQUIRE_WAR_FOR_ORBITAL_KILLS;
-    // --- Interception ---
     public static final ModConfigSpec.DoubleValue INTERCEPT_CHANCE;
     public static final ModConfigSpec.DoubleValue INTERCEPT_CROSSING_FACTOR;
     public static final ModConfigSpec.DoubleValue INTERCEPTOR_KILL_RADIUS;
@@ -37,23 +30,18 @@ public final class WFConfig {
     public static final ModConfigSpec.DoubleValue INTERCEPTOR_GRAZE_DAMAGE;
     public static final ModConfigSpec.DoubleValue MIN_PROJECTILE_DAMAGE;
     public static final ModConfigSpec.BooleanValue REWIND_WHOLE_FLIGHT;
-    // --- Stealth ---
+    public static final ModConfigSpec.BooleanValue BLOCK_DAMAGE;
+    public static final ModConfigSpec.DoubleValue BLOCK_TOUGHNESS_SCALE;
     public static final ModConfigSpec.DoubleValue STEALTH_RCS;
-    // --- Evasion ---
     public static final ModConfigSpec.DoubleValue DIVE_EVASION_MULTIPLIER;
-    // --- Batteries ---
     public static final ModConfigSpec.IntValue BATTERY_MAGAZINE;
     public static final ModConfigSpec.IntValue BATTERY_RELOAD_TICKS;
-    // --- Fuel ---
     public static final ModConfigSpec.IntValue DEFAULT_FUEL_TICKS;
-    // --- Incendiary ---
     public static final ModConfigSpec.BooleanValue FIRE_BOMBLETS_AS_FIREBALLS;
-    // --- Off-world simulation ---
     public static final ModConfigSpec.DoubleValue SIM_PLAYER_KEEP_RANGE;
     public static final ModConfigSpec.DoubleValue SIM_TERMINAL_RANGE;
     public static final ModConfigSpec.DoubleValue SIM_SPAWN_MARGIN;
     public static final ModConfigSpec.IntValue SIM_CRUISE_DELAY_TICKS;
-    // --- Industry tracking (glyphid aggression input) ---
     public static final ModConfigSpec.IntValue CAMERA_STREAM_RADIUS;
     public static final ModConfigSpec.IntValue CAMERA_STREAM_BUDGET;
     public static final ModConfigSpec.IntValue DETACHED_STREAM_RADIUS;
@@ -73,7 +61,6 @@ public final class WFConfig {
     public static final ModConfigSpec.IntValue INDUSTRY_CLUSTER_MIN_VALUE;
     public static final ModConfigSpec.IntValue INDUSTRY_RECOMPUTE_DELAY;
     public static final ModConfigSpec.BooleanValue INDUSTRY_BACKFILL;
-    // --- Colonies ---
     public static final ModConfigSpec.IntValue COLONY_SAFE_RADIUS;
     public static final ModConfigSpec.IntValue COLONY_FULL_STRENGTH_DISTANCE;
     public static final ModConfigSpec.IntValue COLONY_MAX_TIER;
@@ -107,7 +94,6 @@ public final class WFConfig {
     public static final ModConfigSpec.DoubleValue COLONY_EVOLUTION_TIME_FACTOR;
     public static final ModConfigSpec.DoubleValue COLONY_EVOLUTION_PRESSURE_FACTOR;
     public static final ModConfigSpec.DoubleValue COLONY_EVOLUTION_STRENGTH_BONUS;
-    // --- Glyphids ---
     public static final ModConfigSpec.DoubleValue GLYPHID_PACE;
     public static final ModConfigSpec.BooleanValue GLYPHID_EXTENDED_TARGETING;
     public static final ModConfigSpec.BooleanValue GLYPHID_DIG;
@@ -120,7 +106,6 @@ public final class WFConfig {
     public static final ModConfigSpec.DoubleValue GLYPHID_ACID_RADIUS;
     public static final ModConfigSpec.BooleanValue GLYPHID_ACID_CORRODES;
     public static final ModConfigSpec.IntValue GLYPHID_BOMB_BLAST;
-    // --- Debug ---
     public static final ModConfigSpec.BooleanValue DEBUG_LOGGING;
 
     static {
@@ -133,8 +118,9 @@ public final class WFConfig {
                         "faction's defenses don't engage its own missiles across different launchers).")
                 .define("factionFriendOrFoe", true);
         WARFORGE_CLAIM_PROTECTION = b
-                .comment("Missile explosions respect WarForge land claims (protected blocks survive, except in",
-                        "active siege zones). Individual blasts can still opt out (e.g. strategic nukes).")
+                .comment("Missile explosions and round block damage respect WarForge land claims (protected",
+                        "blocks survive, except in active siege zones). Individual blasts can still opt out (e.g.",
+                        "strategic nukes).")
                 .define("explosionsRespectClaims", true);
         b.pop();
 
@@ -190,6 +176,12 @@ public final class WFConfig {
                 .comment("Lag compensation: true = every step of a round sweeps targets as its shooter saw them;",
                         "false = first step only, later steps sweep live targets.")
                 .define("rewindWholeFlight", true);
+        BLOCK_DAMAGE = b
+                .comment("Rounds crack and break blocks by the momentum they lose in them (no drops).")
+                .define("blockDamage", true);
+        BLOCK_TOUGHNESS_SCALE = b
+                .comment("x every block's toughness: 2 = twice the hits.")
+                .defineInRange("blockToughnessScale", 1.0, 0.01, 1000.0);
         b.pop();
 
         b.comment("Stealth missiles: reduced-observability, not invisible.").push("stealth");
@@ -562,7 +554,7 @@ public final class WFConfig {
     private WFConfig() {
     }
 
-    /** Copies the loaded config values into the plain static fields the gameplay code reads. */
+    /** Loaded values -> gameplay statics, one-way. */
     @SubscribeEvent
     public static void onLoad(ModConfigEvent event) {
         if (event.getConfig().getSpec() != SPEC) {
@@ -582,6 +574,8 @@ public final class WFConfig {
         MissileSimConfig.INTERCEPTOR_GRAZE_DAMAGE = INTERCEPTOR_GRAZE_DAMAGE.get().floatValue();
         MissileSimConfig.MIN_PROJECTILE_DAMAGE = MIN_PROJECTILE_DAMAGE.get().floatValue();
         com.wf.wflib.round.Rounds.rewindWholeFlight = REWIND_WHOLE_FLIGHT.get();
+        com.wf.wflib.round.pen.BlockDamage.enabled = BLOCK_DAMAGE.get();
+        com.wf.wflib.round.pen.BlockDamage.toughnessScale = BLOCK_TOUGHNESS_SCALE.get().floatValue();
         MissileSimConfig.STEALTH_RCS = STEALTH_RCS.get().floatValue();
         MissileSimConfig.DIVE_EVASION_MULTIPLIER = DIVE_EVASION_MULTIPLIER.get();
         MissileSimConfig.BATTERY_MAGAZINE = BATTERY_MAGAZINE.get();

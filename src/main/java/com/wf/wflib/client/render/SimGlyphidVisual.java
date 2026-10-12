@@ -18,19 +18,17 @@ import org.joml.Matrix4f;
 import java.util.ArrayList;
 import java.util.List;
 
-/** Draws every glyphid that has no entity, in one pass. */
+/** Draws every sim-tier (entity-less) glyphid in one pass. */
 public class SimGlyphidVisual extends AbstractVisual implements SimpleDynamicVisual,
         EffectVisual<SimGlyphidEffect> {
 
-    /**
-     * A record is never mid-bite, and never missing a plate.
-     */
+    /** Sim ghosts never bite. */
     private static final float NO_BITE = 0.0f;
 
-    /** One growable pool for every caste, since every caste is the same model. */
+    /** One pool for every caste: same model. */
     private final List<GemRenderInstance> pool = new ArrayList<>();
 
-    /** The model the pool's instances were made against; a reload replaces it and empties the pool. */
+    /** Reload replaces model behind skin => pool discarded, not reused. */
     private GlyphidModel.Skin skin;
 
     private int used;
@@ -101,11 +99,6 @@ public class SimGlyphidVisual extends AbstractVisual implements SimpleDynamicVis
         instance.setChanged();
     }
 
-    /**
-     * @return the next free instance, growing the pool if the swarm has never been this big. A reload
-     *      replaces the model behind the skin, which invalidates every instance made from the old one, so the
-     *      pool is thrown away with it.
-     */
     private GemRenderInstance claim(GlyphidModel.Skin current) {
         if (skin != current) {
             for (GemRenderInstance instance : pool) {

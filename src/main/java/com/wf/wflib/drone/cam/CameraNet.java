@@ -527,6 +527,10 @@ public final class CameraNet {
         if (entity instanceof MissileEntity missile) {
             return missile.seeker().spec();
         }
-        return entity instanceof DroneEntity drone ? drone.cameraSpec() : null;
+        if (entity instanceof DroneEntity drone) {
+            return drone.cameraSpec();
+        }
+        CameraSource source = CameraSources.of(entity);
+        return source == null ? null : source.spec();
     }
 }

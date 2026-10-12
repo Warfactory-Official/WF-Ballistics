@@ -4,12 +4,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.event.config.ModConfigEvent;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
-/**
- * Armour tunables, in their own file so the package stays separable from the rest of the mod.
- *
- * <p>Values are copied into plain static fields on load, the same way {@code WFConfig} does it, so
- * the hot path reads a field rather than a config value and a gametest can set one directly.
- */
+/** Armour tunables. Mirrors {@code WFConfig}: values copied to static fields on load so the hot path avoids spec reads and gametests can set fields directly. */
 public final class ArmorConfig {
 
     public static final ModConfigSpec SPEC;
@@ -23,56 +18,26 @@ public final class ArmorConfig {
     private static final ModConfigSpec.DoubleValue LAVA_TIER_VALUE;
     private static final ModConfigSpec.DoubleValue ACUTE_FRACTION_VALUE;
 
-    /** Master switch. Off means vanilla armour, untouched, exactly as if this package were absent. */
+    /** Off => vanilla armour, untouched. */
     public static boolean enabled = true;
 
-    /**
-     * Whether armour this system was never told about is given a profile derived from its own vanilla
-     * numbers. On is the point of the derivation: it means the pack's GregTech and NTM armour works
-     * without any of it having been registered. Off restricts the model to authored pieces and leaves
-     * everything else on vanilla's armour attributes.
-     */
+    /** Derive a profile from vanilla defense/toughness for unregistered armour (e.g. GregTech, NTM); off restricts to authored pieces. */
     public static boolean manageVanillaArmor = true;
 
-    /** Whether the whole-entity door runs for mobs, or only for players. */
+    /** Whole-entity resolution also covers mobs; off = players only. */
     public static boolean mobArmor = true;
 
-    /**
-     * How often contact with fire, gas or a field is charged.
-     *
-     * <p>Five ticks, which is a quarter of a second, which is about how fast a person reacts. Below that
-     * the extra resolution is charging damage nobody could have avoided; above it, a player who did react
-     * in time is charged anyway for the part of the interval they were already out of it.
-     *
-     * <p><b>This is a balance lever, not only a performance one.</b> A hazard's tier is points per
-     * interval, so doubling this halves every environmental wear rate in the game.
-     */
+    /** Ticks between exposure charges. Balance lever, not just perf: hazard tier is points/interval, so doubling this halves every environmental wear rate. */
     public static int exposureIntervalTicks = 5;
 
-    /**
-     * How often accrued exposure is written to the stacks. Coarser than accrual on purpose: a component
-     * written on a worn stack is an equipment-sync packet, and that packet, not the allocation, is what
-     * a per-tick write actually costs. Accrual is integer, so coarsening the write loses nothing.
-     */
+    /** Ticks between flushing accrued exposure to stacks. Coarser than accrual: a component write on a worn stack is an equipment-sync packet, the real cost; integer accrual means coarsening loses nothing. */
     public static int persistIntervalTicks = 100;
 
-    /**
-     * What being on fire and standing in lava deal, in condition points per exposure interval. Same
-     * units as a suit's THERMAL tier, so a suit rated above one of these shrugs it off outright.
-     *
-     * <p>For scale: a 600-durability garment is 60,000 points, and there are four intervals a second, so
-     * fire at 60 burns an unrated one off in about four minutes and lava at 400 in under forty seconds.
-     */
+    /** Fire/lava damage, condition points per exposure interval; same units as a suit's THERMAL tier. */
     public static double fireTier = 60.0D;
     public static double lavaTier = 400.0D;
 
-    /**
-     * Share of maximum condition that walking into the fire or the gas costs at once, before the
-     * timed decay takes over. STALKER's split between a splash and a stay: the splash is a percentage
-     * so it costs cheap kit and power armour alike, which is what stops heavy armour being the
-     * universal answer. Flat, and not scaled by how bad the hazard is: what scales it is the piece's
-     * own resistance to the type, which is a number it already has.
-     */
+    /** Flat share of max condition lost on first contact with a hazard, before sustained decay. Percentage, not points, so cheap and powered armour pay the same proportion; hazard severity is read via tier, not this. */
     public static double acuteFraction = 0.04D;
 
     static {
@@ -122,8 +87,7 @@ public final class ArmorConfig {
         enabled = ENABLED_VALUE.get();
         boolean manage = MANAGE_VANILLA_VALUE.get();
         if (manage != manageVanillaArmor) {
-            // A derived profile is cached per item, and the negative cache is what makes the miss cheap.
-            // Both are wrong the moment this flips, so neither may survive the change.
+            // manage flips => cached derived specs and the negative cache are both stale.
             ArmorProfiles.clearDerived();
         }
         manageVanillaArmor = manage;

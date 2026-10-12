@@ -9,20 +9,15 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.Function;
 
-/** Turns an airframe's rotor layout into the signed spin directions a multirotor actually turns at. */
+/** Alternates spin CW/CCW by bearing rank for torque balance; RotorDamage sums degreesPerTick sign on loss. */
 public final class Bones {
 
     private Bones() {
     }
 
     /**
-     * Register every rotor of an airframe, assigning the direction each one turns.
-     *
-     * @param rotorSpeed hover speed of a rotor disc, degrees/tick. Signs are assigned here, not passed in
-     * @param nodes the hub node of each rotor, in the order the airframe registered them
-     * @param pivots where each of those hubs sits, model units, in the same order
-     * @param pieceId what a rotor is called when it is carried about as an id: a piece of wreckage,
-     *      or a bone to drive
+     * @param rotorSpeed magnitude; sign assigned here by bearing rank, not passed in
+     * @param pieceId node name -> id: wreckage piece, or bone to drive
      */
     public static void rig(ResourceLocation modelId, float rotorSpeed, List<String> nodes,
                            List<Vec3> pivots, Function<String, ResourceLocation> pieceId) {

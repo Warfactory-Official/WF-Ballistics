@@ -19,11 +19,11 @@ import java.util.Locale;
 public class DroneCameraScreen extends Screen {
 
     private static final int PAD = 8;
-    /** Room under the video for the readout. Two text rows plus the gap above them. */
+    /** Room under video for readout: two text rows + gap above. */
     private static final int STRIP = 40;
-    /** Extra room when there is a channel row to draw as well. */
+    /** Extra room for the channel row, when drawn. */
     private static final int CHANNEL_ROW = 14;
-    /** Degrees of gimbal per pixel dragged. Tuned so a full sweep of a 1080p window is most of a turn. */
+    /** Degrees of gimbal per pixel dragged; tuned so a 1080p window's full sweep ~= one turn. */
     private static final double DRAG_GAIN = 0.22;
 
     private int[] feedIds;
@@ -65,7 +65,6 @@ public class DroneCameraScreen extends Screen {
         CameraLink.open(feedId());
     }
 
-    /** Show a different channel. */
     private void select(int index) {
         int next = Math.floorMod(index, this.feedIds.length);
         if (next == this.channel) {
@@ -75,7 +74,7 @@ public class DroneCameraScreen extends Screen {
         CameraLink.open(feedId());
     }
 
-    /** A refreshed channel list from the server, while the screen stays open. */
+    /** Server pushed a refreshed channel list; screen stays open. */
     public void updatePanel(int[] ids) {
         if (ids.length == 0) {
             return;
@@ -85,7 +84,7 @@ public class DroneCameraScreen extends Screen {
         this.feedIds = ids;
         this.channel = Math.min(this.channel, ids.length - 1);
         if (wasMulti != multi()) {
-            // The channel row appearing or disappearing changes how much room the video gets.
+            // Channel row on/off changes video's room => re-init.
             init();
         }
         if (feedId() != before) {
@@ -168,7 +167,7 @@ public class DroneCameraScreen extends Screen {
                 left + 6, y + 16, 0xFF4A6A55, false);
     }
 
-    /** The channel row: one cell per bound camera, the live one lit, the selected one boxed. */
+    /** Channel row: one cell per camera; live lit, selected boxed. */
     private void channels(GuiGraphics g) {
         int y = top + videoH + 6 + STRIP - 8;
         int cell = Math.max(18, Math.min(34, videoW / Math.max(1, this.feedIds.length)));
@@ -237,9 +236,7 @@ public class DroneCameraScreen extends Screen {
         return super.keyPressed(key, scan, modifiers);
     }
 
-    /**
-     * @return where the video sits, for anything that wants to draw over it later.
-     */
+    /** Where the video sits; for overlays drawn over it later. */
     public int videoWidth() {
         return Mth.clamp(this.videoW, 0, this.width);
     }

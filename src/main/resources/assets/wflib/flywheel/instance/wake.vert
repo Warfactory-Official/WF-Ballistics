@@ -16,6 +16,8 @@ void flw_instanceVertex(in FlwInstance i) {
     float size = gemrender_particleAlive(p, age)
             ? p.sizeScale * (s.size0 + s.sizeRate * unitAge)
             : 0.0;
+    float near = gemrender_nearFade(center, flw_cameraPos, size);
+    size *= step(1e-4, near);
 
     // 0 while it is still solid froth, 1 once it is loose bubbles.
     float aerated = clamp((age - s.coolFloor) / max(s.coolSpan, 1e-6), 0.0, 1.0);
@@ -38,7 +40,7 @@ void flw_instanceVertex(in FlwInstance i) {
     flw_vertexPos = vec4(center + (corner.x * spunRight + corner.y * spunUp) * size, 1.0);
     flw_vertexNormal = -vec3(flw_viewInverse[2]);
     flw_vertexColor = vec4(clamp(mix(froth, thinned, aerated) * p.tintScale, 0.0, 1.0),
-                           clamp(alpha * ramp, 0.0, 1.0));
+                           clamp(alpha * ramp, 0.0, 1.0) * near);
     flw_vertexOverlay = ivec2(0, 10);
     flw_vertexLight = s.light;
 }

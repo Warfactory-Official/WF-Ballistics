@@ -11,15 +11,12 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Predicate;
 
-/**
- * The bite a glyphid takes out of terrain: a spherical ray-march like {@link BlockAllocatorStandard}, but priced on
- * what the bug can chew rather than on blast power.
- */
+/** Like {@link BlockAllocatorStandard}'s shell ray-march, but power never decays along the ray. */
 public class BlockAllocatorGlyphidDig extends BlockAllocatorStandard {
 
     private static final float STEP = 0.3F;
 
-    /** Hardness ceiling: anything above it stops the ray dead. */
+    /** Hardness ceiling: blocks above it stop the ray. */
     protected final double maximum;
     protected final Predicate<BlockState> stopAt;
 
@@ -45,7 +42,7 @@ public class BlockAllocatorGlyphidDig extends BlockAllocatorStandard {
         for (int i = 0; i < resolution; ++i) {
             for (int j = 0; j < resolution; ++j) {
                 for (int k = 0; k < resolution; ++k) {
-                    // Only walk the shell of the cube; interior cells would just re-trace the same rays.
+                    // Shell cells only; interior would retrace existing rays.
                     if (i != 0 && i != resolution - 1 && j != 0 && j != resolution - 1 && k != 0 && k != resolution - 1) {
                         continue;
                     }

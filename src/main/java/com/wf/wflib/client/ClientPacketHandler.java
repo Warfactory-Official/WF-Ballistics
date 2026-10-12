@@ -12,12 +12,13 @@ import com.wf.wflib.client.scope.ScopeCache;
 import com.wf.wflib.network.CameraFeedPacket;
 import com.wf.wflib.network.ScopeFramePacket;
 import com.wf.wflib.network.MissileFlightAudioPacket;
+import com.wf.wflib.network.SoundAtPacket;
+import com.wf.wflib.audio.client.Sounds;
 import com.wf.wflib.network.SimGlyphidSyncPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 
-/** Client-only sink for the mod's effect packets. */
 public final class ClientPacketHandler {
 
     private ClientPacketHandler() {
@@ -27,7 +28,7 @@ public final class ClientPacketHandler {
         LocalPlayer player = Minecraft.getInstance().player;
         if (player != null) {
             player.setDeltaMovement(player.getDeltaMovement().add(pkt.x(), pkt.y(), pkt.z()));
-            player.hurtMarked = true; // makes the client push the new velocity back to the server
+            player.hurtMarked = true; // hurtMarked => client resyncs velocity to server
         }
     }
 
@@ -48,11 +49,15 @@ public final class ClientPacketHandler {
                 new com.wf.wflib.client.survey.SurveyScreen(pkt.netId(), pkt.centreX(), pkt.centreZ()));
     }
 
+    public static void handleTelemetry(com.wf.wflib.network.TelemetryPacket pkt) {
+        com.wf.wflib.telemetry.client.TelemetryClient.accept(pkt);
+    }
+
     public static void handleReconMap(com.wf.wflib.network.ReconMapPacket pkt) {
         com.wf.wflib.client.recon.ReconMapClient.accept(pkt.dimension(), pkt.view());
     }
 
-    /** The one place a feed payload is turned back into state. */
+    /** Sole call to {@code CameraFeedCache.accept}. */
     public static void handleCameraFeed(CameraFeedPacket pkt) {
         CameraFeedCache.accept(pkt.feed());
     }
@@ -73,6 +78,10 @@ public final class ClientPacketHandler {
         if (level != null) {
             WFEffects.dispatch(pkt.effect(), level, pkt.x(), pkt.y(), pkt.z(), pkt.data());
         }
+    }
+
+    public static void handleSoundAt(SoundAtPacket pkt) {
+        Sounds.handle(pkt);
     }
 
     public static void handleMissileAudio(MissileFlightAudioPacket pkt) {

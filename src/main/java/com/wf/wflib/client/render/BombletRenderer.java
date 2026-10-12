@@ -25,12 +25,12 @@ public class BombletRenderer extends EntityRenderer<BombletEntity> {
     }
 
     private static void cube(PoseStack.Pose pose, VertexConsumer c, float h, int light) {
-        face(pose, c, light, -h, h, -h, -h, h, h, h, h, h, h, h, -h, 0, 1, 0);   // +Y top
-        face(pose, c, light, -h, -h, h, -h, -h, -h, h, -h, -h, h, -h, h, 0, -1, 0); // -Y bottom
-        face(pose, c, light, h, h, -h, h, h, h, h, -h, h, h, -h, -h, 1, 0, 0);    // +X
-        face(pose, c, light, -h, h, h, -h, h, -h, -h, -h, -h, -h, -h, h, -1, 0, 0); // -X
-        face(pose, c, light, h, h, h, -h, h, h, -h, -h, h, h, -h, h, 0, 0, 1);    // +Z
-        face(pose, c, light, -h, h, -h, h, h, -h, h, -h, -h, -h, -h, -h, 0, 0, -1); // -Z
+        face(pose, c, light, -h, h, -h, -h, h, h, h, h, h, h, h, -h, 0, 1, 0);
+        face(pose, c, light, -h, -h, h, -h, -h, -h, h, -h, -h, h, -h, h, 0, -1, 0);
+        face(pose, c, light, h, h, -h, h, h, h, h, -h, h, h, -h, -h, 1, 0, 0);
+        face(pose, c, light, -h, h, h, -h, h, -h, -h, -h, -h, -h, -h, h, -1, 0, 0);
+        face(pose, c, light, h, h, h, -h, h, h, -h, -h, h, h, -h, h, 0, 0, 1);
+        face(pose, c, light, -h, h, -h, h, h, -h, h, -h, -h, -h, -h, -h, 0, 0, -1);
     }
 
     private static void face(PoseStack.Pose pose, VertexConsumer c, int light,

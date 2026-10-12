@@ -112,7 +112,7 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
     }
 
     private final Level level;
-    private final Entity source;
+    private final Source source;
     private final ParticleEmitter emitter;
 
     /** Emitter centre (missile position), refreshed each tick. */
@@ -128,17 +128,56 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
 
     private final Kind kind;
 
-    public InstancedTrailEffect(Entity source) {
-        this.level = source.level();
-        this.source = source;
+    /** Emitter feed; {@link #gone} true once => trail left to fade. */
+    public interface Source {
+        boolean gone();
 
-        Vec3 emit = emitPoint();
+        Vec3 emitPoint();
+
+        /** False => nothing laid this tick (burnt out), path still followed. */
+        boolean laying();
+    }
+
+    public InstancedTrailEffect(Entity source) {
+        this(source, Kind.of(source));
+    }
+
+    private InstancedTrailEffect(Entity source, Kind kind) {
+        this(source.level(), kind, exhaustTint(source), new Source() {
+            @Override
+            public boolean gone() {
+                return source.isRemoved() || !source.isAlive();
+            }
+
+            @Override
+            public Vec3 emitPoint() {
+                if (source instanceof MissileEntity missile) {
+                    return new Vec3(missile.xOld, missile.yOld, missile.zOld);
+                }
+                return new Vec3(source.xOld, source.yOld + source.getBbHeight() * 0.5, source.zOld);
+            }
+
+            @Override
+            public boolean laying() {
+                return kind.lays(source);
+            }
+        });
+    }
+
+    /** Exhaust plume behind anything, e.g. an entity-less round. */
+    public InstancedTrailEffect(Level level, Source source) {
+        this(level, Kind.EXHAUST, MissileEntity.DEFAULT_EXHAUST_COLOR, source);
+    }
+
+    private InstancedTrailEffect(Level level, Kind kind, int tint, Source source) {
+        this.level = level;
+        this.source = source;
+        Vec3 emit = source.emitPoint();
         this.cx = this.prevX = emit.x;
         this.cy = this.prevY = emit.y;
         this.cz = this.prevZ = emit.z;
-
-        this.kind = Kind.of(source);
-        this.emitter = ParticleEmitter.create(kind.style(exhaustTint()), POOL, emit.x, emit.y, emit.z);
+        this.kind = kind;
+        this.emitter = ParticleEmitter.create(kind.style(tint), POOL, emit.x, emit.y, emit.z);
     }
 
     /** @return which of the two trails this is. Read by {@link InstancedTrailVisual} to pick the shader. */
@@ -146,15 +185,7 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
         return this.kind;
     }
 
-    /** Where the exhaust streams from. */
-    private Vec3 emitPoint() {
-        if (source instanceof MissileEntity missile) {
-            return new Vec3(missile.xOld, missile.yOld, missile.zOld);
-        }
-        return new Vec3(source.xOld, source.yOld + source.getBbHeight() * 0.5, source.zOld);
-    }
-
-    private int exhaustTint() {
+    private static int exhaustTint(Entity source) {
         return source instanceof MissileEntity missile
                 ? missile.getExhaustColor()
                 : MissileEntity.DEFAULT_EXHAUST_COLOR;
@@ -176,12 +207,12 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
 
     @Override
     public void tickEffect() {
-        if (source.isRemoved() || !source.isAlive()) {
+        if (source.gone()) {
             sourceGone = true;
             return;
         }
 
-        Vec3 emit = emitPoint();
+        Vec3 emit = source.emitPoint();
         double ex = emit.x;
         double ey = emit.y;
         double ez = emit.z;
@@ -219,7 +250,7 @@ public class InstancedTrailEffect implements WFFlywheelEffect {
         double lastY = prevY;
         double lastZ = prevZ;
 
-        boolean laying = kind.lays(source);
+        boolean laying = source.laying();
 
         for (int k = 0; k < count && laying; k++) {
             double t = hasPrevEmit ? (double) (k + 1) / count : 1.0;

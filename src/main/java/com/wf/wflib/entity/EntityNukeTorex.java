@@ -1,5 +1,8 @@
 package com.wf.wflib.entity;
 
+import com.wf.wflib.audio.SoundSpec;
+import com.wf.wflib.audio.AudioCategory;
+import com.wf.wflib.audio.client.Emitter;
 import com.wf.wflib.ModEntities;
 import com.wf.wflib.WFSounds;
 import net.minecraft.client.Minecraft;
@@ -8,7 +11,6 @@ import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -56,6 +58,8 @@ public class EntityNukeTorex extends Entity implements IEntityWithComplexSpawn {
     public int lastRenderSortTick = Integer.MIN_VALUE;
     public int maxAge = 1000;
     public float humidity = -1F;
+    /** Heard where the expanding front reaches ({@code tryPlayClientSound}); the curve only shapes loudness. */
+    private static final SoundSpec NUKE = new SoundSpec(WFSounds.NUCLEAR_EXPLOSION.getId(), 1, 1, 0, 20_000, 0);
     public boolean didPlaySound = false;
     public boolean didShake = false;
     public int effectiveAge = 0; // = simAge; used by the sim and renderer for all age-based timing
@@ -320,7 +324,10 @@ public class EntityNukeTorex extends Entity implements IEntityWithComplexSpawn {
 
         double soundRange = (age * 1.5D + 1D) * 1.5D;
         if (player.distanceToSqr(posX, posY, posZ) < soundRange * soundRange) {
-            level().playLocalSound(posX, posY, posZ, WFSounds.NUCLEAR_EXPLOSION.get(), SoundSource.HOSTILE, 10_000F, 1F, false);
+            Emitter blast = Emitter.at(NUKE, AudioCategory.EXPLOSIONS, posX, posY, posZ, random.nextLong());
+            if (blast.refresh()) {
+                Minecraft.getInstance().getSoundManager().play(blast);
+            }
             didPlaySound = true;
         }
     }

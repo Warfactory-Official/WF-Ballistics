@@ -24,7 +24,6 @@ public interface GalleryEntry {
     /** The lines shown in the tooltip and beside an inspected model. Rebuilt per frame, so keep it cheap. */
     List<Component> info();
 
-    /** Whether the model is loaded and can be drawn at all. */
     boolean ready();
 
     /** The clips this model can be scrubbed through. Empty for anything that does not move. */

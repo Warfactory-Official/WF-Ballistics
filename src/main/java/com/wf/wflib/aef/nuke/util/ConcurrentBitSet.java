@@ -3,11 +3,7 @@ package com.wf.wflib.aef.nuke.util;
 import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.atomic.LongAdder;
 
-/**
- * Thread-safe bitset
- *
- * @author mlbv
- */
+/** Thread-safe; cardinality tracked incrementally, not rescanned. */
 public class ConcurrentBitSet {
     private final AtomicLongArray words;
     private final int size;

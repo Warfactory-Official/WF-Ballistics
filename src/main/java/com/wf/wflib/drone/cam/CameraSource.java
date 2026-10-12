@@ -38,7 +38,7 @@ public interface CameraSource {
     /** Charge this feed's running cost to whatever is paying for it. */
     void bill(int fe, int ticks);
 
-    /** {@link CameraFeed#DRONE} / {@link CameraFeed#FIXED} / {@link CameraFeed#GUIDED}. */
+    /** {@link CameraFeed#DRONE} / {@link CameraFeed#FIXED} / {@link CameraFeed#GUIDED} / {@link CameraFeed#MOUNTED}. */
     byte kind();
 
     /** @return the source behind this feed id, or null if there is no longer one. */
@@ -57,11 +57,11 @@ public interface CameraSource {
             return missile.isAlive() && missile.seeker().spec() != null && !missile.damage().isDowned() && !missile.isDud()
                     ? new Guided(missile, missile.seeker().spec()) : null;
         }
-        if (!(entity instanceof DroneEntity drone) || !drone.isAlive()) {
-            return null;
+        if (entity instanceof DroneEntity drone) {
+            CameraSpec spec = drone.cameraSpec();
+            return spec == null || !drone.isAlive() ? null : new Airborne(drone, spec);
         }
-        CameraSpec spec = drone.cameraSpec();
-        return spec == null ? null : new Airborne(drone, spec);
+        return entity == null || !entity.isAlive() ? null : CameraSources.of(entity);
     }
 
     @Nullable

@@ -25,34 +25,26 @@ import org.slf4j.Logger;
 
 import java.util.UUID;
 
-/** An egg chamber: a colony record's hands in a loaded chunk. */
 public class GlyphidSpawnerBlockEntity extends BlockEntity {
 
     private static final Logger LOGGER = LogUtils.getLogger();
 
-    /** Ticks between spawn attempts. A tier-4 nest's five chambers trickle a bug a second, not a burst. */
+    /** T4's 5 chambers trickle ~1 bug/s; no burst. */
     public static final int INTERVAL = 100;
-    /** How close a player has to be for a chamber to bother. */
     private static final double SPAWN_RANGE = 48.0;
-    /** How far a defender may surface and how many spots it tries. Failing costs nothing and no population. */
     private static final int SCATTER = 4;
     private static final int PLACEMENT_ATTEMPTS = 8;
-    /**
-     * How far outside a colony's footprint a chamber may still bind to it, covering a hand-placed block on the
-     * flank of a mound.
-     */
+    /** Covers a hand-placed chamber on a mound's flank, outside the auto footprint. */
     private static final int BIND_MARGIN = 4;
 
-    /** The colony this chamber belongs to, resolved on its first tick and then persisted. */
     private @Nullable UUID colonyId;
-    /** Set once a chamber belongs to no colony, so an orphan never adopts whichever nest is founded next. */
     private boolean orphaned;
 
     public GlyphidSpawnerBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.GLYPHID_SPAWNER.get(), pos, state);
     }
 
-    /** Staggered by position, so the chambers of one nest do not all spawn on the same tick. */
+    /** Position phase-offset: chambers of one nest don't spawn on the same tick. */
     public static void serverTick(Level level, BlockPos pos, BlockState state, GlyphidSpawnerBlockEntity be) {
         if (!(level instanceof ServerLevel server)
                 || Math.floorMod(server.getGameTime() + pos.asLong(), INTERVAL) != 0) {
@@ -65,7 +57,7 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
     }
 
     private void hatch(ServerLevel level, BlockPos pos) {
-        // Cheapest question first: the colony lookup scans every colony in the level.
+        // Cheap check first: colony lookup scans every colony.
         if (!watched(level, pos)) {
             return;
         }
@@ -144,7 +136,7 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
         }
 
         if (registry.colonies().isEmpty()) {
-            // No colonies at all yet. Not orphaned: a nest may still be founded on top of this block.
+            // Not orphaned: a nest may still be founded here.
             return null;
         }
         BlockPos pos = getBlockPos();
@@ -159,7 +151,6 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
         return owner;
     }
 
-    /** A chamber has been dug out. */
     public void onBroken(ServerLevel level) {
         Colony colony = colony(level);
         if (colony == null || colony.spawners <= 0) {
@@ -176,11 +167,8 @@ public class GlyphidSpawnerBlockEntity extends BlockEntity {
     }
 
     private static boolean watched(ServerLevel level, BlockPos pos) {
-        // Shared with the sim tier so the bench's stand-in player counts for a nest as it does for a swarm.
         return SimGlyphidManager.watched(level, pos.getX() + 0.5, pos.getZ() + 0.5, SPAWN_RANGE);
     }
-
-    // --- persistence ---
 
     @Override
     protected void saveAdditional(CompoundTag tag, HolderLookup.Provider registries) {

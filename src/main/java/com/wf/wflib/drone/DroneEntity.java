@@ -50,7 +50,8 @@ import java.util.List;
 import java.util.UUID;
 
 /** An autonomous rotor drone. */
-public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, DroneCarrier {
+public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, DroneCarrier,
+        com.wf.wflib.telemetry.TelemetryReporter {
 
     /**
      * Ticks a released payload flies before self-detonating, so one dropped over a void still goes off.
@@ -357,6 +358,12 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
      * Stamped once at launch from whoever claims the ground it took off from, so a battery can tell its own side's
      * traffic from somebody else's without asking the drone where it is now.
      */
+    @Override
+    public com.wf.wflib.telemetry.Telemetry datalink() {
+        return new com.wf.wflib.telemetry.Telemetry(com.wf.wflib.telemetry.TelemetryKind.DRONE, "drone", this.teamId,
+                null);
+    }
+
     public void setTeamId(@Nullable UUID teamId) {
         this.teamId = teamId;
     }

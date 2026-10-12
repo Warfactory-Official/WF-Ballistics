@@ -29,46 +29,37 @@ import java.util.Set;
 /** Spawns a glyphid swarm on demand and reports what it costs. */
 public final class SwarmBench {
 
-    /** Ticks to let the swarm settle into steady-state before the window is worth reading. */
+    /** Settle time before the profiling window is trustworthy. */
     public static final int WARMUP_TICKS = 60;
 
-    /**
-     * Chunks of margin forceloaded around the ring, so bugs that wander outward keep ticking.
-     */
+    /** Margin forceloaded past the ring: wandering bugs stay ticking. */
     private static final int ARENA_MARGIN_CHUNKS = 2;
 
     private static int warmup;
 
-    /** The arena's forced chunks, held so they can be released again. */
+    /** Forced chunks, held for release. */
     private static final Set<ChunkPos> FORCED = new HashSet<>();
     private static @Nullable ServerLevel arenaLevel;
 
     private SwarmBench() {
     }
 
-    /**
-     * Spawn {@code count} glyphids in a ring around the source, clearing any previous run first so two benchmarks
-     * never overlap.
-     */
+    /** Ring of {@code count} glyphids around the source; clears any standing run first. */
     public static int spawn(CommandSourceStack source, int count, double radius) {
         return spawn(source, count, radius, GlyphidCaste.GRUNT);
     }
 
-    /** As above, of one named caste. */
     public static int spawn(CommandSourceStack source, int count, double radius, GlyphidCaste caste) {
         return spawn(source, count, radius, caste, source.getPosition(), radius, true, true);
     }
 
-    /**
-     * Spawn somewhere other than where the command was run, at exactly the height given, forcing chunks out to
-     * {@code forceRadius}.
-     */
+    /** Spawns at {@code center}, height exact (not sampled), forcing out to {@code forceRadius}. */
     public static int spawnAt(CommandSourceStack source, int count, double radius, GlyphidCaste caste,
                               Vec3 center, double forceRadius) {
         return spawn(source, count, radius, caste, center, forceRadius, false, true);
     }
 
-    /** Add to the swarm that is already standing rather than replacing it. */
+    /** Adds to the standing swarm; does not replace it. */
     public static int reinforce(CommandSourceStack source, int count, double radius, GlyphidCaste caste,
                                 Vec3 center, double forceRadius) {
         return spawn(source, count, radius, caste, center, forceRadius, false, false);
@@ -87,7 +78,7 @@ public final class SwarmBench {
         int spawned = 0;
         for (int i = 0; i < count; i++) {
             double angle = 2.0 * Math.PI * i / count;
-            // Spiral outward slightly so a large count doesn't stack every bug on one circle.
+            // Spiral outward: large counts don't stack on one circle.
             double r = radius * (0.6 + 0.4 * ((double) i / Math.max(1, count)));
             double x = center.x + Math.cos(angle) * r;
             double z = center.z + Math.sin(angle) * r;
@@ -122,7 +113,6 @@ public final class SwarmBench {
         return placed;
     }
 
-    /** Forceload the ring and its margin. */
     private static void forceArena(ServerLevel level, Vec3 center, double radius) {
         int reach = (int) Math.ceil(radius) + 16;
         int minChunkX = SectionPos.blockToSectionCoord(center.x - reach) - ARENA_MARGIN_CHUNKS;
@@ -140,9 +130,6 @@ public final class SwarmBench {
         }
     }
 
-    /**
-     * Give the arena's chunks back, so a finished benchmark stops costing the server anything.
-     */
     private static void releaseArena() {
         if (arenaLevel != null) {
             for (ChunkPos pos : FORCED) {
@@ -153,7 +140,6 @@ public final class SwarmBench {
         arenaLevel = null;
     }
 
-    /** Remove every glyphid and hand the arena's chunks back. */
     public static int clear(CommandSourceStack source) {
         int removed = clearLevel(source.getLevel());
         releaseArena();

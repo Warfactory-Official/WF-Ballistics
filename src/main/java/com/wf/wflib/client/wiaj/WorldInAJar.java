@@ -1,12 +1,9 @@
 package com.wf.wflib.client.wiaj;
 
-import net.minecraft.client.renderer.BiomeColors;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockAndTintGetter;
 import net.minecraft.world.level.ColorResolver;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -33,36 +30,9 @@ public class WorldInAJar implements BlockAndTintGetter {
         this.blocks = new BlockState[x][y][z];
     }
 
-    public static WorldInAJar fromLevel(Level level, int cX, int cY, int cZ, int size, int retry, RandomSource rand) {
-        WorldInAJar jar = new WorldInAJar(size, size, size);
-        if (size <= 0) {
-            return jar;
-        }
-        int middle = size / 2 - 1;
-
-        for (int i = 0; i < 2; i++) {
-            for (int j = 0; j < 2; j++) {
-                for (int k = 0; k < 2; k++) {
-                    jar.setBlock(middle + i, middle + j, middle + k,
-                            level.getBlockState(new BlockPos(cX + i, cY + j, cZ + k)));
-                }
-            }
-        }
-
-        for (int layer = 2; layer <= size / 2; layer++) {
-            for (int t = 0; t < retry; t++) {
-                int jx = -layer + rand.nextInt(layer * 2 + 1);
-                int jy = -layer + rand.nextInt(layer * 2 + 1);
-                int jz = -layer + rand.nextInt(layer * 2 + 1);
-                if (jar.neighborNonAir(middle + jx, middle + jy, middle + jz)) {
-                    jar.setBlock(middle + jx, middle + jy, middle + jz,
-                            level.getBlockState(new BlockPos(cX + jx, cY + jy, cZ + jz)));
-                }
-            }
-        }
-
-        jar.tint = level.getBlockTint(new BlockPos(cX, cY, cZ), BiomeColors.GRASS_COLOR_RESOLVER);
-        return jar;
+    /** Whole-jar tint; {@link #getBlockTint} ignores its colorResolver and returns this. */
+    public void setTint(int rgb) {
+        this.tint = rgb;
     }
 
     public void setBlock(int x, int y, int z, BlockState state) {
@@ -78,12 +48,6 @@ public class WorldInAJar implements BlockAndTintGetter {
         }
         BlockState s = this.blocks[x][y][z];
         return s != null ? s : air;
-    }
-
-    private boolean neighborNonAir(int x, int y, int z) {
-        return !getBlockState(x + 1, y, z).isAir() || !getBlockState(x - 1, y, z).isAir()
-                || !getBlockState(x, y + 1, z).isAir() || !getBlockState(x, y - 1, z).isAir()
-                || !getBlockState(x, y, z + 1).isAir() || !getBlockState(x, y, z - 1).isAir();
     }
 
     @Override

@@ -25,23 +25,21 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
-/** A monitor showing one of several bound cameras. */
 public class CameraMonitorBlockEntity extends BlockEntity {
 
-    /** How far a monitor will look for a drone to tune to when nothing is bound. */
     public static final double BIND_RANGE = 1600.0;
-    /** Ticks between re-resolving. Cheap, and a monitor one second behind is invisible. */
+    /** Cheap; 1s staleness invisible. */
     private static final int RESOLVE_INTERVAL = 20;
 
     private CameraChannels channels = CameraChannels.EMPTY;
-    /** The auto-tune fallback's pick. Only meaningful while nothing is bound. */
+    /** Auto-tune pick; meaningful only while {@link #channels} empty. */
     @Nullable
     private UUID bound;
 
     private int feedId;
-    /** One id per channel, for the strip the screen draws. Zero where a camera is unreachable. */
+    /** Entity id per channel; 0 = unreachable. */
     private int[] feedIds = new int[0];
-    /** Synced for display; the server reads it off {@link #channels} instead. */
+    /** Client-display mirror; server reads {@link #channels} directly. */
     private int selectedChannel;
     private int resolveIn;
 
@@ -60,7 +58,6 @@ public class CameraMonitorBlockEntity extends BlockEntity {
         refresh(sl);
     }
 
-    /** Re-resolve every binding to a live feed id, sync if anything moved, and renew the registration. */
     private void refresh(ServerLevel level) {
         this.resolveIn = RESOLVE_INTERVAL;
         int resolved;
@@ -89,11 +86,7 @@ public class CameraMonitorBlockEntity extends BlockEntity {
         CameraNet.registerMonitor(level, this.worldPosition, this.feedId, this.feedIds);
     }
 
-    /**
-     * The selected channel is a drone that is not in the world.
-     *
-     * @return true if it is worth resolving the channel again immediately.
-     */
+    /** @return true if worth re-resolving immediately. */
     private boolean recall(ServerLevel level) {
         FeedTarget target = this.channels.current();
         if (target == null || target.drone().isEmpty()) {
@@ -106,7 +99,6 @@ public class CameraMonitorBlockEntity extends BlockEntity {
         return DroneRecall.recall(level, target.drone().get());
     }
 
-    /** Show the next channel, or (with nothing bound) tune to the next camera drone in range. */
     public void cycle(ServerLevel level) {
         if (this.channels.isEmpty()) {
             List<DroneEntity> candidates = candidates(level);
@@ -167,7 +159,6 @@ public class CameraMonitorBlockEntity extends BlockEntity {
         return candidates.get(0);
     }
 
-    /** Camera-equipped drones in range, nearest first. */
     private List<DroneEntity> candidates(ServerLevel level) {
         double x = this.worldPosition.getX() + 0.5;
         double y = this.worldPosition.getY() + 0.5;

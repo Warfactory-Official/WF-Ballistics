@@ -5,7 +5,6 @@ import com.wf.wflib.client.flywheel.InstancedFlameEffect;
 import com.wf.wflib.entity.FireLingeringEntity;
 import com.wf.wflib.fire.FireType;
 import com.wf.wflib.fire.FlameCreator;
-import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
@@ -29,11 +28,9 @@ public final class FireClientFX {
     }
 
     private static void registerLight(FireLingeringEntity fire) {
-        AABB box = fire.getBoundingBox();
-        double cx = (box.minX + box.maxX) * 0.5;
-        double cz = (box.minZ + box.maxZ) * 0.5;
-        double cy = box.minY + Math.min(1.0, (box.maxY - box.minY) * 0.5);
-        WFDynamicLight.add(fire.getId(), BlockPos.containing(cx, cy, cz), FIRE_LIGHT);
+        if (!WFLights.fire(fire)) {
+            WFDynamicLight.add(fire.getId(), WFLights.lightPos(fire), FIRE_LIGHT);
+        }
     }
 
     private static void spawnVanillaParticles(FireLingeringEntity fire) {

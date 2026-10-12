@@ -15,7 +15,7 @@ import java.util.List;
 /** Everything a kinetic round is: how it flies, what it does to what it hits, and what it looks like. */
 public final class KineticPreset {
 
-    /** ywzj_vehicle's {@code PhysicsEngine.G}: the gravity its ballistic solver assumes a round falls under. */
+    /** CombinedAssault's {@code PhysicsEngine.G}: the gravity its ballistic solver assumes a round falls under. */
     public static final float DEFAULT_GRAVITY = 9.8f / 400f;
     /** The drag a vehicle cannon's own rounds fly with, so a shell handles like the gun's stock ammunition. */
     public static final float DEFAULT_DRAG = 0.01f;
@@ -23,6 +23,7 @@ public final class KineticPreset {
     private final ResourceLocation id;
     private final ResourceLocation modelId;
     private final ResourceLocation warheadId;
+    private final String itemPath;
 
     private final float muzzleSpeed;
     private final float drag;
@@ -72,6 +73,7 @@ public final class KineticPreset {
         this.id = b.id;
         this.modelId = b.modelId;
         this.warheadId = b.warheadId;
+        this.itemPath = b.itemPath != null ? b.itemPath : "shell_" + b.id.getPath();
         this.muzzleSpeed = b.muzzleSpeed;
         this.drag = b.drag;
         this.gravity = b.gravity;
@@ -128,6 +130,11 @@ public final class KineticPreset {
     @Nullable
     public ResourceLocation modelId() {
         return modelId;
+    }
+
+    /** Registry path of this preset's item. */
+    public String itemPath() {
+        return itemPath;
     }
 
     /** The {@link WarheadRegistry} entry fired when the shell goes off. */
@@ -347,6 +354,7 @@ public final class KineticPreset {
         private final ResourceLocation id;
         private final ResourceLocation modelId;
         private final ResourceLocation warheadId;
+        private String itemPath;
 
         private float muzzleSpeed = 6.0f;
         private float drag = DEFAULT_DRAG;
@@ -394,6 +402,12 @@ public final class KineticPreset {
             this.id = id;
             this.modelId = modelId;
             this.warheadId = warheadId;
+        }
+
+        /** Item registry path; default {@code shell_<id path>}. */
+        public Builder item(String path) {
+            this.itemPath = path;
+            return this;
         }
 
         /** Muzzle velocity in blocks per tick. A field gun is around 6, a mortar 2, a tank gun 20. */

@@ -10,10 +10,7 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
-/**
- * The mod's dedicated creative tab, collecting every WFLib item, blocks/machines and the preset missiles,
- * onto one page.
- */
+/** WFLib's creative tab: every item, block/machine and preset missile on one page. */
 public final class WFCreativeTabs {
 
     public static final DeferredRegister<CreativeModeTab> TABS =
@@ -24,7 +21,6 @@ public final class WFCreativeTabs {
                     .title(Component.translatable("itemGroup.wflib"))
                     .icon(() -> new ItemStack(ModBlocks.MISSILE_DISPENSER_ITEM.get()))
                     .displayItems((params, output) -> {
-                        // Blocks & machines.
                         output.accept(ModBlocks.MISSILE_DISPENSER_ITEM.get());
                         output.accept(ModBlocks.MISSILE_LISTENER_DEBUG_ITEM.get());
                         output.accept(ModBlocks.DRONE_PAD_ITEM.get());
@@ -41,6 +37,7 @@ public final class WFCreativeTabs {
                         output.accept(ModBlocks.SECURITY_CAMERA_ITEM.get());
                         output.accept(ModItems.CAMERA_LINKER.get());
                         output.accept(ModItems.CAMERA_TABLET.get());
+                        output.accept(ModItems.TERMINAL.get());
                         output.accept(ModItems.DECOY_LAUNCHER.get());
                         output.accept(ModBlocks.MINING_CHARGE_ITEM.get());
                         output.accept(ModBlocks.DEEP_MINING_CHARGE_ITEM.get());
@@ -60,6 +57,13 @@ public final class WFCreativeTabs {
                         ModItems.missileItems().forEach(item -> output.accept(item.get()));
                         // Loadable kinetic rounds (registration order).
                         ModItems.shellItems().forEach(item -> output.accept(item.get()));
+                        // Catalogue cartridges; other sources list theirs in their own tabs.
+                        com.wf.wflib.ammo.Ammo.variants().stream()
+                                .filter(v -> v.id().getNamespace().equals(WFLib.MODID))
+                                .forEach(v -> output.accept(com.wf.wflib.ammo.AmmoItems.stack(v, 1)));
+                        output.accept(com.wf.wflib.countermeasure.Countermeasures.FLARE_CARTRIDGE.get());
+                        output.accept(com.wf.wflib.countermeasure.Countermeasures.SMOKE_GRENADE_ITEM.get());
+                        output.accept(com.wf.wflib.countermeasure.Countermeasures.APS_GRENADE_ITEM.get());
                         // Preset mines (registration order).
                         ModItems.mineItems().forEach(item -> output.accept(item.get()));
                         // Armour and its inserts (registration order).

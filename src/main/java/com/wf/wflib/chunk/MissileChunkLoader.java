@@ -18,7 +18,6 @@ public final class MissileChunkLoader {
     private int targetRadius = -1;
 
     private static void force(ServerLevel level, Entity flier, long chunkKey, boolean add, boolean ticking) {
-        // Entity-UUID owned tickets via the shared WF controller.
         DetonationChunkGuard.CONTROLLER.forceChunk(level, flier.getUUID(),
                 ChunkPos.getX(chunkKey), ChunkPos.getZ(chunkKey), add, ticking);
     }

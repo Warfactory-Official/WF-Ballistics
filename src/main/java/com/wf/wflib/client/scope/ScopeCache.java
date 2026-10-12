@@ -31,10 +31,7 @@ public final class ScopeCache {
         return FRAMES.get(netId);
     }
 
-    /**
-     * @return the texture for this network's current frame, rasterising it if the frame has moved on, or null
-     *      if nothing has been received for this net yet.
-     */
+    /** @return texture for net's current frame, rasterised as needed; null if net unseen. */
     @Nullable
     public static ResourceLocation texture(long netId) {
         ScopeFrame frame = FRAMES.get(netId);
@@ -46,7 +43,6 @@ public final class ScopeCache {
         return raster.texture();
     }
 
-    /** Drop textures for networks that have gone quiet. */
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) {
@@ -70,7 +66,6 @@ public final class ScopeCache {
         }
     }
 
-    /** Release everything, on disconnect. */
     public static void clear() {
         for (ScopeRaster raster : RASTERS.values()) {
             raster.close();

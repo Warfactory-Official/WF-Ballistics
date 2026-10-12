@@ -61,8 +61,6 @@ public final class ModelGallery {
         }
     }
 
-    // --- missiles: baked vanilla models, one json + obj each --------------------------------------
-
     private static List<GalleryEntry> missiles() {
         List<GalleryEntry> entries = new ArrayList<>();
         for (ResourceLocation id : MissileModels.ids()) {
@@ -92,8 +90,6 @@ public final class ModelGallery {
         }
         return lines;
     }
-
-    // --- mines: imported glTF, with camouflage as packed variants ---------------------------------
 
     private static List<GalleryEntry> mines() {
         List<GalleryEntry> entries = new ArrayList<>();
@@ -135,8 +131,6 @@ public final class ModelGallery {
         lines.add(grey("asset  " + MineModels.asset(id)));
         return lines;
     }
-
-    // --- drones: imported airframes ---------------------------------------------------------------
 
     private static List<GalleryEntry> drones() {
         List<GalleryEntry> entries = new ArrayList<>();
@@ -185,8 +179,7 @@ public final class ModelGallery {
         return lines;
     }
 
-    // --- pieces: one node of an airframe, which is what wreckage is -------------------------------
-
+    // A piece is a wreckage node of a drone airframe.
     private static List<GalleryEntry> pieces() {
         List<GalleryEntry> entries = new ArrayList<>();
         for (ResourceLocation drone : DroneModels.ids()) {
@@ -243,8 +236,6 @@ public final class ModelGallery {
         return lines;
     }
 
-    // --- doors: fifteen types, each with its own skins ---------------------------------------------
-
     private static List<GalleryEntry> doors() {
         List<GalleryEntry> entries = new ArrayList<>();
         for (DoorType type : DoorType.values()) {
@@ -300,8 +291,6 @@ public final class ModelGallery {
         return lines;
     }
 
-    // --- glyphids: one rig, the castes packed into its sheet ---------------------------------------
-
     private static List<GalleryEntry> glyphids() {
         List<GalleryEntry> entries = new ArrayList<>();
         entries.add(glyphid("body", GlyphidModel::body));
@@ -343,8 +332,6 @@ public final class ModelGallery {
         return variants;
     }
 
-    // --- props: the loose baked models the effects and the item renderers draw ---------------------
-
     private static List<GalleryEntry> props() {
         List<GalleryEntry> entries = new ArrayList<>();
         for (Map.Entry<ResourceLocation, PartialModel> prop : ModModels.props()
@@ -362,8 +349,6 @@ public final class ModelGallery {
         return BakedEntry.measured(id, tail(id), partial::get, () -> List.of(name(id), grey(what)));
     }
 
-    // --- probe: standalone models a probe panel draws ----------------------------------------------
-
     private static List<GalleryEntry> probe() {
         List<GalleryEntry> entries = new ArrayList<>();
         for (ResourceLocation id : ProbeModels.declared()) {
@@ -373,13 +358,7 @@ public final class ModelGallery {
         return entries;
     }
 
-    // --- shared -----------------------------------------------------------------------------------
-
-    /**
-     * A clip list of "held at the first frame" and "played", for a model with exactly one thing it does.
-     *
-     * @return empty when the model has no such clip, which poses it at rest and hides the control
-     */
+    /** "held"/"played" clip pair; empty when no such clip (rest pose, control hidden). */
     private static List<GalleryEntry.Clip> held(String stillName, @Nullable GltfAnimation clip,
                                                 String playingName) {
         if (clip == null) {
@@ -394,7 +373,7 @@ public final class ModelGallery {
         return rig == null ? null : rig.model();
     }
 
-    /** @return the last segment of an id's path, which is the part that tells one entry from the next. */
+    /** Last segment of an id's path; the part that tells one entry from the next. */
     private static String tail(ResourceLocation id) {
         String path = id.getPath();
         return path.substring(path.lastIndexOf('/') + 1);

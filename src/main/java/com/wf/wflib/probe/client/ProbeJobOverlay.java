@@ -1,5 +1,6 @@
 package com.wf.wflib.probe.client;
 
+import com.wf.gemrender.ui.Canvas;
 import com.wf.wflib.probe.ProbeAction;
 import com.wf.wflib.probe.ProbeJobPacket;
 import net.minecraft.client.DeltaTracker;
@@ -66,21 +67,38 @@ public final class ProbeJobOverlay implements LayeredDraw.Layer {
             return;
         }
         Font font = mc.font;
-        int cx = graphics.guiWidth() / 2;
+        float cx = graphics.guiWidth() / 2;
         int y = graphics.guiHeight() / 2 + BELOW_CROSSHAIR;
         long now = mc.level.getGameTime();
-        if (label != null) {
-            float t = Mth.clamp((now - startTick + delta.getGameTimeDeltaPartialTick(false)) / total, 0, 1);
-            graphics.drawCenteredString(font, label, cx, y, 0xFFFFFFFF);
-            int x0 = cx - BAR_WIDTH / 2;
-            int by = y + font.lineHeight + 2;
-            graphics.fill(x0 - 1, by - 1, x0 + BAR_WIDTH + 1, by + BAR_HEIGHT + 1, 0xC0101014);
-            graphics.fill(x0, by, x0 + Math.round(BAR_WIDTH * t), by + BAR_HEIGHT, 0xFFE0E0E0);
-            float left = Math.max(0, total * (1 - t)) / 20.0f;
-            graphics.drawCenteredString(font, Component.translatable("probe.wflib.job.remaining",
-                    String.format(java.util.Locale.ROOT, "%.1f", left)), cx, by + BAR_HEIGHT + 3, 0xFFA0A0A0);
-        } else if (notice != null && now < noticeUntil) {
-            graphics.drawCenteredString(font, notice, cx, y, 0xFFFF5555);
+        if (label == null && (notice == null || now >= noticeUntil)) {
+            return;
         }
+        Canvas canvas = Canvas.shared().begin(graphics);
+        try {
+            draw(canvas, font, cx, y, now, delta.getGameTimeDeltaPartialTick(false));
+        } finally {
+            canvas.end();
+        }
+    }
+
+    private static void draw(Canvas canvas, Font font, float cx, int y, long now, float partialTick) {
+        if (label != null) {
+            float t = Mth.clamp((now - startTick + partialTick) / total, 0, 1);
+            centred(canvas, font, label, cx, y, 0xFFFFFFFF);
+            float x0 = cx - BAR_WIDTH / 2f;
+            int by = y + font.lineHeight + 2;
+            canvas.fill(x0 - 1, by - 1, x0 + BAR_WIDTH + 1, by + BAR_HEIGHT + 1, 0xC0101014);
+            canvas.fill(x0, by, x0 + Math.round(BAR_WIDTH * t), by + BAR_HEIGHT, 0xFFE0E0E0);
+            float left = Math.max(0, total * (1 - t)) / 20.0f;
+            centred(canvas, font, Component.translatable("probe.wflib.job.remaining",
+                    String.format(java.util.Locale.ROOT, "%.1f", left)), cx, by + BAR_HEIGHT + 3, 0xFFA0A0A0);
+        } else {
+            centred(canvas, font, notice, cx, y, 0xFFFF5555);
+        }
+    }
+
+    private static void centred(Canvas canvas, Font font, Component text, float cx, float y, int argb) {
+        var sequence = text.getVisualOrderText();
+        canvas.text(sequence, cx - font.width(sequence) / 2, y, argb, true);
     }
 }

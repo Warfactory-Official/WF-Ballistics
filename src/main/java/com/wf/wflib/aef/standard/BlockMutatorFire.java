@@ -8,7 +8,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
-/** Leaves scattered fires in the blast's wake. */
 public class BlockMutatorFire implements IBlockMutator {
 
     @Override

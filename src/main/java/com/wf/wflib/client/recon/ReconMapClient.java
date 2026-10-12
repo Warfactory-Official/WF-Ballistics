@@ -8,12 +8,12 @@ import org.jetbrains.annotations.Nullable;
 /** The last grid the server told this client about, and the seam a map plugin attaches to. */
 public final class ReconMapClient {
 
-    /** What a renderer has to be told. Implemented by the JourneyMap plugin, and by nothing else today. */
+    /** Implemented by {@link ReconMapLayer}. */
     public interface Listener {
 
         /**
-         * @param dimension where these overlays belong. Carried explicitly rather than read from the client
-         *      level, because a payload can arrive across a dimension change.
+         * @param dimension where overlays belong; carried explicitly since a payload can arrive across a
+         *      dimension change.
          */
         void onReconMap(ResourceKey<Level> dimension, ReconMapView view);
     }

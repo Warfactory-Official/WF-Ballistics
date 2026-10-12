@@ -4,15 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The one reduction step. Pure arithmetic over {@link ArmorLayer}s, with no Minecraft types, so it
- * is unit-testable and so both callers (WFMedical per limb, and whole-entity for mobs with no limb
- * model) share exactly one implementation.
- *
- * <p>Damage reduction is DT then DR, Factorio's decrease/percent under HBM's names. Wear is per
- * absorbed damage rather than per hit, which makes a fully stopped hit transfer all of its energy
- * into the armour: volume fire wears plate faster than a round that punches through. {@code
- * hardness} is the brake on that, so armour can be genuinely too tough to grind down with cheap
- * ammunition.
+ * Pure DT-then-DR reduction (Factorio decrease/percent, HBM's naming), shared by WFMedical's per-limb
+ * path and the whole-entity path. Wear is per absorbed damage, not per hit: a fully-stopped hit dumps
+ * all its energy into the armour, so volume fire wears plate faster than a punch-through round.
+ * {@code hardness} brakes that.
  */
 public final class ArmorResolver {
 
@@ -50,8 +45,6 @@ public final class ArmorResolver {
         for (int i = 0; i < n; i++) {
             ArmorLayer layer = layers.get(i);
             ProtectionRow row = layer.spec().row(type);
-            // Coverage is 1 whenever the caller knows where the hit landed; it is only below 1 on the
-            // whole-entity door, where a piece is worth its share of a body rather than the whole of one.
             double eff = layer.effectiveness() * layer.coverage();
             dt[i] = row.dt() * eff;
             dr[i] = row.dr() * eff;
@@ -59,8 +52,8 @@ public final class ArmorResolver {
             drTotal += dr[i];
         }
 
-        // Piercing is applied to the totals, and the per-layer shares below are taken from the
-        // unpierced values: the ratios are what attribution needs, and they are unchanged by it.
+        // Piercing is subtracted from totals only; per-layer wear shares below use the unpierced
+        // dt[]/dr[] ratios (attribution ratio is invariant under piercing).
         double piercedDt = Math.max(0.0D, dtTotal - Math.max(pierceDt, 0.0D));
         double keptDr = clamp(1.0D - pierceDr, 0.0D, 1.0D);
         double effectiveDr = Math.min(drTotal, ArmorUnits.MAX_RESISTANCE) * keptDr;
@@ -95,9 +88,8 @@ public final class ArmorResolver {
             ArmorLayer layer = layers.get(i);
             int points = 0;
             if (impactWear && share > 0.0D) {
-                // Hardness is not scaled by coverage: it is a property of the material, not of how much
-                // of the body it happens to be in front of. A partly-covering piece therefore absorbs
-                // less and is that much more likely to be merely scuffed, which is the right reading.
+                // hardness scaled by effectiveness only, not coverage: it's a material property,
+                // independent of how much body the piece is in front of.
                 double hardness = layer.spec().row(type).hardness() * layer.effectiveness();
                 double excess = share - hardness;
                 double wearDamage = excess <= 0.0D

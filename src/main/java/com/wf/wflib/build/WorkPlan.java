@@ -10,20 +10,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The result of turning something (a blueprint, a volume of world) into work.
+ * Output of {@link ConstructionPlan#of} or {@link SalvagePlan#of}.
  *
- * @param orders what to do, ready for {@code WorkQueue.of}. Ids are placeholders; the queue assigns its
- *      own
- * @param bill what it costs to build, or roughly what taking it down gives back. Exact for a
- *      construction, since the item that places a block is the item a block needs; an estimate
- *      for a demolition, since what a block actually drops is a loot table and a stone block
- *      mined without a pickaxe drops nothing at all
- * @param bounds the volume affected
- * @param skipped cells deliberately not given an order: the upper half of a door, the head of a bed, the
- *      top of a tall flower. Placing the other half creates these, and ordering them separately
- *      would have a drone fly out to build something that already exists
- * @param unbuildable cells whose block has no item to place it with. Reported rather than dropped quietly:
- *      see {@link #itemFor}
+ * @param orders ids are placeholders; {@code WorkQueue.of} assigns its own.
+ * @param bill exact for construction (item placed = item needed); an estimate for demolition (loot table,
+ *      pickaxe-less stone drops nothing).
+ * @param skipped {@link Placement#derived} cells: the other half already creates them.
+ * @param unbuildable reported, not dropped: see {@link #itemFor}.
  */
 public record WorkPlan(List<WorkOrder> orders, Map<Item, Integer> bill, BoundingBox bounds,
                        int skipped, int unbuildable) {
@@ -37,9 +30,6 @@ public record WorkPlan(List<WorkOrder> orders, Map<Item, Integer> bill, Bounding
         return this.orders.size();
     }
 
-    /**
-     * @return how many items the whole job needs, across every kind.
-     */
     public int totalItems() {
         int total = 0;
         for (int count : this.bill.values()) {
@@ -48,9 +38,6 @@ public record WorkPlan(List<WorkOrder> orders, Map<Item, Integer> bill, Bounding
         return total;
     }
 
-    /**
-     * @return the bill as lines of {@code "64 x Stone"}, commonest first.
-     */
     public List<String> billLines() {
         List<Map.Entry<Item, Integer>> entries = new ArrayList<>(this.bill.entrySet());
         entries.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
@@ -67,9 +54,6 @@ public record WorkPlan(List<WorkOrder> orders, Map<Item, Integer> bill, Bounding
         return item == net.minecraft.world.item.Items.AIR ? null : item;
     }
 
-    /**
-     * Accumulates a bill while a plan is being built.
-     */
     public static final class Bill {
         private final Map<Item, Integer> counts = new LinkedHashMap<>();
 

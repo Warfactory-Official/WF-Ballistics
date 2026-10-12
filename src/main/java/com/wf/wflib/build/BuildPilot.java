@@ -22,18 +22,15 @@ import org.jetbrains.annotations.Nullable;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-/** The world-thread half of working a job: deciding what a drone does next, and doing it. */
 public final class BuildPilot {
 
-    /** How far down the pending queue a resupply looks when deciding what to load. */
+    /** Resupply look-ahead into the pending queue, deciding what to load. */
     private static final int SHOPPING_HORIZON = 512;
 
     private BuildPilot() {
     }
 
-    /**
-     * Keep this drone pointed at something useful. Called once per tick per drone that is on a job.
-     */
+    /** Called once per tick, per drone on a job. */
     public static void advance(ServerLevel level, DroneEntity drone) {
         WorkAssignment work = drone.orders().assignment();
         if (work == null) {
@@ -54,7 +51,7 @@ public final class BuildPilot {
             drone.orders().setAssignment(work);
         }
         if (!open) {
-            // Give the block back unpenalised: the order did nothing wrong, the ground changed under it.
+            // abandon() is free: the order wasn't at fault, the ground changed under it.
             standDown(level, drone, "standing down: " + job.suspended());
             return;
         }
@@ -64,13 +61,10 @@ public final class BuildPilot {
         assign(level, drone, job);
     }
 
-    /**
-     * Pick this drone's next piece of work, or send it to a station, or send it home.
-     */
     private static void assign(ServerLevel level, DroneEntity drone, WorkJob job) {
         boolean building = job.kind().equals(BuildJobs.CONSTRUCT);
         if (!building && drone.hold().cargoFull()) {
-            // Nowhere to put anything else. Everything recovered so far is worth more delivered than carried.
+            // Delivering what's held beats holding out for more.
             sendToStation(level, drone, job, "cargo full");
             return;
         }
@@ -102,9 +96,6 @@ public final class BuildPilot {
         drone.route().setDestination(Vec3.atCenterOf(order.at()));
     }
 
-    /**
-     * Point the drone at the job's station, or home if it has not got one.
-     */
     private static void sendToStation(ServerLevel level, DroneEntity drone, WorkJob job, String why) {
         Vec3 station = stationFor(level, drone, job);
         if (station == null) {
@@ -116,9 +107,7 @@ public final class BuildPilot {
         drone.recordEvent(WFEventType.EXFIL, why + ", heading for the station");
     }
 
-    /**
-     * @return where this job's supplier or depot is, or null if there is not one to be had.
-     */
+    /** Named station first, else the nearest of the right role. */
     @Nullable
     private static Vec3 stationFor(ServerLevel level, DroneEntity drone, WorkJob job) {
         StationRegistry stations = StationRegistry.get(level);
@@ -135,7 +124,6 @@ public final class BuildPilot {
         return candidates.isEmpty() ? null : candidates.get(0).launchPoint();
     }
 
-    /** Do the work at the block the drone says it is over. */
     public static void finish(ServerLevel level, DroneEntity drone, BlockPos at) {
         WorkAssignment work = drone.orders().assignment();
         if (work == null || !work.hasOrder() || !work.order().equals(at)) {
@@ -176,9 +164,6 @@ public final class BuildPilot {
         clearOrder(drone);
     }
 
-    /**
-     * Move items between the drone and the station it is sitting over.
-     */
     public static void exchange(ServerLevel level, DroneEntity drone) {
         WorkAssignment work = drone.orders().assignment();
         if (work == null || !work.hasStation()) {
@@ -203,10 +188,7 @@ public final class BuildPilot {
         }
     }
 
-    /**
-     * @return the items the next stretch of this job will need, commonest first is irrelevant: what matters
-     *      is that they are the ones coming up.
-     */
+    /** Order = queue order, not frequency: that's what's coming up next. */
     private static Set<Item> shoppingList(ServerLevel level, WorkJob job) {
         Set<Item> wanted = new LinkedHashSet<>();
         if (!job.kind().equals(BuildJobs.CONSTRUCT)) {
@@ -228,10 +210,7 @@ public final class BuildPilot {
         return wanted;
     }
 
-    /**
-     * @return the block state a construction order's palette index refers to, or null if the blueprint cannot
-     *      be read any more.
-     */
+    /** Null: blueprint no longer readable. */
     @Nullable
     private static BlockState stateFor(ServerLevel level, WorkJob job, int paletteIndex) {
         String name = BuildJobs.blueprintOf(job);
@@ -254,10 +233,7 @@ public final class BuildPilot {
         }
     }
 
-    /**
-     * @return true while a drone in this state is still able to work. Everything else is on its way home,
-     *      on the ground, or falling
-     */
+    /** False: headed home, grounded, or falling. */
     private static boolean worksJobs(com.wf.wflib.drone.DroneState state) {
         return switch (state) {
             case TAKEOFF, MUSTER, TRANSIT, WORK, SUPPLY -> true;
@@ -265,7 +241,7 @@ public final class BuildPilot {
         };
     }
 
-    /** Take this drone off the job, giving back whatever it was holding, unpenalised. */
+    /** Off the job; abandon() is unpenalised. */
     public static void standDown(ServerLevel level, DroneEntity drone, String why) {
         WorkJob job = drone.orders().assignment() == null ? null
                 : WorkRegistry.get(level).byId(drone.orders().assignment().jobId());
@@ -276,7 +252,7 @@ public final class BuildPilot {
         drone.recordEvent(WFEventType.MISSION_COMPLETE, why);
     }
 
-    /** Take this drone off the job and stop it going anywhere. */
+    /** No live claim at this point (unlike standDown): nothing to release. */
     public static void detach(DroneEntity drone, String why) {
         drone.orders().setAssignment(null);
         drone.route().setDestination(null);

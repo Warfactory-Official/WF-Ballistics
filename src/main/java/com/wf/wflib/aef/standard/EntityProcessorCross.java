@@ -1,6 +1,7 @@
 package com.wf.wflib.aef.standard;
 
 import com.wf.wflib.aef.ExplosionAEF;
+import com.wf.wflib.fx.BlastCorpses;
 import com.wf.wflib.aef.interfaces.ICustomDamageHandler;
 import com.wf.wflib.aef.interfaces.IEntityProcessor;
 import com.wf.wflib.aef.interfaces.IEntityRangeMutator;
@@ -20,7 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** The recommended entity processor. */
+/** Range = nearest AABB point (not centre); density = max over up to 7 LOS probes (vanilla: 1). */
 public class EntityProcessorCross implements IEntityProcessor {
 
     protected double nodeDist;
@@ -33,16 +34,11 @@ public class EntityProcessorCross implements IEntityProcessor {
         this(0);
     }
 
-    /**
-     * @param nodeDist spacing of the six line-of-sight sample nodes; {@code 0} samples the centre only
-     */
+    /** @param nodeDist spacing of the 6 LOS probe nodes; {@code 0} => centre only */
     public EntityProcessorCross(double nodeDist) {
         this.nodeDist = nodeDist;
     }
 
-    /**
-     * Distance from the blast centre to the nearest point of the entity's box, as a fraction of {@code size}.
-     */
     protected static double nearestSurfaceDistanceScaled(Entity entity, double x, double y, double z, float size) {
         AABB box = entity.getBoundingBox();
         double xDist = (box.minX <= x && box.maxX >= x) ? 0 : Math.min(Math.abs(box.minX - x), Math.abs(box.maxX - x));
@@ -77,8 +73,9 @@ public class EntityProcessorCross implements IEntityProcessor {
 
         Vec3[] nodes = buildNodes(x, y, z);
 
-        // First pass: knockback + record the damage each entity should take.
+        // pass 1: knockback + record damage per entity
         Map<Entity, Float> damageMap = new HashMap<>();
+        Map<Entity, Vec3> pushes = new HashMap<>();
         for (Entity entity : list) {
             double distanceScaled = nearestSurfaceDistanceScaled(entity, x, y, z, size);
             if (distanceScaled > 1.0D) {
@@ -117,6 +114,7 @@ public class EntityProcessorCross implements IEntityProcessor {
                     ? knockback * (1.0 - living.getAttributeValue(Attributes.EXPLOSION_KNOCKBACK_RESISTANCE))
                     : knockback;
 
+            pushes.put(entity, new Vec3(deltaX * enchKnockback, deltaY * enchKnockback, deltaZ * enchKnockback));
             if (shouldDealKnockback(entity)) {
                 entity.setDeltaMovement(entity.getDeltaMovement().add(
                         deltaX * enchKnockback * knockbackMult,
@@ -134,10 +132,14 @@ public class EntityProcessorCross implements IEntityProcessor {
 
         SimGlyphidBlast.damage(this, explosion, level, x, y, z, size);
 
-        // Second pass: actually deal the damage + any custom payload.
+        // pass 2: deal damage + any custom payload
         for (Map.Entry<Entity, Float> entry : damageMap.entrySet()) {
             Entity entity = entry.getKey();
+            boolean alive = entity.isAlive();
             attackEntity(entity, explosion, entry.getValue());
+            if (alive && !entity.isAlive() && entity instanceof LivingEntity corpse && shouldDealKnockback(entity)) {
+                BlastCorpses.launch(corpse, pushes.get(entity));
+            }
             if (damage != null) {
                 damage.handleAttack(explosion, entity, nearestSurfaceDistanceScaled(entity, x, y, z, size));
             }
@@ -146,7 +148,7 @@ public class EntityProcessorCross implements IEntityProcessor {
         return affectedPlayers;
     }
 
-    /** The radius this blast actually reaches, after the doubling and any range mutator. */
+    /** Entity-damage reach = 2x size, after any range mutator. */
     float blastRadius(ExplosionAEF explosion, float size) {
         float radius = size * 2.0F;
         return range != null ? range.mutateRange(explosion, radius) : radius;
@@ -171,35 +173,28 @@ public class EntityProcessorCross implements IEntityProcessor {
         return nodes;
     }
 
-    /** Deals the blast damage. */
+    /** Override for a different damage pipeline. */
     public void attackEntity(Entity entity, ExplosionAEF explosion, float amount) {
         entity.hurt(explosionDamage(explosion), amount);
     }
 
-    /**
-     * Vanilla-style scaling damage. Override for flat or otherwise-shaped falloff.
-     */
+    /** Vanilla-style scaling damage; override for flat/other falloff. */
     public float calculateDamage(double distanceScaled, double density, double knockback, float size) {
         return (int) ((knockback * knockback + knockback) / 2.0D * 8.0D * size + 1.0D);
     }
 
-    /**
-     * Whether a given entity should receive knockback at all; override to exempt e.g. projectiles.
-     */
+    /** Override to exempt entities (e.g. projectiles) from knockback. */
     protected boolean shouldDealKnockback(Entity entity) {
         return true;
     }
 
-    /** Blast-shape gate, checked right after the spherical range cull. */
+    /** Shape gate, checked after the spherical range cull. */
     protected boolean isWithinBlastShape(ExplosionAEF explosion, Entity entity, double x, double y, double z) {
         AABB box = entity.getBoundingBox();
         return isWithinBlastShape(explosion, entity.getX(), (box.minY + box.maxY) * 0.5, entity.getZ(), x, y, z);
     }
 
-    /**
-     * The same gate, asked about a position rather than an entity, so something without a bounding box can be
-     * tested too.
-     */
+    /** Position variant: for callers without a bounding box (e.g. {@link SimGlyphidBlast}). */
     protected boolean isWithinBlastShape(ExplosionAEF explosion, double px, double py, double pz,
                                          double x, double y, double z) {
         return true;

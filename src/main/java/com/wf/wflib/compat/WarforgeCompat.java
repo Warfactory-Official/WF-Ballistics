@@ -126,10 +126,10 @@ public final class WarforgeCompat {
 
     /** Allied or the same faction. Stricter than {@link #areFactionsFriendly}, which a truce satisfies. */
     public static boolean areFactionsAllied(UUID a, UUID b) {
-        if (!factionFoFEnabled || !LOADED || a == null || b == null) {
+        if (!factionFoFEnabled || a == null || b == null) {
             return false;
         }
-        return a.equals(b) || WarforgeApi.areFactionsAllied(a, b);
+        return a.equals(b) || LOADED && WarforgeApi.areFactionsAllied(a, b);
     }
 
     /**
@@ -149,14 +149,17 @@ public final class WarforgeCompat {
         return WarforgeApi.maySeeFactionContent(playerId, ownerFaction);
     }
 
+    /** Same side (any owner source, WarForge or not), allied or truced. */
     public static boolean areFactionsFriendly(UUID a, UUID b) {
-        if (!factionFoFEnabled || !LOADED || a == null || b == null) {
+        if (!factionFoFEnabled || a == null || b == null) {
             return false;
         }
-        if (a.equals(b)) {
-            return true;
-        }
-        return WarforgeApi.areFactionsFriendly(a, b);
+        return a.equals(b) || LOADED && WarforgeApi.areFactionsFriendly(a, b);
+    }
+
+    /** Claim rules for explosions, as {@code player} (null => outsider). */
+    public static boolean claimProtected(Level level, UUID player, BlockPos pos) {
+        return claimProtectionEnabled && LOADED && WarforgeApi.claimProtected(level, player, pos);
     }
 
     public static void filterClaimProtected(Level level, UUID igniterFaction, Collection<BlockPos> positions) {

@@ -14,11 +14,10 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.Level;
 import org.joml.Matrix4f;
 
-/**
- * Flywheel visual for a {@link SkeletonBoneEffect}: one {@link TransformedInstance} per bone, drawn from the shared
- * per-part bone models.
- */
 public class SkeletonBoneVisual extends AbstractVisual implements SimpleDynamicVisual, EffectVisual<SkeletonBoneEffect> {
+
+    /** Blocks per unit scale sunk by end of life: under the ground, cutout can't fade. */
+    private static final float SINK = 0.6F;
 
     private final SkeletonBoneEffect effect;
     private final TransformedInstance[] instances;
@@ -28,9 +27,9 @@ public class SkeletonBoneVisual extends AbstractVisual implements SimpleDynamicV
         super(ctx, (Level) effect.level(), partialTick);
         this.effect = effect;
 
-        Instancer<TransformedInstance> skull = instancerProvider().instancer(InstanceTypes.TRANSFORMED, FlywheelModels.translucent(ModModels.BONE_SKULL));
-        Instancer<TransformedInstance> torso = instancerProvider().instancer(InstanceTypes.TRANSFORMED, FlywheelModels.translucent(ModModels.BONE_TORSO));
-        Instancer<TransformedInstance> limb = instancerProvider().instancer(InstanceTypes.TRANSFORMED, FlywheelModels.translucent(ModModels.BONE_LIMB));
+        Instancer<TransformedInstance> skull = instancerProvider().instancer(InstanceTypes.TRANSFORMED, FlywheelModels.cutout(ModModels.BONE_SKULL));
+        Instancer<TransformedInstance> torso = instancerProvider().instancer(InstanceTypes.TRANSFORMED, FlywheelModels.cutout(ModModels.BONE_TORSO));
+        Instancer<TransformedInstance> limb = instancerProvider().instancer(InstanceTypes.TRANSFORMED, FlywheelModels.cutout(ModModels.BONE_LIMB));
 
         this.instances = new TransformedInstance[effect.bones.size()];
         for (int i = 0; i < instances.length; i++) {
@@ -61,15 +60,14 @@ public class SkeletonBoneVisual extends AbstractVisual implements SimpleDynamicV
 
             scratch.identity()
                     .translate((float) (bone.ix(pt) - origin.getX()),
-                            (float) (bone.iy(pt) - origin.getY()),
+                            (float) (bone.iy(pt) - bone.sink(pt) * SINK * bone.scale - origin.getY()),
                             (float) (bone.iz(pt) - origin.getZ()))
                     .rotateY((float) Math.toRadians(bone.yaw))
                     .rotate(bone.itumble(pt), bone.tax, bone.tay, bone.taz)
                     .scale(bone.scale);
 
             instance.setTransform(scratch);
-            int alpha = (int) (bone.alpha(pt) * 255F);
-            instance.colorArgb((alpha << 24) | (grey << 16) | (grey << 8) | grey);
+            instance.colorArgb(0xFF000000 | (grey << 16) | (grey << 8) | grey);
             instance.light(ParticleLight.surface(level, bone.x, bone.y, bone.z));
             instance.setChanged();
         }

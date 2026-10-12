@@ -13,7 +13,6 @@ import net.minecraft.core.Vec3i;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 
-/** Draws a {@link GasVolumeCluster} as one raymarched volume. */
 public class GasVolumeClusterVisual extends AbstractVisual
         implements EffectVisual<GasVolumeCluster>, SimpleDynamicVisual {
 
@@ -39,6 +38,7 @@ public class GasVolumeClusterVisual extends AbstractVisual
                 .instancer(GemRenderVolumeTypes.VOLUME, VolumeModels.cloud())
                 .createInstance();
         this.instance.volume(volume.slot());
+        cluster.volume(volume);
 
         rebuildField();
         push();
@@ -52,7 +52,6 @@ public class GasVolumeClusterVisual extends AbstractVisual
         push();
     }
 
-    /** Voxelises every live cell into the field. */
     private void rebuildField() {
         if (field == null) {
             cluster.rebuilt();
@@ -87,8 +86,8 @@ public class GasVolumeClusterVisual extends AbstractVisual
 
     @Override
     protected void _delete() {
+        cluster.volume(null);
         instance.delete();
-        // Closing the volume releases the field's atlas tile too.
         volume.close();
     }
 }

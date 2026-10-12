@@ -1,5 +1,6 @@
 package com.wf.wflib.client.flywheel;
 
+import com.wf.gemrender.volume.Volume;
 import com.wf.gemrender.volume.VolumeStyle;
 import com.wf.wflib.client.fx.MistClientFX;
 import com.wf.wflib.client.fx.ParticleLight;
@@ -11,23 +12,20 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.material.Fluid;
 import net.minecraft.world.phys.AABB;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.List;
 
-/** One gas cloud, assembled from the many {@link MistEntity} cells that actually make it up. */
 public class GasVolumeCluster implements WFFlywheelEffect {
 
-    /** How close a cell has to be to the cluster's current bounds to be considered part of it. */
     private static final double MERGE_MARGIN = 1.0;
 
-    /** Largest span, in blocks, a cluster is allowed to reach on any axis. */
     private static final double MAX_SPAN = 28.0;
 
-    /** Ticks between field rebuilds while dirty, so a 220-cell burst does not rebuild 220 times. */
+    /** Throttle: coalesces rebuilds across a same-tick cell burst instead of one rebuild per {@link #offer}. */
     private static final int REBUILD_INTERVAL = 4;
 
-    /** Ticks the cloud takes to fade out once its last cell is gone. */
     private static final int FADE_TICKS = 20;
 
     private final Level level;
@@ -37,10 +35,12 @@ public class GasVolumeCluster implements WFFlywheelEffect {
 
     private final List<MistEntity> members = new ArrayList<>();
 
-    /** The member boxes, flattened six doubles at a time, republished whenever membership changes. */
     private volatile double[] boxes = new double[0];
 
     private AABB bounds;
+
+    /** Null until visualised; set from the visual. Client thread. */
+    private Volume volume;
 
     private boolean dirty = true;
     private int sinceRebuild = REBUILD_INTERVAL;
@@ -62,11 +62,7 @@ public class GasVolumeCluster implements WFFlywheelEffect {
         this.style = WFVolumeStyles.mist(tint, LightTexture.block(packed), LightTexture.sky(packed));
     }
 
-    /**
-     * Offers a cell to this cluster.
-     *
-     * @return true if it was taken, in which case the caller must not give it to anything else
-     */
+    /** @return taken; caller must then offer the cell to no other cluster. */
     public boolean offer(MistEntity cell) {
         if (goneTicks >= 0 || cell.getFluid() != fluid || cell.level() != level) {
             return false;
@@ -93,16 +89,24 @@ public class GasVolumeCluster implements WFFlywheelEffect {
         return bounds;
     }
 
+    @Nullable
+    Volume volume() {
+        return volume;
+    }
+
+    void volume(@Nullable Volume value) {
+        volume = value;
+    }
+
     public VolumeStyle style() {
         return style;
     }
 
-    /** The member boxes as flat {@code [minX, minY, minZ, maxX, maxY, maxZ]} runs. Safe to read anywhere. */
+    /** Flat {@code [minX, minY, minZ, maxX, maxY, maxZ]} per member; volatile snapshot, safe off the tick thread. */
     public double[] boxes() {
         return boxes;
     }
 
-    /** True when the field needs rebuilding and enough ticks have passed to be worth doing it. */
     public boolean shouldRebuild() {
         return dirty && sinceRebuild >= REBUILD_INTERVAL;
     }

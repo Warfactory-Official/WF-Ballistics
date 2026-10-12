@@ -51,6 +51,8 @@ public final class MissileSeeker {
     private static final int ACTIVE_LOST_TICKS = 60;
     /** Decoys compete within this distance of the lock. */
     private static final double DECOY_RADIUS = 16.0;
+    /** {@link #decoyChance} set: decoys first seen within this many ticks of a salvo's first share its one roll. */
+    static final int SALVO_TICKS = 20;
     /** Beam riding: aim this many ticks of travel ahead along the beam. */
     private static final double BEAM_LEAD_TICKS = 4.0;
 
@@ -67,6 +69,10 @@ public final class MissileSeeker {
     private int lostTicks;
     /** Decoys already rolled against: each gets one chance per missile. Transient. */
     private final IntSet judged = new IntOpenHashSet();
+    /** Seduction chance per decoy salvo; NaN = per-decoy strength race. */
+    float decoyChance = Float.NaN;
+    /** Tick the current salvo opened. Transient. */
+    private int salvoStart = Integer.MIN_VALUE / 2;
     @Nullable
     UUID designatedTargetId;
     /** Unit line of sight last ordered. */
@@ -204,7 +210,9 @@ public final class MissileSeeker {
 
     /**
      * Each new decoy in the mode's band near the lock and in the cone gets one roll:
-     * p = strength / (strength + lock signature in that band). Seduced => the decoy is the lock.
+     * p = strength / (strength + lock signature in that band). {@link #decoyChance} set: one roll per salvo
+     * (first new decoy opens it, later ones within {@link #SALVO_TICKS} ride it), p = decoyChance.
+     * Seduced => the decoy is the lock.
      */
     @Nullable
     private Entity decoyed(ServerLevel level, @Nullable Entity lock) {
@@ -218,6 +226,17 @@ public final class MissileSeeker {
                         && this.inCone(e));
         for (Entity e : decoys) {
             this.judged.add(e.getId());
+            if (!Float.isNaN(this.decoyChance)) {
+                if (this.missile.tickCount - this.salvoStart <= SALVO_TICKS) {
+                    continue;
+                }
+                this.salvoStart = this.missile.tickCount;
+                if (this.missile.getRandom().nextFloat() < this.decoyChance) {
+                    this.missile.recordEvent(WFEventType.OPERATOR, "decoyed");
+                    return e;
+                }
+                continue;
+            }
             float strength = ((SeekerDecoy) e).decoyStrength(band);
             if (this.missile.getRandom().nextFloat() * (strength + lockWeight) < strength) {
                 this.missile.recordEvent(WFEventType.OPERATOR, "decoyed");
@@ -389,6 +408,9 @@ public final class MissileSeeker {
         tag.putDouble("RadarRange", this.radarRange);
         tag.putBoolean("RadarOn", this.radarOn);
         tag.putInt("LostTicks", this.lostTicks);
+        if (!Float.isNaN(this.decoyChance)) {
+            tag.putFloat("DecoyChance", this.decoyChance);
+        }
         return tag;
     }
 
@@ -400,5 +422,11 @@ public final class MissileSeeker {
         this.radarRange = tag.getDouble("RadarRange");
         this.radarOn = tag.getBoolean("RadarOn");
         this.lostTicks = tag.getInt("LostTicks");
+        this.decoyChance = tag.contains("DecoyChance") ? tag.getFloat("DecoyChance") : Float.NaN;
+    }
+
+    /** NaN = per-decoy strength race. */
+    public float decoyChance() {
+        return this.decoyChance;
     }
 }

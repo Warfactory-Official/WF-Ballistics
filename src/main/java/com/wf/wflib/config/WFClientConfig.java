@@ -1,26 +1,21 @@
 package com.wf.wflib.config;
 
+import com.wf.wflib.audio.AudioCategory;
 import net.neoforged.neoforge.common.ModConfigSpec;
 
 public final class WFClientConfig {
 
     public static final ModConfigSpec SPEC;
 
-    // --- Debug ---
     public static final ModConfigSpec.BooleanValue SHOW_MISSILE_TARGETS;
 
-    // --- Gas clouds ---
     public static final ModConfigSpec.BooleanValue VOLUMETRIC_GAS;
     public static final ModConfigSpec.ConfigValue<String> VOLUMETRIC_GAS_QUALITY;
 
-    /**
-     * Overrides for the two gas settings, so a dev run can flip them from the command line without editing (or
-     * racing) the generated toml.
-     */
+    /** System-property override: dev run flips gas settings without editing/racing the generated toml. */
     private static final String VOLUMETRIC_GAS_PROPERTY = "wflib.volumetricGas";
     private static final String VOLUMETRIC_GAS_QUALITY_PROPERTY = "wflib.volumetricGasQuality";
 
-    // --- Drone camera feeds ---
     public static final ModConfigSpec.IntValue CAMERA_MAX_WIDTH;
     public static final ModConfigSpec.IntValue CAMERA_MAX_FPS;
     public static final ModConfigSpec.IntValue CAMERA_MIN_FPS;
@@ -28,6 +23,10 @@ public final class WFClientConfig {
     public static final ModConfigSpec.IntValue CAMERA_BUDGET;
     public static final ModConfigSpec.IntValue CAMERA_FEED_VIEW_DISTANCE;
     public static final ModConfigSpec.BooleanValue CAMERA_EFFECTS;
+
+    /** Per {@link AudioCategory} ordinal. */
+    public static final ModConfigSpec.DoubleValue[] AUDIO_VOLUME;
+    public static final ModConfigSpec.DoubleValue CABIN_MUFFLE;
 
     static {
         ModConfigSpec.Builder b = new ModConfigSpec.Builder();
@@ -104,10 +103,22 @@ public final class WFClientConfig {
                 .define("videoEffects", true);
         b.pop();
 
+        b.comment("Volumes of wflib-managed sounds (vehicles, guns, blasts, cockpit alerts); also sliders in",
+                "Options > Music & Sounds. Vanilla category sliders do not reach these.").push("audio");
+        AudioCategory[] cats = AudioCategory.values();
+        AUDIO_VOLUME = new ModConfigSpec.DoubleValue[cats.length];
+        for (AudioCategory c : cats) {
+            AUDIO_VOLUME[c.ordinal()] = b.defineInRange(c.getSerializedName(), 1.0, 0.0, 1.0);
+        }
+        CABIN_MUFFLE = b
+                .comment("How strongly a closed vehicle cabin muffles outside sound, 0 (off) to 1.")
+                .defineInRange("cabinMuffle", 1.0, 0.0, 1.0);
+        b.pop();
+
         SPEC = b.build();
     }
 
-    /** Whether gas should be raymarched rather than drawn as billboards. */
+    /** IllegalStateException: SPEC unbaked (too early) => false, not a real read. */
     public static boolean volumetricGas() {
         String override = System.getProperty(VOLUMETRIC_GAS_PROPERTY);
         if (override != null) {
@@ -120,7 +131,7 @@ public final class WFClientConfig {
         }
     }
 
-    /** The raymarch quality name; see {@link #volumetricGas()} for why this is not just a config read. */
+    /** Same override + unbaked-SPEC fallback as {@link #volumetricGas()}; default "MEDIUM". */
     public static String volumetricGasQuality() {
         String override = System.getProperty(VOLUMETRIC_GAS_QUALITY_PROPERTY);
         if (override != null) {

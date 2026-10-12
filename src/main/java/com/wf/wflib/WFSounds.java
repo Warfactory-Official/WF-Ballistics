@@ -7,9 +7,6 @@ import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
-/**
- * Registered {@link SoundEvent}s.
- */
 public final class WFSounds {
 
     public static final DeferredRegister<SoundEvent> SOUND_EVENTS =
@@ -34,6 +31,9 @@ public final class WFSounds {
     public static final DeferredHolder<SoundEvent, SoundEvent> DETONATOR_ARM = register("detonator_arm");
     public static final DeferredHolder<SoundEvent, SoundEvent> DETONATOR_DETONATE =
             register("detonator_detonate");
+
+    public static final DeferredHolder<SoundEvent, SoundEvent> SMOKE_POP = register("countermeasure.smoke_pop");
+    public static final DeferredHolder<SoundEvent, SoundEvent> FLARE_BURN = register("countermeasure.flare_burn");
 
     private WFSounds() {
     }

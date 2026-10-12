@@ -12,15 +12,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * A snapshot of a sub-chunks.
- *
- * @author mlbv
- */
 public class SubChunkSnapshot {
-    /**
-     * A section that contains only air.
-     */
+    /** All-air section AND unloaded/out-of-range chunk both collapse here; callers can't tell which. */
     public static final SubChunkSnapshot EMPTY = new SubChunkSnapshot(new Block[]{Blocks.AIR}, null);
 
     private final Block[] palette;
@@ -31,16 +24,6 @@ public class SubChunkSnapshot {
         this.data = d;
     }
 
-    /**
-     * Creates a SubChunkSnapshot.
-     *
-     * @param level The ServerLevel instance from which to retrieve the chunk.
-     * @param key The SubChunkKey identifying the section.
-     * @param allowGeneration Whether to generate chunks. If false, attempting to retrieve a snapshot of a chunk
-     *      that doesn't exist would return {@link SubChunkSnapshot#EMPTY}.
-     * @return A SubChunkSnapshot containing the palette and block data for the section, or {@link
-     *      SubChunkSnapshot#EMPTY} if the region contains only air.
-     */
     public static SubChunkSnapshot getSnapshot(ServerLevel level, SubChunkKey key, boolean allowGeneration) {
         LevelChunk chunk = allowGeneration
                 ? (LevelChunk) level.getChunk(key.getChunkX(), key.getChunkZ(), ChunkStatus.FULL, true)
@@ -78,14 +61,6 @@ public class SubChunkSnapshot {
         return new SubChunkSnapshot(palette.toArray(new Block[0]), data);
     }
 
-    /**
-     * Retrieves the Block at the specified local coordinates within this sub-chunk snapshot.
-     *
-     * @param x The local x-coordinate within the section (0-15).
-     * @param y The local y-coordinate within the section (0-15).
-     * @param z The local z-coordinate within the section (0-15).
-     * @return The Block instance at the given position.
-     */
     public Block getBlock(int x, int y, int z) {
         if (this == EMPTY || data == null) return Blocks.AIR;
         short idx = data[(y << 8) | (z << 4) | x];

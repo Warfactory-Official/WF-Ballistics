@@ -76,7 +76,7 @@ import java.util.UUID;
  * behaviour lives in the components under {@link com.wf.wflib.missile}.
  */
 public class MissileEntity extends Projectile implements OBBEntity, InterceptTarget, IMissileListener, WarheadCarrier,
-        ModelledProjectile, ThreatSource {
+        ModelledProjectile, ThreatSource, com.wf.wflib.telemetry.TelemetryReporter {
     private static final Logger LOGGER = LogUtils.getLogger();
     private static final int LOG_INTERVAL = 4;
 
@@ -149,6 +149,11 @@ public class MissileEntity extends Projectile implements OBBEntity, InterceptTar
     /** WarForge faction. */
     @Nullable
     private UUID teamId;
+    /** Player whose terminal hears this round regardless of team. */
+    @Nullable
+    private UUID operatorId;
+    /** Target height unknown at launch (map point): snapped to the surface once its chunk loads. */
+    private boolean groundTarget;
     private boolean leavingWorld;
 
     public MissileEntity(EntityType<? extends Projectile> type, Level level) {
@@ -205,7 +210,27 @@ public class MissileEntity extends Projectile implements OBBEntity, InterceptTar
             this.refitBounds();
             return;
         }
+        if (this.groundTarget) {
+            this.snapGroundTarget();
+        }
         MissileTicker.tick(this, (ServerLevel) this.level());
+    }
+
+    /** Preloads the target chunk (ticket, async) and takes its surface height when it arrives. */
+    public void setGroundTarget() {
+        this.groundTarget = true;
+        this.chunkLoader.setTargetPreload(this.flight.getTarget(), 1);
+    }
+
+    private void snapGroundTarget() {
+        Vec3 target = this.flight.getTarget();
+        if (target == null || !this.level().isLoaded(net.minecraft.core.BlockPos.containing(target))) {
+            return;
+        }
+        net.minecraft.core.BlockPos column = net.minecraft.core.BlockPos.containing(target);
+        this.groundTarget = false;
+        this.flight.setTarget(new Vec3(target.x, this.level().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                column.getX(), column.getZ()), target.z));
     }
 
     /** Fuel-out bookkeeping, once. */
@@ -229,10 +254,7 @@ public class MissileEntity extends Projectile implements OBBEntity, InterceptTar
         }
     }
 
-    /**
-     * Move by {@code v}, refit the body, sweep what the move crossed.
-     * @return the first non-miss hit while armed, else null
-     */
+    /** @return first non-miss hit while armed, else null */
     @Nullable
     public HitResult flyTo(Vec3 from, Vec3 v) {
         this.setDeltaMovement(v);
@@ -400,6 +422,27 @@ public class MissileEntity extends Projectile implements OBBEntity, InterceptTar
     }
 
     @Nullable
+    public UUID getOperatorId() {
+        return this.operatorId;
+    }
+
+    public void setOperatorId(@Nullable UUID operatorId) {
+        this.operatorId = operatorId;
+    }
+
+    /** Radio: none under water. */
+    @Override
+    @Nullable
+    public com.wf.wflib.telemetry.Telemetry datalink() {
+        if (this.isInWater()) {
+            return null;
+        }
+        ResourceLocation look = this.getLook();
+        return new com.wf.wflib.telemetry.Telemetry(com.wf.wflib.telemetry.TelemetryKind.MISSILE,
+                (look != null ? look : this.getModelId()).getPath(), this.teamId, this.operatorId);
+    }
+
+    @Nullable
     public UUID getControlId() {
         return this.controlId;
     }
@@ -437,7 +480,6 @@ public class MissileEntity extends Projectile implements OBBEntity, InterceptTar
         return this.obbList;
     }
 
-    /** Rebuild the body OBB from model + heading; no-op while position and heading are unchanged. */
     private void refreshObb() {
         double x = this.getX(), y = this.getY(), z = this.getZ();
         Vec3 move = this.isDud() ? new Vec3(this.dudHeading()) : this.getDeltaMovement();
@@ -764,6 +806,10 @@ public class MissileEntity extends Projectile implements OBBEntity, InterceptTar
         if (this.teamId != null) {
             tag.putUUID("TeamId", this.teamId);
         }
+        if (this.operatorId != null) {
+            tag.putUUID("OperatorId", this.operatorId);
+        }
+        tag.putBoolean("GroundTarget", this.groundTarget);
         tag.putFloat("DownedRoll", this.downedRoll());
         if (this.isDud()) {
             Vector3f h = this.dudHeading();
@@ -784,6 +830,8 @@ public class MissileEntity extends Projectile implements OBBEntity, InterceptTar
                 tag.getDouble("FlightSoundSpeedPitch"));
         this.controlId = tag.hasUUID("ControlId") ? tag.getUUID("ControlId") : null;
         this.teamId = tag.hasUUID("TeamId") ? tag.getUUID("TeamId") : null;
+        this.operatorId = tag.hasUUID("OperatorId") ? tag.getUUID("OperatorId") : null;
+        this.groundTarget = tag.getBoolean("GroundTarget");
         this.flight.load(tag.getCompound("Flight"));
         this.motor.load(tag.getCompound("Motor"));
         this.fuze.load(tag.getCompound("Fuze"));

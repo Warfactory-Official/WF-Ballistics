@@ -1,5 +1,8 @@
 package com.wf.wflib.drone;
 
+import com.wf.wflib.audio.AudioCategory;
+import com.wf.wflib.audio.Blasts;
+import com.wf.wflib.audio.WfAudio;
 import com.wf.wflib.ModEntities;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
@@ -8,8 +11,6 @@ import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
@@ -215,8 +216,7 @@ public class DroneDebrisEntity extends Entity {
             level.addFreshEntity(new DroneDebrisEntity(level, centre.add(offset), part, velocity, spin));
         }
         level.sendParticles(ParticleTypes.LARGE_SMOKE, centre.x, centre.y, centre.z, 12, 0.4, 0.3, 0.4, 0.02);
-        level.playSound(null, centre.x, centre.y, centre.z, SoundEvents.GENERIC_EXPLODE.value(),
-                SoundSource.NEUTRAL, 0.7f, 1.6f);
+        WfAudio.at(level, centre, AudioCategory.EXPLOSIONS, Blasts.pop(96, 1.6F));
     }
 
     private static Vec3 randomHorizontal(ServerLevel level) {

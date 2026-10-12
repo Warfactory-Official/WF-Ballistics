@@ -24,4 +24,16 @@ public final class ProbeProvider {
     public interface Entities {
         void append(ProbeInfo info, ProbeContext ctx, Entity entity);
     }
+
+    /** Nodes on an entity; client, per frame, while within reach. */
+    @FunctionalInterface
+    public interface EntityNodes {
+        void nodes(java.util.List<ProbeNode> out, ProbeContext ctx, Entity entity);
+    }
+
+    /** Nodes on a block entity; client, per frame, while within reach. */
+    @FunctionalInterface
+    public interface BlockNodes {
+        void nodes(java.util.List<ProbeNode> out, ProbeContext ctx, BlockEntity blockEntity);
+    }
 }

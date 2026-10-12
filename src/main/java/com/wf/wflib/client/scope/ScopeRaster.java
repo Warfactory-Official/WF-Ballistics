@@ -20,7 +20,7 @@ public final class ScopeRaster implements AutoCloseable {
     /** Range rings, as fractions of full scale. */
     private static final double[] RINGS = {0.25, 0.5, 0.75, 1.0};
 
-    // Phosphor. ARGB, and NativeImage is little-endian ABGR in memory, so everything goes through argb().
+    // Phosphor palette. Colours here are ARGB; NativeImage stores ABGR, converted via argb().
     private static final int BACKGROUND = 0xFF04140A;
     private static final int GRID = 0xFF0E5A28;
     private static final int GRID_BRIGHT = 0xFF14883C;
@@ -53,7 +53,7 @@ public final class ScopeRaster implements AutoCloseable {
         return location;
     }
 
-    /** Redraw only if this frame is newer than what is on the texture. */
+    /** Same gameTime as last draw still redraws if the frame went empty -> non-empty. */
     void ensureDrawn(ScopeFrame frame) {
         boolean empty = frame.blips().isEmpty() && frame.events().isEmpty();
         if (frame.gameTime() == drawnAt && !(drawnEmpty && !empty)) {
@@ -110,18 +110,12 @@ public final class ScopeRaster implements AutoCloseable {
         }
     }
 
-    /**
-     * Midpoint circle, eight-way symmetric, blended so a translucent colour draws as one.
-     */
+    /** Blended (not plotted): octant overlaps at axes/diagonals would double the alpha otherwise. */
     private void circleAt(int cx, int cy, int r, int colour) {
         circleAt(cx, cy, r, colour, 1);
     }
 
-    /**
-     * @param step draw one point in {@code step}. Two gives a dashed circle, which is how an event's error
-     *      boundary is drawn: it is a statement about where something might have been rather than a
-     *      thing that is there, and a solid ring the width of the scope reads as the second.
-     */
+    /** @param step 2 = dashed ring; used for an event's error boundary so it doesn't read as a solid detection. */
     private void circleAt(int cx, int cy, int r, int colour, int step) {
         int x = r;
         int y = 0;
@@ -148,10 +142,6 @@ public final class ScopeRaster implements AutoCloseable {
         }
     }
 
-    /**
-     * A contact, drawn as what it actually is: a disc the size of its own error radius, brightness from quality and
-     * staleness, colour from IFF.
-     */
     private void drawBlip(int px, int py, ScopeFrame.Blip blip, double scale) {
         int colour = switch (blip.iffValue()) {
             case FRIENDLY -> BLIP_FRIENDLY;
@@ -177,7 +167,7 @@ public final class ScopeRaster implements AutoCloseable {
         if (r > 2) {
             circleAt(px, py, r, (Math.min(255, alpha + 110) << 24) | (colour & 0x00FFFFFF));
         }
-        // A merged cell says so: a bright core scaled by how many the estimator thinks are in there.
+        // Merged-cell core brightness scales with log2(estimated count).
         if (blip.count() > 1) {
             int core = Math.min(r, 1 + (int) Math.round(Math.log(blip.count()) / Math.log(2.0)));
             for (int y = -core; y <= core; y++) {
@@ -190,7 +180,7 @@ public final class ScopeRaster implements AutoCloseable {
         }
     }
 
-    /** A logged explosion: a hollow ring at the fix's own error, and a cross where the network thinks it was. */
+    /** Ring = fix's own error; cross = network's estimate. Distinct marks: real vs estimated position. */
     private void drawEvent(ScopeFrame frame, ScopeFrame.Event event, double scale) {
         double dx = (event.x() - frame.originX()) * scale;
         double dz = (event.z() - frame.originZ()) * scale;
@@ -225,10 +215,7 @@ public final class ScopeRaster implements AutoCloseable {
         }
     }
 
-    /**
-     * Source-over, so overlapping error discs accumulate into a brighter smear instead of the last one drawn
-     * winning.
-     */
+    /** Source-over: overlapping discs accumulate brightness; last-drawn does not simply win. */
     private void blend(int x, int y, int colour) {
         if (x < 0 || y < 0 || x >= SIZE || y >= SIZE) {
             return;
@@ -238,7 +225,6 @@ public final class ScopeRaster implements AutoCloseable {
         int sr = (colour >>> 16) & 0xFF;
         int sg = (colour >>> 8) & 0xFF;
         int sb = colour & 0xFF;
-        // NativeImage stores ABGR; unpack accordingly.
         int dr = dst & 0xFF;
         int dg = (dst >>> 8) & 0xFF;
         int db = (dst >>> 16) & 0xFF;
@@ -263,16 +249,11 @@ public final class ScopeRaster implements AutoCloseable {
         texture.close();
     }
 
-    /**
-     * @return which network this raster belongs to, for diagnostics.
-     */
     public long netId() {
         return netId;
     }
 
-    /**
-     * @return how a blip is named on the readout beside the scope.
-     */
+    /** @return blip name for the readout beside the scope. */
     public static String label(ScopeFrame.Blip blip) {
         String name = blip.kindValue().name();
         return blip.iffValue() == IffState.FRIENDLY ? name + " (F)" : name;

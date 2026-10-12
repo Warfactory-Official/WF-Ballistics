@@ -23,8 +23,10 @@ import com.wf.wflib.round.effect.ImpactContext;
 import com.wf.wflib.round.effect.ImpactEffect;
 import com.wf.wflib.round.effect.ImpactEffects;
 import com.wf.wflib.round.effect.ImpactTrigger;
+import com.wf.wflib.round.pen.BlockDamage;
 import com.wf.wflib.round.pen.BlockPen;
 import com.wf.wflib.round.pen.PenTable;
+import com.wf.wflib.round.pen.Ricochet;
 import com.wf.wflib.round.terrain.AsyncTerrainSource;
 import com.wf.wflib.round.terrain.SectionSolidity;
 import com.wf.wflib.sim.SimKind;
@@ -211,6 +213,13 @@ public final class Rounds implements SimKind<RoundBatch> {
         return i < 0 ? null : new Vec3(b.vx[i], b.vy[i], b.vz[i]);
     }
 
+    /** Ricochets so far; -1 once ended. */
+    public static int ricochets(ServerLevel level, long key) {
+        RoundBatch b = batch(level);
+        int i = b.indexOf(key);
+        return i < 0 ? -1 : b.ricochets[i];
+    }
+
     /** Shooter of a round in flight, if still loaded; null once ended. */
     @Nullable
     public static Entity shooter(ServerLevel level, long key) {
@@ -275,6 +284,10 @@ public final class Rounds implements SimKind<RoundBatch> {
         VirtualGroundEvents.drain(level);
         DeferredImpacts.get(level).apply(level);
         if (tier.view().isEmpty()) {
+            return;
+        }
+        if (!level.tickRateManager().runsNormally()) {
+            RoundNetwork.flush(level);
             return;
         }
         RoundBatch b = tier.view().get(0);
@@ -358,17 +371,31 @@ public final class Rounds implements SimKind<RoundBatch> {
         Vec3 velocity = new Vec3(b.vx[i], b.vy[i], b.vz[i]);
         List<Entity> struck = null;
         long seed = b.seq[i] != NO_SEQ ? BlockPen.shot(b.shooter[i], b.seq[i]) : key;
+        boolean skips = preset.blockPen() > 0.0f && preset.penetration() == 0;
         int pierced = 0;
+        boolean bounced = false;
         while (true) {
             BlockHitResult block = clip(level, terrain, from, to);
             if (block == PENDING_HIT) {
-                if (pierced == 0) {
+                if (pierced == 0 && !bounced) {
                     return true;
                 }
                 // TODO: deflected remainder over a column still decoding flies as air.
                 break;
             }
             Vec3 end = block.getType() == HitResult.Type.MISS ? to : block.getLocation();
+            BlockHitResult water = null;
+            Vec3 skim = null;
+            if (skips && wet == 0 && terrain == null && velocity.y < 0.0 && b.ricochets[i] < Ricochet.MAX) {
+                water = Ricochet.water(level, from, end);
+                if (water != null) {
+                    skim = Ricochet.bounce(velocity, Ricochet.UP, Ricochet.WATER, true,
+                            BlockPen.seed(seed, water.getBlockPos()));
+                    if (skim != null) {
+                        end = water.getLocation();
+                    }
+                }
+            }
             List<Entity> done = struck;
             List<EntityHit> hits = sweep == DARK ? List.of() : entityHits(level, from, end,
                     done == null ? canHit : e -> canHit.test(e) && !done.contains(e), when);
@@ -376,9 +403,11 @@ public final class Rounds implements SimKind<RoundBatch> {
                 // Spent by a step that swept entities: a retried (decoding) or dark step keeps it.
                 b.rewind[i] = 0;
             }
+            EntityHit glanced = null;
+            Vec3 glance = null;
             for (EntityHit eh : hits) {
                 ProjectileStrikeEvent strike = strike(level, preset, null, key, eh, from, end, velocity,
-                        shooter, b.faction[i], b.damageScale[i]);
+                        shooter, b.faction[i], b.damageScale[i], b.ricochets[i] < Ricochet.MAX, b.ricochets[i] > 0);
                 // Listeners may end this round (destroy => swap-remove); keys are unique.
                 if (i >= b.size || b.key[i] != key) {
                     return false;
@@ -396,18 +425,81 @@ public final class Rounds implements SimKind<RoundBatch> {
                     struck = new ArrayList<>(2);
                 }
                 struck.add(eh.entity);
+                if (strike.outcome() == ProjectileStrikeEvent.Outcome.RICOCHET) {
+                    glanced = eh;
+                    glance = strike.ricochet();
+                    break;
+                }
             }
-            if (block.getType() == HitResult.Type.MISS) {
+            Vec3 bounceAt = null;
+            Vec3 bounce = null;
+            Vec3 normal = null;
+            RoundNetwork.Surface surface = null;
+            BlockHitResult surfaceBlock = null;
+            if (glanced != null) {
+                bounceAt = glanced.at;
+                bounce = glance;
+                normal = glance.normalize().subtract(velocity.normalize()).normalize();
+                surface = RoundNetwork.Surface.ENTITY;
+            } else if (skim != null) {
+                bounceAt = water.getLocation();
+                bounce = skim;
+                normal = Ricochet.UP;
+                surface = RoundNetwork.Surface.WATER;
+                surfaceBlock = water;
+            } else if (block.getType() == HitResult.Type.MISS) {
                 break;
             }
             BlockPos hitPos = block.getBlockPos();
-            boolean unloaded = !loaded(level, hitPos.getX(), hitPos.getZ());
-            if (!unloaded && drill(level, b, i, block)) {
+            boolean unloaded = bounce == null && !loaded(level, hitPos.getX(), hitPos.getZ());
+            if (bounce == null && !unloaded && drill(level, b, i, block, shooter)) {
                 from = block.getLocation();
                 continue;
             }
-            BlockPen.Pass pass = preset.blockPen() > 0.0f && pierced < BlockPen.MAX_PER_STEP
-                    ? pierce(level, terrain, preset, block, velocity, seed) : null;
+            // Entry from air only: right after a pierce exit (adjacent block) the round is inside the layer.
+            if (bounce == null && !unloaded && skips && b.ricochets[i] < Ricochet.MAX
+                    && (pierced == 0 || from.distanceTo(block.getLocation()) > Ricochet.OFF)) {
+                BlockState state = level.getBlockState(hitPos);
+                Vec3 n = Vec3.atLowerCornerOf(block.getDirection().getNormal());
+                if (Ricochet.holds(BlockPen.capacity(preset.blockPen() * (b.ricochets[i] > 0 ? Ricochet.TUMBLE_PEN
+                                : 1.0f), preset.muzzleSpeed(), velocity.length()), PenTable.resistance(state),
+                        state.getCollisionShape(level, hitPos), block.getDirection(), velocity)) {
+                    bounce = Ricochet.bounce(velocity, n, PenTable.ricochet(state), false, BlockPen.seed(seed, hitPos));
+                }
+                if (bounce != null) {
+                    bounceAt = block.getLocation();
+                    normal = n;
+                    surface = RoundNetwork.Surface.BLOCK;
+                    surfaceBlock = block;
+                    BlockDamage.hit(level, hitPos, state, preset.mass() * velocity.subtract(bounce).length() * 20.0,
+                            shooter);
+                }
+            }
+            BlockPen.Pass pass = bounce == null && preset.blockPen() > 0.0f && pierced < BlockPen.MAX_PER_STEP
+                    ? pierce(level, terrain, preset, block, velocity, seed, b.ricochets[i] > 0) : null;
+            if (bounce != null) {
+                b.ricochets[i]++;
+                RoundNetwork.ricocheted(level, b, i, bounceAt, normal, surface,
+                        surfaceBlock == null ? 0L : surfaceBlock.getBlockPos().asLong());
+                if (preset.hasEffects(ImpactTrigger.RICOCHET)) {
+                    ImpactEffects.fire(new ImpactContext(level, ImpactTrigger.RICOCHET, preset, key, null, shooter,
+                            b.faction[i], bounceAt, bounce, surfaceBlock, glanced == null ? null : glanced.entity,
+                            glanced == null ? null : glanced.parts, null, null));
+                    if (i >= b.size || b.key[i] != key) {
+                        return false;
+                    }
+                }
+                double left = Math.max(0.0, from.distanceTo(to) - from.distanceTo(bounceAt)) / velocity.length();
+                velocity = bounce;
+                from = bounceAt.add(normal.scale(Ricochet.OFF));
+                to = from.add(velocity.scale(left));
+                bounced = true;
+                sweep = span(level, from, to);
+                if (sweep != LOADED && terrain == null) {
+                    terrain = AsyncTerrainSource.of(level);
+                }
+                continue;
+            }
             if (pass != null) {
                 NeoForge.EVENT_BUS.post(new RoundPierceEvent(level, preset, key, block, pass, velocity));
                 if (!unloaded && preset.hasEffects(ImpactTrigger.PIERCE_IN)) {
@@ -422,6 +514,11 @@ public final class Rounds implements SimKind<RoundBatch> {
                     return false;
                 }
                 RoundNetwork.pierced(level, b, i, block, pass);
+            }
+            if (!unloaded && skips) {
+                Vec3 after = pass != null && pass.exited() ? pass.velocity() : Vec3.ZERO;
+                BlockDamage.hit(level, hitPos, level.getBlockState(hitPos),
+                        preset.mass() * velocity.subtract(after).length() * 20.0, shooter);
             }
             if (pass != null && pass.exited()) {
                 double left = Math.max(0.0, from.distanceTo(to) - from.distanceTo(pass.point())) / velocity.length();
@@ -461,7 +558,7 @@ public final class Rounds implements SimKind<RoundBatch> {
             detonate(level, b, i, new Vec3(b.x[i], b.y[i], b.z[i]), shooter, RoundEnd.FUSE);
             return false;
         }
-        if (pierced > 0 || partial) {
+        if (pierced > 0 || bounced || partial) {
             b.x[i] = to.x;
             b.y[i] = to.y;
             b.z[i] = to.z;
@@ -478,7 +575,8 @@ public final class Rounds implements SimKind<RoundBatch> {
             b.y[i] += b.vy[i];
             b.z[i] += b.vz[i];
         }
-        double decay = preset.decay(Math.sqrt(b.vx[i] * b.vx[i] + b.vy[i] * b.vy[i] + b.vz[i] * b.vz[i]));
+        double decay = Ricochet.decay(preset, Math.sqrt(b.vx[i] * b.vx[i] + b.vy[i] * b.vy[i] + b.vz[i] * b.vz[i]),
+                b.ricochets[i] > 0);
         float gravity = preset.gravity();
         if (wet != 0) {
             decay = (double) (1.0f - Math.max(preset.waterDrag(), 0.0f));
@@ -488,7 +586,7 @@ public final class Rounds implements SimKind<RoundBatch> {
         b.vy[i] = b.vy[i] * decay - gravity;
         b.vz[i] = b.vz[i] * decay;
         b.dark[i] = sweep == DARK;
-        if (pierced > 0) {
+        if (pierced > 0 || bounced) {
             RoundNetwork.sync(level, b, i);
         }
         return true;
@@ -496,7 +594,7 @@ public final class Rounds implements SimKind<RoundBatch> {
 
     /** {@link KineticPreset#blockPen} through the struck voxel: loaded state, else its on-disk solidity. */
     private static BlockPen.Pass pierce(ServerLevel level, @Nullable AsyncTerrainSource terrain, KineticPreset preset,
-                                        BlockHitResult hit, Vec3 velocity, long seed) {
+                                        BlockHitResult hit, Vec3 velocity, long seed, boolean tumbling) {
         BlockPos pos = hit.getBlockPos();
         LevelChunk chunk = level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4);
         VoxelShape shape;
@@ -514,8 +612,8 @@ public final class Rounds implements SimKind<RoundBatch> {
             resistance = partial == null ? section.resistance(index) : PenTable.resistance(partial);
         }
         return BlockPen.pass(shape, pos, hit.getLocation(), velocity, resistance,
-                BlockPen.capacity(preset.blockPen(), preset.muzzleSpeed(), velocity.length()),
-                BlockPen.seed(seed, pos));
+                BlockPen.capacity(preset.blockPen() * (tumbling ? Ricochet.TUMBLE_PEN : 1.0f), preset.muzzleSpeed(),
+                        velocity.length()), BlockPen.seed(seed, pos));
     }
 
     private static void land(ServerLevel level, RoundBatch b, int i, Vec3 at) {
@@ -537,7 +635,7 @@ public final class Rounds implements SimKind<RoundBatch> {
             BlockState state = level.getBlockState(below);
             float cost = Math.max(0.1f, state.getDestroySpeed(level, below));
             if (below.getY() <= level.getMinBuildHeight() || state.getDestroySpeed(level, below) < 0.0f
-                    || !state.isAir() && cost > b.burrow[i]) {
+                    || !state.isAir() && (cost > b.burrow[i] || BlockDamage.isProtected(level, below, shooter))) {
                 b.burrow[i] = 0.0f;
                 return true;
             }
@@ -913,8 +1011,13 @@ public final class Rounds implements SimKind<RoundBatch> {
     /** Strike event, then the direct hit when it proceeds; the preset's pierce rides on the source. */
     static ProjectileStrikeEvent strike(ServerLevel level, KineticPreset preset, @Nullable Entity projectile,
                                         Object key, EntityHit eh, Vec3 from, Vec3 segmentEnd, Vec3 velocity,
-                                        @Nullable Entity shooter, @Nullable UUID faction, float damageScale) {
+                                        @Nullable Entity shooter, @Nullable UUID faction, float damageScale,
+                                        boolean canRicochet, boolean tumbling) {
         Threat threat = threat(preset, velocity);
+        if (tumbling) {
+            threat = new Threat(threat.kind(), threat.caliberMm(), threat.penetrationMm() * Ricochet.TUMBLE_PEN,
+                    threat.wearFactor());
+        }
         ImpactContext ctx = null;
         List<ImpactEffect> effects = List.of();
         if (preset.hasEffects(ImpactTrigger.HIT)) {
@@ -925,8 +1028,9 @@ public final class Rounds implements SimKind<RoundBatch> {
                 threat = e.threat(ctx, threat);
             }
         }
-        ProjectileStrikeEvent strike = NeoForge.EVENT_BUS.post(new ProjectileStrikeEvent(projectile, key, eh.entity,
-                eh.at, velocity, threat, eh.parts));
+        ProjectileStrikeEvent event = new ProjectileStrikeEvent(projectile, key, eh.entity, eh.at, velocity, threat,
+                eh.parts).withShooter(shooter);
+        ProjectileStrikeEvent strike = NeoForge.EVENT_BUS.post(canRicochet ? event.allowRicochet() : event);
         if (strike.outcome() != ProjectileStrikeEvent.Outcome.PROCEED) {
             return strike;
         }
@@ -957,14 +1061,19 @@ public final class Rounds implements SimKind<RoundBatch> {
         return Math.abs(fromEye) < HEAD_HALF_HEIGHT ? preset.headshot() : 1.0f;
     }
 
-    /** Drill: each block with {@link PenTable} resistance <= the preset's costs one penetration and is destroyed. */
-    private static boolean drill(ServerLevel level, RoundBatch b, int i, BlockHitResult hit) {
+    /**
+     * Drill: each unclaimed block with {@link PenTable} resistance <= the preset's costs one penetration and is
+     * destroyed.
+     */
+    private static boolean drill(ServerLevel level, RoundBatch b, int i, BlockHitResult hit,
+                                 @Nullable Entity shooter) {
         if (b.pen[i] <= 0) {
             return false;
         }
         BlockPos pos = hit.getBlockPos();
         BlockState state = level.getBlockState(pos);
-        if (state.isAir() || PenTable.resistance(state) > b.preset[i].penetrationResistance()) {
+        if (state.isAir() || PenTable.resistance(state) > b.preset[i].penetrationResistance()
+                || BlockDamage.isProtected(level, pos, shooter)) {
             return false;
         }
         b.pen[i]--;

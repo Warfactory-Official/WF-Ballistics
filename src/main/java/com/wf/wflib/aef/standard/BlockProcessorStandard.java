@@ -16,11 +16,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 
-/**
- * The standard destructive block processor: for every allocated position it optionally rolls item drops, removes
- * the block, and optionally hands the (now-cleared) position to an {@link IBlockMutator} so the blast can leave
- * fire, rubble, etc.
- */
 public class BlockProcessorStandard implements IBlockProcessor {
 
     protected IDropChanceMutator chance;
@@ -72,7 +67,7 @@ public class BlockProcessorStandard implements IBlockProcessor {
                 }
             }
 
-            // Removes the block and fires wasExploded (block entities, observers, etc.).
+            // fires wasExploded: notifies block entities/observers
             state.getBlock().onBlockExploded(state, level, pos, explosion.compat);
 
             if (convert != null) {
@@ -91,17 +86,13 @@ public class BlockProcessorStandard implements IBlockProcessor {
         }
     }
 
-    /**
-     * No block ever drops items (clean vaporising blast).
-     */
+    /** No block ever drops items (clean vaporising blast). */
     public BlockProcessorStandard setNoDrop() {
         this.chance = new DropChanceMutatorStandard(0F);
         return this;
     }
 
-    /**
-     * Every block drops its items (loot-friendly mining charge).
-     */
+    /** Every block drops its items (loot-friendly mining charge). */
     public BlockProcessorStandard setAllDrop() {
         this.chance = new DropChanceMutatorStandard(1F);
         return this;

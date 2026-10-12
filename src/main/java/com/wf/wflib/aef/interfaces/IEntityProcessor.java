@@ -7,16 +7,8 @@ import net.minecraft.world.phys.Vec3;
 
 import java.util.Map;
 
-/**
- * Stage 2 of the explosion pipeline: applies damage and knockback to entities in range.
- *
- * @see com.wf.wflib.aef.standard.EntityProcessorCross the recommended "nearest-surface" model
- */
 public interface IEntityProcessor {
 
-    /**
-     * @return for every {@link Player} caught in the blast, the knockback impulse (world-space velocity
-     *      delta) that should be forwarded to its client. Never {@code null}.
-     */
+    /** Per hit {@link Player}: knockback impulse, world-space velocity delta, forwarded to its client. Never null. */
     Map<Player, Vec3> process(ExplosionAEF explosion, Level level, double x, double y, double z, float size);
 }

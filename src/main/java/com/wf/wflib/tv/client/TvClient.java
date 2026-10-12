@@ -20,15 +20,12 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.InputEvent;
-import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
-import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /** Operator end of a TV link: which round, mouse -> seeker gimbal ({@link CameraLink}), view mode. */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class TvClient {
 
-    public static final ResourceLocation LAYER = ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "tv_link");
 
     /** Seeker gimbal limit off the round's heading, degrees. Mouse past it winds nothing up. */
     static final double GIMBAL_LIMIT = 60.0;
@@ -207,8 +204,4 @@ public final class TvClient {
         lostTicks = 0;
     }
 
-    @SubscribeEvent
-    public static void onRegisterLayers(RegisterGuiLayersEvent event) {
-        event.registerAbove(VanillaGuiLayers.CROSSHAIR, LAYER, new TvOverlay());
-    }
 }

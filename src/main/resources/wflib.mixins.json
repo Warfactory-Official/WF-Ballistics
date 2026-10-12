@@ -19,6 +19,9 @@
     "MixinChunkMapTrackedEntity",
     "MixinChunkMap",
     "MixinPlayerChunkSender",
+    "MixinConnection",
+    "MixinChunkHolder",
+    "AccessorPacketEncoder",
     "gt.MixinNotifiableEnergyContainer"
   ],
   "client": [
@@ -29,10 +32,19 @@
     "MixinViewArea",
     "MixinClientChunkCache",
     "MixinClientLevelStreamLog",
+    "MixinClientLevelRemovals",
     "MixinParticleEngine",
     "MixinRenderSectionSort",
     "MixinMouseHandler",
-    "MixinMinecraftFeedTarget"
+    "AccessorChannel",
+    "MixinSoundEngine",
+    "MixinSoundOptionsScreen",
+    "MixinMinecraftFeedTarget",
+    "xaero.worldmap.AccessorGuiMap",
+    "xaero.worldmap.AccessorXaeroScreenBase",
+    "xaero.worldmap.MixinGuiMap",
+    "xaero.minimap.AccessorMinimapFBORenderer",
+    "xaero.minimap.AccessorMinimapElementMapRendererHandler"
   ],
   "injectors": {
     "defaultRequire": 1

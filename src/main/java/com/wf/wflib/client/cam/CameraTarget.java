@@ -36,6 +36,8 @@ public final class CameraTarget implements AutoCloseable {
     private static final float DEGRADE_ONSET = 0.75f;
 
     private final int feedId;
+    /** Feed OSD instance; smoothing and blink state per feed. */
+    com.wf.wflib.ui.UiInstance osd;
     private final FeedTexture texture = new FeedTexture();
     private final ResourceLocation location;
     @Nullable
@@ -173,6 +175,8 @@ public final class CameraTarget implements AutoCloseable {
                 lens = missile.getPosition(partial)
                         .add(CameraSource.Guided.heading(missile).scale(missile.noseForward()))
                         .add(forward.scale(SEEKER_CLEAR));
+            } else if (feed.kind() == CameraFeed.MOUNTED) {
+                lens = FeedMotion.position(feed);
             } else {
                 double boom = anchor == null ? GIMBAL_BOOM : Math.max(GIMBAL_BOOM, anchor.getBbWidth());
                 lens = FeedMotion.position(feed).add(forward.scale(boom));

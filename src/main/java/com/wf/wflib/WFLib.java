@@ -33,7 +33,9 @@ public class WFLib {
         com.wf.wflib.block.ModBlocks.register(modEventBus);
         com.wf.wflib.block.ModBlockEntities.register(modEventBus);
         com.wf.wflib.item.ModItems.register(modEventBus);
+        com.wf.wflib.countermeasure.Countermeasures.register(modEventBus);
         com.wf.wflib.item.ModDataComponents.register(modEventBus);
+        com.wf.wflib.ammo.AmmoItems.register(modEventBus);
         com.wf.wflib.armor.ArmorComponents.register(modEventBus);
         com.wf.wflib.armor.ArmorMaterials.register(modEventBus);
         com.wf.wflib.WFCreativeTabs.register(modEventBus);
@@ -46,6 +48,8 @@ public class WFLib {
         // A plain list add, on both sides, for the same reason the doors' is.
         com.wf.wflib.mine.MineProbeActions.register();
 
+        modEventBus.addListener(net.neoforged.fml.event.lifecycle.FMLLoadCompleteEvent.class, e -> e.enqueueWork(
+                () -> com.wf.wflib.ammo.Ammo.checkWarheads(com.wf.wflib.warhead.WarheadRegistry::exists)));
         modEventBus.addListener(WFConfig::onLoad);
         modEventBus.addListener(com.wf.wflib.armor.ArmorConfig::onLoad);
         modContainer.registerConfig(

@@ -1,5 +1,8 @@
 package com.wf.wflib.missile;
 
+import com.wf.wflib.audio.AudioCategory;
+import com.wf.wflib.audio.Blasts;
+import com.wf.wflib.audio.WfAudio;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.MissileEntity.InterceptMode;
 import com.wf.wflib.drone.DroneEntity;
@@ -9,8 +12,6 @@ import com.wf.wflib.sim.MissileSimConfig;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.sounds.SoundEvents;
-import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.phys.AABB;
@@ -66,6 +67,12 @@ public final class MissileInterceptor {
 
     public boolean isActive() {
         return this.active;
+    }
+
+    /** LOCK target, or null (NEAREST). */
+    @Nullable
+    public UUID lockTarget() {
+        return this.mode == InterceptMode.LOCK ? this.lockTargetId : null;
     }
 
     public float getChance() {
@@ -210,8 +217,7 @@ public final class MissileInterceptor {
         level.sendParticles(ParticleTypes.EXPLOSION, p.x, p.y, p.z, kill ? 3 : 1, 1.0, 1.0, 1.0, 0.0);
         level.sendParticles(ParticleTypes.FLAME, p.x, p.y, p.z, kill ? 24 : 6, 1.4, 1.4, 1.4, 0.06);
         level.sendParticles(ParticleTypes.LARGE_SMOKE, p.x, p.y, p.z, kill ? 14 : 5, 1.6, 1.6, 1.6, 0.02);
-        level.playSound(null, p.x, p.y, p.z, SoundEvents.GENERIC_EXPLODE, SoundSource.HOSTILE,
-                kill ? 3.0f : 1.3f, kill ? 1.0f : 1.5f);
+        WfAudio.at(level, p, AudioCategory.EXPLOSIONS, kill ? Blasts.small() : Blasts.pop(150, 1.5F));
     }
 
     public CompoundTag save() {

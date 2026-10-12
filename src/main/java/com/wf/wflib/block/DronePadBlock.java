@@ -56,7 +56,7 @@ public class DronePadBlock extends BaseEntityBlock {
             if (player.isShiftKeyDown()) {
                 pad.openCargo(player);
             } else if (player instanceof ServerPlayer serverPlayer) {
-                // Hands the block pos to the client menu constructor (read back in DronePadMenu).
+                // buf read back in DronePadMenu's client constructor.
                 serverPlayer.openMenu(pad, buf -> buf.writeBlockPos(pos));
             }
         }

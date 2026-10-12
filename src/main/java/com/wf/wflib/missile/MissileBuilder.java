@@ -94,6 +94,7 @@ public final class MissileBuilder {
     private SeekerMode seekerMode = SeekerMode.DESIGNATED;
     private float seekerFov = 30.0f;
     private double radarRange = 1024.0;
+    private float decoyChance = Float.NaN;
     private float proximity;
     private float impactDamage;
     private ThreatKind threatKind;
@@ -388,6 +389,16 @@ public final class MissileBuilder {
         return this;
     }
 
+    /**
+     * Decoy seduction per salvo (decoys first seen within {@link MissileSeeker#SALVO_TICKS} of the first): one roll,
+     * p = {@code chance}, target-independent. Unset (NaN) = one roll per decoy, p = strength / (strength + target
+     * signature).
+     */
+    public MissileBuilder decoyChance(float chance) {
+        this.decoyChance = Float.isNaN(chance) ? chance : Mth.clamp(chance, 0.0f, 1.0f);
+        return this;
+    }
+
     /** Proximity fuze radius; 0 = contact only. */
     public MissileBuilder proximity(float radius) {
         this.proximity = radius;
@@ -558,6 +569,7 @@ public final class MissileBuilder {
         missile.seeker().mode = this.seekerMode;
         missile.seeker().fov = this.seekerFov;
         missile.seeker().radarRange = this.radarRange;
+        missile.seeker().decoyChance = this.decoyChance;
 
         MissileSignature signature = missile.signature();
         signature.rcs = this.rcs;

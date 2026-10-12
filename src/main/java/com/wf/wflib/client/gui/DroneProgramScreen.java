@@ -74,10 +74,9 @@ public class DroneProgramScreen extends Screen {
         int x = left() + PAD;
         int y = top() + 20;
 
-        // --- the step being composed ---
         kindButton = addRenderableWidget(Button.builder(Component.empty(), b -> {
             kindIndex++;
-            // The fields a step needs depend on its kind, so rebuild rather than toggling widgets around.
+            // Fields needed depend on kind => rebuild rather than toggle widgets.
             this.rebuildWidgets();
         }).bounds(x, y, 92, BTN_H).build());
 
@@ -184,7 +183,7 @@ public class DroneProgramScreen extends Screen {
         }
     }
 
-    /** Keep the selected row on screen, and the window inside the list. */
+    /** Selected row kept on screen; window clamped inside the list. */
     private void clampScroll() {
         int max = Math.max(0, program.tasks().size() - VISIBLE_ROWS);
         if (selected >= 0) {
@@ -211,7 +210,7 @@ public class DroneProgramScreen extends Screen {
         return true;
     }
 
-    /** The panel, drawn as part of the background so that the widgets on it land on top of it. */
+    /** Panel drawn in background so its widgets land on top. */
     @Override
     public void renderBackground(GuiGraphics gg, int mouseX, int mouseY, float partialTick) {
         super.renderBackground(gg, mouseX, mouseY, partialTick);

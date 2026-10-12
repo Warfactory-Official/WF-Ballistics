@@ -9,10 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Every appearance WFLib asks GemRender's particle instancer for. */
 public final class WFParticleStyles {
 
-    /**
-     * Flame's horizontal drag with no vertical drag at all: {@code xd *= 0.9; zd *= 0.9;} while {@code yd} is only
-     * ever added to.
-     */
+    /** Flame: {@code xd*=0.9; zd*=0.9}; yd undamped (only added to). */
     private static final float DRAG_09 = ParticleStyle.dragFromPerTickFactor(0.9F);
 
     /** The exhaust plume's isotropic drag. */
@@ -21,18 +18,14 @@ public final class WFParticleStyles {
     /** The explosion puff's much heavier horizontal drag, {@code xd *= 0.65}. */
     private static final float DRAG_065 = ParticleStyle.dragFromPerTickFactor(0.65F);
 
-    /**
-     * The torpedo wake's drag, and it is the heaviest here by a long way for the obvious reason: water is eight
-     * hundred times the density of air, so whatever sideways velocity the screws hand a bubble is gone within a few
-     * ticks and the wake stands still in the water exactly where it was laid.
-     */
+    /** Water drag, heaviest here: water ~800x air density kills sideways velocity in a few ticks. */
     private static final float DRAG_WAKE_H = ParticleStyle.dragFromPerTickFactor(0.72F);
     private static final float DRAG_WAKE_V = ParticleStyle.dragFromPerTickFactor(0.94F);
 
     /** The blast cloud's isotropic {@code v *= 0.91}. */
     private static final float DRAG_091 = ParticleStyle.dragFromPerTickFactor(0.91F);
 
-    /** Spray: droplets in air, so light drag, and lighter still on the axis they are falling along. */
+    /** Droplets in air: light drag, lighter still on the vertical. */
     private static final float DRAG_SPRAY_H = ParticleStyle.dragFromPerTickFactor(0.92F);
     private static final float DRAG_SPRAY_V = ParticleStyle.dragFromPerTickFactor(0.985F);
 
@@ -43,7 +36,7 @@ public final class WFParticleStyles {
     private static final float DRAG_095 = ParticleStyle.dragFromPerTickFactor(0.95F);
     private static final float DRAG_099 = ParticleStyle.dragFromPerTickFactor(0.99F);
 
-    /** A block chip's {@code friction = 0.98F}, which vanilla applies on all three axes. */
+    /** Block chip: vanilla {@code friction = 0.98F}, isotropic. */
     private static final float DRAG_098 = ParticleStyle.dragFromPerTickFactor(0.98F);
 
     /** The smoke plume's {@code friction = 0.95F}. */
@@ -63,14 +56,13 @@ public final class WFParticleStyles {
     private static volatile int debris = -1;
     private static volatile int cloud = -1;
     private static volatile int blockChunk = -1;
+    private static volatile int bloodDrop = -1;
+    private static volatile int bloodDecal = -1;
 
     private WFParticleStyles() {
     }
 
-    /**
-     * A missile's exhaust plume, drawn by {@code wflib:instance/exhaust.vert} rather than the stock particle
-     * shader, which cannot draw one.
-     */
+    /** Exhaust plume: needs {@code exhaust.vert}; stock particle shader can't draw it. */
     public static int trail(int rgb) {
         return TRAILS.computeIfAbsent(rgb & 0xFFFFFF, tint -> register(ParticleStyle.builder()
                 .drag(DRAG_EXHAUST)
@@ -79,6 +71,7 @@ public final class WFParticleStyles {
                 .tint(tint)
                 .alpha(0.42F, 1.0F)
                 .cool(0.12F, 0.22F)
+                .glow(1.0F)
                 .fadeIn(0.008F)
                 .spin(0.3F)
                 .light(0.0F, 15.0F / 16.0F)
@@ -117,8 +110,9 @@ public final class WFParticleStyles {
                                     .drag(DRAG_09, 0.0F)
                                     .gravity(ParticleStyle.gravityFromPerTickDelta(0.002F))
                                     .size(1.0F, 0.0F)
-                                    .alpha(0.85F, 0.5F)
+                                    .alpha(0.7F, 0.5F)
                                     .cool(0.55F, 0.45F)
+                                    .glow(1.0F)
                                     .build());
                 }
             }
@@ -128,9 +122,8 @@ public final class WFParticleStyles {
 
     /**
      * Gas and mist.
-     *
-     * @param blockLight block light 0-15 where the cloud sits
-     * @param skyLight sky light 0-15 where the cloud sits
+     * @param blockLight 0-15
+     * @param skyLight 0-15
      */
     public static int mist(int rgb, int blockLight, int skyLight) {
         int block = quantiseLight(blockLight);
@@ -148,7 +141,7 @@ public final class WFParticleStyles {
                 .build(), puff()));
     }
 
-    /** Chunks of ground thrown by an explosion, and the one style here that touches the world. */
+    /** Ground chunks thrown by an explosion. */
     public static int debris() {
         if (debris < 0) {
             synchronized (WFParticleStyles.class) {
@@ -166,7 +159,7 @@ public final class WFParticleStyles {
         return debris;
     }
 
-    /** The fireball an explosion throws up, and the last of the hand-ticked appearances to move across. */
+    /** Fireball an explosion throws up. */
     public static int cloud() {
         if (cloud < 0) {
             synchronized (WFParticleStyles.class) {
@@ -178,6 +171,8 @@ public final class WFParticleStyles {
                             .tint(0xFFB20D)
                             .alpha(0.46F, 1.2F)
                             .cool(0.18F, 0.09F)
+                            .glow(1.0F)
+                            .spin(0.25F)
                             .build(), -1);
                 }
             }
@@ -185,10 +180,7 @@ public final class WFParticleStyles {
         return cloud;
     }
 
-    /**
-     * Settling cinders, and the effect with by far the most to gain from not being ticked: a flake lives a full
-     * minute, and the old one spent every tick of it calling {@code move}, which is a collision test.
-     */
+    /** Settling cinder; old particle called {@code move} (collision test) every tick for its full-minute life. */
     public static int ash(int blockLight, int skyLight) {
         int block = quantiseLight(blockLight);
         int sky = quantiseLight(skyLight);
@@ -237,7 +229,7 @@ public final class WFParticleStyles {
                 .build(), cloud()));
     }
 
-    /** A flying copy of one block, thrown by a mining charge: {@code BlockDebrisParticle}'s replacement. */
+    /** Flying block copy, thrown by a mining charge: replaces {@code BlockDebrisParticle}. */
     public static int blockChunk() {
         if (blockChunk < 0) {
             synchronized (WFParticleStyles.class) {
@@ -253,6 +245,39 @@ public final class WFParticleStyles {
             }
         }
         return blockChunk;
+    }
+
+    /** Blood thrown off a landing corpse; colour + light per particle ({@code ParticleLook}). */
+    public static int bloodDrop() {
+        if (bloodDrop < 0) {
+            synchronized (WFParticleStyles.class) {
+                if (bloodDrop < 0) {
+                    bloodDrop = register(ParticleStyle.builder()
+                            .gravity(SPRAY_GRAVITY)
+                            .drag(ParticleStyle.dragFromPerTickFactor(0.98F))
+                            .size(1.0F, 0.0F)
+                            .fadeOut(0.8F)
+                            .stopsOnContact()
+                            .build(), -1);
+                }
+            }
+        }
+        return bloodDrop;
+    }
+
+    /** Splat on the ground under it; fades over the last 15% of its life. */
+    public static int bloodDecal() {
+        if (bloodDecal < 0) {
+            synchronized (WFParticleStyles.class) {
+                if (bloodDecal < 0) {
+                    bloodDecal = register(ParticleStyle.builder()
+                            .size(1.0F, 0.0F)
+                            .fadeOut(0.85F)
+                            .build(), -1);
+                }
+            }
+        }
+        return bloodDecal;
     }
 
     /** Downward acceleration on a droplet of spray, in blocks per second squared. */
@@ -276,10 +301,7 @@ public final class WFParticleStyles {
                 .build(), cloud()));
     }
 
-    /**
-     * The base surge and the raft it leaves: foam pushed out across the surface, which floats where it stops and
-     * takes a long time to break up.
-     */
+    /** Base surge + raft: foam pushed out, floats where it stops, breaks up slowly. */
     public static int foamSurge(int blockLight, int skyLight) {
         int block = quantiseLight(blockLight);
         int sky = quantiseLight(skyLight);
@@ -312,7 +334,7 @@ public final class WFParticleStyles {
         }
     }
 
-    /** Four steps of light, so one gas colour costs at most four of the buffer's style slots. */
+    /** 4 brightness buckets/axis cap style-buffer slots spent per gas colour. */
     private static int quantiseLight(int level) {
         return Math.min(15, Math.max(0, level) / 4 * 5);
     }

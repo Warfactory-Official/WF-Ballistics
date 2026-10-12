@@ -26,15 +26,9 @@ import java.util.stream.Stream;
 /** The blueprints a server has on disk, in {@code <world>/wflib/blueprints/}. */
 public final class BlueprintLibrary {
 
-    /**
-     * Where blueprints live, relative to the world folder.
-     */
     public static final String FOLDER = "wflib/blueprints";
-    /**
-     * Largest file that will be opened, before decompression.
-     */
+    /** Raw file-size cap; {@link #MAX_TAG_BYTES} bounds the decompressed tag. */
     public static final long MAX_FILE_BYTES = 8L * 1024L * 1024L;
-    /** Quota on the decompressed tag. */
     public static final long MAX_TAG_BYTES = 64L * 1024L * 1024L;
 
     private static final Map<String, Cached> CACHE = new HashMap<>();
@@ -46,10 +40,7 @@ public final class BlueprintLibrary {
         return server.getWorldPath(LevelResource.ROOT).resolve(FOLDER);
     }
 
-    /**
-     * @return every file in the folder a registered format claims to read, by bare name, sorted. Cheap: this
-     *      lists the directory and does not open anything
-     */
+    /** Cheap: lists the directory, opens nothing. */
     public static List<String> names(MinecraftServer server) {
         Path dir = directory(server);
         if (!Files.isDirectory(dir)) {
@@ -71,10 +62,9 @@ public final class BlueprintLibrary {
     }
 
     /**
-     * Load a blueprint by name, with or without its extension.
+     * Name may omit the extension.
      *
-     * @throws BlueprintException if the name escapes the folder, no file matches it, it is too big, or its
-     *      format rejects it
+     * @throws BlueprintException no match, file too large, or the format rejects it.
      */
     public static Blueprint load(MinecraftServer server, String name) throws BlueprintException {
         Path path = resolve(server, name);
@@ -107,11 +97,7 @@ public final class BlueprintLibrary {
         return blueprint;
     }
 
-    /**
-     * @return the block registry as a lookup. Taken from the built-in registries rather than a level, because
-     *      blocks are not datapack-registered and a format should be loadable without a world, which is what lets
-     *      {@code DroneSelfTest} drive the readers directly
-     */
+    /** Built-in registry, not a level's: blocks aren't datapack-registered; lets {@code BuildSelfTest} drive readers with no world. */
     public static HolderGetter<Block> blocks() {
         return BuiltInRegistries.BLOCK.asLookup();
     }
@@ -130,9 +116,6 @@ public final class BlueprintLibrary {
         }
     }
 
-    /**
-     * @return the file this name refers to.
-     */
     private static Path resolve(MinecraftServer server, String name) throws BlueprintException {
         String wanted = name.trim().toLowerCase(Locale.ROOT);
         if (wanted.isEmpty()) {
@@ -150,9 +133,7 @@ public final class BlueprintLibrary {
                 : "no blueprint '" + name + "' (have: " + String.join(", ", available) + ")");
     }
 
-    /**
-     * Forget everything cached. For {@code /wflib blueprint reload}, and for tests.
-     */
+    /** For {@code /wflib blueprint reload} and tests. */
     public static void invalidate() {
         CACHE.clear();
     }

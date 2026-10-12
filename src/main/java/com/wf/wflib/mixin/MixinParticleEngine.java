@@ -1,7 +1,6 @@
 package com.wf.wflib.mixin;
 
 import com.wf.wflib.client.cam.FeedPass;
-import com.wf.wflib.client.cam.ScreenSensor;
 import net.minecraft.client.Camera;
 import net.minecraft.client.particle.ParticleEngine;
 import net.minecraft.client.particle.ParticleRenderType;
@@ -14,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.function.Predicate;
 
-/** No particles under thermal: feed or {@link ScreenSensor}. */
+/** No particles under {@link FeedPass#drawingThermal}. */
 @Mixin(ParticleEngine.class)
 public class MixinParticleEngine {
 
@@ -24,7 +23,7 @@ public class MixinParticleEngine {
     private void wfCamSkipParticlesInThermal(LightTexture lightTexture, Camera camera, float partialTick,
                                              Frustum frustum, Predicate<ParticleRenderType> filter,
                                              CallbackInfo ci) {
-        if (FeedPass.active() ? FeedPass.thermal() : ScreenSensor.thermal()) {
+        if (FeedPass.drawingThermal()) {
             ci.cancel();
         }
     }

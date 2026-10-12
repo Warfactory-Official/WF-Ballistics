@@ -23,10 +23,9 @@ import org.joml.Matrix4f;
 import org.joml.Quaternionf;
 import org.joml.Vector4f;
 
-/** Draws one bone of a drone that came apart: the same mesh it was a moment ago, tumbling on its own. */
 public class DroneDebrisVisual extends AbstractEntityVisual<DroneDebrisEntity> implements DynamicVisual {
 
-    /** The bound of the model as it was last posed, in model space, and whether it has been posed at all. */
+    /** Last-posed bound, model space; valid only once {@code bounded}. */
     private final Vector4f bound = new Vector4f();
     private boolean bounded;
 
@@ -36,11 +35,10 @@ public class DroneDebrisVisual extends AbstractEntityVisual<DroneDebrisEntity> i
     private final Quaternionf spinPose = new Quaternionf();
     private final Matrix4f pose = new Matrix4f();
     private final BlockPos.MutableBlockPos lightPos = new BlockPos.MutableBlockPos();
-    /** One layer: the clip that makes this piece a piece. */
     private final GltfAnimation[] layers = new GltfAnimation[1];
     private final float[] times = new float[1];
 
-    /** The piece's own centre within the airframe. */
+    /** Piece centre within the airframe's model space. */
     private final org.joml.Vector3f centre = new org.joml.Vector3f();
     private boolean centred;
 
@@ -48,7 +46,7 @@ public class DroneDebrisVisual extends AbstractEntityVisual<DroneDebrisEntity> i
     private double curX, curY, curZ;
     private int lastPosTick = -1;
     private float lastPartialTick;
-    /** Accumulated tumble about each axis, radians. Integrated per frame, like the drone's rotor phase. */
+    /** Tumble per axis, radians. */
     private float angleX;
     private float angleY;
     private float angleZ;
@@ -153,7 +151,6 @@ public class DroneDebrisVisual extends AbstractEntityVisual<DroneDebrisEntity> i
         }
     }
 
-    /** Whether the piece is on screen, tested against the model rather than against its hitbox. */
     @Override
     public boolean isVisible(FrustumIntersection frustum) {
         return super.isVisible(frustum) || (bounded && PosedBound.test(frustum, pose, bound));
