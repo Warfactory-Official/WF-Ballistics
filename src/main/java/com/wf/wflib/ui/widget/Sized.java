@@ -33,6 +33,9 @@ public record Sized(String w, String h, Point align, boolean clip, WidgetDef chi
                 }
                 if (clip) {
                     ev.canvas.pushClip(x, y, x + width, y + height);
+                    if (ev.input != null) {
+                        ev.input.pushClip(x, y, x + width, y + height);
+                    }
                 }
                 try {
                     node.draw(ev, x + align.x.offset(width, node.width()), y + align.y.offset(height, node.height()),
@@ -40,6 +43,9 @@ public record Sized(String w, String h, Point align, boolean clip, WidgetDef chi
                 } finally {
                     if (clip) {
                         ev.canvas.popClip();
+                        if (ev.input != null) {
+                            ev.input.popClip();
+                        }
                     }
                 }
             }

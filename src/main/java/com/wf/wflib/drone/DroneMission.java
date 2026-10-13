@@ -79,6 +79,9 @@ public final class DroneMission {
     /** The construction or salvage job this flight is being sent to work, or null for an ordinary mission. */
     @Nullable
     public java.util.UUID jobId;
+    /** {@link DroneEntity#setOperatorId}; not on the wire. */
+    @Nullable
+    public java.util.UUID operator;
 
     /**
      * @return true if this mission drops an explosive rather than a crate.
@@ -201,6 +204,9 @@ public final class DroneMission {
         if (jobId != null) {
             tag.putUUID("JobId", jobId);
         }
+        if (operator != null) {
+            tag.putUUID("Operator", operator);
+        }
         return tag;
     }
 
@@ -268,6 +274,7 @@ public final class DroneMission {
         m.exchangeId = tag.hasUUID("ExchangeId") ? tag.getUUID("ExchangeId") : null;
         m.stationCode = tag.contains("StationCode") ? tag.getString("StationCode") : null;
         m.jobId = tag.hasUUID("JobId") ? tag.getUUID("JobId") : null;
+        m.operator = tag.hasUUID("Operator") ? tag.getUUID("Operator") : null;
         return m;
     }
 
@@ -386,6 +393,7 @@ public final class DroneMission {
         drone.setTeamId(com.wf.wflib.recon.ReconOwners.owningAt(
                 level, net.minecraft.core.BlockPos.containing(origin)));
         drone.setModelId(modelId);
+        drone.setOperatorId(operator);
         drone.route().setDestination(destination);
         drone.route().setExfil(exfilOr(origin));
         drone.flight().setCruiseSpeed(cruiseSpeed);

@@ -135,6 +135,17 @@ public final class CameraTarget implements AutoCloseable {
     }
 
     /** @return the chain's {@code Degrade} for a link quality: 0 above {@link #DEGRADE_ONSET}, 1 near the drop. */
+    /**
+     * Intensifier / IR gain scale: 1 at night, down to the mode's day factor in full daylight (auto-gating /
+     * exposure). Sky brightness at the client, not at the camera.
+     */
+    public static float exposure(CameraMode mode, float partial) {
+        Minecraft mc = Minecraft.getInstance();
+        float day = mc.level == null ? 0.0f : net.minecraft.util.Mth.clamp((mc.level.getSkyDarken(partial) - 0.2f) / 0.8f, 0.0f, 1.0f);
+        float dayFactor = mode == CameraMode.INTENSIFIER ? 0.02f : mode == CameraMode.IR ? 0.12f : 1.0f;
+        return net.minecraft.util.Mth.lerp(day, 1.0f, dayFactor);
+    }
+
     static float degrade(float link, CameraMode mode) {
         float loss = Math.max(0.0f, (DEGRADE_ONSET - link) / DEGRADE_ONSET);
         return Math.min(1.0f, loss * loss * mode.noiseMultiplier());
@@ -181,9 +192,11 @@ public final class CameraTarget implements AutoCloseable {
                 double boom = anchor == null ? GIMBAL_BOOM : Math.max(GIMBAL_BOOM, anchor.getBbWidth());
                 lens = FeedMotion.position(feed).add(forward.scale(boom));
             }
-            boolean thermal = feed.modeValue() == CameraMode.THERMAL;
+            CameraMode mode = feed.modeValue();
+            boolean thermal = mode == CameraMode.THERMAL;
+            this.view.ortho(feed.kind() == CameraFeed.ORBITAL ? FeedGimbal.fov(feed) : 0.0f, feed.altitude());
             if (!this.view.render(anchor != null ? anchor : mc.player, lens, yaw, pitch, 0.0f,
-                    FeedGimbal.fov(feed), this.target, delta, thermal)) {
+                    FeedGimbal.fov(feed), this.target, delta, mode)) {
                 return;
             }
 
@@ -194,6 +207,7 @@ public final class CameraTarget implements AutoCloseable {
 
             if (this.chain != null) {
                 this.chain.setUniform("Degrade", degrade(feed.link(), feed.modeValue()));
+                this.chain.setUniform("Exposure", exposure(feed.modeValue(), delta.getGameTimeDeltaPartialTick(true)));
                 this.chain.setUniform("Link", feed.link());
                 this.chain.setUniform("FeedTime", (feed.gameTime() % 24000L) + partial);
                 this.chain.process(partial);

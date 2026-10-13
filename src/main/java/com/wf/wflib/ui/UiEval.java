@@ -1,6 +1,7 @@
 package com.wf.wflib.ui;
 
 import com.wf.gemrender.ui.Canvas;
+import com.wf.wflib.ui.input.UiInput;
 import net.minecraft.client.gui.GuiGraphics;
 
 import java.util.List;
@@ -28,6 +29,8 @@ public final class UiEval {
     /** One framebuffer pixel in layout units. */
     public float pixel = 1;
     public float partialTick;
+    /** Null => no pointer: interactive widgets draw without recording hits. */
+    public UiInput input;
 
     UiEval(LayoutPlan plan, double[] values, double[] state, CharSequence[] texts, List<?>[] lists, Object[] subjects) {
         this.plan = plan;
@@ -60,6 +63,11 @@ public final class UiEval {
         values[scope.indexSlot()] = index;
         values[scope.countSlot()] = count;
         plan.eval(scope.id(), this);
+    }
+
+    /** Current element bound to {@link Binder#itemSlot()}'s result; null for -1. */
+    public Object item(int slot) {
+        return slot < 0 ? null : subjects[slot];
     }
 
     public Object saveItem(ItemsRef<?> items) {

@@ -4,15 +4,23 @@ import com.wf.wflib.ui.widget.Align;
 import com.wf.wflib.ui.widget.Anchor;
 import com.wf.wflib.ui.widget.Arc;
 import com.wf.wflib.ui.widget.Bar;
+import com.wf.wflib.ui.input.UiAction;
+import com.wf.wflib.ui.input.UiDrag;
+import com.wf.wflib.ui.input.UiSetter;
 import com.wf.wflib.ui.widget.Box;
+import com.wf.wflib.ui.widget.Button;
+import com.wf.wflib.ui.widget.DragArea;
 import com.wf.wflib.ui.widget.Flow;
 import com.wf.wflib.ui.widget.Line;
+import com.wf.wflib.ui.widget.ListView;
 import com.wf.wflib.ui.widget.Place;
 import com.wf.wflib.ui.widget.Point;
 import com.wf.wflib.ui.widget.Poly;
 import com.wf.wflib.ui.widget.Rect;
+import com.wf.wflib.ui.widget.ScrollBox;
 import com.wf.wflib.ui.widget.Repeat;
 import com.wf.wflib.ui.widget.Sized;
+import com.wf.wflib.ui.widget.Slider;
 import com.wf.wflib.ui.widget.Stack;
 import com.wf.wflib.ui.widget.Text;
 import com.wf.wflib.ui.widget.Transform;
@@ -152,5 +160,34 @@ public final class Ui {
 
     public static WidgetDef repeat(String items, boolean vertical, float gap, WidgetDef child) {
         return new Repeat(items, vertical, gap, Align.START, 0, 0, child);
+    }
+
+    /** Padded button; {@code hover} doubles as the pressed colour. */
+    public static WidgetDef button(String background, String hover, float pad, UiAction action, WidgetDef child) {
+        return new Button(action, "true", background, hover, hover, "0", 0, 0, pad, pad, 0, 0, Point.TOP_LEFT, child);
+    }
+
+    /** Fixed-size button, child centred. */
+    public static WidgetDef button(float w, float h, String background, String hover, String border, UiAction action,
+                                   WidgetDef child) {
+        return new Button(action, "true", background, hover, hover, border, 1, 0, 0, 0, w, h, Point.CENTER, child);
+    }
+
+    public static WidgetDef list(String items, float rowHeight, float gap, String w, String h, String bar,
+                                 WidgetDef row) {
+        return new ListView(items, rowHeight, gap, w, h, bar, row);
+    }
+
+    public static WidgetDef scroll(String w, String h, String bar, WidgetDef child) {
+        return new ScrollBox(w, h, 8, bar, child);
+    }
+
+    public static WidgetDef slider(String w, String h, String value, UiSetter set, String track, String fill,
+                                   String knob) {
+        return new Slider(w, h, value, set, 0.05f, track, fill, knob);
+    }
+
+    public static WidgetDef drag(String w, String h, UiDrag handler, WidgetDef child) {
+        return new DragArea(w, h, handler, child);
     }
 }

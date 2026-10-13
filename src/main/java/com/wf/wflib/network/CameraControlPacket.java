@@ -52,7 +52,7 @@ public record CameraControlPacket(int feedId, float yaw, float pitch, float zoom
             }
             CameraNet.subscribe(player, this.feedId);
             CameraNet.aim(player, this.feedId, this.yaw, this.pitch, this.zoom, this.mode);
-            com.wf.wflib.item.CameraTabletItem.refresh(player);
+            com.wf.wflib.pda.PdaCameras.refresh(player, false);
         });
     }
 }

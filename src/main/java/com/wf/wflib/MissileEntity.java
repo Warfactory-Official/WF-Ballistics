@@ -331,7 +331,7 @@ public class MissileEntity extends Projectile implements OBBEntity, InterceptTar
     }
 
     private void recordSpawnIfFresh() {
-        if (this.telemetry != null && this.telemetry.total() == 0 && this.tickCount <= 1) {
+        if ((this.telemetry == null || this.telemetry.total() == 0) && this.tickCount <= 1) {
             this.recordEvent(WFEventType.SPAWN, "");
         }
     }
@@ -342,6 +342,7 @@ public class MissileEntity extends Projectile implements OBBEntity, InterceptTar
         }
         WFTelemetryService.record(this.telemetry, this.getUUID(), type,
                 this.level().getGameTime(), this.position(), false, detail);
+        com.wf.wflib.telemetry.TelemetryLog.post(this, type, detail);
     }
 
     /** Sweep/proximity target filter. */

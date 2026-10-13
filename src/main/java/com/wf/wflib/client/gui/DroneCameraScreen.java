@@ -26,7 +26,7 @@ public class DroneCameraScreen extends Screen {
     /** Degrees of gimbal per pixel dragged; tuned so a 1080p window's full sweep ~= one turn. */
     private static final double DRAG_GAIN = 0.22;
 
-    private int[] feedIds;
+    private final int[] feedIds;
     private int channel;
 
     private int left;
@@ -72,24 +72,6 @@ public class DroneCameraScreen extends Screen {
         }
         this.channel = next;
         CameraLink.open(feedId());
-    }
-
-    /** Server pushed a refreshed channel list; screen stays open. */
-    public void updatePanel(int[] ids) {
-        if (ids.length == 0) {
-            return;
-        }
-        boolean wasMulti = multi();
-        int before = feedId();
-        this.feedIds = ids;
-        this.channel = Math.min(this.channel, ids.length - 1);
-        if (wasMulti != multi()) {
-            // Channel row on/off changes video's room => re-init.
-            init();
-        }
-        if (feedId() != before) {
-            CameraLink.open(feedId());
-        }
     }
 
     @Override

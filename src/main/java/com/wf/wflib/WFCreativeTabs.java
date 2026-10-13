@@ -36,8 +36,7 @@ public final class WFCreativeTabs {
                         output.accept(ModBlocks.CAMERA_MONITOR_ITEM.get());
                         output.accept(ModBlocks.SECURITY_CAMERA_ITEM.get());
                         output.accept(ModItems.CAMERA_LINKER.get());
-                        output.accept(ModItems.CAMERA_TABLET.get());
-                        output.accept(ModItems.TERMINAL.get());
+                        output.accept(ModItems.PDA.get());
                         output.accept(ModItems.DECOY_LAUNCHER.get());
                         output.accept(ModBlocks.MINING_CHARGE_ITEM.get());
                         output.accept(ModBlocks.DEEP_MINING_CHARGE_ITEM.get());
@@ -68,6 +67,7 @@ public final class WFCreativeTabs {
                         ModItems.mineItems().forEach(item -> output.accept(item.get()));
                         // Armour and its inserts (registration order).
                         ModItems.armorItems().forEach(item -> output.accept(item.get()));
+                        com.wf.wflib.nvg.NvgRegistry.ITEMS.forEach(item -> output.accept(item.get()));
                     })
                     .build());
 

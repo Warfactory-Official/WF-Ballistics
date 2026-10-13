@@ -17,16 +17,4 @@ public final class CameraScreenOpener {
         Minecraft mc = Minecraft.getInstance();
         mc.execute(() -> mc.setScreen(new DroneCameraScreen(feedIds, selected)));
     }
-
-    /** A refreshed channel list for a receiver. */
-    public static void panel(int[] feedIds, int selected) {
-        Minecraft mc = Minecraft.getInstance();
-        mc.execute(() -> {
-            if (mc.screen instanceof DroneCameraScreen screen) {
-                screen.updatePanel(feedIds);
-            } else {
-                mc.setScreen(new DroneCameraScreen(feedIds, selected));
-            }
-        });
-    }
 }

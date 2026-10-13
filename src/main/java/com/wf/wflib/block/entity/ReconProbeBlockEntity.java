@@ -8,6 +8,7 @@ import com.wf.wflib.recon.ReconBound;
 import com.wf.wflib.recon.ReconNet;
 import com.wf.wflib.recon.ReconOwners;
 import com.wf.wflib.recon.SourceIds;
+import com.wf.wflib.recon.grid.NamedNode;
 import com.wf.wflib.recon.grid.GridNode;
 import com.wf.wflib.recon.grid.HubIndex;
 import com.wf.wflib.recon.grid.ReconGrid;
@@ -25,7 +26,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.UUID;
 
 /** One remote sensor on a grid: it draws power, warms up, links home, and only then contributes anything. */
-public class ReconProbeBlockEntity extends BlockEntity implements ReconBound {
+public class ReconProbeBlockEntity extends BlockEntity implements ReconBound, NamedNode {
 
     /** Ticks between re-checks of which hub this belongs to. */
     private static final int HUB_REFRESH = 40;
@@ -42,6 +43,7 @@ public class ReconProbeBlockEntity extends BlockEntity implements ReconBound {
     /** Sonar only: whether this set is standing in water, and whether redstone is telling it to ping. */
     private boolean wet = true;
     private boolean pinging;
+    private String name = "";
 
     public ReconProbeBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.RECON_PROBE.get(), pos, state);
@@ -97,7 +99,7 @@ public class ReconProbeBlockEntity extends BlockEntity implements ReconBound {
             this.refile(sl, kind);
         }
         GridNode node = ReconNet.registerNode(sl, this.worldPosition, this.netId,
-                kind.linkRange(), kind.linkMast(), false, kind.id());
+                kind.linkRange(), kind.linkMast(), false, this.name.isEmpty() ? kind.id() : this.name);
         int hops = node.hops();
         if (hops != this.lastHops) {
             this.lastHops = hops;
@@ -175,6 +177,12 @@ public class ReconProbeBlockEntity extends BlockEntity implements ReconBound {
 
     public IEnergyStorage energy() {
         return this.energy;
+    }
+
+    @Override
+    public void rename(String name) {
+        this.name = name;
+        this.setChanged();
     }
 
     @Override
@@ -261,6 +269,9 @@ public class ReconProbeBlockEntity extends BlockEntity implements ReconBound {
         tag.putInt("Energy", this.energy.getEnergyStored());
         tag.putInt("Calibration", this.calibration);
         tag.putLong("NetId", this.netId);
+        if (!this.name.isEmpty()) {
+            tag.putString("Name", this.name);
+        }
         if (this.bound != null) {
             tag.putUUID("BoundNet", this.bound);
         }
@@ -272,6 +283,7 @@ public class ReconProbeBlockEntity extends BlockEntity implements ReconBound {
         this.energy.set(tag.getInt("Energy"));
         this.calibration = tag.getInt("Calibration");
         this.netId = tag.getLong("NetId");
+        this.name = tag.getString("Name");
         this.bound = tag.hasUUID("BoundNet") ? tag.getUUID("BoundNet") : null;
     }
 

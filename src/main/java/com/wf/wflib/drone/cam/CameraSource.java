@@ -3,6 +3,7 @@ package com.wf.wflib.drone.cam;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.block.SecurityCameraBlock;
 import com.wf.wflib.drone.DroneEntity;
+import com.wf.wflib.orbital.SpotFeeds;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.GlobalPos;
@@ -38,7 +39,7 @@ public interface CameraSource {
     /** Charge this feed's running cost to whatever is paying for it. */
     void bill(int fe, int ticks);
 
-    /** {@link CameraFeed#DRONE} / {@link CameraFeed#FIXED} / {@link CameraFeed#GUIDED} / {@link CameraFeed#MOUNTED}. */
+    /** {@link CameraFeed#DRONE} / {@link CameraFeed#FIXED} / {@link CameraFeed#GUIDED} / {@link CameraFeed#MOUNTED} / {@link CameraFeed#ORBITAL}. */
     byte kind();
 
     /** @return the source behind this feed id, or null if there is no longer one. */
@@ -47,7 +48,10 @@ public interface CameraSource {
         if (feedId == 0) {
             return null;
         }
-        return feedId > 0 ? airborne(level, feedId) : fixed(level, feedId);
+        if (feedId > 0) {
+            return airborne(level, feedId);
+        }
+        return SpotFeeds.isSpot(feedId) ? SpotFeeds.source(level, feedId) : fixed(level, feedId);
     }
 
     @Nullable

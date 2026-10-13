@@ -11,7 +11,7 @@
 ## 80. Client
 
 - View = HUD layout `wflib:tv` (`TvHud`, Part XXVI), OSD = `wflib:camera_osd` drawn into each feed FBO (`CameraOsd`).
-- Keys: `key.wflib.tv_link` (Y) connect / let go, `key.wflib.tv_view` (M) full view <-> picture-in-picture (top right, 34% width). Scroll = zoom.
+- Keys: `key.wflib.tv_link` (Y) connect / let go, `key.wflib.tv_view` (M) full view <-> picture-in-picture (top right, 34% width). Scroll = zoom. PDA not carried => keys drained, link dropped; server `TvGuidance.connect` refuses too.
 - `MixinMouseHandler` wraps `turnPlayer`'s `LocalPlayer.turn` at priority 1500: outermost over a vehicle mod's turret wrap. Linked => mouse pans `CameraLink`, look untouched.
 - Order clamped to 60 deg off the heading the client sees (`TvClient.GIMBAL_LIMIT`): no wind-up past the gimbal.
 - Feed pass: lens = tracked entity's frame pose + nose + 0.3 along the sight (`CameraTarget`), not the 5 Hz feed walk. Streamed terrain keeps the round tracked at any range. OSD `TV-xxxx`, motor bar `MTR`; burnt out != blind (`CameraFeed.GUIDED`).

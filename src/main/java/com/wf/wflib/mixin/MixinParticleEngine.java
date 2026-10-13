@@ -13,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.function.Predicate;
 
-/** No particles under {@link FeedPass#drawingThermal}. */
+/** No particles under {@link FeedPass#seesThroughSmoke}. */
 @Mixin(ParticleEngine.class)
 public class MixinParticleEngine {
 
@@ -23,7 +23,7 @@ public class MixinParticleEngine {
     private void wfCamSkipParticlesInThermal(LightTexture lightTexture, Camera camera, float partialTick,
                                              Frustum frustum, Predicate<ParticleRenderType> filter,
                                              CallbackInfo ci) {
-        if (FeedPass.drawingThermal()) {
+        if (FeedPass.seesThroughSmoke()) {
             ci.cancel();
         }
     }

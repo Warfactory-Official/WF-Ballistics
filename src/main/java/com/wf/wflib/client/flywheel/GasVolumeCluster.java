@@ -64,7 +64,8 @@ public class GasVolumeCluster implements WFFlywheelEffect {
 
     /** @return taken; caller must then offer the cell to no other cluster. */
     public boolean offer(MistEntity cell) {
-        if (goneTicks >= 0 || cell.getFluid() != fluid || cell.level() != level) {
+        if (goneTicks >= 0 || cell.getFluid() != fluid || cell.level() != level
+                || MistClientFX.tintFor(cell) != tint) {
             return false;
         }
 

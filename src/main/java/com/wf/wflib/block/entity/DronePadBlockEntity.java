@@ -5,6 +5,11 @@ import com.wf.wflib.block.ModBlockEntities;
 import com.wf.wflib.drone.CrateEntity;
 import com.wf.wflib.drone.DroneEntity;
 import com.wf.wflib.drone.DroneMission;
+import com.wf.wflib.drone.DroneProgram;
+import com.wf.wflib.drone.DroneTask;
+import com.wf.wflib.drone.dispatch.DroneDispatcher;
+import com.wf.wflib.drone.dispatch.DroneDispatchers;
+import com.wf.wflib.recon.ReconOwners;
 import com.wf.wflib.exchange.Exchange;
 import com.wf.wflib.exchange.ExchangeManager;
 import com.wf.wflib.exchange.ExchangeMode;
@@ -17,6 +22,8 @@ import com.wf.wflib.drone.sim.SimDrone;
 import com.wf.wflib.drone.sim.SimDroneManager;
 
 import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.network.protocol.Packet;
@@ -26,6 +33,7 @@ import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.Containers;
@@ -47,7 +55,7 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
+public class DronePadBlockEntity extends BlockEntity implements MenuProvider, DroneDispatcher {
 
     /** = {@link CrateEntity#SLOTS}: full pad maps to one full crate. */
     public static final int CARGO_SLOTS = CrateEntity.SLOTS;
@@ -146,21 +154,103 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider {
             return "no destination set";
         }
 
-        CompoundTag cargo = null;
-        if (!this.cargoEmpty()) {
-            cargo = new CompoundTag();
-            ContainerHelper.saveAllItems(cargo, this.cargo, this.level.registryAccess());
-        }
+        DroneMission.Result result = this.launch(serverLevel, this.mission, origin, !this.cargoEmpty());
+        return result.ok() ? null : result.error();
+    }
 
-        DroneMission.Result result = this.mission.dispatch(serverLevel, origin, cargo);
-        if (!result.ok()) {
-            return result.error();
+    /** {@code withCargo} => pad cargo rides the leader, pad emptied on success. */
+    private DroneMission.Result launch(ServerLevel level, DroneMission run, Vec3 origin, boolean withCargo) {
+        CompoundTag cargo = null;
+        if (withCargo) {
+            cargo = new CompoundTag();
+            ContainerHelper.saveAllItems(cargo, this.cargo, level.registryAccess());
         }
-        if (cargo != null) {
+        DroneMission.Result result = run.dispatch(level, origin, cargo);
+        if (result.ok() && cargo != null) {
             this.cargo.clear();
         }
         this.setChanged();
-        return null;
+        return result;
+    }
+
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (this.level instanceof ServerLevel serverLevel) {
+            DroneDispatchers.add(serverLevel, this);
+        }
+    }
+
+    @Override
+    public void setRemoved() {
+        super.setRemoved();
+        if (this.level != null) {
+            DroneDispatchers.remove(this.level, this);
+        }
+    }
+
+    @Override
+    public void onChunkUnloaded() {
+        super.onChunkUnloaded();
+        if (this.level != null) {
+            DroneDispatchers.remove(this.level, this);
+        }
+    }
+
+    @Override
+    public BlockPos dispatchPos() {
+        return this.worldPosition;
+    }
+
+    @Nullable
+    @Override
+    public UUID side() {
+        return ReconOwners.owningAt((ServerLevel) this.level, this.worldPosition);
+    }
+
+    /** LOITER always; DELIVER with cargo; STRIKE / MINELAY when the configured mission slings one. */
+    @Override
+    public List<DroneTask.Kind> offers() {
+        List<DroneTask.Kind> kinds = new ArrayList<>(4);
+        kinds.add(DroneTask.Kind.LOITER);
+        if (!this.cargoEmpty()) {
+            kinds.add(DroneTask.Kind.DELIVER);
+        }
+        if (this.mission.payloadId != null) {
+            kinds.add(DroneTask.Kind.STRIKE);
+        }
+        if (this.mission.mines != null) {
+            kinds.add(DroneTask.Kind.MINELAY);
+        }
+        return kinds;
+    }
+
+    /** Configured mission's airframe, flight and count; DIRECT, home = this pad. */
+    @Override
+    public DroneMission.Result dispatch(ServerPlayer by, DroneTask.Kind kind, Vec3 at) {
+        if (!offers().contains(kind)) {
+            return new DroneMission.Result(List.of(), 0, "pad cannot fly " + kind.id());
+        }
+        DroneMission run = DroneMission.load(this.mission.save());
+        run.mode = ExchangeMode.DIRECT;
+        run.recipientCode = null;
+        run.exchangeId = null;
+        run.stationCode = null;
+        run.collecting = false;
+        run.jobId = null;
+        run.operator = by.getUUID();
+        run.approachLegs = List.of();
+        run.egressLegs = List.of();
+        run.program = DroneProgram.of(List.of(kind.at(at)));
+        if (kind != DroneTask.Kind.STRIKE) {
+            run.payloadId = null;
+        }
+        if (kind != DroneTask.Kind.MINELAY) {
+            run.mines = null;
+        }
+        Vec3 origin = Vec3.atCenterOf(this.worldPosition.above());
+        run.exfil = origin;
+        return this.launch((ServerLevel) this.level, run, origin, kind == DroneTask.Kind.DELIVER);
     }
 
     private boolean cargoEmpty() {

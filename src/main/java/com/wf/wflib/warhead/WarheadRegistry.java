@@ -128,6 +128,7 @@ public final class WarheadRegistry {
         register(rl("emp"), EMPWarhead::detonate);
         register(BombletWarhead.ID, BombletWarhead.STANDARD);
         register(BombletWarhead.FIRE_ID, BombletWarhead.FIRE);
+        com.wf.wflib.grenade.GrenadeWarheads.bootstrap();
 
         BLAST_SIZE.put(DEFAULT_ID, STANDARD_BLAST_SIZE);
         BLAST_SIZE.put(FireWarhead.ID, 8F);

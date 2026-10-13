@@ -56,6 +56,8 @@ public final class ArmorPresets {
                 .row(ProtectionType.IMPACT, 4.0D, 0.40D, 3.0D, 0.0D)
                 .row(ProtectionType.BLAST, 2.0D, 0.20D, 2.0D, 0.0D)
                 .wornFloor(0.25D)
+                .model(ArmorPreset.rl("models/armor/combat_helmet.glb"))
+                .nvgMount()
                 .build());
 
         if (!net.neoforged.fml.loading.FMLEnvironment.production) {

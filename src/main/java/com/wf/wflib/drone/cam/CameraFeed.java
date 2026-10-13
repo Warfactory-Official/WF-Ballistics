@@ -33,6 +33,8 @@ public record CameraFeed(int feedId, byte kind, double x, double y, double z,
     public static final byte GUIDED = 2;
     /** Lens = published eye (no boom): camera on a vehicle's hull, eye outside it. */
     public static final byte MOUNTED = 3;
+    /** Satellite spot ({@code SpotFeeds}): orthographic, straight down; fov = half-height in blocks. */
+    public static final byte ORBITAL = 4;
     /** Link at or below => signal-loss card; a TV round stops obeying its operator. */
     public static final float USABLE_LINK = 0.05f;
 

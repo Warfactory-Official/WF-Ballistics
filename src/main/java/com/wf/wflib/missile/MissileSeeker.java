@@ -289,7 +289,7 @@ public final class MissileSeeker {
             }
         }
         for (Entity blocker : level.getEntities(this.missile, new AABB(from, to).inflate(1.0),
-                b -> b instanceof SightBlocker)) {
+                b -> b instanceof SightBlocker s && s.blocksSight())) {
             if (blocker.getBoundingBox().clip(from, to).isPresent() || blocker.getBoundingBox().contains(from)) {
                 return false;
             }

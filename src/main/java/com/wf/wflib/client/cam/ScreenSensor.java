@@ -60,6 +60,16 @@ public final class ScreenSensor {
         return mode == CameraMode.THERMAL && WFClientConfig.CAMERA_EFFECTS.get();
     }
 
+    /** Main pass drawn under IR. */
+    public static boolean ir() {
+        return mode == CameraMode.IR && WFClientConfig.CAMERA_EFFECTS.get();
+    }
+
+    /** Main pass amplifies light (IR, intensifier): IR lights + night sky into colour. */
+    public static boolean amplifying() {
+        return (mode == CameraMode.IR || mode == CameraMode.INTENSIFIER) && WFClientConfig.CAMERA_EFFECTS.get();
+    }
+
     @SubscribeEvent
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL) {
@@ -84,6 +94,7 @@ public final class ScreenSensor {
                         event.getProjectionMatrix(), partial);
             }
             chain.setUniform("Degrade", CameraTarget.degrade(link, m));
+            chain.setUniform("Exposure", CameraTarget.exposure(m, partial));
             chain.setUniform("FeedTime", (mc.level.getGameTime() % 24000L) + partial);
             chain.process(partial);
         } finally {

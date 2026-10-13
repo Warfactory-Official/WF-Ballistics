@@ -6,6 +6,7 @@ import com.wf.wflib.ui.NumProp;
 import com.wf.wflib.ui.UiEval;
 import com.wf.wflib.ui.Widget;
 import com.wf.wflib.ui.WidgetDef;
+import com.wf.wflib.ui.input.UiInput;
 
 /**
  * Translates, then rotates ({@code rotate} degrees, clockwise) and scales about the child's
@@ -33,15 +34,22 @@ public record Transform(String dx, String dy, String rotate, String scale, Point
                 Canvas canvas = ev.canvas;
                 float px = x + pivot.x.pivot(width);
                 float py = y + pivot.y.pivot(height);
-                canvas.push()
-                        .translate(px + tx.getFloat(ev), py + ty.getFloat(ev))
-                        .rotate((float) Math.toRadians(rot.get(ev)))
-                        .scale(sc.getFloat(ev))
-                        .translate(-px, -py);
+                float ox = px + tx.getFloat(ev);
+                float oy = py + ty.getFloat(ev);
+                float radians = (float) Math.toRadians(rot.get(ev));
+                float s = sc.getFloat(ev);
+                canvas.push().translate(ox, oy).rotate(radians).scale(s).translate(-px, -py);
+                UiInput input = ev.input;
+                if (input != null) {
+                    input.push().translate(ox, oy).rotate(radians).scale(s).translate(-px, -py);
+                }
                 try {
                     node.draw(ev, x, y, w, h);
                 } finally {
                     canvas.pop();
+                    if (input != null) {
+                        input.pop();
+                    }
                 }
             }
         };

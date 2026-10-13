@@ -78,13 +78,8 @@ public final class ModItems {
     public static final DeferredHolder<Item, Item> CAMERA_LINKER =
             ITEMS.register("camera_linker", () -> new CameraLinkerItem(new Item.Properties().stacksTo(1)));
 
-    /** A monitor you can carry: the same bounded channel list, in the hand. */
-    public static final DeferredHolder<Item, Item> CAMERA_TABLET =
-            ITEMS.register("camera_tablet", () -> new CameraTabletItem(new Item.Properties().stacksTo(1)));
-
-    /** Placeholder datalink receiver: carried => {@link com.wf.wflib.telemetry.TelemetryLink} reports to you. */
-    public static final DeferredHolder<Item, Item> TERMINAL =
-            ITEMS.register("terminal", () -> new Item(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<Item, Item> PDA =
+            ITEMS.register("pda", () -> new com.wf.wflib.pda.PdaItem(new Item.Properties().stacksTo(1)));
 
     private ModItems() {
     }

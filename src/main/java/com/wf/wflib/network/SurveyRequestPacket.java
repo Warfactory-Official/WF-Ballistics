@@ -34,6 +34,11 @@ public record SurveyRequestPacket(long netId, int tileX, int tileZ) implements C
                     || !(player.level() instanceof ServerLevel level)) {
                 return;
             }
+            // Debug survey screen (operators) may name any net; everyone else: own net, uplinked.
+            if (!com.wf.wflib.pda.uplink.Uplink.allows(player, netId)
+                    && !com.wf.wflib.recon.map.ReconMapService.mayChooseAnyNet(player)) {
+                return;
+            }
             SurveyTile tile = SurveyRaster.get(level).existing(netId, tileX, tileZ);
             if (tile == null) {
                 return;

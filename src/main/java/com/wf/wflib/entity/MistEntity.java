@@ -25,7 +25,7 @@ import net.minecraft.world.phys.AABB;
 import java.util.List;
 
 /** A stationary cloud of fluid hanging in the air: gas, spray or vapour. */
-public class MistEntity extends Entity {
+public class MistEntity extends Entity implements com.wf.wflib.api.SightBlocker {
 
     private static final EntityDataAccessor<Float> RADIUS = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> HEIGHT = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
@@ -33,6 +33,8 @@ public class MistEntity extends Entity {
     private static final EntityDataAccessor<Float> BOX_X = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> BOX_Y = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
     private static final EntityDataAccessor<Float> BOX_Z = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.FLOAT);
+    /** RGB overriding the fluid/effect colour; -1 none. */
+    private static final EntityDataAccessor<Integer> TINT = SynchedEntityData.defineId(MistEntity.class, EntityDataSerializers.INT);
 
     private int maxAge = 150;
     private int effectInterval = 1;
@@ -70,8 +72,15 @@ public class MistEntity extends Entity {
      */
     public static MistEntity spawnBox(Level level, Fluid fluid, double minX, double minY, double minZ,
                                       float sizeX, float sizeY, float sizeZ, int duration, int effectInterval) {
+        return spawnBox(level, fluid, minX, minY, minZ, sizeX, sizeY, sizeZ, duration, effectInterval, -1);
+    }
+
+    public static MistEntity spawnBox(Level level, Fluid fluid, double minX, double minY, double minZ,
+                                      float sizeX, float sizeY, float sizeZ, int duration, int effectInterval,
+                                      int tint) {
         MistEntity gas = new MistEntity(ModEntities.MIST.get(), level);
         gas.setFluid(fluid);
+        gas.setTint(tint);
         gas.setDuration(duration);
         gas.effectInterval = Math.max(1, effectInterval);
         gas.setPos(minX, minY, minZ);     // position = box min corner
@@ -93,6 +102,7 @@ public class MistEntity extends Entity {
         builder.define(BOX_X, 0F);
         builder.define(BOX_Y, 0F);
         builder.define(BOX_Z, 0F);
+        builder.define(TINT, -1);
     }
 
     /**
@@ -201,6 +211,34 @@ public class MistEntity extends Entity {
         return this;
     }
 
+    public int tint() {
+        return this.entityData.get(TINT);
+    }
+
+    public MistEntity setTint(int rgb) {
+        this.entityData.set(TINT, rgb);
+        return this;
+    }
+
+    @Override
+    public boolean blocksSight() {
+        return getFluid() == com.wf.wflib.fluid.WFFluids.SMOKE.get();
+    }
+
+    @Override
+    public void onAddedToLevel() {
+        super.onAddedToLevel();
+        if (!level().isClientSide && blocksSight()) {
+            com.wf.wflib.grenade.SmokeScreens.add(this);
+        }
+    }
+
+    @Override
+    public void onRemovedFromLevel() {
+        super.onRemovedFromLevel();
+        com.wf.wflib.grenade.SmokeScreens.remove(this);
+    }
+
     public float getRadius() {
         return this.entityData.get(RADIUS);
     }
@@ -258,6 +296,9 @@ public class MistEntity extends Entity {
         if (tag.contains("effectInterval")) {
             this.effectInterval = Math.max(1, tag.getInt("effectInterval"));
         }
+        if (tag.contains("tint")) {
+            setTint(tag.getInt("tint"));
+        }
         if (tag.contains("boxX")) {
             setBox(tag.getFloat("boxX"), tag.getFloat("boxY"), tag.getFloat("boxZ"));
         }
@@ -271,6 +312,7 @@ public class MistEntity extends Entity {
         tag.putFloat("height", getMistHeight());
         tag.putInt("maxAge", maxAge);
         tag.putInt("effectInterval", effectInterval);
+        tag.putInt("tint", tint());
         tag.putFloat("boxX", this.entityData.get(BOX_X));
         tag.putFloat("boxY", this.entityData.get(BOX_Y));
         tag.putFloat("boxZ", this.entityData.get(BOX_Z));

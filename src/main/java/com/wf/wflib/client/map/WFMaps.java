@@ -64,6 +64,26 @@ public final class WFMaps {
         });
     }
 
+    public static boolean hasFullscreen() {
+        for (MapHost host : HOSTS) {
+            if (host.hasFullscreen()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** First host with a fullscreen map opens it. @return false = none installed. */
+    public static boolean openFullscreen() {
+        for (MapHost host : HOSTS) {
+            if (host.hasFullscreen()) {
+                host.openFullscreen();
+                return true;
+            }
+        }
+        return false;
+    }
+
     public static void addTool(MapTool tool) {
         TOOLS.add(tool);
     }

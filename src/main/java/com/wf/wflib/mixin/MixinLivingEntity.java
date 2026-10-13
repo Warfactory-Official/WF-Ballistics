@@ -7,8 +7,9 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-/** Skips vanilla's per-tick equipment diff for bare glyphids; holds a blast-thrown corpse's death removal. */
+/** Skips vanilla's per-tick equipment diff for bare glyphids; holds a blast-thrown corpse's death removal; smoke hides. */
 @Mixin(LivingEntity.class)
 public abstract class MixinLivingEntity {
 
@@ -24,6 +25,15 @@ public abstract class MixinLivingEntity {
         LivingEntity self = (LivingEntity) (Object) this;
         if (!self.level().isClientSide && BlastCorpses.holdDeath(self)) {
             ci.cancel();
+        }
+    }
+
+    @Inject(method = "hasLineOfSight", at = @At("RETURN"), cancellable = true)
+    private void wflib$smokeHides(net.minecraft.world.entity.Entity target, CallbackInfoReturnable<Boolean> cir) {
+        LivingEntity self = (LivingEntity) (Object) this;
+        if (cir.getReturnValueZ() && !self.level().isClientSide
+                && com.wf.wflib.grenade.SmokeScreens.blocked(self.level(), self.getEyePosition(), target.getEyePosition())) {
+            cir.setReturnValue(false);
         }
     }
 }

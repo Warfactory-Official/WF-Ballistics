@@ -19,8 +19,10 @@ public enum CameraMode {
     OPTICAL("optical", "wf_cam_optical", 1.0f, 1.0f),
     /** Uncooled microbolometer. */
     THERMAL("thermal", "wf_cam_thermal", 2.2f, 1.6f),
-    /** Image-intensified low light. */
-    LOWLIGHT("lowlight", "wf_cam_lowlight", 1.3f, 2.4f);
+    /** Image intensifier: weapon sights, vehicle night channels. Amplifies visible + near-IR light present. */
+    INTENSIFIER("intensifier", "wf_cam_intensifier", 1.3f, 2.4f),
+    /** Active IR (cameras, drones): own illuminator, IR lights, sees through smoke. */
+    IR("ir", "wf_cam_ir", 1.6f, 1.8f);
 
     public static final CameraMode[] VALUES = values();
 

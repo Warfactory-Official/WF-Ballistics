@@ -49,6 +49,11 @@ public final class GasCloud {
      * @return the number of gas cell entities spawned
      */
     public static int spawn(Level level, Fluid fluid, Vec3 center, int radius, int maxCells, int duration) {
+        return spawn(level, fluid, center, radius, maxCells, duration, -1);
+    }
+
+    /** @param tint per-cell RGB ({@link MistEntity#setTint}); -1 = fluid colour */
+    public static int spawn(Level level, Fluid fluid, Vec3 center, int radius, int maxCells, int duration, int tint) {
         if (level.isClientSide) {
             return 0;
         }
@@ -72,7 +77,7 @@ public final class GasCloud {
             float sx = b[3] - b[0] + 1;
             float sy = b[4] - b[1] + 1;
             float sz = b[5] - b[2] + 1;
-            MistEntity.spawnBox(level, fluid, wx, wy, wz, sx, sy, sz, duration, DEFAULT_EFFECT_INTERVAL);
+            MistEntity.spawnBox(level, fluid, wx, wy, wz, sx, sy, sz, duration, DEFAULT_EFFECT_INTERVAL, tint);
         }
         return boxes.size();
     }

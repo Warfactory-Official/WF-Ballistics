@@ -28,7 +28,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Tracks heard by this player's terminal, with the trail each has flown; drawn on every map host. */
+/** Tracks heard by this player's PDA, with the trail each has flown; drawn on every map host and the PDA. */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class TelemetryClient {
 
@@ -52,7 +52,8 @@ public final class TelemetryClient {
     private static final ResourceLocation ICON_DRONE =
             ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "textures/map/telemetry_drone.png");
 
-    private static final class Track {
+    public static final class Track {
+        final long id;
         final TelemetryKind kind;
         final ArrayDeque<MapPoint> trail = new ArrayDeque<>();
         String label;
@@ -64,12 +65,53 @@ public final class TelemetryClient {
         long lastHeard;
         boolean lost;
 
-        Track(TelemetryKind kind) {
+        Track(long id, TelemetryKind kind) {
+            this.id = id;
             this.kind = kind;
+        }
+
+        /** {@link TelemetryLink#trackId}. */
+        public long id() {
+            return id;
+        }
+
+        public TelemetryKind kind() {
+            return kind;
+        }
+
+        public String label() {
+            return label;
+        }
+
+        public boolean own() {
+            return own;
+        }
+
+        public double x() {
+            return x;
+        }
+
+        public double y() {
+            return y;
+        }
+
+        public double z() {
+            return z;
+        }
+
+        /** Degrees clockwise from north. */
+        public float heading() {
+            return heading;
+        }
+
+        public boolean lost() {
+            return lost;
         }
     }
 
     private static final Map<Long, Track> TRACKS = new LinkedHashMap<>();
+    private static final List<Track> LIST = new ArrayList<>();
+    private static final List<Track> VIEW = java.util.Collections.unmodifiableList(LIST);
     @Nullable
     private static ResourceKey<Level> dimension;
     private static long clock;
@@ -77,15 +119,26 @@ public final class TelemetryClient {
     private TelemetryClient() {
     }
 
+    /** Current tracks, insertion order; same list each call, changes on receipt / expiry. */
+    public static List<Track> tracks() {
+        return VIEW;
+    }
+
+    @Nullable
+    public static Track track(long id) {
+        return TRACKS.get(id);
+    }
+
     public static void accept(TelemetryPacket pkt) {
         if (!pkt.dimension().equals(dimension)) {
             TRACKS.clear();
+            LIST.clear();
             dimension = pkt.dimension();
         }
         Set<Long> heard = new HashSet<>();
         for (TelemetryPacket.Entry e : pkt.entries()) {
             heard.add(e.id());
-            Track track = TRACKS.computeIfAbsent(e.id(), id -> new Track(e.kind()));
+            Track track = TRACKS.computeIfAbsent(e.id(), id -> new Track(id, e.kind()));
             MapPoint last = track.trail.peekLast();
             if (last == null || Math.hypot(e.x() - last.x(), e.z() - last.z()) >= TRAIL_STEP) {
                 track.trail.addLast(new MapPoint(e.x(), e.z()));
@@ -135,11 +188,14 @@ public final class TelemetryClient {
     @SubscribeEvent
     public static void onLoggedOut(ClientPlayerNetworkEvent.LoggingOut event) {
         TRACKS.clear();
+        LIST.clear();
         dimension = null;
         WFMaps.clear(LAYER);
     }
 
     private static void publish() {
+        LIST.clear();
+        LIST.addAll(TRACKS.values());
         if (dimension == null) {
             return;
         }

@@ -4,6 +4,7 @@ import com.wf.gemrender.ui.Canvas;
 import com.wf.gemrender.ui.CanvasTarget;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.client.cam.FeedTexture;
+import com.wf.wflib.ui.input.UiInput;
 import net.minecraft.client.Minecraft;
 import net.minecraft.resources.ResourceLocation;
 import net.neoforged.api.distmarker.Dist;
@@ -79,6 +80,12 @@ public final class UiSurfaces {
         return surface.id;
     }
 
+    /** Pointer input of {@code key}'s surface (enabled on first call); null while it has none. */
+    public static UiInput input(Object key) {
+        Surface surface = SURFACES.get(key);
+        return surface == null ? null : surface.instance.input();
+    }
+
     @SubscribeEvent
     static void onFrame(RenderFrameEvent.Pre event) {
         if (SURFACES.isEmpty()) {
@@ -100,11 +107,14 @@ public final class UiSurfaces {
             }
             surface.drawnNanos = now;
             surface.instance.context(surface.context);
+            UiStats.begin();
             Canvas canvas = Canvas.shared().begin(surface.target, surface.unitsW, surface.unitsH, surface.clear);
+            UiStats.mark(UiStats.BEGIN);
             try {
                 surface.instance.render(canvas, 0, 0, surface.unitsW, surface.unitsH, partialTick);
             } finally {
                 canvas.end();
+                UiStats.end();
             }
             surface.texture.adopt(surface.target.texture());
         }

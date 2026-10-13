@@ -5,6 +5,7 @@ import com.wf.wflib.recon.ReconBound;
 import com.wf.wflib.recon.ReconNet;
 import com.wf.wflib.recon.ReconOwners;
 import com.wf.wflib.recon.SourceIds;
+import com.wf.wflib.recon.grid.NamedNode;
 import com.wf.wflib.recon.grid.HubIndex;
 import com.wf.wflib.recon.grid.ReconGrid;
 import net.minecraft.core.BlockPos;
@@ -18,7 +19,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-public abstract class OrbitalNodeBlockEntity extends BlockEntity implements ReconBound {
+public abstract class OrbitalNodeBlockEntity extends BlockEntity implements ReconBound, NamedNode {
 
     public static final double LINK_RANGE = 128.0;
     private static final int RESOLVE_INTERVAL = 100;
@@ -27,6 +28,7 @@ public abstract class OrbitalNodeBlockEntity extends BlockEntity implements Reco
     private UUID bound;
     private long netId;
     private int resolveIn;
+    private String name = "";
 
     protected OrbitalNodeBlockEntity(BlockEntityType<?> type, BlockPos pos, BlockState state) {
         super(type, pos, state);
@@ -53,10 +55,17 @@ public abstract class OrbitalNodeBlockEntity extends BlockEntity implements Reco
             this.resolveIn = RESOLVE_INTERVAL;
         }
         if (nodeActive()) {
-            ReconNet.registerNode(sl, this.worldPosition, netId(), LINK_RANGE, 0.0, false, nodeLabel());
+            ReconNet.registerNode(sl, this.worldPosition, netId(), LINK_RANGE, 0.0, false,
+                    this.name.isEmpty() ? nodeLabel() : this.name);
         } else {
             ReconNet.unregisterNode(sl, this.worldPosition, netId());
         }
+    }
+
+    @Override
+    public void rename(String name) {
+        this.name = name;
+        this.setChanged();
     }
 
     @Override
@@ -86,12 +95,16 @@ public abstract class OrbitalNodeBlockEntity extends BlockEntity implements Reco
         if (this.bound != null) {
             tag.putUUID("BoundNet", this.bound);
         }
+        if (!this.name.isEmpty()) {
+            tag.putString("Name", this.name);
+        }
     }
 
     @Override
     protected void loadAdditional(CompoundTag tag, HolderLookup.Provider registries) {
         super.loadAdditional(tag, registries);
         this.bound = tag.hasUUID("BoundNet") ? tag.getUUID("BoundNet") : null;
+        this.name = tag.getString("Name");
         this.resolveIn = 0;
     }
 

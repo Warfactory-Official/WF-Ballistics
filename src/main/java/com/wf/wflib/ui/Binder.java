@@ -133,6 +133,11 @@ public final class Binder implements Symbols {
         return scope;
     }
 
+    /** Subject index of the innermost repeat's element ({@link UiEval#item}); -1 outside a repeat. */
+    public int itemSlot() {
+        return depth == 0 ? -1 : scopeSubjects[depth - 1];
+    }
+
     public void exitScope() {
         depth--;
     }

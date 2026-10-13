@@ -167,6 +167,15 @@ final class FeedRenderSwap implements AutoCloseable {
         state.wfCamSwapClouds(this.clouds);
     }
 
+    /** {@link FeedGraphColumns}; a change re-traverses. */
+    void columns(boolean columns) {
+        FeedGraphColumns flag = (FeedGraphColumns) this.graph;
+        if (flag.wflib$columns() != columns) {
+            flag.wflib$setColumns(columns);
+            this.graph.invalidate();
+        }
+    }
+
     /** Reset the graph first, then give the sections back. */
     private void releaseGrid() {
         if (this.builtWith == null) {

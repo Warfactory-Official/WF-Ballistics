@@ -6,7 +6,9 @@ public enum FireType {
     /** Ordinary burning fuel. Diesel, napalm, a ruptured tank. Goes out in water. */
     NORMAL(2.0F, 60, false),
     /** White phosphorus. Hotter, sticks far longer, and keeps burning underwater. */
-    PHOSPHORUS(5.0F, 300, true);
+    PHOSPHORUS(5.0F, 300, true),
+    /** Thermite slag: hottest, short, unaffected by water (own oxidiser). */
+    THERMITE(7.0F, 160, true);
 
     /** Damage per burn interval (see {@code FireHandler}). */
     public final float damage;

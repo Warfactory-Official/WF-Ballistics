@@ -35,10 +35,13 @@ public class ArmorPieceItem extends ArmorItem {
         super.appendHoverText(stack, context, tooltip, flag);
     }
 
-    /** Right-click insert onto garment = fit; right-click garment with empty cursor = pop last insert. Bundle-style gesture, no screen; menu click handling is already server-authoritative. */
+    /** Right-click insert onto garment = fit; right-click garment with empty cursor = pop last insert. Any click with an NVG = mount. Bundle-style gesture, no screen; menu click handling is already server-authoritative. */
     @Override
     public boolean overrideOtherStackedOnMe(ItemStack stack, ItemStack other, Slot slot, ClickAction action,
                                             Player player, SlotAccess access) {
+        if (other.getItem() instanceof com.wf.wflib.nvg.NvgItem) {
+            return com.wf.wflib.nvg.NvgMount.fit(preset, stack, other, slot, player);
+        }
         if (action != ClickAction.SECONDARY || stack.getCount() != 1 || !slot.allowModification(player)) {
             return false;
         }

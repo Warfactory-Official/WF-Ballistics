@@ -1,8 +1,8 @@
 package com.wf.wflib.telemetry;
 
+import com.wf.wflib.pda.Pda;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.compat.WarforgeCompat;
-import com.wf.wflib.item.ModItems;
 import com.wf.wflib.network.TelemetryPacket;
 import com.wf.wflib.recon.ReconOwners;
 import net.minecraft.server.level.ServerLevel;
@@ -26,7 +26,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Reporter positions -> players carrying a {@code wflib:terminal}. No range limit: the link is the network. */
+/** Reporter positions -> players carrying a PDA. No range limit: the link is the network. */
 @EventBusSubscriber(modid = WFLib.MODID)
 public final class TelemetryLink {
 
@@ -66,7 +66,7 @@ public final class TelemetryLink {
         }
         List<ServerPlayer> viewers = new ArrayList<>();
         for (ServerPlayer player : level.players()) {
-            if (carriesTerminal(player) || RECEIVING.contains(player.getUUID())) {
+            if (Pda.carries(player) || RECEIVING.contains(player.getUUID())) {
                 viewers.add(player);
             }
         }
@@ -76,7 +76,7 @@ public final class TelemetryLink {
         List<Report> reports = collect(level);
         for (ServerPlayer viewer : viewers) {
             List<TelemetryPacket.Entry> frame = new ArrayList<>();
-            if (carriesTerminal(viewer)) {
+            if (Pda.carries(viewer)) {
                 UUID side = ReconOwners.owningEntity(viewer);
                 for (Report report : reports) {
                     if (receives(viewer.getUUID(), side, report.telemetry())) {
@@ -105,16 +105,15 @@ public final class TelemetryLink {
                 && (viewerSide.equals(team) || WarforgeCompat.areFactionsAllied(viewerSide, team));
     }
 
-    public static boolean carriesTerminal(ServerPlayer player) {
-        return player.getInventory().hasAnyMatching(stack -> stack.is(ModItems.TERMINAL.get()));
-    }
-
     private record Report(Entity entity, Telemetry telemetry) {
         TelemetryPacket.Entry entry(boolean own) {
-            return new TelemetryPacket.Entry(entity.getUUID().getLeastSignificantBits()
-                    ^ entity.getUUID().getMostSignificantBits(), telemetry.kind(), entity.getX(), entity.getY(),
+            return new TelemetryPacket.Entry(trackId(entity.getUUID()), telemetry.kind(), entity.getX(), entity.getY(),
                     entity.getZ(), heading(entity), telemetry.label(), own);
         }
+    }
+
+    public static long trackId(UUID id) {
+        return id.getLeastSignificantBits() ^ id.getMostSignificantBits();
     }
 
     /** Degrees clockwise from north, from velocity; at rest, the body yaw. */

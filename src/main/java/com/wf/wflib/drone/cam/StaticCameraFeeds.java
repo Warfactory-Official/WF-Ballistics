@@ -60,9 +60,9 @@ public final class StaticCameraFeeds {
         return BY_ID.get(feedId);
     }
 
-    /** @return true if this id belongs to a fixed camera rather than a drone. */
+    /** @return true if this id belongs to a fixed camera (not a drone, not a {@code SpotFeeds} spot). */
     public static boolean isFixed(int feedId) {
-        return feedId < 0;
+        return feedId < 0 && !com.wf.wflib.orbital.SpotFeeds.isSpot(feedId);
     }
 
     public static int allocated() {

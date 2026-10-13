@@ -40,6 +40,7 @@ public final class CameraOsd {
         Signals.bool(FEED, "thermal", f -> f.modeValue() == CameraMode.THERMAL);
         Signals.bool(FEED, "guided", f -> f.kind() == CameraFeed.GUIDED);
         Signals.bool(FEED, "fixed", f -> f.kind() == CameraFeed.FIXED);
+        Signals.bool(FEED, "orbital", f -> f.kind() == CameraFeed.ORBITAL);
         Signals.text(FEED, "mode", 16, f -> f.modeValue().name());
         Signals.num(FEED, "altitude", CameraFeed::altitude);
         Signals.num(FEED, "speed", CameraFeed::speed);
@@ -79,19 +80,21 @@ public final class CameraOsd {
                 bracket(6, 6, 1, 1), bracket(OSD_W - 7, 6, -1, 1), bracket(6, OSD_H - 7, 1, -1),
                 bracket(OSD_W - 7, OSD_H - 7, -1, -1),
                 at("10", "10", when("feed.guided", text("TV-{mod(feed.id, 65536)|04X}  {feed.mode}", TINT),
-                        text("CAM-{mod(feed.id, 65536)|04X}  {feed.mode}", TINT))),
+                        when("feed.orbital", text("SAT  {feed.mode}", TINT),
+                                text("CAM-{mod(feed.id, 65536)|04X}  {feed.mode}", TINT)))),
                 place(Integer.toString(OSD_W - 10), "10", Point.TOP_RIGHT,
                         text("{world.hour|02}:{world.minute|02}", TINT)),
                 when("feed.fixed", at("10", Integer.toString(OSD_H - 24), text("MAINS", TINT)), stack(
                         at("10", Integer.toString(OSD_H - 34), text("AGL {feed.altitude|5}", TINT)),
-                        at("10", Integer.toString(OSD_H - 24), text("SPD {feed.speed|5.1}", TINT)),
+                        when("!feed.orbital", at("10", Integer.toString(OSD_H - 24), text("SPD {feed.speed|5.1}", TINT))),
                         at("10", Integer.toString(OSD_H - 14), stack(
                                 rect(46, 6, "#80000000"),
                                 new com.wf.wflib.ui.widget.Rect("46", "6", battery, 0, 1),
                                 at("1", "1", rect("44 * feed.battery", "4", battery)),
                                 at("50", "-1", text("{feed.battery * 100|3}%", battery)),
                                 at("72", "-1", when("feed.guided", text("MTR", battery),
-                                        when("feed.battery < 0.1", text("RTB", RED)))))))),
+                                        when("feed.orbital", text("PWR", battery),
+                                                when("feed.battery < 0.1", text("RTB", RED))))))))),
                 place(Integer.toString(OSD_W - 10), Integer.toString(OSD_H - 24), Point.TOP_RIGHT,
                         text("{mod(feed.yaw + 360, 360)|03} / {feed.pitch|+03}", TINT)),
                 stack(linkBars),
@@ -99,7 +102,7 @@ public final class CameraOsd {
                         text("LOW SIGNAL", RED))),
                 at(Integer.toString(OSD_W / 2), Integer.toString(OSD_H / 2), stack(
                         at("-8", "0", rect(6, 1, TINT)), at("3", "0", rect(6, 1, TINT)),
-                        at("0", "-8", rect(1, 6, TINT)), at("0", "3", rect(1, 6, TINT))))));
+                        at("0", "-8", rect(1, 6, TINT)), at("0", "3", rect(1, 6, TINT)))))).absolute();
     }
 
     /** One corner mark, twelve units along each axis from {@code (x, y)} in the direction given. */

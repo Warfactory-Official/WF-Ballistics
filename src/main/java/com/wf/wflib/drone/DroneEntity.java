@@ -116,6 +116,12 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
     private PowerProfile power = PowerProfile.DEFAULT;
     // Whose drone this is, stamped at launch from the claim on the ground it left. Null = nobody's.
     private UUID teamId;
+    /** Player who ordered the flight (PDA dispatch); hears its datalink whatever the side. */
+    @Nullable
+    private UUID operatorId;
+    /** PDA terminal {@code rename}; null = model path. */
+    @Nullable
+    private String callsign;
 
     private WFTelemetry telemetry;
     private boolean telemetryInit;
@@ -359,9 +365,22 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
      * traffic from somebody else's without asking the drone where it is now.
      */
     @Override
+    @Nullable
     public com.wf.wflib.telemetry.Telemetry datalink() {
-        return new com.wf.wflib.telemetry.Telemetry(com.wf.wflib.telemetry.TelemetryKind.DRONE, "drone", this.teamId,
-                null);
+        return this.orders.isClassified() ? null : new com.wf.wflib.telemetry.Telemetry(
+                com.wf.wflib.telemetry.TelemetryKind.DRONE, this.callsign(), this.teamId, this.operatorId);
+    }
+
+    public String callsign() {
+        return this.callsign != null ? this.callsign : this.getModelId().getPath();
+    }
+
+    public void setCallsign(@Nullable String callsign) {
+        this.callsign = callsign;
+    }
+
+    public void setOperatorId(@Nullable UUID operatorId) {
+        this.operatorId = operatorId;
     }
 
     public void setTeamId(@Nullable UUID teamId) {
@@ -494,7 +513,9 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
         if (WFTelemetryService.autoOpen()) {
             this.telemetry = WFTelemetryService.open(this.getUUID(), this.level().getGameTime());
         }
-        this.recordEvent(WFEventType.SPAWN, "drone " + this.getModelId().getPath());
+        if (this.tickCount <= 1) {
+            this.recordEvent(WFEventType.SPAWN, "drone " + this.getModelId().getPath());
+        }
     }
 
     public void openTelemetry() {
@@ -514,6 +535,7 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
         }
         WFTelemetryService.record(this.telemetry, this.getUUID(), type, this.level().getGameTime(),
                 this.position(), false, detail);
+        com.wf.wflib.telemetry.TelemetryLog.post(this, type, detail);
     }
 
     @Override
@@ -641,6 +663,8 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
         this.battery = DroneBattery.load(tag.getCompound("Battery"));
         this.camera = cameraFitOf(tag.getByte("Camera"));
         this.teamId = tag.hasUUID("TeamId") ? tag.getUUID("TeamId") : null;
+        this.operatorId = tag.hasUUID("Operator") ? tag.getUUID("Operator") : null;
+        this.callsign = tag.contains("Callsign") ? tag.getString("Callsign") : null;
         this.flight.load(tag.getCompound("Flight"));
         this.route.load(tag.getCompound("Route"));
         this.orders.load(tag.getCompound("Orders"));
@@ -658,6 +682,12 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
         tag.putByte("Camera", cameraFitByte(this.camera));
         if (this.teamId != null) {
             tag.putUUID("TeamId", this.teamId);
+        }
+        if (this.operatorId != null) {
+            tag.putUUID("Operator", this.operatorId);
+        }
+        if (this.callsign != null) {
+            tag.putString("Callsign", this.callsign);
         }
         tag.put("Flight", this.flight.save());
         tag.put("Route", this.route.save());

@@ -231,5 +231,67 @@
       "wflib:countermeasure/flare_burn_03"
     ],
     "subtitle": "subtitles.wflib.countermeasure.flare_burn"
+  },
+  "pda.buzz": {
+    "sounds": [
+      "wflib:pda/buzz"
+    ],
+    "subtitle": "subtitles.wflib.pda.buzz"
+  },
+  "grenade.bounce": {
+    "sounds": [
+      "wflib:grenade/bounce_01",
+      "wflib:grenade/bounce_02",
+      "wflib:grenade/bounce_03"
+    ],
+    "subtitle": "subtitles.wflib.grenade.bounce"
+  },
+  "grenade.pin": {
+    "sounds": [
+      "wflib:grenade/pin"
+    ],
+    "subtitle": "subtitles.wflib.grenade.pin"
+  },
+  "grenade.spoon": {
+    "sounds": [
+      "wflib:grenade/spoon"
+    ],
+    "subtitle": "subtitles.wflib.grenade.spoon"
+  },
+  "grenade.flashbang": {
+    "sounds": [
+      "wflib:grenade/flashbang"
+    ],
+    "subtitle": "subtitles.wflib.grenade.flashbang"
+  },
+  "grenade.flashbang_far": {
+    "sounds": [
+      "wflib:grenade/flashbang_far"
+    ],
+    "subtitle": "subtitles.wflib.grenade.flashbang_far"
+  },
+  "grenade.thermite_ignite": {
+    "sounds": [
+      "wflib:grenade/thermite_ignite"
+    ],
+    "subtitle": "subtitles.wflib.grenade.thermite_ignite"
+  },
+  "grenade.thermite_loop": {
+    "sounds": [
+      "wflib:grenade/thermite_loop"
+    ],
+    "subtitle": "subtitles.wflib.grenade.thermite_loop"
+  },
+  "grenade.smoke_hiss": {
+    "sounds": [
+      "wflib:grenade/smoke_hiss"
+    ],
+    "subtitle": "subtitles.wflib.grenade.smoke_hiss"
+  },
+  "grenade.tinnitus": {
+    "sounds": [
+      "wflib:grenade/tinnitus"
+    ],
+    "subtitle": "subtitles.wflib.grenade.tinnitus"
   }
 }

@@ -42,7 +42,7 @@ public final class SightSensor implements AutoCloseable {
             mode = null;
         }
         boolean thermal = mode == CameraMode.THERMAL;
-        if (!this.view.render(anchor, pos, yaw, pitch, roll, fovDeg, target, delta, thermal)) {
+        if (!this.view.render(anchor, pos, yaw, pitch, roll, fovDeg, target, delta, mode)) {
             return false;
         }
         if (mode == null) {
@@ -62,6 +62,7 @@ public final class SightSensor implements AutoCloseable {
                         this.view.projection(), partial);
             }
             this.chain.setUniform("Degrade", 0.0f);
+            this.chain.setUniform("Exposure", CameraTarget.exposure(mode, partial));
             this.chain.setUniform("FeedTime", (mc.level.getGameTime() % 24000L) + partial);
             this.chain.process(partial);
         } finally {

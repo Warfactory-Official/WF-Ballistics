@@ -9,6 +9,7 @@ import com.wf.wflib.recon.ReconOwners;
 import com.wf.wflib.recon.SourceIds;
 import com.wf.wflib.recon.event.SeismicFix;
 import com.wf.wflib.recon.event.SeismicLog;
+import com.wf.wflib.recon.grid.NamedNode;
 import com.wf.wflib.recon.grid.HubIndex;
 import com.wf.wflib.recon.grid.ReconGrid;
 import com.wf.wflib.recon.scope.ScopeFrame;
@@ -27,13 +28,14 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Objects;
 import java.util.UUID;
 
-public class ReconHubBlockEntity extends BlockEntity implements ReconBound {
+public class ReconHubBlockEntity extends BlockEntity implements ReconBound, NamedNode {
 
     public static final double LINK_RANGE = 192.0;
     public static final double LINK_MAST = 8.0;
 
     private UUID gridId;
     private boolean named;
+    private String name = "";
     private int teamRefresh;
     private long sentAt = Long.MIN_VALUE;
     private final SeismicLog events = new SeismicLog();
@@ -56,7 +58,8 @@ public class ReconHubBlockEntity extends BlockEntity implements ReconBound {
         }
         long netId = this.netId();
         HubIndex.register(sl, this.worldPosition, netId);
-        ReconNet.registerNode(sl, this.worldPosition, netId, LINK_RANGE, LINK_MAST, true, "hub");
+        ReconNet.registerNode(sl, this.worldPosition, netId, LINK_RANGE, LINK_MAST, true,
+                this.name.isEmpty() ? "hub" : this.name);
         this.broadcast(sl, ReconNet.picture(sl, netId), netId);
         this.pullEvents(sl, netId);
     }
@@ -142,6 +145,12 @@ public class ReconHubBlockEntity extends BlockEntity implements ReconBound {
     }
 
     @Override
+    public void rename(String name) {
+        this.name = name;
+        this.setChanged();
+    }
+
+    @Override
     public long netId() {
         return this.gridId == null ? ReconNet.UNAFFILIATED : SourceIds.of(this.gridId);
     }
@@ -192,6 +201,9 @@ public class ReconHubBlockEntity extends BlockEntity implements ReconBound {
         if (this.named) {
             tag.putBoolean("NamedNet", true);
         }
+        if (!this.name.isEmpty()) {
+            tag.putString("Name", this.name);
+        }
         if (!this.events.isEmpty()) {
             tag.put("Events", this.events.save());
         }
@@ -205,6 +217,7 @@ public class ReconHubBlockEntity extends BlockEntity implements ReconBound {
         super.loadAdditional(tag, registries);
         this.gridId = tag.hasUUID("GridId") ? tag.getUUID("GridId") : null;
         this.named = tag.getBoolean("NamedNet");
+        this.name = tag.getString("Name");
         if (tag.contains("EventCap")) {
             this.events.setCapacity(tag.getInt("EventCap"));
         }

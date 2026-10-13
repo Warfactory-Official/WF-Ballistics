@@ -63,7 +63,7 @@ public final class ClientPacketHandler {
     }
 
     public static void handleCameraPanel(com.wf.wflib.network.CameraPanelPacket pkt) {
-        com.wf.wflib.client.gui.CameraScreenOpener.panel(pkt.feedIds(), pkt.selected());
+        com.wf.wflib.pda.client.CamerasApp.accept(pkt.feedIds(), pkt.selected());
     }
 
     public static void handleBlockFX(ExplosionBlockFXPacket pkt) {

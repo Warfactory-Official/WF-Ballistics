@@ -24,7 +24,10 @@ the look-at probe, recon/sonar, and the UI widget system other mods build HUDs f
 | [chunk-streaming-remote-bodies](chunk-streaming-remote-bodies.md) | chunk streaming + remote-body tracking |
 | [offscreen-views](offscreen-views.md) | OffscreenView API, Boxy far-entity interplay |
 | [maps-and-telemetry](maps-and-telemetry.md) | map API + telemetry packets |
-| [ui-widgets](ui-widgets.md) | UI widget system: pieces, expressions, hosts, JSON layouts |
+| [ui-widgets](ui-widgets.md) | UI widget system: pieces, expressions, input, hosts, JSON layouts |
+| [pda](pda.md) | handheld PDA: focus/input, rendering, app API, shipped apps |
+| [nvg](nvg.md) | night vision goggles: helmet mount, flip, IR illuminator, intensifier optics JSON, sensor modes |
+| [grenades](grenades.md) | thrown charge entity, grenade warheads (frag rays, flashbang, smoke x16, thermite), smoke sight blocking, flash post chain, hearing loss |
 
 Each doc keeps the detailed explanatory voice it was written in; this index is a reference layer on top,
 not a rewrite.

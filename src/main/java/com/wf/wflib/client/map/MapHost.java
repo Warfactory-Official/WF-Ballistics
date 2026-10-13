@@ -15,4 +15,13 @@ public interface MapHost {
 
     /** Replace everything {@code layer} drew. Client thread. Empty list = clear. */
     void show(String layer, ResourceKey<Level> dimension, List<MapShape> shapes);
+
+    default boolean hasFullscreen() {
+        return false;
+    }
+
+    /** Only when {@link #hasFullscreen()}. Client thread, in world. */
+    default void openFullscreen() {
+        throw new UnsupportedOperationException(name() + " has no fullscreen map");
+    }
 }

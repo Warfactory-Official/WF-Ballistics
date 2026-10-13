@@ -6,6 +6,7 @@ import com.wf.wflib.WFLib;
 import com.wf.wflib.client.cam.CameraFeedCache;
 import com.wf.wflib.client.cam.CameraLink;
 import com.wf.wflib.drone.cam.CameraFeed;
+import com.wf.wflib.pda.client.PdaClient;
 import com.wf.wflib.tv.TvConnectPacket;
 import com.wf.wflib.tv.TvGuidance;
 import com.wf.wflib.tv.TvLinkPacket;
@@ -92,6 +93,8 @@ public final class TvClient {
     private static void lose() {
         CameraLink.close();
         lostTicks = LOST_HOLD;
+        com.wf.wflib.pda.client.PdaAlerts.post(net.minecraft.network.chat.Component.translatable(
+                "wflib.pda.alert.tv_lost"), com.wf.wflib.pda.alerts.PdaAlert.Tier.WARNING);
     }
 
     private static void unlink() {
@@ -156,7 +159,11 @@ public final class TvClient {
         if (mc.level == null || mc.player == null) {
             return;
         }
+        boolean pda = PdaClient.carried();
         while (TvKeys.LINK.consumeClick()) {
+            if (!pda) {
+                continue;
+            }
             if (missileId != 0) {
                 unlink();
             } else {
@@ -164,7 +171,9 @@ public final class TvClient {
             }
         }
         while (TvKeys.VIEW.consumeClick()) {
-            full = !full;
+            if (pda) {
+                full = !full;
+            }
         }
         if (lostTicks > 0) {
             if (--lostTicks == 0) {
@@ -175,8 +184,8 @@ public final class TvClient {
         if (missileId == 0) {
             return;
         }
-        // Another screen took the gimbal (a drone feed), or the operator died.
-        if (!mc.player.isAlive() || !CameraLink.active() || CameraLink.feedId() != missileId) {
+        // Another screen took the gimbal (a drone feed), the operator died or dropped the PDA.
+        if (!pda || !mc.player.isAlive() || !CameraLink.active() || CameraLink.feedId() != missileId) {
             unlink();
             return;
         }

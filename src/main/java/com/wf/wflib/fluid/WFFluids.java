@@ -142,6 +142,16 @@ public final class WFFluids {
     public static final BaseFlowingFluid.Properties GLYPHID_ACID_PROPS =
             new BaseFlowingFluid.Properties(GLYPHID_ACID_TYPE, GLYPHID_ACID, FLOWING_GLYPHID_ACID);
 
+    /** Screening smoke: harmless; colour per cloud ({@code MistEntity} tint). */
+    public static final DeferredHolder<FluidType, FluidType> SMOKE_TYPE =
+            FLUID_TYPES.register("smoke", () -> new GasFluidType(0xD8D8D8));
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> SMOKE =
+            FLUIDS.register("smoke", () -> new BaseFlowingFluid.Source(WFFluids.SMOKE_PROPS));
+    public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid> FLOWING_SMOKE =
+            FLUIDS.register("flowing_smoke", () -> new BaseFlowingFluid.Flowing(WFFluids.SMOKE_PROPS));
+    public static final BaseFlowingFluid.Properties SMOKE_PROPS =
+            new BaseFlowingFluid.Properties(SMOKE_TYPE, SMOKE, FLOWING_SMOKE);
+
     public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>KEROSENE =
             FLUIDS.register("kerosene", () -> new BaseFlowingFluid.Source(WFFluids.KEROSENE_PROPS));
     public static final DeferredHolder<net.minecraft.world.level.material.Fluid, BaseFlowingFluid>FLOWING_KEROSENE =

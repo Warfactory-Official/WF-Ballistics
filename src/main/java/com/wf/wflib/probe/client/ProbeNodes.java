@@ -3,6 +3,7 @@ package com.wf.wflib.probe.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.wf.gemrender.ui.Canvas;
 import com.wf.wflib.WFLib;
+import com.wf.wflib.pda.client.PdaClient;
 import com.wf.wflib.probe.ProbeAction;
 import com.wf.wflib.probe.ProbeContext;
 import com.wf.wflib.probe.ProbeInfo;
@@ -81,7 +82,7 @@ public final class ProbeNodes implements LayeredDraw.Layer {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
         Level level = mc.level;
-        if (player == null || level == null || player.isSpectator() || mc.screen != null) {
+        if (player == null || level == null || player.isSpectator() || mc.screen != null || PdaClient.focused()) {
             if (had) {
                 ProbeSelection.clear();
             }

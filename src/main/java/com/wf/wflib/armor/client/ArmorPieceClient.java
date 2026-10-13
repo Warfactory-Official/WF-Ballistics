@@ -37,16 +37,18 @@ public final class ArmorPieceClient {
         ResourceLocation model = preset.model();
         // Null check first: GemRenderArmor only classloads on first use, so a mod with no glTF
         // armour never touches GemRender's model types at all.
-        return model == null ? VANILLA : BY_MODEL.computeIfAbsent(model, GemRenderArmor::new);
+        return model == null ? VANILLA : BY_MODEL.computeIfAbsent(model, m -> new GemRenderArmor(m, preset.nvgMount()));
     }
 
     private static final class GemRenderArmor implements IClientItemExtensions {
 
         private final com.wf.gemrender.asset.ModelCache.Handle<com.wf.gemrender.gltf.GemRenderGltfModel> model;
+        private final boolean nvgMount;
         private com.wf.gemrender.direct.GemRenderArmorModel armorModel;
 
-        private GemRenderArmor(ResourceLocation model) {
+        private GemRenderArmor(ResourceLocation model, boolean nvgMount) {
             this.model = com.wf.gemrender.asset.GemRenderModels.armor(model);
+            this.nvgMount = nvgMount;
         }
 
         @Override
@@ -59,7 +61,22 @@ public final class ArmorPieceClient {
         private com.wf.gemrender.direct.GemRenderArmorModel armorModel() {
             if (armorModel == null) {
                 armorModel = new com.wf.gemrender.direct.GemRenderArmorModel(
-                        (entity, stack, slot) -> model.get());
+                        new com.wf.gemrender.direct.ArmorAppearance() {
+                            @Override
+                            public com.wf.gemrender.gltf.GemRenderGltfModel model(LivingEntity entity,
+                                                                                  ItemStack stack, EquipmentSlot slot) {
+                                return model.get();
+                            }
+
+                            @Override
+                            public void attachments(LivingEntity entity, ItemStack stack, EquipmentSlot slot,
+                                                    Attachments out) {
+                                if (nvgMount) {
+                                    com.wf.wflib.nvg.client.NvgItemClient.attach(entity,
+                                            com.wf.wflib.nvg.NvgWorn.mounted(stack), out);
+                                }
+                            }
+                        });
             }
             return armorModel;
         }

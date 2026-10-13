@@ -59,6 +59,8 @@ public class WFLibClient {
                 com.wf.wflib.countermeasure.client.FlareRenderer::new);
         event.registerEntityRenderer(com.wf.wflib.countermeasure.Countermeasures.SMOKE_GRENADE.get(), NoopRenderer::new);
         event.registerEntityRenderer(com.wf.wflib.countermeasure.Countermeasures.APS_GRENADE.get(), NoopRenderer::new);
+        event.registerEntityRenderer(com.wf.wflib.grenade.Grenades.CHARGE.get(),
+                com.wf.wflib.grenade.client.ChargeRenderer::new);
         // Drawn by its Flywheel visual; vanilla still needs a renderer or the dispatcher NPEs.
 
         // Bomblets are simple tumbling orange cubes (fragmentation payload).
@@ -131,6 +133,7 @@ public class WFLibClient {
     /** Rebuild the mine rigs after a resource reload. */
     @SubscribeEvent
     public static void onRegisterReloadListeners(RegisterClientReloadListenersEvent event) {
+        event.registerReloadListener(new com.wf.wflib.nvg.client.NvgOptics.Loader());
         event.registerReloadListener((barrier, manager, prepProfiler, reloadProfiler, background, game) ->
                 barrier.wait(net.minecraft.Util.NIL_UUID)
                         .thenRunAsync(MineRigs::init, game));
@@ -146,8 +149,14 @@ public class WFLibClient {
     public static void onClientSetup(final FMLClientSetupEvent event) {
 
         event.enqueueWork(() -> {
-            ParticleBuffer.getInstance().hideWhen(FeedPass::drawingThermal);
+            ParticleBuffer.getInstance().hideWhen(FeedPass::seesThroughSmoke);
+            com.wf.gemrender.volume.VolumeBuffer.getInstance().hideWhen(FeedPass::seesThroughSmoke);
+            com.wf.gemrender.medium.CameraMedium.getInstance().hideWhen(FeedPass::seesThroughSmoke);
             com.wf.wflib.client.fx.WFLights.register();
+            com.wf.wflib.nvg.client.NvgIllumination.register();
+            com.wf.gemrender.light.Lights.irView(com.wf.wflib.nvg.client.NvgClient::irView);
+            com.wf.gemrender.light.Lights.nightSky(com.wf.wflib.nvg.client.NvgClient::nightSky);
+            com.wf.wflib.audio.client.AudioMixer.addHearing(com.wf.wflib.grenade.client.Flashbang::hearingLoss);
             PartRigs.init();
             MineRigs.init();
             MineItemRenderers.init();
@@ -155,6 +164,7 @@ public class WFLibClient {
             com.wf.wflib.client.recon.ReconMapLayer.register();
             com.wf.wflib.client.cam.CameraOsd.register();
             com.wf.wflib.tv.client.TvHud.register();
+            com.wf.wflib.pda.client.PdaApps.registerBuiltins();
             com.wf.wflib.client.rail.AlignmentMapLayer.register();
             com.wf.wflib.client.map.WFMaps.addTool(new com.wf.wflib.client.rail.RailMapEditor());
             if (net.neoforged.fml.ModList.get().isLoaded("xaeroworldmap")) {

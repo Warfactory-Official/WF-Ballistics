@@ -2,6 +2,7 @@ package com.wf.wflib.drone.cam;
 
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.drone.DroneEntity;
+import com.wf.wflib.orbital.SpotFeeds;
 import com.wf.wflib.tv.TvGuidance;
 import com.wf.wflib.item.ModDataComponents;
 import com.wf.wflib.network.CameraFeedPacket;
@@ -36,12 +37,24 @@ public final class CameraNet {
     private static final int QUIET_HORIZON = 6000;
 
     private static final Map<ResourceKey<Level>, Cameras> BY_LEVEL = new HashMap<>();
+    private static final List<Entitlement> ENTITLEMENTS = new ArrayList<>();
     /** Subscriptions to an entity's feed, all levels; 0 => {@link #watches} off the tracking hot path. */
     private static int entityWatches;
     private static long encodes;
     private static long deliveries;
 
     private CameraNet() {
+    }
+
+    /** Extra right to watch a feed (another mod's linked hosts), beside monitors, held panels, TV rounds. */
+    @FunctionalInterface
+    public interface Entitlement {
+        boolean allows(ServerLevel level, ServerPlayer player, int feedId);
+    }
+
+    /** Mod construction / common setup. */
+    public static synchronized void entitle(Entitlement entitlement) {
+        ENTITLEMENTS.add(entitlement);
     }
 
     private static Cameras of(ServerLevel level) {
@@ -112,7 +125,16 @@ public final class CameraNet {
                 return true;
             }
         }
-        return holdsPanelWith(level, player, feedId) || TvGuidance.entitled(level, player, feedId);
+        if (holdsPanelWith(level, player, feedId) || TvGuidance.entitled(level, player, feedId)
+                || SpotFeeds.entitled(player, feedId)) {
+            return true;
+        }
+        for (int i = 0; i < ENTITLEMENTS.size(); i++) {
+            if (ENTITLEMENTS.get(i).allows(level, player, feedId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean holdsPanelWith(ServerLevel level, ServerPlayer player, int feedId) {

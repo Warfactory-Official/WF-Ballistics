@@ -25,10 +25,10 @@ Xaero (World Map 1.47.0, Minimap 26.6.0; no API, internals => recheck on bump):
 
 ## 89. Telemetry (`telemetry/`)
 
-- `TelemetryReporter.datalink()` on entity classes, tracked join -> leave: `MissileEntity` (null under water), `DroneEntity`, CombinedAssault UAV vehicles.
-- Every `PERIOD_TICKS` = 10 per level: players carrying `wflib:terminal` (placeholder) get reporters whose operator they are, or whose team = their side (`ReconOwners.owningEntity`) or a WarForge ally of it (`areFactionsAllied`: truce excluded). No range limit.
+- `TelemetryReporter.datalink()` on entity classes, tracked join -> leave: `MissileEntity` (null under water), `DroneEntity` (null while classified), CombinedAssault UAV vehicles. Events: `TelemetryLog` (docs/pda.md).
+- Every `PERIOD_TICKS` = 10 per level: players carrying a PDA (`Pda.carries`, inventory) get reporters whose operator they are, or whose team = their side (`ReconOwners.owningEntity`) or a WarForge ally of it (`areFactionsAllied`: truce excluded). No range limit.
 - `MissileEntity.setGroundTarget()`: target y unknown (map point) => target chunk preloaded, y = surface once loaded. CombinedAssault sets it for rack rounds from `indirect_fire` stations.
 - `MarkerOverlay` takes no dimension in its constructor: set it or JourneyMap never draws the icon.
 - Operator: `MissileEntity.setOperatorId` at launch (missile item, commands, CombinedAssault launchers); UAV = last pilot.
-- Client: trail vertex every 4 blocks, 512 max; unheard > 2 periods + 1 s => grey "link lost", dropped after 30 s.
+- Client: trail vertex every 4 blocks, 512 max; unheard > 2 periods + 1 s => grey "link lost", dropped after 30 s. `TelemetryClient.tracks()` = PDA Telemetry app.
 

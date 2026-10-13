@@ -55,6 +55,13 @@ public final class ArmorMaterials {
         }
     }
 
+    /** Night vision goggle worn standalone: no protection; an ArmorItem so the head renders its armour model. */
+    public static final DeferredHolder<ArmorMaterial, ArmorMaterial> NVG = MATERIALS.register("nvg",
+            () -> new ArmorMaterial(Map.of(ArmorItem.Type.HELMET, 0, ArmorItem.Type.CHESTPLATE, 0,
+                    ArmorItem.Type.LEGGINGS, 0, ArmorItem.Type.BOOTS, 0, ArmorItem.Type.BODY, 0), 0,
+                    SoundEvents.ARMOR_EQUIP_GENERIC, () -> Ingredient.EMPTY,
+                    List.of(new ArmorMaterial.Layer(ResourceLocation.fromNamespaceAndPath(WFLib.MODID, "nvg"))), 0.0F, 0.0F));
+
     private ArmorMaterials() {
     }
 

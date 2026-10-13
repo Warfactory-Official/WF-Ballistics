@@ -1,0 +1,31 @@
+{
+    "targets": [ "wf_flash_snap", "wf_flash_swap" ],
+    "passes": [
+        {
+            "name": "wflib:wf_flash_capture",
+            "intarget": "minecraft:main",
+            "outtarget": "wf_flash_swap",
+            "auxtargets": [
+                { "name": "SnapSampler", "id": "wf_flash_snap" }
+            ]
+        },
+        {
+            "name": "blit",
+            "intarget": "wf_flash_swap",
+            "outtarget": "wf_flash_snap"
+        },
+        {
+            "name": "wflib:wf_flash",
+            "intarget": "minecraft:main",
+            "outtarget": "wf_flash_swap",
+            "auxtargets": [
+                { "name": "SnapSampler", "id": "wf_flash_snap" }
+            ]
+        },
+        {
+            "name": "blit",
+            "intarget": "wf_flash_swap",
+            "outtarget": "minecraft:main"
+        }
+    ]
+}

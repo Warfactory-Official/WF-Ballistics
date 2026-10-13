@@ -1,5 +1,6 @@
 package com.wf.wflib.item;
 
+import com.wf.wflib.pda.Pda;
 import com.wf.wflib.block.CameraMonitorBlock;
 import com.wf.wflib.block.SecurityCameraBlock;
 import com.wf.wflib.block.entity.CameraMonitorBlockEntity;
@@ -75,7 +76,7 @@ public class CameraLinkerItem extends Item {
                 ItemStack other = player.getItemInHand(hand == InteractionHand.MAIN_HAND
                         ? InteractionHand.OFF_HAND : InteractionHand.MAIN_HAND);
                 FeedTarget held = stack.get(ModDataComponents.LINK_TARGET.get());
-                if (other.getItem() instanceof CameraTabletItem && held != null && !held.empty()) {
+                if (Pda.is(other) && held != null && !held.empty()) {
                     CameraChannels after = add(other.getOrDefault(ModDataComponents.CHANNELS.get(),
                             CameraChannels.EMPTY), held, player);
                     if (after != null) {

@@ -59,7 +59,7 @@ public record CameraSpec(float fovDeg, float maxZoom, float pitchMin, float pitc
     /** The fitted-out head. */
     public static final CameraSpec RECON = new CameraSpec(
             60.0f, 8.0f, -45.0f, 90.0f, FREE_YAW, 9.0f, 1600.0,
-            mask(CameraMode.OPTICAL, CameraMode.THERMAL, CameraMode.LOWLIGHT), 6);
+            mask(CameraMode.OPTICAL, CameraMode.THERMAL, CameraMode.IR), 6);
 
     /**
      * Missile nose seeker. Gimbal = operator's aim, missile pursues its line of sight: free both axes, slew fast
@@ -71,7 +71,7 @@ public record CameraSpec(float fovDeg, float maxZoom, float pitchMin, float pitc
     /** A camera on a wall, and a deliberately different thing from a drone's. */
     public static final CameraSpec SECURITY = new CameraSpec(
             75.0f, 6.0f, -45.0f, 90.0f, 110.0f, 12.0f, 2000.0,
-            mask(CameraMode.OPTICAL, CameraMode.LOWLIGHT), 0);
+            mask(CameraMode.OPTICAL, CameraMode.IR), 0);
 
     private static int mask(CameraMode... modes) {
         int out = 0;

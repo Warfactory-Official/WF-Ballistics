@@ -84,6 +84,34 @@ public final class OrbitalNet {
         return sat == null ? Optional.empty() : Optional.of(sat.view(level.getGameTime()));
     }
 
+    /** Last reply line ({@link #commandBy} results land here once executed); "" if none. */
+    public static String reply(ServerLevel level, SatId id) {
+        Satellite sat = OrbitalRegistry.get(level).byId(id);
+        return sat == null ? "" : sat.reply();
+    }
+
+    /**
+     * Ticks until {@code id}'s footprint next covers {@code (x, z)}: 0 = now, -1 = not within {@code horizon}.
+     * Sampled every {@code step} ticks.
+     */
+    public static int nextPass(ServerLevel level, SatId id, double x, double z, int horizon, int step) {
+        Satellite sat = OrbitalRegistry.get(level).byId(id);
+        if (sat == null) {
+            return -1;
+        }
+        long now = level.getGameTime();
+        double swath = sat.swath();
+        for (int t = 0; t <= horizon; t += step) {
+            Vec3 at = sat.position(now + t);
+            double dx = at.x - x;
+            double dz = at.z - z;
+            if (dx * dx + dz * dz <= swath * swath) {
+                return t;
+            }
+        }
+        return -1;
+    }
+
     /** Everything of this network whose footprint currently covers {@code (x, z)}. */
     public static List<SatView> overhead(ServerLevel level, long netId, double x, double z) {
         long now = level.getGameTime();

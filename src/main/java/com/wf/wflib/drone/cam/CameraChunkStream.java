@@ -2,6 +2,7 @@ package com.wf.wflib.drone.cam;
 
 import com.wf.wflib.block.SecurityCameraBlock;
 import com.wf.wflib.config.WFConfig;
+import com.wf.wflib.orbital.SpotFeeds;
 import com.wf.wflib.stream.ChunkStreams;
 import com.wf.wflib.stream.StreamWindow;
 import net.minecraft.core.BlockPos;
@@ -116,6 +117,10 @@ public final class CameraChunkStream {
      */
     @Nullable
     private static ChunkPos centreOf(ServerLevel level, int feedId) {
+        if (SpotFeeds.isSpot(feedId)) {
+            Vec3 at = SpotFeeds.target(level, feedId);
+            return at == null ? null : new ChunkPos(BlockPos.containing(at));
+        }
         if (feedId < 0) {
             GlobalPos at = StaticCameraFeeds.posFor(feedId);
             if (at == null || !at.dimension().equals(level.dimension())) {

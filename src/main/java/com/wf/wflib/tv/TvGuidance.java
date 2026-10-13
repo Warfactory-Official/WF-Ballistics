@@ -1,5 +1,6 @@
 package com.wf.wflib.tv;
 
+import com.wf.wflib.pda.Pda;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.ModEntities;
 import com.wf.wflib.missile.MissileSeeker;
@@ -66,6 +67,9 @@ public final class TvGuidance {
      *      Newest: the one just fired is the one being asked for.
      */
     public static int connect(ServerPlayer player) {
+        if (!Pda.carries(player)) {
+            return 0;
+        }
         MissileEntity best = null;
         for (MissileEntity missile : player.serverLevel().getEntities(ModEntities.STEALTH_MISSILE.get(),
                 m -> m.seeker().spec() != null && m.isAlive() && !m.damage().isDowned() && !m.isDud())) {

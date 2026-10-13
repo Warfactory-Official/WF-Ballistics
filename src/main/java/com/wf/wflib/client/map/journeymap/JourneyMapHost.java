@@ -54,6 +54,16 @@ public final class JourneyMapHost implements MapHost {
     }
 
     @Override
+    public boolean hasFullscreen() {
+        return true;
+    }
+
+    @Override
+    public void openFullscreen() {
+        journeymap.client.ui.UIManager.INSTANCE.getOrOpenFullscreenMap();
+    }
+
+    @Override
     public void show(String layer, ResourceKey<Level> dimension, List<MapShape> shapes) {
         List<Overlay> previous = this.shown.remove(layer);
         if (previous != null) {

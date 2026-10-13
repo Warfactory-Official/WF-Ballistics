@@ -207,6 +207,7 @@ public class TvGuidanceGameTest {
         FakePlayer player = FakePlayerFactory.get(lane.level,
                 new GameProfile(new UUID(0x7654_0000L, n), "tv_operator_" + n));
         player.moveTo(lane.origin.getX() - 4.5, lane.y(), lane.origin.getZ() + 0.5);
+        player.getInventory().add(new net.minecraft.world.item.ItemStack(com.wf.wflib.item.ModItems.PDA.get()));
         return player;
     }
 

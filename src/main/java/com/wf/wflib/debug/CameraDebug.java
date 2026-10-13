@@ -132,7 +132,7 @@ public final class CameraDebug {
                         "  use the monitor to open the feed; sneak-use to tune to another drone")
                 .withStyle(ChatFormatting.GRAY), false);
         source.sendSuccess(() -> Component.literal(
-                        "  in the feed: drag to slew, scroll to zoom, M cycles optical/thermal/lowlight")
+                        "  in the feed: drag to slew, scroll to zoom, M cycles optical/thermal/ir")
                 .withStyle(ChatFormatting.GRAY), false);
         return 1;
     }
@@ -157,7 +157,7 @@ public final class CameraDebug {
                     drone.getId() & 0xFFFF,
                     spec == null ? "no camera" : spec == CameraSpec.RECON ? "recon" : "standard",
                     drone.flight().getDroneState().name(),
-                    drone.battery().percent() * 100.0f,
+                    drone.battery().percent(),
                     Math.sqrt(drone.distanceToSqr(source.getPosition())))), false);
         }
         return drones.size();

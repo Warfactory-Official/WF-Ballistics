@@ -44,6 +44,7 @@ public final class MistClientFX {
     }
 
     public static int tintFor(MistEntity mist) {
+        if (mist.tint() != -1) return mist.tint();
         MistEffect effect = MistEffects.get(mist.getFluid());
         if (effect != null) {
             int c = effect.color(mist);

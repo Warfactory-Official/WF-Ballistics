@@ -84,6 +84,18 @@ public final class XaeroWorldMapHost implements MapHost {
     }
 
     @Override
+    public boolean hasFullscreen() {
+        return true;
+    }
+
+    @Override
+    public void openFullscreen() {
+        Minecraft mc = Minecraft.getInstance();
+        mc.setScreen(new xaero.map.gui.GuiMap(null, null,
+                xaero.map.WorldMapSession.getCurrentSession().getMapProcessor(), mc.getCameraEntity()));
+    }
+
+    @Override
     public void show(String layer, ResourceKey<Level> dimension, List<MapShape> shapes) {
         this.painter.show(layer, dimension, shapes);
     }

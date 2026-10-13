@@ -1,23 +1,32 @@
 package com.wf.wflib.ui.json;
 
 import com.wf.wflib.WFLib;
+import com.wf.wflib.ui.input.UiAction;
+import com.wf.wflib.ui.input.UiActions;
+import com.wf.wflib.ui.input.UiDrag;
+import com.wf.wflib.ui.input.UiSetter;
 import com.wf.wflib.ui.widget.Align;
 import com.wf.wflib.ui.widget.Anchor;
 import com.wf.wflib.ui.widget.Arc;
 import com.wf.wflib.ui.widget.Bar;
 import com.wf.wflib.ui.widget.Box;
+import com.wf.wflib.ui.widget.Button;
+import com.wf.wflib.ui.widget.DragArea;
 import com.wf.wflib.ui.widget.Dial;
 import com.wf.wflib.ui.widget.Feed;
 import com.wf.wflib.ui.widget.Flow;
 import com.wf.wflib.ui.widget.Image;
 import com.wf.wflib.ui.widget.Ladder;
 import com.wf.wflib.ui.widget.Line;
+import com.wf.wflib.ui.widget.ListView;
 import com.wf.wflib.ui.widget.Place;
 import com.wf.wflib.ui.widget.Point;
 import com.wf.wflib.ui.widget.Poly;
 import com.wf.wflib.ui.widget.Rect;
+import com.wf.wflib.ui.widget.ScrollBox;
 import com.wf.wflib.ui.widget.Repeat;
 import com.wf.wflib.ui.widget.Sized;
+import com.wf.wflib.ui.widget.Slider;
 import com.wf.wflib.ui.widget.Stack;
 import com.wf.wflib.ui.widget.Tape;
 import com.wf.wflib.ui.widget.Text;
@@ -93,10 +102,35 @@ final class BuiltinWidgets {
         });
         add("feed", p -> new Feed(p.expr("feed"), p.expr("w"), p.expr("h")));
         add("dial", BuiltinWidgets::dial);
+        add("button", p -> {
+            float pad = p.number("pad", 0);
+            String background = p.expr("background", "0");
+            String hover = p.expr("hover", background);
+            return new Button(handler(p, "action", UiAction.class), p.expr("enabled", "true"), background,
+                    hover, p.expr("pressed", hover), p.expr("border", "0"), p.number("border_width", 1),
+                    p.number("radius", 0), p.number("pad_x", pad), p.number("pad_y", pad), p.number("min_width", 0),
+                    p.number("min_height", 0), p.choice("align", Point.class, Point.TOP_LEFT), p.widgetOrNull("child"));
+        });
+        add("list", p -> new ListView(p.expr("items"), p.number("row_height"), p.number("gap", 0), p.expr("w"),
+                p.expr("h"), p.expr("bar", "0"), p.widget("child")));
+        add("scroll", p -> new ScrollBox(p.expr("w"), p.expr("h"), p.number("step", 8), p.expr("bar", "0"),
+                p.widget("child")));
+        add("slider", p -> new Slider(p.expr("w"), p.expr("h"), p.expr("value"), handler(p, "set", UiSetter.class),
+                p.number("step", 0), p.expr("track", "#ff303030"), p.expr("fill", WHITE), p.expr("knob", WHITE)));
+        add("drag", p -> new DragArea(p.expr("w"), p.expr("h"), handler(p, "handler", UiDrag.class),
+                p.widgetOrNull("child")));
     }
 
     private static void add(String name, WidgetReader reader) {
         UiWidgetTypes.register(ResourceLocation.fromNamespaceAndPath(WFLib.MODID, name), reader);
+    }
+
+    private static <T> T handler(JsonProps p, String key, Class<T> type) {
+        try {
+            return UiActions.get(p.id(key), type);
+        } catch (IllegalArgumentException e) {
+            throw p.error(key, e.getMessage());
+        }
     }
 
     private static Flow flow(JsonProps p, boolean vertical) {

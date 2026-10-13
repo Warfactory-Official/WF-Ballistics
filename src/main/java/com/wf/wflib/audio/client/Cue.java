@@ -13,6 +13,7 @@ public final class Cue extends AbstractTickableSoundInstance {
     private final AudioCategory category;
     private int fadeTicks;
     private int fadeLeft = -1;
+    private boolean ignoresHearing;
 
     public Cue(SoundSpec spec, AudioCategory category, boolean loop) {
         super(SoundEvent.createVariableRangeEvent(spec.event()), SoundSource.MASTER, RandomSource.create());
@@ -27,6 +28,16 @@ public final class Cue extends AbstractTickableSoundInstance {
         this.z = 0;
         this.pitch = spec.rollPitch(random);
         this.volume = spec.volume() * AudioOptions.volume(category);
+    }
+
+    /** Unaffected by {@link AudioMixer.Hearing} loss (the ringing itself). */
+    public Cue ignoreHearing() {
+        ignoresHearing = true;
+        return this;
+    }
+
+    public boolean ignoresHearing() {
+        return ignoresHearing;
     }
 
     public SoundSpec spec() {

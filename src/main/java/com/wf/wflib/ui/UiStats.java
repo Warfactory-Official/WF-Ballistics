@@ -6,8 +6,8 @@ import org.slf4j.Logger;
 import java.lang.management.ManagementFactory;
 
 /**
- * HUD wall time and bytes allocated on the render thread per stage, averaged and logged every 600
- * frames that drew; {@code /wfui stats} or {@code -Dwflib.ui.stats=true}. Off => one branch per mark.
+ * HUD + {@link UiSurfaces} wall time and bytes allocated on the render thread per stage, averaged and logged every
+ * 600 frames that drew; {@code /wfui stats} or {@code -Dwflib.ui.stats=true}. Off => one branch per mark.
  */
 public final class UiStats {
     private static final Logger LOGGER = LogUtils.getLogger();
@@ -73,7 +73,7 @@ public final class UiStats {
         markNanos = System.nanoTime();
     }
 
-    /** Charges everything since the previous mark to {@code stage}. No-op outside a HUD layer. */
+    /** Charges everything since the previous mark to {@code stage}. No-op outside a HUD layer / surface. */
     static void mark(int stage) {
         if (!active) {
             return;
@@ -111,7 +111,7 @@ public final class UiStats {
         }
         last[0] = totalNanos / 1000.0 / frames;
         last[1] = (double) totalBytes / frames;
-        LOGGER.info("[wflib ui] HUD {} us/frame, {} B/frame over {} frames ({})",
+        LOGGER.info("[wflib ui] UI {} us/frame, {} B/frame over {} frames ({})",
                 String.format("%.1f", last[0]), String.format("%.1f", last[1]), frames, split);
         if (detail) {
             int frameCount = frames;

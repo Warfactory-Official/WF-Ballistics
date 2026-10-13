@@ -1,0 +1,37 @@
+{
+  "tubes": [
+    {
+      "x": -0.4,
+      "y": 0,
+      "r": 0.42
+    },
+    {
+      "x": 0.4,
+      "y": 0,
+      "r": 0.42
+    }
+  ],
+  "resolution": 0.45,
+  "gain_max": 400,
+  "snr": 18,
+  "ebi": 0.03,
+  "halo": 0.4,
+  "autogate": false,
+  "abc_rate": 1.5,
+  "distortion": 0.08,
+  "vignette": 0.45,
+  "honeycomb": 0.25,
+  "blemishes": 3,
+  "phosphor": [
+    0.35,
+    1.0,
+    0.45
+  ],
+  "persistence": 0.3,
+  "spectral": [
+    0.7,
+    0.45,
+    0.2,
+    1.0
+  ]
+}

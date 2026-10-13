@@ -2,6 +2,7 @@ package com.wf.wflib.probe.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.wf.gemrender.ui.Canvas;
+import com.wf.wflib.pda.client.PdaClient;
 import com.wf.wflib.probe.ProbeContext;
 import com.wf.wflib.probe.ProbeInfo;
 import com.wf.wflib.probe.ProbeRegistry;
@@ -29,7 +30,7 @@ public final class ProbeOverlay implements LayeredDraw.Layer {
         Minecraft mc = Minecraft.getInstance();
         ProbeSelection.advance();
         if (!ProbeConfig.ENABLED.get() || mc.options.hideGui || mc.level == null || mc.player == null
-                || mc.getDebugOverlay().showDebugScreen()) {
+                || mc.getDebugOverlay().showDebugScreen() || PdaClient.focused()) {
             ProbeSelection.clear();
             return;
         }

@@ -171,9 +171,11 @@ neoForge {
         configureEach {
             // -PwithWarforge runs get their own game directory: WarForge keeps faction/claim state in
             // the save, so a factions run must not share a world with the plain dev run.
+            // Game tests: own directory; run/server.properties names the 5.5 GB benchmark world => hang.
             gameDirectory = project.file(
                     project.hasProperty('withIR') ? 'run-ir'
-                            : project.hasProperty('withWarforge') ? 'run-warforge' : 'run')
+                            : project.hasProperty('withWarforge') ? 'run-warforge'
+                            : delegate.name == 'gameTestServer' ? 'run-gametest' : 'run')
             systemProperty 'forge.logging.markers', 'REGISTRIES'
             logLevel = org.slf4j.event.Level.DEBUG
 
@@ -333,6 +335,8 @@ dependencies {
     if (!gradle.startParameter.taskNames.any { it.toLowerCase().contains('server') }) {
         localRuntime "maven.modrinth:journeymap:${journeymap_version}"
     }
+    // Internal `UIManager` (PDA map app opens the fullscreen map); no API for it.
+    compileOnly("maven.modrinth:journeymap:${journeymap_version}") { transitive = false }
 
     // --- Xaero's World Map + Minimap (compile-only, dev runtime behind -Pxaero) ---------------
     compileOnly("maven.modrinth:xaeros-world-map:${xaero_worldmap_version}") { transitive = false }

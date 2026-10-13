@@ -11,10 +11,11 @@ import org.jetbrains.annotations.Nullable;
  * registration rather than carrying an independent figure.
  *
  * @param type  the slot this goes on, or null for an insert
- * @param model a rigged glTF for GemRender to draw, or null to render as a vanilla armour texture
+ * @param model    a rigged glTF for GemRender to draw, or null to render as a vanilla armour texture
+ * @param nvgMount accepts a {@link com.wf.wflib.nvg.NvgItem}; drawn at the model's {@code socket_nvg}
  */
 public record ArmorPreset(ResourceLocation id, @Nullable ArmorItem.Type type, int durability,
-                          ArmorSpec spec, @Nullable ResourceLocation model) {
+                          ArmorSpec spec, @Nullable ResourceLocation model, boolean nvgMount) {
 
     public ArmorPreset {
         if (durability <= 0) {
@@ -48,6 +49,7 @@ public record ArmorPreset(ResourceLocation id, @Nullable ArmorItem.Type type, in
         private final int durability;
         private final ArmorSpec.Builder spec;
         private ResourceLocation model;
+        private boolean nvgMount;
 
         private Builder(String path, @Nullable ArmorItem.Type type, int durability) {
             this.id = rl(path);
@@ -77,8 +79,13 @@ public record ArmorPreset(ResourceLocation id, @Nullable ArmorItem.Type type, in
             return this;
         }
 
+        public Builder nvgMount() {
+            this.nvgMount = true;
+            return this;
+        }
+
         public ArmorPreset build() {
-            return new ArmorPreset(id, type, durability, spec.build(), model);
+            return new ArmorPreset(id, type, durability, spec.build(), model, nvgMount);
         }
     }
 }

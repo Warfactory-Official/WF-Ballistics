@@ -4,6 +4,9 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.wf.wflib.ui.UiLayout;
 import com.wf.wflib.ui.WidgetDef;
+import com.wf.wflib.ui.input.UiAction;
+import com.wf.wflib.ui.input.UiActions;
+import com.wf.wflib.ui.widget.Button;
 import com.wf.wflib.ui.widget.Flow;
 import com.wf.wflib.ui.widget.Place;
 import com.wf.wflib.ui.widget.Stack;
@@ -122,5 +125,20 @@ class UiExpanderTest {
         assertEquals("$5", text.text());
         assertEquals(List.of(), ((Stack) root(layout("""
                 {"root": {"type": "stack"}}"""))).children());
+    }
+
+    @Test
+    void buttonResolvesNamedAction() {
+        UiAction action = item -> { };
+        UiActions.register(id("press"), action);
+        Button button = (Button) root(layout("""
+                {"root": {"type": "button", "action": "test:press", "background": "#ff000000", "pad": 2,
+                          "child": {"type": "text", "text": "GO"}}}"""));
+        assertEquals(action, button.action());
+        assertEquals("#ff000000", button.hover());
+        assertEquals(2, button.padX());
+        UiJsonException missing = assertThrows(UiJsonException.class, () -> layout("""
+                {"root": {"type": "button", "action": "test:absent"}}"""));
+        assertTrue(missing.getMessage().startsWith("layout/root/action: no UI handler"), missing.getMessage());
     }
 }

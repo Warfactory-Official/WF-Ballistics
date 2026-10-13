@@ -34,9 +34,11 @@ public class WFLib {
         com.wf.wflib.block.ModBlockEntities.register(modEventBus);
         com.wf.wflib.item.ModItems.register(modEventBus);
         com.wf.wflib.countermeasure.Countermeasures.register(modEventBus);
+        com.wf.wflib.grenade.Grenades.register(modEventBus);
         com.wf.wflib.item.ModDataComponents.register(modEventBus);
         com.wf.wflib.ammo.AmmoItems.register(modEventBus);
         com.wf.wflib.armor.ArmorComponents.register(modEventBus);
+        com.wf.wflib.nvg.NvgRegistry.register(modEventBus);
         com.wf.wflib.armor.ArmorMaterials.register(modEventBus);
         com.wf.wflib.WFCreativeTabs.register(modEventBus);
         com.wf.wflib.menu.ModMenus.register(modEventBus);

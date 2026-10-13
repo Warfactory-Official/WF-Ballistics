@@ -70,13 +70,29 @@ Missing subject => NUM NaN, BOOL false, TEXT empty, list empty.
 | `Ladder` | pitch ladder; wrap in `Transform` (roll) + clipping `Sized` |
 | `Dial` | dotted quadrant: minor dots, major / accent ticks, band, needles; degrees CCW from +x |
 | `Feed` | live camera feed by id; requests it at the drawn pixel width => never gate it on the feed being drawable (never requested => never drawable) |
+| `Button` | `Box` + click `UiAction`; `hover` / `pressed` backgrounds; `enabled` false => no hit |
+| `ListView` (`list`) | virtualised fixed-row list over a list signal; wheel scroll; scroll thumb |
+| `ScrollBox` (`scroll`) | clip + wheel-scrolled child |
+| `Slider` | 0..1 track; press/drag/wheel => `UiSetter` |
+| `DragArea` (`drag`) | drag deltas + wheel => `UiDrag`; child's interactive widgets sit above it |
 
 Native widget = any `WidgetDef`; read subjects through `binder.subject(..)` => `SubjectRef.get(ev)`. Vanilla drawing (items, entities, shaders): `ev.graphics` (HUD only) between `ev.canvas.suspend()` / `resume()`.
+
+### Input (`ui/input/`)
+
+- Opt-in per instance: `UiInstance.input()` => `UiInput`; host feeds `pointer(x, y, buttons)` / `wheel` in render-box units. Null `ev.input` => interactive widgets draw, record nothing.
+- Immediate mode: widgets `hit(..)` boxes while drawing; next render's `dispatch` resolves against them => 1 frame stale. Topmost = last recorded => container hits before its children.
+- Hit identity = (owner, item), item = innermost repeat element (`binder.itemSlot()` -> `ev.item(slot)`), `equals` across frames.
+- Any canvas transform/clip around interactive children MUST be mirrored on `ev.input` (`Transform`, `Sized` clip, `ListView`, `ScrollBox` do); `Text`/`Image` push only for their own glyphs.
+- Capture: press => drags + release go to the pressed hit even outside it; `release(.., inside)` = click.
+- Wheel: topmost-down until a `wheel` returns true.
+- JSON names handlers by id: `UiActions.register(id, UiAction|UiSetter|UiDrag)` at client setup; `"action"`, `"set"`, `"handler"`.
+- Keyboard (no Screen hosts): `UiKeyboard.focus(Target)` => every key / char to it, none to key mappings (`MixinKeyboardHandler`; Esc included), held keys released. Any new primary press blurs; screen open => blur. `TextField` + `TextLine` model (edit keys, history, Ctrl+V); code-only.
 
 ## 94. Hosts
 
 - HUD: CombinedAssault (JSON presets `combinedassault:vehicle|rotary_wing|fixed_wing|ship|scope|hit`, `client/hud/CaHudSource`), MineAssault (`mineassault:gun`, Java), wflib TV (`wflib:tv`, Java), `/wfui demo` (Java).
-- Feed OSD: `wflib:camera_osd`, `Canvas.begin(fbo, .., topRowFirst = true)` over the feed picture.
+- Feed OSD: `wflib:camera_osd`, absolute 320x180 units (relative default 270 => drawn at 67%), `Canvas.begin(fbo, .., topRowFirst = true)` over the feed picture.
 - Probe panel, nodes, job bar; map painter + `MapTool.render(Canvas, MapView)` (Xaero, JourneyMap): canvas; 3D probe elements through vanilla between `suspend`/`resume`.
 
 ## 96. JSON layouts (`ui/json/`)
@@ -104,6 +120,6 @@ Component: `{"use", "constants", "params": {"name": "num" | {"type": .., "defaul
 - Constant props (`gap`, `w` of `bar`, ...): JSON literal or constant expression (`"$gap * 2"`); units not allowed.
 - Widget types: bare name = `wflib:<name>`, props = record components in snake_case (`max_width`, `label_offset`); `absolute` = child in host units. Java widgets: `UiWidgetTypes.register(id, props -> ..)` at client setup; `JsonProps` reads + rejects unknown keys.
 - Load: parse on reload, expand + compile first frame after the loading overlay (types and signals registered). Per layout id highest pack that expands and compiles wins, else previous good, else Java registration. Errors: log `[wf_ui]` with file + JSON pointer, chat in dev. Self-including component / depth > 32 => error.
-- JSON cannot: add data (only registered signals), keep state beyond the stateful built-ins, take input, repeat over anything but item signals, draw custom geometry, place by measured text. Those = Java widget (`WidgetDef`), usable from JSON once registered.
+- JSON cannot: add data (only registered signals), keep state beyond the stateful built-ins, repeat over anything but item signals, handle input except through registered handlers, draw custom geometry, place by measured text. Those = Java widget (`WidgetDef`), usable from JSON once registered.
 - Runtime cost = Java-built tree: expansion inlines components, `Located` wrapper only acts at bind.
 

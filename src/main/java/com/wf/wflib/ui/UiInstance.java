@@ -1,6 +1,7 @@
 package com.wf.wflib.ui;
 
 import com.wf.gemrender.ui.Canvas;
+import com.wf.wflib.ui.input.UiInput;
 import net.minecraft.client.gui.GuiGraphics;
 
 /** A bound layout with its own values, state and widget tree. Render thread only. */
@@ -35,6 +36,14 @@ public final class UiInstance {
         return true;
     }
 
+    /** Enables pointer input; host feeds {@link UiInput#pointer} in the render box's units. */
+    public UiInput input() {
+        if (ev.input == null) {
+            ev.input = new UiInput();
+        }
+        return ev.input;
+    }
+
     public UiInstance context(UiContext context) {
         this.context = context;
         return this;
@@ -67,6 +76,12 @@ public final class UiInstance {
         ev.height = height / scale;
         ev.partialTick = partialTick;
         canvas.push().translate(x, y).scale(scale);
+        UiInput input = ev.input;
+        if (input != null) {
+            input.dispatch();
+            input.begin();
+            input.translate(x, y).scale(scale);
+        }
         try {
             ev.pixel = 1 / canvas.pixelsPerUnit();
             plan.refreshSubjects(ev, context);
@@ -76,6 +91,9 @@ public final class UiInstance {
             UiStats.mark(UiStats.MEASURE);
             root.draw(ev, 0, 0, ev.width, ev.height);
         } finally {
+            if (input != null) {
+                input.end();
+            }
             canvas.pop();
             UiStats.mark(UiStats.DRAW);
             ev.graphics = null;

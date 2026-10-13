@@ -1,5 +1,7 @@
 package com.wf.wflib.client.cam;
 
+import com.wf.wflib.drone.cam.CameraMode;
+
 import com.mojang.blaze3d.pipeline.RenderTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.VertexSorting;
@@ -20,11 +22,17 @@ import org.joml.Quaternionf;
 public final class OffscreenView implements AutoCloseable {
 
     private static final float NEAR = 0.05f;
+    private static final float ORTHO_NEAR = 0.5f;
 
     private final FeedCamera camera = new FeedCamera();
     private final FeedRenderSwap swap;
     private final Matrix4f projection = new Matrix4f();
     private final Matrix4f frustum = new Matrix4f();
+    private final Matrix4f cull = new Matrix4f();
+    /** > 0 => orthographic, half-height in blocks. */
+    private float orthoHalf;
+    /** Lens height over the ground, blocks (ortho only). */
+    private float orthoDepth;
 
     private OffscreenView(int viewDistance) {
         this.swap = new FeedRenderSwap(viewDistance);
@@ -50,6 +58,17 @@ public final class OffscreenView implements AutoCloseable {
         return new OffscreenView(viewDistance);
     }
 
+    /**
+     * Following passes orthographic ({@code halfHeight} blocks, lens {@code depth} over the ground; fov ignored) or,
+     * {@code halfHeight <= 0}, perspective. Ortho: far plane at the world floor; culled with a perspective cone
+     * holding the box down to half the lens height (vanilla {@code offsetToFullyIncludeCameraCube} steps ~far/2 per
+     * loop under ortho => hang); no fog, sky, clouds; section graph not height-capped ({@link FeedGraphColumns}).
+     */
+    public void ortho(float halfHeight, float depth) {
+        this.orthoHalf = halfHeight;
+        this.orthoDepth = Math.max(depth, 8.0f);
+    }
+
     public boolean render(Vec3 pos, float yaw, float pitch, float roll, float fovDeg,
                           RenderTarget target, DeltaTracker delta) {
         Minecraft mc = Minecraft.getInstance();
@@ -65,11 +84,11 @@ public final class OffscreenView implements AutoCloseable {
      */
     public boolean render(Entity anchor, Vec3 pos, float yaw, float pitch, float roll, float fovDeg,
                           RenderTarget target, DeltaTracker delta) {
-        return render(anchor, pos, yaw, pitch, roll, fovDeg, target, delta, false);
+        return render(anchor, pos, yaw, pitch, roll, fovDeg, target, delta, CameraMode.OPTICAL);
     }
 
     boolean render(Entity anchor, Vec3 pos, float yaw, float pitch, float roll, float fovDeg,
-                   RenderTarget target, DeltaTracker delta, boolean thermal) {
+                   RenderTarget target, DeltaTracker delta, CameraMode mode) {
         RenderSystem.assertOnRenderThread();
         if (FeedPass.active()) {
             throw new IllegalStateException("offscreen pass inside an offscreen pass");
@@ -87,22 +106,35 @@ public final class OffscreenView implements AutoCloseable {
         VertexSorting savedSorting = RenderSystem.getVertexSorting();
         try {
             this.camera.place(mc.level, anchor, pos, yaw, pitch, roll, partial);
-            this.projection.setPerspective((float) Math.toRadians(fovDeg),
-                    (float) target.width / (float) target.height, NEAR, mc.gameRenderer.getDepthFar());
+            float aspect = (float) target.width / (float) target.height;
+            boolean ortho = this.orthoHalf > 0;
+            if (ortho) {
+                float far = (float) (pos.y - mc.level.getMinBuildHeight()) + 1.0f;
+                this.projection.setOrtho(-this.orthoHalf * aspect, this.orthoHalf * aspect, -this.orthoHalf,
+                        this.orthoHalf, ORTHO_NEAR, far);
+                this.cull.setPerspective((float) (2.0 * Math.atan(2.0 * this.orthoHalf / this.orthoDepth)), aspect,
+                        NEAR, far);
+            } else {
+                this.projection.setPerspective((float) Math.toRadians(fovDeg), aspect, NEAR,
+                        mc.gameRenderer.getDepthFar());
+                this.cull.set(this.projection);
+            }
             this.frustum.rotation(this.camera.rotation().conjugate(new Quaternionf()));
 
             // clear() ends in unbindWrite => binds the main target; clear first, bind after.
             target.clear(Minecraft.ON_OSX);
             target.bindWrite(true);
-            RenderSystem.setProjectionMatrix(this.projection, VertexSorting.DISTANCE_TO_ORIGIN);
-            mc.levelRenderer.prepareCullFrustum(pos, this.frustum, this.projection);
+            RenderSystem.setProjectionMatrix(this.projection,
+                    ortho ? VertexSorting.ORTHOGRAPHIC_Z : VertexSorting.DISTANCE_TO_ORIGIN);
+            mc.levelRenderer.prepareCullFrustum(pos, this.frustum, this.cull);
 
             // renderLevel opens with popPush.
             mc.getProfiler().push("wf_offscreen_view");
             FeedPass.begin(this.swap.shared() ? null : pos,
                     this.swap.shared() ? mc.options.getEffectiveRenderDistance() : this.swap.viewDistance(),
-                    thermal, target);
+                    mode, ortho, target, pos, yaw, pitch);
             try {
+                this.swap.columns(ortho);
                 this.swap.install(mc.levelRenderer, pos);
                 mc.levelRenderer.renderLevel(delta, false, this.camera, mc.gameRenderer,
                         mc.gameRenderer.lightTexture(), new Matrix4f(this.frustum), new Matrix4f(this.projection));

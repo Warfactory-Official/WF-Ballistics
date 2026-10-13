@@ -25,7 +25,14 @@ public record ScopeFramePacket(ScopeFrame frame) implements CustomPacketPayload 
     }
 
     private static void encode(RegistryFriendlyByteBuf buf, ScopeFramePacket pkt) {
-        ScopeFrame frame = pkt.frame;
+        write(buf, pkt.frame);
+    }
+
+    private static ScopeFramePacket decode(RegistryFriendlyByteBuf buf) {
+        return new ScopeFramePacket(read(buf));
+    }
+
+    public static void write(RegistryFriendlyByteBuf buf, ScopeFrame frame) {
         buf.writeLong(frame.netId());
         buf.writeDouble(frame.originX());
         buf.writeDouble(frame.originY());
@@ -64,7 +71,7 @@ public record ScopeFramePacket(ScopeFrame frame) implements CustomPacketPayload 
         }
     }
 
-    private static ScopeFramePacket decode(RegistryFriendlyByteBuf buf) {
+    public static ScopeFrame read(RegistryFriendlyByteBuf buf) {
         long netId = buf.readLong();
         double x = buf.readDouble();
         double y = buf.readDouble();
@@ -87,7 +94,6 @@ public record ScopeFramePacket(ScopeFrame frame) implements CustomPacketPayload 
                     buf.readFloat(), buf.readFloat(),
                     buf.readVarInt(), buf.readByte(), buf.readBoolean()));
         }
-        return new ScopeFramePacket(new ScopeFrame(netId, x, y, z, range, gameTime,
-                List.copyOf(blips), List.copyOf(events)));
+        return new ScopeFrame(netId, x, y, z, range, gameTime, List.copyOf(blips), List.copyOf(events));
     }
 }

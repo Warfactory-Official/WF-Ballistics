@@ -1,0 +1,32 @@
+{
+  "tubes": [
+    {
+      "x": 0,
+      "y": 0,
+      "r": 0.48
+    }
+  ],
+  "resolution": 0.62,
+  "gain_max": 900,
+  "snr": 28,
+  "ebi": 0.015,
+  "halo": 0.25,
+  "autogate": true,
+  "abc_rate": 2.5,
+  "distortion": 0.04,
+  "vignette": 0.3,
+  "honeycomb": 0.12,
+  "blemishes": 2,
+  "phosphor": [
+    0.35,
+    1.0,
+    0.45
+  ],
+  "persistence": 0.15,
+  "spectral": [
+    0.6,
+    0.35,
+    0.15,
+    1.3
+  ]
+}

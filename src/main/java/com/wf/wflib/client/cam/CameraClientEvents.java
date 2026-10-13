@@ -30,10 +30,19 @@ public final class CameraClientEvents {
         FeedProbe.checkpoint(CameraFeedCache.frame(), "post");
     }
 
+    /** Fog start past any ortho far plane. */
+    private static final float FOGLESS = 100_000.0f;
+
     /** Close the fog in to the edge of the streamed bubble while a feed is being drawn. */
     @SubscribeEvent
     public static void onRenderFog(ViewportEvent.RenderFog event) {
         if (!FeedPass.active()) {
+            return;
+        }
+        if (FeedPass.ortho()) {
+            event.setNearPlaneDistance(FOGLESS);
+            event.setFarPlaneDistance(FOGLESS);
+            event.setCanceled(true);
             return;
         }
         float far = FeedPass.viewDistance() * 16.0f;
