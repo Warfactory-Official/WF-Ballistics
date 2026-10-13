@@ -28,6 +28,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Publish WarForge to mavenLocal
+        run: |
+          git clone https://github.com/Warfactory-Official/WarForge-Remaintained.git "$RUNNER_TEMP/warforge"
+          git -C "$RUNNER_TEMP/warforge" checkout 1bb799899975d31d97c9c5e2dcbc2638769e144e
+          cd "$RUNNER_TEMP/warforge"
+          chmod +x ./gradlew
+          ./gradlew publishToMavenLocal --no-daemon --stacktrace
+
       - name: Build
         run: |
           chmod +x ./gradlew
