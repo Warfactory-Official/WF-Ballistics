@@ -32,7 +32,7 @@ jobs:
 
       - name: Stage jar
         run: |
-          SRC=$(find build/libs -maxdepth 1 -name '*-all.jar' | head -1)
+          SRC=$(find build/libs -maxdepth 1 -name 'wflib-*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar' | head -1)
           cp "$SRC" wflib.jar
 
       - name: Publish wf release
