@@ -303,7 +303,43 @@ is what makes following a drone worth doing.
 /wflib exchange purge             # cancel everything live
 ```
 
-## 11. States
+## 10e. Bodies (`ControllableDrone`)
+
+Autonomy flies any `ControllableDrone`: `DroneEntity` (wflib fallback) or another mod's body.
+- Body owns motion + slung load; mission state = shared components `DroneFlight`/`DroneRoute`/`DroneOrders`/`DroneSquadRole` (public ctors, save/load).
+- Register: `DroneTracker.track(body)` on level join, `untrack` on leave. `DroneEntity` via entity events.
+- `DroneTracker.bodies(level)` / `byId` = every body; `drones(level)` = `DroneEntity` only (sim offload, pad recharge, camera monitor).
+- `DronePlan.desired`/`feedForward` = guidance setpoint before `Multirotor.step`; self-flying bodies fly these, `velocity` is wflib's integration.
+- `supports(DroneTask.Kind)` gates dispatch; `recall(home)` = EXFIL.
+- `DroneTasking.assign(body, operator, kind, at)`: one-step program for a body in the world; grounded => home = where it stands.
+- Drone pad: idle non-`DroneEntity` body within 8 blocks flying the kind takes the dispatch first (home = pad), else spawn.
+- `Multirotor.integrate(v, axis, thrust, frame)`: force law without controller (attitude flown directly).
+- Link: `Datalink.quality(level, spec, operatorAt(player), body)` = one figure for feeds (best audience anchor), PDA rows, TV rounds, remote pilots. Riding a `DetachedBodyHost` => operator = parked body anchor. `!usable` (<= `USABLE_LINK`) => host mod drops pilot input; CA: autopilot flies program, else holds (rotors hover, fixed-wing orbits).
+- `DroneEntity` manual: CONNECT = remote ride (`DetachedBodyHost`, `api/DetachedAnchors`; refused: no camera / downed / in use). Piloted => brain plans dropped; vanilla passenger input: W/S along look (pitch incl.) x cruise, A/D strafe, jump climbs; heading = look yaw; `Multirotor.step`. Battery empty => input ignored, descends at climb rate. Grounded + no climb => parked; climb => SURVEIL; descend near ground => IDLE. Sneak = release (vanilla). Client `DronePilotView`: camera entity = drone, aimed by player look. Eye (pilot `MixinCameraDronePilot` + feed `CameraSource`) = `DroneModels.lens`: lens node, else gimbal pitch, else hull centre; heading only, lean ignored.
+- Client: `DroneCamHud` = one overlay piloted (`pilot(link, release key, freeLook)` per tick; host leave key != sneak: CA sneak = DOWN; FREE LOOK tag) + PDA fullscreen drone/mounted feed (burned `CameraOsd` skipped): link bars, LOW SIGNAL, SIGNAL LOST card; watched adds name/mode/AGL/SPD/BAT/gimbal. `ScreenSensor.set(mode, link)` => same `Degrade` as feeds.
+
+## 10f. Lasers (`laser/`)
+
+- `LaserDamage.perTick = rated / (1 + res (m / 2 kg)^1.5 (1 + armour / 5 mm))`, `WFDamageTypes.LASER`, i-frames cleared. Mass/armour/res from `LaserTarget`; else living 80 kg, box x 100 kg/m³.
+- 2 kg quad: rated/2; 80 kg player ~rated/250; 2 t airframe ~0 => anti-FPV only.
+- `LaserBeamPacket` -> client `LaserBeams` (2-tick additive strip). Hosts + targeting = other mods (CA `combinedassault:laser`).
+
+## 10g. Counterplay (`recon/env/Interference`, `Datalink`)
+
+Passive engagers see only the recon picture => everything below defeats them.
+
+| tool | effect |
+| --- | --- |
+| `Interference.Area` | main-thread area, applied in `ReconTargets.collect` as an extra countermeasure. TARGET scope: targets inside x `factor` on `band`; SENSOR scope: sensors inside hear every target x `factor`. `heat > 0` => thermal-only UNKNOWN contact at centre (`SourceIds.ofHeat`, never its own glare) |
+| `PortableJammerItem` (`wflib:portable_jammer`) | use toggles `ACTIVE`; carried + on => RADAR TARGET area r 32 x 1e-4 (radar reach x0.1) on the carrier; links with either end inside cut (`Datalink`). Durability = 180 s charge, anvil + redstone block |
+| thermite (`GrenadeWarheads`) | while burning: THERMAL TARGET r 8 x 0.02 + heat contact 20 (motor 2.25, body 0.15) |
+| blast (`SeismicEvents.report`, grounded) | SEISMIC SENSOR r `48 sqrt(power / 4)` x 0.05, 200 ticks |
+| EMP (`EMPWarhead`) | non-player entities in r 48: `Datalink.jam` 300 ticks => link 0, connect refused ("jammed") |
+| `DroneNetBlock` (`wflib:drone_net`) | iron-bars shape, no collision (hull solvers stopped drones short of the strands); `catchable` body (`DroneEntity`; other mods `DroneNetBlock.catches`) whose box overlaps a strand => host pins it (`DroneEntity.moveWith`; CA `finishTick`) until the net breaks |
+
+- Gap: no recipes (pack/GT). Heat contacts are clutter + glare; no seeker seduction (`SeekerDecoy` separate).
+
+
 
 `DroneState`, each bound to a handler in `DroneStateRegistry`. Handlers are stateless strategies exactly like
 `FlightStage`: they read a snapshot, return a desired velocity, and decide when to hand over.
@@ -1131,17 +1167,12 @@ An open-ended loiter (`0` seconds) runs until `PowerPolicy.canHoldStation` says 
 
 ## 14. Off-world simulation
 
-`SimDroneManager` decides *when* a drone stops being an entity, not how it flies:
-
-- **Offload** while in `TRANSIT`/`EXFIL`, more than ~128 blocks from the current leg's waypoint, with no
-  player within `OFFLOAD_PLAYER_RANGE`.
-- **Onload** within `WAYPOINT_ONLOAD_RANGE` of that waypoint, when a player comes near, or whenever the state
-  is no longer a travel leg. That last condition matters: the sim has no real terrain to measure against, so a
-  drone left simulated while landing would descend forever.
-
-The crate entity is discarded on offload with its contents carried in the `SimDrone` record, and rebuilt on
-onload. Note the waypoint is leg-aware: on the way home it is the exfil point, not the destination the drone
-still remembers.
+`SimDroneManager` decides when a drone stops being an entity:
+- Offload: `TRANSIT`/`EXFIL`, > ~128 blocks from current leg's waypoint, no player within `OFFLOAD_PLAYER_RANGE`.
+- Onload: within `WAYPOINT_ONLOAD_RANGE` of waypoint, player near, or state no longer a travel leg (sim has no terrain => landing would descend forever).
+- Waypoint leg-aware: homeward = exfil, not remembered destination.
+- Crate discarded on offload, contents in `SimDrone`, rebuilt on onload.
+- Exchange/classified never offload (sim drops legs, exchange link). Team, operator, callsign carried.
 
 ## 15. Flying one
 

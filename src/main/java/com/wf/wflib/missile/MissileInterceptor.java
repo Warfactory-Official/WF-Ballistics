@@ -5,8 +5,8 @@ import com.wf.wflib.audio.Blasts;
 import com.wf.wflib.audio.WfAudio;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.MissileEntity.InterceptMode;
-import com.wf.wflib.drone.DroneEntity;
 import com.wf.wflib.entity.InterceptTarget;
+import com.wf.wflib.recon.ContactClass;
 import com.wf.wflib.sim.MissileListenerRegistry;
 import com.wf.wflib.sim.MissileSimConfig;
 import net.minecraft.core.particles.ParticleTypes;
@@ -127,7 +127,10 @@ public final class MissileInterceptor {
         AABB box = this.missile.getBoundingBox().inflate(r);
         List<MissileEntity> missiles = level.getEntitiesOfClass(MissileEntity.class, box, MissileEntity::isAlive);
         List<InterceptTarget> nearby = new ArrayList<>(missiles);
-        nearby.addAll(level.getEntitiesOfClass(DroneEntity.class, box, DroneEntity::isAlive));
+        for (Entity e : level.getEntities(this.missile, box, e -> e instanceof InterceptTarget t && e.isAlive()
+                && !(e instanceof MissileEntity) && t.interceptClass() == ContactClass.DRONE)) {
+            nearby.add((InterceptTarget) e);
+        }
         Set<UUID> claimed = claimedTargets(missiles, this.missile.getId());
         InterceptTarget best = null;
         InterceptTarget fallback = null;

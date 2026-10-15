@@ -39,6 +39,7 @@ public final class DroneModels {
                 .rotors("ROTOR_01_SPIN", "ROTOR_02_SPIN", "ROTOR_03_SPIN", "ROTOR_04_SPIN",
                         "ROTOR_05_SPIN", "ROTOR_06_SPIN", "ROTOR_07_SPIN", "ROTOR_08_SPIN")
                 .stow("PAYLOAD_ROOT")
+                .lens("ATTACH_FORWARD_CAMERA")
                 .hull("FRAME", "CANOPY", "ELECTRONICS", "LANDING_GEAR", "PAYLOAD_ROOT")
                 .shatter("FRAME", "CANOPY", "ARMS", "MOTORS", "LANDING_GEAR", "ELECTRONICS", "WIRING"));
 
@@ -114,6 +115,11 @@ public final class DroneModels {
     @Nullable
     public static Gimbal gimbal(ResourceLocation id) {
         return rig(id).gimbal();
+    }
+
+    /** @return camera origin, model units. */
+    public static Vec3 lens(ResourceLocation id) {
+        return rig(id).lens();
     }
 
     /**
@@ -241,9 +247,10 @@ public final class DroneModels {
             hull = graph.bounds();
         }
 
+        String lensNode = builder.lens != null ? builder.lens : builder.gimbal != null ? builder.gimbal.pitch() : null;
         RIGS.put(key, new Rig(asset, mount, builder.attitudeId, builder.airframe,
                 List.copyOf(builder.rotors), List.copyOf(pieces), List.copyOf(builder.stow),
-                builder.gimbal, hull.size(), hull.center()));
+                builder.gimbal, hull.size(), hull.center(), lensNode != null ? graph.origin(lensNode) : hull.center()));
 
         List<Vec3> pivots = new ArrayList<>(builder.rotors.size());
         for (String node : builder.rotors) {
@@ -298,10 +305,11 @@ public final class DroneModels {
      * @param pieces what it shatters into, rotors first
      * @param stowed nodes of the model that are never drawn, see {@link #stowed}
      * @param gimbal its camera head, or null if it has no modelled one
+     * @param lens camera origin, model units: lens node, else gimbal pitch node, else hull centre
      */
     private record Rig(ResourceLocation asset, Vec3 mount, String attitudeId, Airframe airframe,
                        List<String> rotorNodes, List<ResourceLocation> pieces, List<String> stowed,
-                       @Nullable Gimbal gimbal, Vec3 hullSize, Vec3 hullCenter) {
+                       @Nullable Gimbal gimbal, Vec3 hullSize, Vec3 hullCenter, Vec3 lens) {
     }
 
     /** One piece of a shattered airframe: which asset it comes from and which node of it it is. */
@@ -323,6 +331,7 @@ public final class DroneModels {
         private Airframe airframe = Airframe.AMAZOG;
         private Vec3 mount = Vec3.ZERO;
         private Gimbal gimbal;
+        private String lens;
 
         private Builder(String id) {
             this.id = id;
@@ -357,6 +366,11 @@ public final class DroneModels {
         /** Nodes the model has that the game does not want drawn. */
         private Builder stow(String... nodes) {
             this.stow.addAll(List.of(nodes));
+            return this;
+        }
+
+        private Builder lens(String node) {
+            this.lens = node;
             return this;
         }
 

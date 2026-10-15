@@ -74,6 +74,7 @@ public class GrenadeGameTest {
 
     private static Husk husk(ServerLevel level, Vec3 at, boolean ai) {
         Husk husk = new Husk(EntityType.HUSK, level);
+        husk.setPersistenceRequired();
         husk.moveTo(at.x, at.y, at.z, 0, 0);
         husk.setNoAi(!ai);
         husk.setPersistenceRequired();

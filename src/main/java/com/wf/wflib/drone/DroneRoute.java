@@ -23,7 +23,7 @@ public final class DroneRoute {
      */
     private static final long NEVER = Long.MIN_VALUE;
 
-    private final DroneEntity drone;
+    private final ControllableDrone drone;
     @Nullable
     private Vec3 destination;
     private Vec3 exfil = Vec3.ZERO;
@@ -39,7 +39,7 @@ public final class DroneRoute {
      */
     private long pathRequestedAt = NEVER;
 
-    DroneRoute(DroneEntity drone) {
+    public DroneRoute(ControllableDrone drone) {
         this.drone = drone;
     }
 
@@ -48,7 +48,7 @@ public final class DroneRoute {
         return this.path;
     }
 
-    void adoptPath(DronePath path) {
+    public void adoptPath(DronePath path) {
         this.path = path;
     }
 
@@ -71,11 +71,11 @@ public final class DroneRoute {
     }
 
     @Nullable
-    Vec3 nextLeg() {
+    public Vec3 nextLeg() {
         return this.legs.peek();
     }
 
-    void advanceLeg() {
+    public void advanceLeg() {
         this.legs.poll();
     }
 
@@ -96,14 +96,14 @@ public final class DroneRoute {
     /**
      * Swap the remaining route for the egress dogleg. Does nothing on a direct mission, which has none.
      */
-    void beginEgress() {
+    public void beginEgress() {
         this.legs.clear();
         this.legs.addAll(this.egressPlan);
         this.egressPlan.clear();
     }
 
     /** Everything the planner needs to know about the ground, read here because a worker cannot read it itself. */
-    DroneNav sampleNav(ServerLevel level, Vec3 pos, double groundY, long gameTime) {
+    public DroneNav sampleNav(ServerLevel level, Vec3 pos, double groundY, long gameTime) {
         DroneFlight flight = this.drone.flight();
         Vec3 goal = DroneNavigation.goal(flight.getDroneState(), this.legs.peek(), this.destination, this.exfil);
         boolean overdue = this.pathRequestedAt == NEVER
@@ -115,7 +115,7 @@ public final class DroneRoute {
         }
         double planningSpeed = Math.max(flight.getCruiseSpeed(), flight.getReleaseSpeed());
         double required = flight.getDroneState().followsTerrain()
-                ? DroneNavigation.requiredAltitude(level, pos, this.drone.getDeltaMovement(), planningSpeed,
+                ? DroneNavigation.requiredAltitude(level, pos, this.drone.asEntity().getDeltaMovement(), planningSpeed,
                 flight.getClimbRate(), groundY)
                 : Double.NEGATIVE_INFINITY;
         return new DroneNav(this.path, field, required);
@@ -143,7 +143,7 @@ public final class DroneRoute {
         tag.put(key, list);
     }
 
-    CompoundTag save() {
+    public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         if (this.destination != null) {
             tag.putDouble("DestX", this.destination.x);
@@ -158,7 +158,7 @@ public final class DroneRoute {
         return tag;
     }
 
-    void load(CompoundTag tag) {
+    public void load(CompoundTag tag) {
         this.destination = tag.contains("DestX")
                 ? new Vec3(tag.getDouble("DestX"), tag.getDouble("DestY"), tag.getDouble("DestZ")) : null;
         this.exfil = new Vec3(tag.getDouble("ExfilX"), tag.getDouble("ExfilY"), tag.getDouble("ExfilZ"));

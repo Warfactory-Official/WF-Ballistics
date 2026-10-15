@@ -91,7 +91,7 @@ public final class Rounds implements SimKind<RoundBatch> {
     /** Head = eye height +- this, for {@link KineticPreset#headshot}. */
     private static final double HEAD_HALF_HEIGHT = 0.25;
     /** Pick slack on plain AABB targets, as vanilla's projectile sweep. */
-    private static final double PICK_INFLATE = 0.3;
+    public static final double PICK_INFLATE = 0.3;
     /** Chunk ticket ids: {@code key} in the low half. */
     private static final long TICKET_HIGH = 0x524F554E44L;
     /** Steps per tick for an unwatched round over unloaded ground. */
@@ -162,13 +162,25 @@ public final class Rounds implements SimKind<RoundBatch> {
     public static long launch(ServerLevel level, KineticPreset preset, Vec3 at, Vec3 velocity,
                               @Nullable Entity shooter, @Nullable UUID faction, float damageScale, int rewindTicks,
                               int shooterSeq) {
-        if (rewindTicks < 0 || !(damageScale >= 0.0f)) {
-            throw new IllegalArgumentException("rewind " + rewindTicks + ", damage scale " + damageScale);
+        return launch(level, preset, at, velocity, shooter, faction, damageScale, rewindTicks, shooterSeq, 0.0f);
+    }
+
+    /**
+     * {@link #launch(ServerLevel, KineticPreset, Vec3, Vec3, Entity, UUID, float, int, int)}, fired {@code lead}
+     * ticks into the current tick: first step flies {@code 1 - lead} of it, so rounds launched together string out.
+     * @param lead {@code [0, 1)}
+     */
+    public static long launch(ServerLevel level, KineticPreset preset, Vec3 at, Vec3 velocity,
+                              @Nullable Entity shooter, @Nullable UUID faction, float damageScale, int rewindTicks,
+                              int shooterSeq, float lead) {
+        if (rewindTicks < 0 || !(damageScale >= 0.0f) || !(lead >= 0.0f && lead < 1.0f)) {
+            throw new IllegalArgumentException("rewind " + rewindTicks + ", damage scale " + damageScale
+                    + ", lead " + lead);
         }
         long key = nextKey++;
         RoundBatch b = batch(level);
         int i = b.add(key, preset, at.x, at.y, at.z, velocity.x, velocity.y, velocity.z,
-                shooter == null ? -1 : shooter.getId(), faction, damageScale, rewindTicks, shooterSeq);
+                shooter == null ? -1 : shooter.getId(), faction, damageScale, rewindTicks, shooterSeq, lead);
         RoundNetwork.sync(level, b, i);
         return key;
     }
@@ -346,6 +358,10 @@ public final class Rounds implements SimKind<RoundBatch> {
         long key = b.key[i];
         Vec3 from = new Vec3(b.x[i], b.y[i], b.z[i]);
         Vec3 to = from.add(b.vx[i], b.vy[i], b.vz[i]);
+        boolean led = b.lead[i] > 0.0f;
+        if (led) {
+            to = from.lerp(to, 1.0 - b.lead[i]);
+        }
         int span = preset.loadsChunks() ? LOADED : span(level, from, to);
         // Undecoded column ahead: fly the decoded prefix now (targets short of it), wait at its edge.
         boolean partial = span == PENDING;
@@ -558,14 +574,15 @@ public final class Rounds implements SimKind<RoundBatch> {
             detonate(level, b, i, new Vec3(b.x[i], b.y[i], b.z[i]), shooter, RoundEnd.FUSE);
             return false;
         }
-        if (pierced > 0 || bounced || partial) {
+        if (pierced > 0 || bounced || partial || led) {
             b.x[i] = to.x;
             b.y[i] = to.y;
             b.z[i] = to.z;
             b.vx[i] = velocity.x;
             b.vy[i] = velocity.y;
             b.vz[i] = velocity.z;
-            if (partial) {
+            b.lead[i] = 0.0f;
+            if (partial || led) {
                 // Sub-tick advance: no decay/gravity; the client learns the delay from the resync.
                 RoundNetwork.sync(level, b, i);
                 return true;
@@ -953,7 +970,7 @@ public final class Rounds implements SimKind<RoundBatch> {
         }
         RoundBatch b = batch(level);
         int i = b.add(nextKey++, preset, d.at().x, d.at().y, d.at().z, 0.0, 0.0, 0.0,
-                shooter == null ? -1 : shooter.getId(), d.faction(), 1.0f, 0, NO_SEQ);
+                shooter == null ? -1 : shooter.getId(), d.faction(), 1.0f, 0, NO_SEQ, 0.0f);
         b.rest[i] = fuse;
         b.burrow[i] = burrow;
         RoundNetwork.sync(level, b, i);
@@ -1202,6 +1219,17 @@ public final class Rounds implements SimKind<RoundBatch> {
             return null;
         }
         return boxHit(e, box, from, to, feetY, when);
+    }
+
+    /** Live {@link #hitLiving} for blast rays (fragments, jets); null = miss. */
+    @Nullable
+    public static LiveHit hitLive(LivingEntity e, Vec3 from, Vec3 to) {
+        EntityHit h = hitLiving(e, from, to, null, RoundDamageSource.LIVE);
+        return h == null ? null : new LiveHit(h.at, h.parts == null ? null : h.parts.get(0));
+    }
+
+    /** @param part first AHF part; null = box fallback (no part) */
+    public record LiveHit(Vec3 at, @Nullable HitboxPart part) {
     }
 
     @Nullable

@@ -1,7 +1,9 @@
 package com.wf.wflib.drone.cam;
 
 import com.wf.wflib.MissileEntity;
+import com.wf.wflib.drone.ControllableDrone;
 import com.wf.wflib.drone.DroneEntity;
+import com.wf.wflib.drone.DroneTracker;
 import com.wf.wflib.orbital.SpotFeeds;
 import com.wf.wflib.tv.TvGuidance;
 import com.wf.wflib.item.ModDataComponents;
@@ -113,8 +115,14 @@ public final class CameraNet {
         entityWatches = n;
     }
 
-    /** Is this player allowed to watch this feed at all? */
+    /** Is this player allowed to watch this feed at all? Classified drone => nobody. */
     private static boolean entitled(ServerLevel level, ServerPlayer player, int feedId) {
+        if (feedId > 0 && level.getEntity(feedId) instanceof Entity e) {
+            ControllableDrone body = DroneTracker.byId(level, e.getUUID());
+            if (body != null && body.orders().isClassified()) {
+                return false;
+            }
+        }
         Cameras cameras = of(level);
         double reach = MONITOR_AUDIENCE * MONITOR_AUDIENCE;
         for (Map.Entry<Long, Monitor> entry : cameras.monitors.entrySet()) {
@@ -302,11 +310,12 @@ public final class CameraNet {
         cam.slew(PUBLISH_INTERVAL);
 
         Vec3 eye = source.eye();
-        double nearest = Double.MAX_VALUE;
+        Entity body = feedId > 0 ? level.getEntity(feedId) : null;
+        float link = 0.0f;
         for (Anchor anchor : audience) {
-            nearest = Math.min(nearest, anchor.pos().distanceTo(eye));
+            link = Math.max(link, body != null ? Datalink.quality(level, spec, anchor.pos(), body, eye)
+                    : Datalink.quality(level, spec, anchor.pos(), eye));
         }
-        float link = spec.linkAt(nearest);
 
         source.bill(spec.drawFor(cam.mode), PUBLISH_INTERVAL);
 

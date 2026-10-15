@@ -116,6 +116,9 @@ public final class SimDroneManager implements SimKind<SimDrone> {
                 && CameraNet.quietFor(level, drone.getId()) < CAMERA_QUIET_TICKS) {
             return false;
         }
+        if (drone.orders().getExchangeId() != null || drone.orders().isClassified()) {
+            return false;
+        }
         DroneState state = drone.flight().getDroneState();
         if (state != DroneState.TRANSIT && state != DroneState.EXFIL) {
             return false;

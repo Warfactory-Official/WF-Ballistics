@@ -6,7 +6,7 @@
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "wflib:turret_ciws"
+          "name": "wflib:drone_net"
         }
       ],
       "conditions": [

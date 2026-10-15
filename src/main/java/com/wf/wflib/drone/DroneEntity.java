@@ -1,6 +1,9 @@
 package com.wf.wflib.drone;
 
+import com.wf.wflib.block.DroneNetBlock;
 import com.wf.wflib.ModEntities;
+import com.wf.wflib.api.DetachedAnchors;
+import com.wf.wflib.api.DetachedBodyHost;
 import com.wf.wflib.api.WFLibAPI;
 import com.wf.wflib.api.WFEventType;
 import com.wf.wflib.api.WFTelemetry;
@@ -10,14 +13,15 @@ import com.wf.wflib.attitude.MissileAttitudeRegistry;
 import com.wf.wflib.chunk.MissileChunkLoader;
 import com.wf.wflib.drone.ai.DroneAction;
 import com.wf.wflib.drone.cam.CameraSpec;
-import com.wf.wflib.drone.ai.DroneCarrier;
+import com.wf.wflib.drone.cam.Datalink;
 import com.wf.wflib.drone.ai.DroneBrain;
 import com.wf.wflib.drone.ai.DronePlan;
 import com.wf.wflib.drone.ai.DroneSnapshot;
 import com.wf.wflib.drone.ai.TerrainSampler;
 import com.wf.wflib.drone.flight.Airframe;
+import com.wf.wflib.drone.flight.Contacts;
 import com.wf.wflib.drone.flight.FlightAttitude;
-import com.wf.wflib.drone.nav.DronePath;
+import com.wf.wflib.drone.flight.Multirotor;
 import com.wf.wflib.entity.InterceptTarget;
 import com.wf.wflib.entity.OBBEntity;
 import com.wf.wflib.recon.ContactClass;
@@ -35,6 +39,8 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
@@ -46,12 +52,12 @@ import org.joml.Quaternionf;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
 /** An autonomous rotor drone. */
-public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, DroneCarrier,
-        com.wf.wflib.telemetry.TelemetryReporter {
+public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, ControllableDrone, DetachedBodyHost {
 
     /**
      * Ticks a released payload flies before self-detonating, so one dropped over a void still goes off.
@@ -65,6 +71,16 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
     public static final double PICKUP_REACH_DOWN = 8.0;
     /** How far apart a squad's drones are set down when it launches. */
     public static final double SPAWN_SPACING = 4.0;
+    /** Byte units per radian of lean, and per unit of throttle. */
+    public static final float TILT_QUANTUM = 90.0f;
+    public static final float THROTTLE_QUANTUM = 50.0f;
+    /**
+     * Downward speed applied to a grounded drone until it is resting, so one that finishes a landing a fraction of
+     * a block high settles instead of hovering.
+     */
+    private static final double SETTLE_SPEED = 0.08;
+    /** How far above the surface a drone under power is held. */
+    private static final double SKIM_CLEARANCE = 0.5;
 
     private static final EntityDataAccessor<String> MODEL_ID =
             SynchedEntityData.defineId(DroneEntity.class, EntityDataSerializers.STRING);
@@ -84,13 +100,20 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
     /** Which rotor discs have been shot off, as a bitmask over the airframe's rotor list. */
     static final EntityDataAccessor<Byte> ROTORS_OUT =
             SynchedEntityData.defineId(DroneEntity.class, EntityDataSerializers.BYTE);
-    /** Lean and throttle as flown ({@link DroneFlight#setAttitude}), not guessed by the renderer from velocity. */
+    /** Lean and throttle as flown ({@link #onAttitude}), not guessed by the renderer from velocity. */
     static final EntityDataAccessor<Byte> ROLL =
             SynchedEntityData.defineId(DroneEntity.class, EntityDataSerializers.BYTE);
     static final EntityDataAccessor<Byte> PITCH =
             SynchedEntityData.defineId(DroneEntity.class, EntityDataSerializers.BYTE);
     static final EntityDataAccessor<Byte> THROTTLE =
             SynchedEntityData.defineId(DroneEntity.class, EntityDataSerializers.BYTE);
+    /** Remote pilots' parked bodies ({@link DetachedAnchors}). */
+    private static final EntityDataAccessor<CompoundTag> ANCHORS =
+            SynchedEntityData.defineId(DroneEntity.class, EntityDataSerializers.COMPOUND_TAG);
+    /** Pilot's {@link Datalink} quality, quantised. */
+    private static final EntityDataAccessor<Float> LINK =
+            SynchedEntityData.defineId(DroneEntity.class, EntityDataSerializers.FLOAT);
+    private static final float LINK_QUANTUM = 1.0f / 64.0f;
     /** Scratch for {@link #refreshObb}, which runs every tick for every one of these that moved. */
     private final Vector3f obbHeading = new Vector3f();
     private final Quaternionf obbOrientation = new Quaternionf();
@@ -106,6 +129,7 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
     private final DroneHold hold = new DroneHold(this);
     private final DroneDamage damage = new DroneDamage(this);
     private final DroneSquadRole squad = new DroneSquadRole(this);
+    private final DetachedAnchors anchors = new DetachedAnchors(this, ANCHORS);
 
     private DroneBattery battery = new DroneBattery(DroneBattery.DEFAULT_CAPACITY);
     /** Which camera head is bolted on, or null for none. */
@@ -162,18 +186,32 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
             com.wf.wflib.build.BuildPilot.advance(serverLevel, this);
         }
 
+        LivingEntity pilot = this.pilot();
+        this.tickLink(serverLevel, pilot);
+        if (pilot != null) {
+            this.flyManual(pilot);
+        }
+
         this.battery.drain(this.power.drain(this.flight.getDroneState(), this.flight.getAttitude().throttle(),
                 this.massFactor(), this.getDeltaMovement().horizontalDistance()));
     }
 
+    @Override
+    public Entity asEntity() {
+        return this;
+    }
+
+    @Override
     public DroneFlight flight() {
         return this.flight;
     }
 
+    @Override
     public DroneRoute route() {
         return this.route;
     }
 
+    @Override
     public DroneOrders orders() {
         return this.orders;
     }
@@ -186,59 +224,65 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
         return this.damage;
     }
 
+    @Override
     public DroneSquadRole squad() {
         return this.squad;
     }
 
-    /** Entering an airborne state: take the chunk tickets now, not next tick. */
-    void onAirborne() {
-        if (this.level() instanceof ServerLevel serverLevel) {
+    /** Entering an airborne state takes the chunk tickets now, not next tick. */
+    @Override
+    public void onStateChanged(DroneState state) {
+        this.entityData.set(STATE, (byte) state.ordinal());
+        if (state.airborne() && this.level() instanceof ServerLevel serverLevel) {
             this.chunkLoader.update(this, serverLevel, this.position(), this.getDeltaMovement(), true);
         }
     }
 
+    @Override
+    public void onAttitude(FlightAttitude attitude) {
+        float yaw = this.headingRadians();
+        this.entityData.set(ROLL, quantise(attitude.roll(yaw), TILT_QUANTUM));
+        this.entityData.set(PITCH, quantise(attitude.pitch(yaw), TILT_QUANTUM));
+        this.entityData.set(THROTTLE, quantise(attitude.throttle(), THROTTLE_QUANTUM));
+    }
+
+    private static byte quantise(double value, float quantum) {
+        return (byte) Math.max(-127, Math.min(127, Math.round(value * quantum)));
+    }
+
+    /**
+     * @return lean about the nose axis, radians, as the client sees it.
+     */
+    public float getRoll() {
+        return this.entityData.get(ROLL) / TILT_QUANTUM;
+    }
+
+    /**
+     * @return lean about the wing axis, radians: positive is nose down.
+     */
+    public float getPitch() {
+        return this.entityData.get(PITCH) / TILT_QUANTUM;
+    }
+
+    /**
+     * @return thrust as a multiple of an unladen hover, so 1.0 is holding station and 0 is a dead rotor.
+     */
+    public float getThrottle() {
+        return this.entityData.get(THROTTLE) / THROTTLE_QUANTUM;
+    }
+
+    @Override
+    public double chargeFraction() {
+        return this.battery.percent() / 100.0;
+    }
+
+    @Override
+    public boolean supports(DroneTask.Kind kind) {
+        return true;
+    }
+
     void refitBounds() {
         this.setBoundingBox(this.makeBoundingBox());
-    }
-
-    @Override
-    public UUID droneId() {
-        return this.getUUID();
-    }
-
-    @Override
-    public long squadId() {
-        return this.squad.squadId();
-    }
-
-    @Override
-    public boolean leader() {
-        return this.squad.leader();
-    }
-
-    @Override
-    public void promote() {
-        this.squad.promote();
-    }
-
-    @Override
-    public ResourceLocation formationId() {
-        return this.squad.formationId();
-    }
-
-    @Override
-    public double formationSpacing() {
-        return this.squad.formationSpacing();
-    }
-
-    @Override
-    public ResourceLocation coordinationId() {
-        return this.squad.coordinationId();
-    }
-
-    @Override
-    public boolean carrierAlive() {
-        return this.isAlive() && !this.isRemoved();
     }
 
     @Override
@@ -265,6 +309,9 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
 
     @Override
     public void apply(ServerLevel level, DronePlan plan) {
+        if (this.pilot() != null) {
+            return;
+        }
         for (DroneAction action : plan.actions()) {
             this.perform(level, action);
         }
@@ -275,17 +322,181 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
             this.flight.setAttitude(plan.attitude());
             this.setHeadingRadians(plan.yaw());
         }
-        this.flight.moveWith(plan.velocity());
+        this.moveWith(plan.velocity());
     }
 
     @Override
     public void coast(ServerLevel level) {
-        this.flight.moveWith(DroneBrain.coast(this.getDeltaMovement()));
+        if (this.pilot() != null) {
+            return;
+        }
+        this.moveWith(DroneBrain.coast(this.getDeltaMovement()));
+    }
+
+    /** Remote pilot (anchored passenger), else null: flies by hand, the brain's plans are dropped meanwhile. */
+    @Nullable
+    public LivingEntity pilot() {
+        for (Entity passenger : this.getPassengers()) {
+            if (passenger instanceof LivingEntity living && this.anchors.get(living) != null) {
+                return living;
+            }
+        }
+        return null;
+    }
+
+    public float link() {
+        return this.entityData.get(LINK);
+    }
+
+    private void tickLink(ServerLevel level, @Nullable LivingEntity pilot) {
+        float link = pilot == null || this.camera == null ? 1.0f
+                : Datalink.quality(level, this.camera, Datalink.operatorAt(pilot), this, this.getEyePosition());
+        float shown = this.entityData.get(LINK);
+        if (Math.abs(link - shown) >= LINK_QUANTUM || link == 1.0f && shown != 1.0f) {
+            this.entityData.set(LINK, link);
+        }
+    }
+
+    /**
+     * Stabilised stick: W/S along the look (pitch included), A/D strafe, jump climbs; heading = look yaw.
+     * Lost link => hover. Grounded + no climb => stays parked.
+     */
+    private void flyManual(LivingEntity pilot) {
+        Vec3 desired = Vec3.ZERO;
+        if (this.battery.isEmpty()) {
+            desired = new Vec3(0.0, -this.flight.getClimbRate(), 0.0);
+        } else if (Datalink.usable(this.link())) {
+            double speed = this.flight.getCruiseSpeed();
+            float yaw = pilot.getYRot();
+            Vec3 look = Vec3.directionFromRotation(pilot.getXRot(), yaw);
+            Vec3 left = Vec3.directionFromRotation(0.0f, yaw - 90.0f);
+            desired = look.scale(pilot.zza * speed).add(left.scale(pilot.xxa * speed))
+                    .add(0.0, pilot.jumping ? this.flight.getClimbRate() : 0.0, 0.0);
+            this.setHeadingRadians((float) -Math.toRadians(yaw));
+        }
+        DroneState state = this.flight.getDroneState();
+        if (!state.airborne()) {
+            if (desired.y <= 0.0) {
+                this.moveWith(Vec3.ZERO);
+                return;
+            }
+            this.flight.setState(DroneState.SURVEIL);
+        } else if (desired.y < 0.0 && this.getY() - this.flight.lastGroundY() < SKIM_CLEARANCE + 0.1) {
+            this.flight.setState(DroneState.IDLE);
+        }
+        Multirotor.Step step = Multirotor.step(this.getDeltaMovement(), this.flight.getAttitude(), desired, Vec3.ZERO,
+                this.airframe(), this.massFactor());
+        if (!this.damage.crashed()) {
+            this.flight.setAttitude(step.attitude());
+        }
+        this.moveWith(step.velocity());
     }
 
     @Override
-    public void adoptPath(DronePath path) {
-        this.route.adoptPath(path);
+    public boolean isDetachedBodyActive() {
+        return !this.anchors.isEmpty();
+    }
+
+    @Nullable
+    @Override
+    public Vec3 getDetachedBodyAnchor(Entity operator) {
+        return this.anchors.get(operator);
+    }
+
+    @Override
+    public void setDetachedBodyAnchor(Entity operator, @Nullable Vec3 anchor) {
+        this.anchors.set(operator, anchor);
+    }
+
+    @Override
+    public void clearDetachedBodyAnchors() {
+        this.anchors.clear();
+    }
+
+    @Override
+    public Collection<Entity> getDetachedOperators() {
+        return this.anchors.operators();
+    }
+
+    /** Remote pilot's body stays parked at its anchor. */
+    @Override
+    protected void positionRider(Entity passenger, Entity.MoveFunction callback) {
+        Vec3 anchor = this.anchors.get(passenger);
+        if (anchor != null) {
+            callback.accept(passenger, anchor.x, anchor.y, anchor.z);
+            return;
+        }
+        super.positionRider(passenger, callback);
+    }
+
+    @Override
+    public Vec3 getDismountLocationForPassenger(LivingEntity passenger) {
+        Vec3 anchor = this.anchors.release(passenger);
+        return anchor != null ? anchor : super.getDismountLocationForPassenger(passenger);
+    }
+
+    private void moveWith(Vec3 velocity) {
+        if (!this.flight.getDroneState().airborne()) {
+            this.setDeltaMovement(Vec3.ZERO);
+            double rest = this.flight.lastGroundY();
+            if (!Double.isNaN(rest) && this.getY() > rest) {
+                this.setPos(this.getX(), Math.max(rest, this.getY() - SETTLE_SPEED), this.getZ());
+            }
+            this.refitBounds();
+            this.resolveContacts();
+            return;
+        }
+        if (DroneNetBlock.caught(this.level(), this)) {
+            this.setDeltaMovement(Vec3.ZERO);
+            return;
+        }
+        this.setDeltaMovement(velocity);
+        this.hasImpulse = true;
+        this.move(MoverType.SELF, velocity);
+        this.resolveContacts();
+        this.clampAboveGround();
+        this.refitBounds();
+    }
+
+    /** Push out of any drone this one ended the tick inside of. */
+    private void resolveContacts() {
+        AABB box = this.getBoundingBox();
+        List<DroneEntity> touching = this.level().getEntitiesOfClass(DroneEntity.class, box,
+                other -> other != this && other.isAlive());
+        if (touching.isEmpty()) {
+            return;
+        }
+        Vec3 escape = Vec3.ZERO;
+        for (DroneEntity other : touching) {
+            escape = escape.add(Contacts.escape(box, other.getBoundingBox(), this.getId() < other.getId()));
+        }
+        Vec3 step = Contacts.step(escape);
+        if (step.lengthSqr() < 1.0E-12) {
+            return;
+        }
+        this.setPos(this.getX() + step.x, this.getY() + step.y, this.getZ() + step.z);
+        this.refitBounds();
+    }
+
+    /** Refuse to end a tick inside the ground. */
+    private void clampAboveGround() {
+        if (!(this.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        double ground = TerrainSampler.measure(serverLevel, this.getX(), this.getZ());
+        if (Double.isNaN(ground)) {
+            return;
+        }
+        this.flight.noteGround(ground);
+        double floor = ground + (this.flight.getDroneState().followsTerrain() ? SKIM_CLEARANCE : 0.0);
+        if (this.getY() >= floor) {
+            return;
+        }
+        this.setPos(this.getX(), floor, this.getZ());
+        Vec3 motion = this.getDeltaMovement();
+        if (motion.y < 0.0) {
+            this.setDeltaMovement(motion.x, 0.0, motion.z);
+        }
     }
 
     /** Drones are solid bodies. */
@@ -355,6 +566,7 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
     /**
      * @return the faction this drone flies for, or null if it belongs to nobody (a hand-summoned one).
      */
+    @Override
     @Nullable
     public UUID getTeamId() {
         return this.teamId;
@@ -371,18 +583,28 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
                 com.wf.wflib.telemetry.TelemetryKind.DRONE, this.callsign(), this.teamId, this.operatorId);
     }
 
+    @Override
     public String callsign() {
         return this.callsign != null ? this.callsign : this.getModelId().getPath();
     }
 
+    @Override
     public void setCallsign(@Nullable String callsign) {
         this.callsign = callsign;
     }
 
+    @Override
+    @Nullable
+    public UUID getOperatorId() {
+        return this.operatorId;
+    }
+
+    @Override
     public void setOperatorId(@Nullable UUID operatorId) {
         this.operatorId = operatorId;
     }
 
+    @Override
     public void setTeamId(@Nullable UUID teamId) {
         this.teamId = teamId;
     }
@@ -495,6 +717,15 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
      * @return the airframe's facing as a rotation about {@code +Y}, the form the model and OBB both want.
      *      Vanilla yaw runs the other way, which is why this isn't just {@code getYRot()}.
      */
+    /** Camera lens, world: {@link DroneModels#lens} turned to heading; lean ignored. */
+    public Vec3 lensPosition(float partialTick) {
+        Vec3 lens = DroneModels.lens(this.getModelId());
+        double yaw = -Math.toRadians(this.getViewYRot(partialTick));
+        double cos = Math.cos(yaw);
+        double sin = Math.sin(yaw);
+        return this.getPosition(partialTick).add(lens.x * cos + lens.z * sin, lens.y, lens.z * cos - lens.x * sin);
+    }
+
     public float headingRadians() {
         return (float) -Math.toRadians(this.getYRot());
     }
@@ -526,6 +757,7 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
         this.telemetry = telemetry;
     }
 
+    @Override
     public void recordEvent(WFEventType type, String detail) {
         if (this.level().isClientSide) {
             return;
@@ -626,6 +858,8 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
         builder.define(ROLL, (byte) 0);
         builder.define(PITCH, (byte) 0);
         builder.define(THROTTLE, (byte) 0);
+        builder.define(ANCHORS, new CompoundTag());
+        builder.define(LINK, 1.0f);
     }
 
     /**
@@ -660,12 +894,16 @@ public class DroneEntity extends Entity implements OBBEntity, InterceptTarget, D
     @Override
     protected void readAdditionalSaveData(CompoundTag tag) {
         this.setModelId(DroneModels.parse(tag.getString("ModelId")));
-        this.battery = DroneBattery.load(tag.getCompound("Battery"));
+        // /summon reads an empty tag: keep the full pack.
+        if (tag.contains("Battery")) {
+            this.battery = DroneBattery.load(tag.getCompound("Battery"));
+        }
         this.camera = cameraFitOf(tag.getByte("Camera"));
         this.teamId = tag.hasUUID("TeamId") ? tag.getUUID("TeamId") : null;
         this.operatorId = tag.hasUUID("Operator") ? tag.getUUID("Operator") : null;
         this.callsign = tag.contains("Callsign") ? tag.getString("Callsign") : null;
         this.flight.load(tag.getCompound("Flight"));
+        this.entityData.set(STATE, (byte) this.flight.getDroneState().ordinal());
         this.route.load(tag.getCompound("Route"));
         this.orders.load(tag.getCompound("Orders"));
         this.hold.load(tag.getCompound("Hold"));

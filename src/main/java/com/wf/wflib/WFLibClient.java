@@ -81,6 +81,7 @@ public class WFLibClient {
 
         event.registerEntityRenderer(ModEntities.FIRE_LINGERING.get(),
                 NoopRenderer::new);
+        event.registerEntityRenderer(ModEntities.AGENT_ORANGE.get(), NoopRenderer::new);
 
         for (GlyphidCaste caste : GlyphidCaste.VALUES) {
             event.registerEntityRenderer(caste.type(), NoopRenderer::new);

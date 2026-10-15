@@ -502,6 +502,7 @@ public class ImpactEffectGameTest {
 
     private static Husk pinnedHusk(ServerLevel level, Vec3 at) {
         Husk husk = new Husk(EntityType.HUSK, level);
+        husk.setPersistenceRequired();
         husk.moveTo(at.x, at.y, at.z);
         husk.setNoAi(true);
         husk.setNoGravity(true);

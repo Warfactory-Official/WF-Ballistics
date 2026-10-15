@@ -70,7 +70,7 @@ side = "BOTH"
 [[dependencies.wflib]]
 modId = "gtceu"
 type = "optional"
-versionRange = "*"
+versionRange = "[8.0.0,)"
 ordering = "AFTER"
 side = "BOTH"
 

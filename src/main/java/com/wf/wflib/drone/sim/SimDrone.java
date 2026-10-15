@@ -79,6 +79,12 @@ public final class SimDrone implements DroneCarrier {
     public MineLoad mines;
     public double releaseSpeed = DroneFlight.DEFAULT_RELEASE_SPEED;
     public long lastGameTime;
+    @Nullable
+    public UUID teamId;
+    @Nullable
+    public UUID operatorId;
+    @Nullable
+    public String callsign;
 
     public static SimDrone fromEntity(DroneEntity drone, @Nullable CompoundTag cargo) {
         SimDrone sd = new SimDrone();
@@ -111,6 +117,9 @@ public final class SimDrone implements DroneCarrier {
         sd.mines = drone.hold().getMines();
         sd.releaseSpeed = drone.flight().getReleaseSpeed();
         sd.lastGameTime = drone.level().getGameTime();
+        sd.teamId = drone.getTeamId();
+        sd.operatorId = drone.getOperatorId();
+        sd.callsign = drone.callsign().equals(drone.getModelId().getPath()) ? null : drone.callsign();
         return sd;
     }
 
@@ -122,6 +131,9 @@ public final class SimDrone implements DroneCarrier {
         drone.setUUID(this.id);
         drone.setModelId(this.modelId);
         drone.setCameraSpec(this.camera);
+        drone.setTeamId(this.teamId);
+        drone.setOperatorId(this.operatorId);
+        drone.setCallsign(this.callsign);
         drone.route().setDestination(this.destination);
         drone.route().setExfil(this.exfil);
         drone.flight().setCruiseSpeed(this.cruiseSpeed);
@@ -286,6 +298,15 @@ public final class SimDrone implements DroneCarrier {
         }
         tag.putDouble("ReleaseSpeed", releaseSpeed);
         tag.putLong("LastGameTime", lastGameTime);
+        if (teamId != null) {
+            tag.putUUID("TeamId", teamId);
+        }
+        if (operatorId != null) {
+            tag.putUUID("Operator", operatorId);
+        }
+        if (callsign != null) {
+            tag.putString("Callsign", callsign);
+        }
         if (!program.isEmpty()) {
             tag.put("Program", program.save());
         }
@@ -338,6 +359,9 @@ public final class SimDrone implements DroneCarrier {
         if (tag.contains("Mines")) {
             sd.mines = MineLoad.load(tag.getCompound("Mines"));
         }
+        sd.teamId = tag.hasUUID("TeamId") ? tag.getUUID("TeamId") : null;
+        sd.operatorId = tag.hasUUID("Operator") ? tag.getUUID("Operator") : null;
+        sd.callsign = tag.contains("Callsign") ? tag.getString("Callsign") : null;
         sd.releaseSpeed = tag.contains("ReleaseSpeed")
                 ? tag.getDouble("ReleaseSpeed") : DroneFlight.DEFAULT_RELEASE_SPEED;
         sd.lastGameTime = tag.getLong("LastGameTime");

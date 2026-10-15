@@ -5,7 +5,10 @@ import com.wf.wflib.recon.propagate.SeismicPropagator;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.resources.ResourceKey;
+import com.wf.wflib.recon.Band;
+import com.wf.wflib.recon.env.Interference;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.levelgen.Heightmap;
 
@@ -47,6 +50,11 @@ public final class SeismicEvents {
     private static final Map<ResourceKey<Level>, List<BlastEvent>> BY_LEVEL = new HashMap<>();
     private static long nextId = 1L;
 
+    /** Ground ringing after a blast: geophones within {@code NOISE_RADIUS sqrt(power / TNT)} hear x{@code NOISE_FACTOR}. */
+    public static final double NOISE_RADIUS = 48.0;
+    public static final float NOISE_FACTOR = 0.05f;
+    public static final int NOISE_TICKS = 200;
+
     private SeismicEvents() {
     }
 
@@ -86,6 +94,11 @@ public final class SeismicEvents {
                 power, coupling > 1.0, gameTime));
         if (live.size() > MAX_LIVE) {
             dropWeakest(live);
+        }
+        if (coupling > 0.0) {
+            Interference.put(level, new Object(), new Interference.Area(Band.SEISMIC, Interference.Scope.SENSOR,
+                    new Vec3(x, y, z), NOISE_RADIUS * Math.sqrt(power / TNT_POWER), NOISE_FACTOR,
+                    gameTime + NOISE_TICKS, 0.0f));
         }
     }
 

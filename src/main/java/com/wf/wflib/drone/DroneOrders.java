@@ -21,7 +21,7 @@ public final class DroneOrders {
     /** How far around the point it was sent to watch a surveillance drone reports contacts from. */
     public static final double WATCH_RADIUS = 48.0;
 
-    private final DroneEntity drone;
+    private final ControllableDrone drone;
     /** The queued mission steps. */
     private DroneProgram program = DroneProgram.EMPTY;
     /**
@@ -50,7 +50,7 @@ public final class DroneOrders {
     @Nullable
     private WorkAssignment assignment;
 
-    DroneOrders(DroneEntity drone) {
+    public DroneOrders(ControllableDrone drone) {
         this.drone = drone;
     }
 
@@ -68,13 +68,13 @@ public final class DroneOrders {
     }
 
     /** Step the queue on and take the next destination with it. */
-    void advanceTask() {
+    public void advanceTask() {
         this.program = this.program.advanced();
         this.seenContacts.clear();
         this.drone.route().setDestination(this.program.destination(this.drone.route().getExfil()));
     }
 
-    void abandonProgram(String reason) {
+    public void abandonProgram(String reason) {
         this.program = this.program.abandoned();
         this.drone.recordEvent(WFEventType.MISSION_COMPLETE, "program abandoned: " + reason);
     }
@@ -134,7 +134,7 @@ public final class DroneOrders {
     /**
      * @return false if anyone is standing near the drop point.
      */
-    boolean dropZoneClear(ServerLevel level) {
+    public boolean dropZoneClear(ServerLevel level) {
         Vec3 destination = this.drone.route().getDestination();
         if (!this.classified || destination == null) {
             return true;
@@ -154,7 +154,7 @@ public final class DroneOrders {
     /**
      * @return everyone who has come into view of a watching drone since the last time it looked.
      */
-    List<String> sweepForContacts(ServerLevel level) {
+    public List<String> sweepForContacts(ServerLevel level) {
         Vec3 destination = this.drone.route().getDestination();
         if (this.drone.flight().getDroneState() != DroneState.SURVEIL || destination == null) {
             if (!this.seenContacts.isEmpty()) {
@@ -181,7 +181,7 @@ public final class DroneOrders {
         return fresh == null ? List.of() : fresh;
     }
 
-    CompoundTag save() {
+    public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean("Classified", this.classified);
         tag.putBoolean("Collecting", this.collecting);
@@ -200,7 +200,7 @@ public final class DroneOrders {
         return tag;
     }
 
-    void load(CompoundTag tag) {
+    public void load(CompoundTag tag) {
         this.classified = tag.getBoolean("Classified");
         this.collecting = tag.getBoolean("Collecting");
         this.exchangeId = tag.hasUUID("Exchange") ? tag.getUUID("Exchange") : null;

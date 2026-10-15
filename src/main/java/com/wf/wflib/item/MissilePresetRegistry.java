@@ -6,6 +6,7 @@ import com.wf.wflib.WFLib;
 import com.wf.wflib.drone.cam.CameraSpec;
 import com.wf.wflib.flight.FlightStageRegistry;
 import com.wf.wflib.sim.MissileSimConfig;
+import com.wf.wflib.warhead.AgentOrangeWarhead;
 import com.wf.wflib.warhead.FireWarhead;
 import com.wf.wflib.warhead.GasWarhead;
 import com.wf.wflib.warhead.RecursiveFrag;
@@ -92,6 +93,11 @@ public final class MissilePresetRegistry {
 
         register(MissilePreset.builder(rl("chemical"), MissileModels.rl("taint"), GasWarhead.ID)
                 .highAltitude(250).explosionOffset(5.0f)
+                .fuel(MissileEntity.FuelType.LIQUID, 1500).build());
+
+        // Airburst above the canopy: spray falls through it to the ground.
+        register(MissilePreset.builder(rl("agent_orange"), MissileModels.rl("taint"), AgentOrangeWarhead.ID)
+                .highAltitude(250).explosionOffset(24.0f)
                 .fuel(MissileEntity.FuelType.LIQUID, 1500).build());
 
         register(MissilePreset.builder(rl("incendiary"), MissileModels.rl("v2_incendiary"), FireWarhead.ID)

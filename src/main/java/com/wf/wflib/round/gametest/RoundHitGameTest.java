@@ -861,6 +861,8 @@ public class RoundHitGameTest {
         mob.setYBodyRot(0.0F);
         mob.setNoAi(true);
         mob.setNoGravity(true);
+        // Any FakePlayer in the level => hostile mobs > 128 blocks from it despawn (noAi does not stop it).
+        mob.setPersistenceRequired();
         helper.getLevel().addFreshEntity(mob);
         return mob;
     }

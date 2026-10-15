@@ -49,6 +49,14 @@ public class ModBlocks {
             ITEMS.register("missile_listener_debug", () ->
                     new BlockItem(MISSILE_LISTENER_DEBUG.get(), new Item.Properties()));
 
+    public static final DeferredHolder<Block, Block> DRONE_NET =
+            BLOCKS.register("drone_net", () -> new DroneNetBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.WOOL).strength(0.8f).sound(net.minecraft.world.level.block.SoundType.WOOL)
+                    .noOcclusion()));
+
+    public static final DeferredHolder<Item, Item> DRONE_NET_ITEM =
+            ITEMS.register("drone_net", () -> new BlockItem(DRONE_NET.get(), new Item.Properties()));
+
     public static final DeferredHolder<Block, Block> DRONE_PAD =
             BLOCKS.register("drone_pad", () -> new DronePadBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(3.0f)));
@@ -84,14 +92,6 @@ public class ModBlocks {
     public static final DeferredHolder<Item, Item>MISSILE_DISPENSER_ITEM =
             ITEMS.register("missile_dispenser", () ->
                     new BlockItem(MISSILE_DISPENSER.get(), new Item.Properties()));
-
-    public static final DeferredHolder<Block, Block>TURRET_CIWS =
-            BLOCKS.register("turret_ciws", () -> new TurretCiwsBlock(
-                    BlockBehaviour.Properties.of().mapColor(MapColor.METAL).strength(5.0f).requiresCorrectToolForDrops()));
-
-    public static final DeferredHolder<Item, Item>TURRET_CIWS_ITEM =
-            ITEMS.register("turret_ciws", () ->
-                    new BlockItem(TURRET_CIWS.get(), new Item.Properties()));
 
     public static final DeferredHolder<Block, Block>TURRET_INTERCEPTOR =
             BLOCKS.register("turret_interceptor", () -> new TurretInterceptorBlock(

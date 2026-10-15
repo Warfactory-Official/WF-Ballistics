@@ -97,7 +97,7 @@ public interface CameraSource {
 
         @Override
         public Vec3 eye() {
-            return this.drone.position().add(0.0, this.drone.getBbHeight() * 0.5, 0.0);
+            return this.drone.lensPosition(1.0f);
         }
 
         @Override

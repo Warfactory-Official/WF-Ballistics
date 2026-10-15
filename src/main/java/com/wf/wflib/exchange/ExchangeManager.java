@@ -3,6 +3,7 @@ package com.wf.wflib.exchange;
 import com.mojang.logging.LogUtils;
 import com.wf.wflib.block.entity.DronePadBlockEntity;
 import com.wf.wflib.drone.CrateEntity;
+import com.wf.wflib.drone.ControllableDrone;
 import com.wf.wflib.drone.DroneEntity;
 import com.wf.wflib.drone.DroneTracker;
 import net.minecraft.server.MinecraftServer;
@@ -211,7 +212,7 @@ public final class ExchangeManager {
         exchange.cancel(reason);
         ExchangeRegistry.get(server).touch();
         for (ServerLevel level : server.getAllLevels()) {
-            for (DroneEntity drone : List.copyOf(DroneTracker.drones(level))) {
+            for (ControllableDrone drone : List.copyOf(DroneTracker.bodies(level))) {
                 if (exchange.id().equals(drone.orders().getExchangeId())) {
                     drone.orders().abortExchange();
                 }

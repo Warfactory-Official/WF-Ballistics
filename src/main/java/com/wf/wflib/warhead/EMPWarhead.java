@@ -6,7 +6,11 @@ import com.wf.wflib.aef.standard.BlockAllocatorBlockEntities;
 import com.wf.wflib.aef.standard.BlockProcessorEMP;
 import com.wf.wflib.fx.EMPCreator;
 import net.minecraft.resources.ResourceLocation;
+import com.wf.wflib.drone.cam.Datalink;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public final class EMPWarhead {
@@ -18,6 +22,8 @@ public final class EMPWarhead {
     private static final boolean DRAIN_ENERGY = true;
     private static final boolean PAUSE_WORK = true;
     private static final boolean BREAK_MAINTENANCE = true;
+    /** Datalinks of bodies in the radius: feeds, remote control. */
+    public static final int LINK_KILL_TICKS = 300;
 
     private EMPWarhead() {
     }
@@ -35,5 +41,9 @@ public final class EMPWarhead {
         emp.explode();
 
         EMPCreator.compose(level, pos.x, pos.y, pos.z, RADIUS);
+        for (Entity e : level.getEntities((Entity) null, new AABB(pos, pos).inflate(RADIUS),
+                e -> !(e instanceof Player) && e.position().distanceToSqr(pos) <= RADIUS * RADIUS)) {
+            Datalink.jam(e, LINK_KILL_TICKS);
+        }
     }
 }

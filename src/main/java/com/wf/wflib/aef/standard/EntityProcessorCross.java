@@ -1,6 +1,7 @@
 package com.wf.wflib.aef.standard;
 
 import com.wf.wflib.aef.ExplosionAEF;
+import com.wf.wflib.damage.BlastDamageSource;
 import com.wf.wflib.fx.BlastCorpses;
 import com.wf.wflib.aef.interfaces.ICustomDamageHandler;
 import com.wf.wflib.aef.interfaces.IEntityProcessor;
@@ -16,6 +17,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.EventHooks;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.HashMap;
 import java.util.List;
@@ -51,6 +53,10 @@ public class EntityProcessorCross implements IEntityProcessor {
         return explosion.level.damageSources().explosion(explosion.compat);
     }
 
+    protected static DamageSource blastSource(DamageSource base, ExplosionAEF explosion, Entity victim, Vec3 aim) {
+        return BlastDamageSource.of(base, victim, new Vec3(explosion.posX, explosion.posY, explosion.posZ), aim, null);
+    }
+
     public EntityProcessorCross setAllowSelfDamage() {
         this.allowSelfDamage = true;
         return this;
@@ -76,6 +82,7 @@ public class EntityProcessorCross implements IEntityProcessor {
         // pass 1: knockback + record damage per entity
         Map<Entity, Float> damageMap = new HashMap<>();
         Map<Entity, Vec3> pushes = new HashMap<>();
+        Map<Entity, Vec3> aims = new HashMap<>();
         for (Entity entity : list) {
             double distanceScaled = nearestSurfaceDistanceScaled(entity, x, y, z, size);
             if (distanceScaled > 1.0D) {
@@ -83,7 +90,8 @@ public class EntityProcessorCross implements IEntityProcessor {
                         com.wf.wflib.debug.ExplosionTrace.Verdict.OUT_OF_RANGE, 0.0f);
                 continue;
             }
-            if (!isWithinBlastShape(explosion, entity, x, y, z)) {
+            Vec3 aim = shapeAim(explosion, entity, x, y, z);
+            if (aim == null) {
                 com.wf.wflib.debug.ExplosionTrace.victim(entity,
                         com.wf.wflib.debug.ExplosionTrace.Verdict.OUTSIDE_CONE, 0.0f);
                 continue;
@@ -107,6 +115,7 @@ public class EntityProcessorCross implements IEntityProcessor {
             double knockback = (1.0D - distanceScaled) * density;
             float dmg = calculateDamage(distanceScaled, density, knockback, size);
             damageMap.merge(entity, dmg, Math::max);
+            aims.put(entity, aim);
             com.wf.wflib.debug.ExplosionTrace.victim(entity,
                     com.wf.wflib.debug.ExplosionTrace.Verdict.HIT, dmg);
 
@@ -136,7 +145,7 @@ public class EntityProcessorCross implements IEntityProcessor {
         for (Map.Entry<Entity, Float> entry : damageMap.entrySet()) {
             Entity entity = entry.getKey();
             boolean alive = entity.isAlive();
-            attackEntity(entity, explosion, entry.getValue());
+            attackEntity(entity, explosion, entry.getValue(), aims.get(entity));
             if (alive && !entity.isAlive() && entity instanceof LivingEntity corpse && shouldDealKnockback(entity)) {
                 BlastCorpses.launch(corpse, pushes.get(entity));
             }
@@ -173,9 +182,9 @@ public class EntityProcessorCross implements IEntityProcessor {
         return nodes;
     }
 
-    /** Override for a different damage pipeline. */
-    public void attackEntity(Entity entity, ExplosionAEF explosion, float amount) {
-        entity.hurt(explosionDamage(explosion), amount);
+    /** Override for a different damage pipeline; {@code aim} = struck point ({@link #shapeAim}). */
+    public void attackEntity(Entity entity, ExplosionAEF explosion, float amount, Vec3 aim) {
+        entity.hurt(blastSource(explosionDamage(explosion), explosion, entity, aim), amount);
     }
 
     /** Vanilla-style scaling damage; override for flat/other falloff. */
@@ -188,10 +197,11 @@ public class EntityProcessorCross implements IEntityProcessor {
         return true;
     }
 
-    /** Shape gate, checked after the spherical range cull. */
-    protected boolean isWithinBlastShape(ExplosionAEF explosion, Entity entity, double x, double y, double z) {
-        AABB box = entity.getBoundingBox();
-        return isWithinBlastShape(explosion, entity.getX(), (box.minY + box.maxY) * 0.5, entity.getZ(), x, y, z);
+    /** Shape gate, checked after the spherical range cull: point of the box inside the shape; null = outside. */
+    @Nullable
+    protected Vec3 shapeAim(ExplosionAEF explosion, Entity entity, double x, double y, double z) {
+        Vec3 centre = entity.getBoundingBox().getCenter();
+        return isWithinBlastShape(explosion, centre.x, centre.y, centre.z, x, y, z) ? centre : null;
     }
 
     /** Position variant: for callers without a bounding box (e.g. {@link SimGlyphidBlast}). */

@@ -60,7 +60,8 @@ public final class PowerPolicy {
      * charge to make the exfil point, otherwise put down where we are.
      */
     private static DroneState transitOverride(DroneSnapshot self) {
-        if (canDeliver(self)) {
+        // Last MOVE_TO step done: destination cleared, TransitHandler turns for home.
+        if (!self.hasMission() || canDeliver(self)) {
             return null;
         }
         return canReach(self, self.exfil()) ? DroneState.EXFIL : DroneState.LANDING;

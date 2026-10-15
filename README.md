@@ -28,12 +28,11 @@ behaviour is registered through a small registry and is meant to be extended by 
   `ATTACK`). Stages include a gravity-turn ascent, terrain-following / high-altitude cruise, a loitering
   orbit (Shahed-style drone), attack runs, and vertical terminal dives.
 - **Warheads** - standard HE, mini-nuke, airburst fragmentation, recursive cluster fragmentation, chemical
-  gas, incendiary, an electromagnetic-pulse (EMP) payload that drains and disables machines without breaking
-  blocks, a no-op interceptor payload, and inert duds. Each warhead can define a cheaper "neutralised" effect
-  used when the missile is shot down mid-air.
-- **Active defense** - CIWS turrets (hitscan) and launch-and-forget interceptor batteries (normal /
-  supersonic), plus predictive friendly deconfliction so a swarm doesn't ram itself. Stealth missiles are
-  only briefly detectable by automatic defenses.
+  gas, incendiary, agent orange defoliant (strips leaves and logs down to the ground), an electromagnetic-pulse
+  (EMP) payload that drains and disables machines without breaking blocks, a no-op interceptor payload, and inert
+  duds. Each warhead can define a cheaper "neutralised" effect used when the missile is shot down mid-air.
+- **Active defense** - launch-and-forget interceptor batteries (normal / supersonic), plus predictive friendly
+  deconfliction so a swarm doesn't ram itself. Stealth missiles are only briefly detectable by automatic defenses.
 - **Off-world simulation** - missiles far from any player offload from the world into a cheap analytic
   simulation (`sim/`), then rematerialize into real entities near listeners (players, turrets, launchers).
   This keeps long-range strikes cheap without unloading their flight. Missiles force-load a look-ahead
@@ -64,7 +63,7 @@ com.wf.wflib
 ├── item/                      MissilePreset + MissilePresetRegistry (launch-ready configs → items)
 ├── sim/                       off-world simulation, listeners, collision prediction, tunables
 ├── chunk/                     MissileChunkLoader (force-loads the flight path)
-├── block/                     launcher, CIWS turret, interceptor batteries + their block entities
+├── block/                     launcher, interceptor batteries + their block entities
 ├── aef/                       ExplosionAEF framework (+ aef/nuke batched ray-march)
 ├── damage/  fire/  fluid/     custom damage classes, fire type, kerosene fluid
 ├── entity/                    bomblets, gas mist, nuke-explosion + torex entities

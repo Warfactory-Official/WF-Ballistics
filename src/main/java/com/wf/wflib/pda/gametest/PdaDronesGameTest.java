@@ -41,10 +41,28 @@ public class PdaDronesGameTest {
 
         List<DroneStatusPacket.Entry> drones = PdaDrones.status(player).drones();
         drone.discard();
-        if (drones.size() != 2 || !drones.get(0).loaded() || drones.get(0).state().isEmpty()
+        if (drones.size() != 2 || !drones.get(0).loaded() || drones.get(0).status().isEmpty()
                 || drones.get(1).loaded()) {
             helper.fail("drones " + drones);
         }
+        helper.succeed();
+    }
+
+    /** Exchange (classified) => no feed id, no connect, status NO LINK. */
+    @GameTest(template = TEMPLATE)
+    public static void classifiedDroneShowsNoLink(GameTestHelper helper) {
+        BlockPos at = helper.absolutePos(new BlockPos(1, 2, 1));
+        DroneEntity drone = new DroneEntity(helper.getLevel(), Vec3.atCenterOf(at.above(3)));
+        drone.orders().setExchange(null, null, true, false, List.of(), List.of());
+        helper.getLevel().addFreshEntity(drone);
+        FakePlayer player = PdaUplinkGameTest.player(helper, 9, 1, at);
+        ItemStack pda = new ItemStack(ModItems.PDA.get());
+        pda.set(ModDataComponents.CHANNELS.get(), new CameraChannels(List.of(FeedTarget.ofDrone(drone.getUUID())), 0));
+        player.setItemInHand(InteractionHand.MAIN_HAND, pda);
+        DroneStatusPacket.Entry entry = PdaDrones.status(player).drones().get(0);
+        drone.discard();
+        helper.assertTrue(entry.status().equals("NO LINK") && entry.feedId() == 0 && !entry.refusal().isEmpty(),
+                "classified drone exposed: " + entry);
         helper.succeed();
     }
 }

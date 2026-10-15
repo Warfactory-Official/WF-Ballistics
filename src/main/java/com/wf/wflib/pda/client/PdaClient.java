@@ -1,5 +1,6 @@
 package com.wf.wflib.pda.client;
 
+import com.wf.wflib.client.cam.CameraLink;
 import com.wf.wflib.client.screen.EmbeddedScreen;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.pda.Pda;
@@ -91,6 +92,16 @@ public final class PdaClient {
             UiKeyboard.blur();
             fullscreenFeed = feedId;
         }
+    }
+
+    /** Raise and watch {@code feedId} full screen (e.g. on releasing a remote body); PDA must be in hand. */
+    public static void watch(int feedId) {
+        if (!held || feedId == 0) {
+            return;
+        }
+        focused = true;
+        CameraLink.open(feedId);
+        fullscreen(feedId);
     }
 
     /** Null = home grid. */
@@ -210,6 +221,9 @@ public final class PdaClient {
     static void onMouseButton(InputEvent.MouseButton.Pre event) {
         if (fullscreenFeed != 0 && event.getButton() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             event.setCanceled(true);
+            if (event.getAction() == GLFW.GLFW_PRESS && Minecraft.getInstance().screen == null) {
+                PdaFullscreen.control();
+            }
             return;
         }
         if (!focused || Minecraft.getInstance().screen != null) {

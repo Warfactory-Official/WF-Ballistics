@@ -1,5 +1,7 @@
 package com.wf.wflib.grenade;
 
+import com.wf.wflib.recon.env.Interference;
+import com.wf.wflib.recon.Band;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.aef.ExplosionAEF;
 import com.wf.wflib.aef.standard.EntityProcessorCross;
@@ -83,6 +85,10 @@ public final class GrenadeWarheads {
     public static final double THERMITE_REACH = 2.5;
     /** Heat per second at contact. */
     public static final float THERMITE_HEAT = 30.0f;
+    /** Recon: thermal contact at the burn (vs motor 2.25, body 0.15); targets within the glare radius x factor. */
+    public static final float THERMITE_SIGNATURE = 20.0f;
+    public static final double THERMITE_GLARE = 8.0;
+    public static final float THERMITE_GLARE_FACTOR = 0.02f;
 
     //: smoke -------------------------------------------------------------------------------------
     public static final int SMOKE_BURN = 1200;
@@ -297,6 +303,8 @@ public final class GrenadeWarheads {
             }
         }
         if (age % 20 == 0) {
+            Interference.put(level, charge.getUUID(), new Interference.Area(Band.THERMAL, Interference.Scope.TARGET,
+                    pos, THERMITE_GLARE, THERMITE_GLARE_FACTOR, level.getGameTime() + 21, THERMITE_SIGNATURE));
             Entity host = charge.host();
             for (Entity e : level.getEntities(charge, new AABB(pos, pos).inflate(THERMITE_REACH + 8),
                     x -> x instanceof PreciseHitbox && x.isAlive())) {

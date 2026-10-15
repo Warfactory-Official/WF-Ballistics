@@ -1,6 +1,7 @@
 package com.wf.wflib.recon;
 
 import com.wf.wflib.drone.WorldThread;
+import com.wf.wflib.recon.env.Interference;
 import com.wf.wflib.recon.snapshot.TargetSnapshot;
 import com.wf.wflib.recon.source.EntityTargetSource;
 import com.wf.wflib.recon.source.SensorTargetSource;
@@ -37,6 +38,7 @@ public final class ReconTargets {
         addSource(new SimGlyphidSource());
         addSource(new SimDroneSource());
         addSource(new SensorTargetSource());
+        addSource(new Interference());
     }
 
     public static int sourceCount() {
@@ -48,9 +50,10 @@ public final class ReconTargets {
         WorldThread.assertOn("recon target collection");
         List<TargetSnapshot> out = new ArrayList<>();
         Set<Long> seen = new HashSet<>();
+        List<Interference.Area> areas = Interference.live(level);
         TargetSink sink = snapshot -> {
             if (seen.add(snapshot.sourceId())) {
-                out.add(snapshot);
+                out.add(Interference.apply(areas, snapshot));
             }
         };
         for (int i = 0; i < SOURCES.size(); i++) {

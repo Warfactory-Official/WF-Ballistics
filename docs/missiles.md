@@ -116,6 +116,7 @@ What the missile does on impact. Pick by registered id. Built-ins:
 | `recursive_frag`| splits into child missiles `splitDepth` times before the leaves detonate |
 | `gas`           | chemical cloud                                                    |
 | `fire`          | incendiary                                                        |
+| `agent_orange` | defoliant spray, falls 1 block/tick over a disc (radius = blast size, default 12): `#wflib:defoliant_targets` (leaves, logs) -> air, column stops at any other solid or fluid. Claims respected; entities untouched |
 | `emp`           | drains/disables energy systems, no physical blast                 |
 | `interceptor`   | the neutralize-on-hit effect used by anti-missile interceptors    |
 | `inert`         | no detonation (test rounds)                                       |

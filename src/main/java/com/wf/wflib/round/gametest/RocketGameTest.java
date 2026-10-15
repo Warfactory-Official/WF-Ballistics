@@ -129,6 +129,7 @@ public class RocketGameTest {
         BlockPos wall = BlockPos.containing(centre(helper, 8.0));
         level.setBlockAndUpdate(wall, Blocks.STONE.defaultBlockState());
         Husk husk = new Husk(EntityType.HUSK, level);
+        husk.setPersistenceRequired();
         husk.moveTo(wall.getX() + 0.5, wall.getY() + 1.0, wall.getZ() + 0.5);
         husk.setNoAi(true);
         husk.setNoGravity(true);

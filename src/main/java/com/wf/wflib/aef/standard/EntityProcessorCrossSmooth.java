@@ -8,6 +8,7 @@ import com.wf.wflib.fire.AshHandler;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;
 
 /** {@link EntityProcessorCross} variant for weapons rather than terrain-cratering blasts. */
 public class EntityProcessorCrossSmooth extends EntityProcessorCross {
@@ -39,11 +40,12 @@ public class EntityProcessorCrossSmooth extends EntityProcessorCross {
     }
 
     @Override
-    public void attackEntity(Entity entity, ExplosionAEF explosion, float amount) {
+    public void attackEntity(Entity entity, ExplosionAEF explosion, float amount, Vec3 aim) {
         if (!entity.isAlive()) return;
         if (explosion.exploder == entity) amount *= 0.5F; // shooter takes half damage
 
-        DamageSource dmg = WFDamageSources.create(explosion.level, clazz, explosion.exploder);
+        DamageSource dmg = blastSource(WFDamageSources.create(explosion.level, clazz, explosion.exploder), explosion,
+                entity, aim);
 
         if (!(entity instanceof LivingEntity living)) {
             entity.hurt(dmg, amount);

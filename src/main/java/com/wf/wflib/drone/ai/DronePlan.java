@@ -17,19 +17,25 @@ import java.util.List;
  *      recomputed on the world thread because it is state, not decoration: next tick's
  *      physics starts from the attitude this tick ended at
  * @param nextState the state to switch into, or null to stay put
+ * @param desired guidance setpoint before the flight model; bodies with their own physics fly this
+ * @param feedForward guidance reference acceleration, blocks/tick²
  */
 public record DronePlan(java.util.UUID droneId, long sourceGameTime, Vec3 velocity, FlightAttitude attitude,
-                        float yaw, @Nullable DroneState nextState, List<DroneAction> actions) {
+                        float yaw, @Nullable DroneState nextState, List<DroneAction> actions,
+                        Vec3 desired, Vec3 feedForward) {
 
     public static DronePlan of(DroneSnapshot self, Vec3 velocity, FlightAttitude attitude, float yaw,
-                               @Nullable DroneState nextState, List<DroneAction> actions) {
-        return new DronePlan(self.id(), self.gameTime(), velocity, attitude, yaw, nextState, actions);
+                               @Nullable DroneState nextState, List<DroneAction> actions, Vec3 desired,
+                               Vec3 feedForward) {
+        return new DronePlan(self.id(), self.gameTime(), velocity, attitude, yaw, nextState, actions, desired,
+                feedForward);
     }
 
     /**
      * @return a plan that changes nothing, used when a drone has no handler for its state.
      */
     public static DronePlan idle(DroneSnapshot self) {
-        return new DronePlan(self.id(), self.gameTime(), Vec3.ZERO, self.attitude(), self.yaw(), null, List.of());
+        return new DronePlan(self.id(), self.gameTime(), Vec3.ZERO, self.attitude(), self.yaw(), null, List.of(),
+                Vec3.ZERO, Vec3.ZERO);
     }
 }

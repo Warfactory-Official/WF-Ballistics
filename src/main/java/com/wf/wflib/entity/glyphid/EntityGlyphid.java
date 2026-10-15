@@ -112,7 +112,7 @@ public class EntityGlyphid extends Monster implements DynamicResistance, Glyphid
     public static final byte FLIGHT_CAPABLE = 0b01;
     public static final byte FLIGHT_AIRBORNE = 0b10;
 
-    /** Radians per unit of the quantised lean, matching {@code DroneFlight.TILT_QUANTUM}. */
+    /** Radians per unit of the quantised lean, matching {@code DroneEntity.TILT_QUANTUM}. */
     public static final float TILT_QUANTUM = 90.0F;
 
     /** Ticks between looking for something to push. See {@link #pushEntities}. */

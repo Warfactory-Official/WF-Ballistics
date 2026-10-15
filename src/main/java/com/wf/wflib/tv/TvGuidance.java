@@ -4,7 +4,7 @@ import com.wf.wflib.pda.Pda;
 import com.wf.wflib.MissileEntity;
 import com.wf.wflib.ModEntities;
 import com.wf.wflib.missile.MissileSeeker;
-import com.wf.wflib.drone.cam.CameraFeed;
+import com.wf.wflib.drone.cam.Datalink;
 import com.wf.wflib.drone.cam.CameraNet;
 import com.wf.wflib.drone.cam.CameraSpec;
 import net.minecraft.server.level.ServerLevel;
@@ -48,8 +48,8 @@ public final class TvGuidance {
 
     private static boolean linked(ServerPlayer player, MissileEntity missile) {
         CameraSpec spec = missile.seeker().spec();
-        return spec != null
-                && spec.linkAt(player.getEyePosition().distanceTo(missile.position())) > CameraFeed.USABLE_LINK;
+        return spec != null && Datalink.usable(Datalink.quality(player.serverLevel(), spec, player.getEyePosition(),
+                missile, missile.position()));
     }
 
     /** @return unit line of sight the operator is ordering, or null with nobody (entitled, in range) on the stick. */

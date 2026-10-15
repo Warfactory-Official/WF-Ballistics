@@ -3,6 +3,8 @@ package com.wf.wflib.block.entity;
 import com.wf.wflib.sim.SimTier;
 import com.wf.wflib.block.ModBlockEntities;
 import com.wf.wflib.drone.CrateEntity;
+import com.wf.wflib.drone.ControllableDrone;
+import com.wf.wflib.drone.DroneTasking;
 import com.wf.wflib.drone.DroneEntity;
 import com.wf.wflib.drone.DroneMission;
 import com.wf.wflib.drone.DroneProgram;
@@ -62,6 +64,8 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider, Dr
     /** Per tick; full charge in a couple of minutes. */
     public static final double RECHARGE_RATE = 30.0;
     private static final double PAD_RADIUS = 2.5;
+    /** Another mod's bodies parked idle within this are flown before anything is spawned. */
+    private static final double PARKED_RADIUS = 8.0;
     private static final int RECHARGE_INTERVAL = 10;
 
     private final NonNullList<ItemStack> cargo = NonNullList.withSize(CARGO_SLOTS, ItemStack.EMPTY);
@@ -208,18 +212,47 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider, Dr
         return ReconOwners.owningAt((ServerLevel) this.level, this.worldPosition);
     }
 
-    /** LOITER always; DELIVER with cargo; STRIKE / MINELAY when the configured mission slings one. */
+    /** Nearest idle non-{@link DroneEntity} body on this pad that flies {@code kind}, or null. */
+    @Nullable
+    private ControllableDrone parked(ServerLevel level, DroneTask.Kind kind) {
+        Vec3 centre = Vec3.atCenterOf(this.worldPosition.above());
+        ControllableDrone best = null;
+        double bestSq = PARKED_RADIUS * PARKED_RADIUS;
+        for (ControllableDrone body : DroneTracker.bodies(level)) {
+            if (body instanceof DroneEntity || !body.carrierAlive() || !body.supports(kind)
+                    || body.flight().getDroneState() != DroneState.IDLE) {
+                continue;
+            }
+            double d = body.asEntity().position().distanceToSqr(centre);
+            if (d <= bestSq) {
+                bestSq = d;
+                best = body;
+            }
+        }
+        return best;
+    }
+
+    /** LOITER always; DELIVER with cargo; STRIKE / MINELAY when the configured mission slings one; plus parked bodies'. */
     @Override
     public List<DroneTask.Kind> offers() {
         List<DroneTask.Kind> kinds = new ArrayList<>(4);
-        kinds.add(DroneTask.Kind.LOITER);
+        if (this.level instanceof ServerLevel sl) {
+            for (DroneTask.Kind kind : DroneTask.Kind.values()) {
+                if (this.parked(sl, kind) != null) {
+                    kinds.add(kind);
+                }
+            }
+        }
+        if (!kinds.contains(DroneTask.Kind.LOITER)) {
+            kinds.add(DroneTask.Kind.LOITER);
+        }
         if (!this.cargoEmpty()) {
             kinds.add(DroneTask.Kind.DELIVER);
         }
-        if (this.mission.payloadId != null) {
+        if (this.mission.payloadId != null && !kinds.contains(DroneTask.Kind.STRIKE)) {
             kinds.add(DroneTask.Kind.STRIKE);
         }
-        if (this.mission.mines != null) {
+        if (this.mission.mines != null && !kinds.contains(DroneTask.Kind.MINELAY)) {
             kinds.add(DroneTask.Kind.MINELAY);
         }
         return kinds;
@@ -228,6 +261,15 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider, Dr
     /** Configured mission's airframe, flight and count; DIRECT, home = this pad. */
     @Override
     public DroneMission.Result dispatch(ServerPlayer by, DroneTask.Kind kind, Vec3 at) {
+        ControllableDrone body = this.parked((ServerLevel) this.level, kind);
+        if (body != null) {
+            String error = DroneTasking.assign(body, by.getUUID(), kind, at);
+            if (error != null) {
+                return new DroneMission.Result(List.of(), 0, error);
+            }
+            body.route().setExfil(Vec3.atCenterOf(this.worldPosition.above()));
+            return new DroneMission.Result(List.of(body), 1, null);
+        }
         if (!offers().contains(kind)) {
             return new DroneMission.Result(List.of(), 0, "pad cannot fly " + kind.id());
         }
@@ -326,14 +368,10 @@ public class DronePadBlockEntity extends BlockEntity implements MenuProvider, Dr
     public int recall(ServerLevel level) {
         Vec3 home = Vec3.atCenterOf(this.worldPosition.above());
         int count = 0;
-        for (DroneEntity drone : DroneTracker.drones(level)) {
-            if (!drone.flight().getDroneState().powered()) {
-                continue;
+        for (ControllableDrone drone : DroneTracker.bodies(level)) {
+            if (drone.recall(home)) {
+                count++;
             }
-            drone.route().setExfil(home);
-            drone.route().setDestination(null);
-            drone.flight().setState(DroneState.EXFIL);
-            count++;
         }
         for (SimDrone sd : new ArrayList<>(SimDroneManager.tier(level).view())) {
             sd.exfil = home;

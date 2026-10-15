@@ -76,6 +76,16 @@ public class ModEntities {
                     .build("mist")
             );
 
+    public static final DeferredHolder<EntityType<?>, EntityType<AgentOrangeEntity>> AGENT_ORANGE =
+            ENTITY_TYPES.register("agent_orange", () -> EntityType.Builder.<AgentOrangeEntity>of(AgentOrangeEntity::new,
+                            MobCategory.MISC)
+                    .sized(1.0F, 1.0F)
+                    .clientTrackingRange(10)
+                    .updateInterval(20)
+                    .noSummon()
+                    .build("agent_orange")
+            );
+
     public static final DeferredHolder<EntityType<?>, EntityType<FireLingeringEntity>> FIRE_LINGERING =
             ENTITY_TYPES.register("fire_lingering", () -> EntityType.Builder.of(FireLingeringEntity::new, MobCategory.MISC)
                     .sized(1.0F, 1.0F)

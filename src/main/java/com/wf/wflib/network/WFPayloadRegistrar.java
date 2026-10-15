@@ -89,6 +89,10 @@ public final class WFPayloadRegistrar {
         r.playToClient(com.wf.wflib.pda.drone.DroneStatusPacket.TYPE,
                 com.wf.wflib.pda.drone.DroneStatusPacket.STREAM_CODEC, (pkt, ctx) -> ctx.enqueueWork(
                         () -> com.wf.wflib.pda.client.DronesApp.accept(pkt)));
+        r.playToClient(com.wf.wflib.laser.LaserBeamPacket.TYPE, com.wf.wflib.laser.LaserBeamPacket.STREAM_CODEC,
+                (pkt, ctx) -> ctx.enqueueWork(() -> com.wf.wflib.client.fx.LaserBeams.accept(pkt)));
+        r.playToServer(com.wf.wflib.pda.drone.DroneActionPacket.TYPE,
+                com.wf.wflib.pda.drone.DroneActionPacket.STREAM_CODEC, (pkt, ctx) -> pkt.handle(ctx));
         r.playToServer(com.wf.wflib.pda.drone.DroneDispatchPacket.TYPE,
                 com.wf.wflib.pda.drone.DroneDispatchPacket.STREAM_CODEC, (pkt, ctx) -> pkt.handle(ctx));
         r.playToClient(com.wf.wflib.pda.drone.DroneDispatchReplyPacket.TYPE,

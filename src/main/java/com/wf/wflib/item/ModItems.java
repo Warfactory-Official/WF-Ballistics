@@ -62,6 +62,9 @@ public final class ModItems {
     /**
      * Showcase content for the sensor net: scatters a cloud of radar decoys. No recipe, creative tab only.
      */
+    public static final DeferredHolder<Item, Item> PORTABLE_JAMMER =
+            ITEMS.register("portable_jammer", () -> new PortableJammerItem(new Item.Properties().stacksTo(1)
+                    .durability(PortableJammerItem.CHARGE_SECONDS)));
     public static final DeferredHolder<Item, Item> DECOY_LAUNCHER =
             ITEMS.register("decoy_launcher", () -> new DecoyLauncherItem(new Item.Properties().stacksTo(1)));
 

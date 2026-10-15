@@ -3,6 +3,7 @@ package com.wf.wflib.drone;
 import com.wf.wflib.drone.sim.SimDroneManager;
 import net.minecraft.core.GlobalPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.util.Unit;
 import net.minecraft.world.level.ChunkPos;
@@ -27,7 +28,7 @@ public final class DroneRecall {
     }
 
     /** Called as a drone leaves the level, whether that is an unload or a death. */
-    public static void leaving(DroneEntity drone) {
+    public static void leaving(Entity drone) {
         if (!(drone.level() instanceof ServerLevel level)) {
             return;
         }

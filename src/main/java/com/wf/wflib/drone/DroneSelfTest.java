@@ -899,7 +899,7 @@ public final class DroneSelfTest {
     private static Vec3 slotCommand(DroneSnapshot self, SquadView squad, Vec3 leaderVelocity, float leaderYaw) {
         DroneSnapshot leader = squad.leader();
         DronePlan plan = new DronePlan(leader.id(), leader.gameTime(), leaderVelocity, leader.attitude(),
-                leaderYaw, null, List.of());
+                leaderYaw, null, List.of(), leaderVelocity, Vec3.ZERO);
         SquadAnchor seeded = LeaderFollower.INSTANCE.advance(squad, null);
         return LeaderFollower.INSTANCE.guide(self, squad,
                 LeaderFollower.INSTANCE.refresh(squad, seeded, plan)).velocity();

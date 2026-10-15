@@ -66,8 +66,8 @@ public class PdaTelemetryGameTest {
 
         // onLoad (-> DroneDispatchers.add) runs at the next level tick.
         helper.runAfterDelay(1, () -> {
-            String strike = PdaDrones.dispatch(player, DroneTask.Kind.STRIKE, target);
-            String loiter = PdaDrones.dispatch(player, DroneTask.Kind.LOITER, target);
+            String strike = PdaDrones.dispatch(player, DroneTask.Kind.STRIKE, target, java.util.Optional.empty());
+            String loiter = PdaDrones.dispatch(player, DroneTask.Kind.LOITER, target, java.util.Optional.empty());
             CameraChannels channels = player.getMainHandItem().getOrDefault(ModDataComponents.CHANNELS.get(),
                     CameraChannels.EMPTY);
             boolean operated = false;

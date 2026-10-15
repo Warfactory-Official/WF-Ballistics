@@ -132,8 +132,8 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
 
     private void sampleTick() {
         sampledTick = entity.tickCount;
-        targetRoll = entity.flight().getRoll();
-        targetPitch = entity.flight().getPitch();
+        targetRoll = entity.getRoll();
+        targetPitch = entity.getPitch();
         boolean loaded = entity.hold().isLoaded();
         carryingCrate = entity.hold().hasCrateAboard();
         carryingBomb = entity.hold().hasPayloadAboard();
@@ -141,7 +141,7 @@ public class DroneVisual extends AbstractEntityVisual<DroneEntity> implements Dy
         mineCount = entity.hold().slungMineCount();
         targetRotorScale = entity.flight().getDroneState()
                 .powered()
-                        ? (float) airframe.rotorScale(entity.flight().getThrottle(),
+                        ? (float) airframe.rotorScale(entity.getThrottle(),
                                 PowerProfile.DEFAULT.massFactor(loaded))
                         : 0.0f;
         lightPos.set(Mth.floor(curX), Mth.floor(curY), Mth.floor(curZ));

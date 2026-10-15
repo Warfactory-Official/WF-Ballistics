@@ -117,7 +117,7 @@ public final class DroneBrain {
         }
 
         float yaw = heading(routed, flying, velocity);
-        return DronePlan.of(routed, velocity, attitude, yaw, next, actions);
+        return DronePlan.of(routed, velocity, attitude, yaw, next, actions, desired, feedForward);
     }
 
     /** How a wreck rolls on the way down. */

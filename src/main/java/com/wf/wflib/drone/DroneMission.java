@@ -377,7 +377,7 @@ public final class DroneMission {
         if (cargo != null) {
             spawned.get(0).hold().loadCargo(cargo);
         }
-        return new Result(List.copyOf(spawned), wanted, null);
+        return new Result(List.<ControllableDrone>copyOf(spawned), wanted, null);
     }
 
     /**
@@ -443,7 +443,7 @@ public final class DroneMission {
      * @param ordered how many the mission asked for
      * @param error null on success, otherwise why the mission was refused
      */
-    public record Result(List<DroneEntity> drones, int ordered, @Nullable String error) {
+    public record Result(List<ControllableDrone> drones, int ordered, @Nullable String error) {
         public boolean ok() {
             return error == null;
         }

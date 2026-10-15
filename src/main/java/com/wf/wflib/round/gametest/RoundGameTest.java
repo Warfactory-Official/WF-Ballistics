@@ -222,6 +222,7 @@ public class RoundGameTest {
         ServerLevel level = helper.getLevel();
         // Husk: no sunburn. Pinned: a fall drops it under the round's line. Above the barrier lid.
         Husk husk = new Husk(EntityType.HUSK, level);
+        husk.setPersistenceRequired();
         Vec3 at = centre(helper, 8.0);
         husk.moveTo(at.x, at.y, at.z);
         husk.setNoAi(true);
@@ -278,6 +279,7 @@ public class RoundGameTest {
 
     private static Husk pinnedHusk(ServerLevel level, Vec3 at) {
         Husk husk = new Husk(EntityType.HUSK, level);
+        husk.setPersistenceRequired();
         husk.moveTo(at.x, at.y, at.z);
         husk.setNoAi(true);
         husk.setNoGravity(true);

@@ -69,7 +69,7 @@ public final class AmmoCatalogue {
                            float neck, float rim, float oal, float projLen, CaseMaterial mat, float cartGrams,
                            float dpk) {
         Calibre c = new Calibre(rl(key), name, kind, bullet, caseLen, caseD, neck, rim, oal, projLen, mat,
-                Calibre.defaultCasing(kind, bullet), cartGrams / 1000f, Calibre.defaultStack(kind));
+                Calibre.defaultCasing(kind, bullet, mat), cartGrams / 1000f, Calibre.defaultStack(kind));
         Ammo.register(c, SOURCE);
         return new Cal(c, key, dpk);
     }

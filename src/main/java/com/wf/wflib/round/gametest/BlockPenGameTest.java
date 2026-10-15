@@ -174,6 +174,7 @@ public class BlockPenGameTest {
         BlockPos wall = BlockPos.containing(centre(helper, 10.0));
         level.setBlockAndUpdate(wall, Blocks.OAK_PLANKS.defaultBlockState());
         Husk husk = new Husk(EntityType.HUSK, level);
+        husk.setPersistenceRequired();
         Vec3 c = centre(helper, 13.0);
         husk.moveTo(c.x, c.y, c.z);
         husk.setNoAi(true);

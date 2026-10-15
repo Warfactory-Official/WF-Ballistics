@@ -139,6 +139,7 @@ public class VirtualFlightGameTest {
                 .thenExecute(() -> {
                     helper.assertTrue(unloadedBetween(level, start, target) > 0, "setup: nothing unloaded between");
                     husk[0] = new Husk(EntityType.HUSK, level);
+                    husk[0].setPersistenceRequired();
                     husk[0].moveTo(target.x, target.y - 1.0, target.z);
                     husk[0].setNoAi(true);
                     husk[0].setNoGravity(true);
@@ -180,6 +181,7 @@ public class VirtualFlightGameTest {
                     plant(level, near, far);
                     terrain.invalidate(far.toLong());
                     Husk husk = new Husk(EntityType.HUSK, level);
+                    husk.setPersistenceRequired();
                     husk.moveTo(start.x - 4.0, start.y - 1.0, start.z);
                     husk.setNoAi(true);
                     husk.setNoGravity(true);

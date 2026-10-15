@@ -28,6 +28,9 @@ public class WFLib {
     public WFLib(IEventBus modEventBus, ModContainer modContainer) {
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(WFLib::registerCapabilities);
+        if (com.wf.wflib.compat.GregtechCompat.isActive()) {
+            modEventBus.addListener(com.wf.wflib.compat.gt.gametest.GregtechEMPGameTest::register);
+        }
 
         ModEntities.register(modEventBus);
         com.wf.wflib.block.ModBlocks.register(modEventBus);
@@ -40,10 +43,10 @@ public class WFLib {
         com.wf.wflib.armor.ArmorComponents.register(modEventBus);
         com.wf.wflib.nvg.NvgRegistry.register(modEventBus);
         com.wf.wflib.armor.ArmorMaterials.register(modEventBus);
+        com.wf.wflib.backpack.Backpacks.register(modEventBus);
         com.wf.wflib.WFCreativeTabs.register(modEventBus);
         com.wf.wflib.menu.ModMenus.register(modEventBus);
         com.wf.wflib.client.particle.WFParticles.register(modEventBus);
-        com.wf.wflib.backpack.Backpacks.register(modEventBus);
         com.wf.wflib.fluid.WFFluids.register(modEventBus);
         com.wf.wflib.WFSounds.register(modEventBus);
         com.wf.wflib.fire.WFFire.register(modEventBus);
@@ -86,6 +89,7 @@ public class WFLib {
            com.wf.wflib.armor.ArmorExposure.bootstrap();
            com.wf.wflib.armor.ArmorPresets.bootstrap();
            DroneTracker.bootstrap();
+           com.wf.wflib.pda.drone.PdaDrones.register();
            com.wf.wflib.sim.SimKinds.register(com.wf.wflib.sim.SimMissileManager.KIND);
            com.wf.wflib.sim.SimKinds.register(com.wf.wflib.round.Rounds.KIND);
            com.wf.wflib.sim.SimKinds.register(SimDroneManager.KIND);

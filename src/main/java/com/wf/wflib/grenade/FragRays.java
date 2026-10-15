@@ -1,8 +1,12 @@
 package com.wf.wflib.grenade;
 
+import com.norwood.ahf.hit.HitRegistration;
+import com.norwood.ahf.part.HitboxPart;
 import com.wf.wflib.api.PreciseHitbox;
+import com.wf.wflib.damage.BlastDamageSource;
 import com.wf.wflib.damage.DamageClass;
 import com.wf.wflib.damage.WFDamageSources;
+import com.wf.wflib.round.Rounds;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
@@ -16,7 +20,7 @@ import org.jetbrains.annotations.Nullable;
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
-import java.util.Optional;
+import java.util.EnumMap;
 
 /**
  * Fragment fan: {@code rays} directions (Fibonacci sphere, random rotation per burst). Per victim only rays inside
@@ -56,7 +60,7 @@ public final class FragRays {
         int hits = 0;
         for (Entity victim : level.getEntities(direct, new AABB(pos, pos).inflate(range),
                 e -> e.isAlive() && e instanceof LivingEntity && !e.isSpectator() && !e.ignoreExplosion(null))) {
-            AABB box = victim.getBoundingBox();
+            AABB box = victim.getBoundingBox().minmax(HitRegistration.registrationBox(victim)).inflate(Rounds.PICK_INFLATE);
             Vec3 centre = box.getCenter();
             Vec3 to = centre.subtract(pos);
             double d = to.length();
@@ -69,12 +73,24 @@ public final class FragRays {
             Vec3 axis = d > 1.0E-6 ? to.scale(1.0 / d) : new Vec3(0, 1, 0);
             float damage = 0;
             int struck = 0;
+            EnumMap<HitboxPart, Float> byPart = new EnumMap<>(HitboxPart.class);
+            HitboxPart part = null;
+            Vec3 through = null;
+            float best = 0;
             for (Vec3 dir : dirs) {
                 if (dir.dot(axis) < cosLimit) {
                     continue;
                 }
                 Vec3 end = pos.add(dir.scale(range));
-                Vec3 entry = entry(victim, box, pos, end);
+                Vec3 entry;
+                HitboxPart rayPart = null;
+                if (victim instanceof PreciseHitbox precise) {
+                    entry = precise.clip(pos, end);
+                } else {
+                    Rounds.LiveHit hit = Rounds.hitLive((LivingEntity) victim, pos, end);
+                    entry = hit == null ? null : hit.at();
+                    rayPart = hit == null ? null : hit.part();
+                }
                 if (entry == null) {
                     continue;
                 }
@@ -82,27 +98,23 @@ public final class FragRays {
                         CollisionContext.empty())).getType() != HitResult.Type.MISS) {
                     continue;
                 }
-                damage += (float) (perHit * Math.exp(-entry.distanceTo(pos) / decay));
+                float share = (float) (perHit * Math.exp(-entry.distanceTo(pos) / decay));
+                damage += share;
                 struck++;
+                float onPart = rayPart == null ? share : byPart.merge(rayPart, share, Float::sum);
+                if (through == null || onPart > best) {
+                    best = onPart;
+                    part = rayPart;
+                    through = entry;
+                }
             }
             if (struck > 0 && damage >= 0.5f) {
                 victims++;
                 hits += struck;
-                victim.hurt(WFDamageSources.create(level, DamageClass.EXPLOSIVE, attacker, direct), damage);
+                victim.hurt(BlastDamageSource.of(WFDamageSources.create(level, DamageClass.EXPLOSIVE, attacker, direct),
+                        victim, pos, through, part), damage);
             }
         }
         return new Result(victims, hits);
-    }
-
-    @Nullable
-    private static Vec3 entry(Entity victim, AABB box, Vec3 from, Vec3 to) {
-        if (victim instanceof PreciseHitbox precise) {
-            return precise.clip(from, to);
-        }
-        if (box.contains(from)) {
-            return from;
-        }
-        Optional<Vec3> hit = box.clip(from, to);
-        return hit.orElse(null);
     }
 }

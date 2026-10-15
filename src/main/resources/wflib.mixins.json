@@ -23,9 +23,12 @@
     "MixinConnection",
     "MixinChunkHolder",
     "AccessorPacketEncoder",
+    "gt.MixinConverterFEContainer",
+    "gt.MixinEnergyBatteryTrait",
     "gt.MixinNotifiableEnergyContainer"
   ],
   "client": [
+    "MixinCameraDronePilot",
     "MixinEntityRenderDispatcher",
     "MixinLevelRenderer",
     "MixinLevelRendererFeed",

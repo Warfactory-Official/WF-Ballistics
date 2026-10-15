@@ -24,7 +24,7 @@ public final class WFCreativeTabs {
                         output.accept(ModBlocks.MISSILE_DISPENSER_ITEM.get());
                         output.accept(ModBlocks.MISSILE_LISTENER_DEBUG_ITEM.get());
                         output.accept(ModBlocks.DRONE_PAD_ITEM.get());
-                        output.accept(ModBlocks.TURRET_CIWS_ITEM.get());
+                        output.accept(ModBlocks.DRONE_NET_ITEM.get());
                         output.accept(ModBlocks.TURRET_INTERCEPTOR_ITEM.get());
                         output.accept(ModBlocks.TURRET_INTERCEPTOR_SUPERSONIC_ITEM.get());
                         output.accept(ModBlocks.GLYPHID_NEST_ITEM.get());
@@ -38,6 +38,7 @@ public final class WFCreativeTabs {
                         output.accept(ModItems.CAMERA_LINKER.get());
                         output.accept(ModItems.PDA.get());
                         output.accept(ModItems.DECOY_LAUNCHER.get());
+                        output.accept(ModItems.PORTABLE_JAMMER.get());
                         output.accept(ModBlocks.MINING_CHARGE_ITEM.get());
                         output.accept(ModBlocks.DEEP_MINING_CHARGE_ITEM.get());
                         output.accept(ModItems.DETONATOR.get());

@@ -70,15 +70,23 @@ public final class Multirotor {
         double thrust = Mth.clamp(liftDemand / Math.max(MIN_LIFT_FRACTION, axis.y),
                 0.0, frame.maxSpecificThrust(massFactor));
         double throttle = thrust / frame.gravity();
+        return new Step(integrate(velocity, axis, thrust, frame), new FlightAttitude(tiltX, tiltZ, throttle));
+    }
 
+    /**
+     * One tick of motion under a given thrust, with no controller: for a body whose attitude is flown directly.
+     *
+     * @param axis unit thrust direction
+     * @param thrust specific thrust, blocks/tick²
+     */
+    public static Vec3 integrate(Vec3 velocity, Vec3 axis, double thrust, Airframe frame) {
         double speed = velocity.length();
         Vec3 drag = speed > 1.0E-6 ? velocity.scale(frame.dragAt(speed) / speed) : Vec3.ZERO;
         Vec3 next = velocity
                 .add(axis.scale(thrust))
                 .subtract(0.0, frame.gravity(), 0.0)
                 .subtract(drag);
-        next = new Vec3(next.x, Mth.clamp(next.y, -frame.maxDescentRate(), frame.maxClimbRate()), next.z);
-        return new Step(next, new FlightAttitude(tiltX, tiltZ, throttle));
+        return new Vec3(next.x, Mth.clamp(next.y, -frame.maxDescentRate(), frame.maxClimbRate()), next.z);
     }
 
     /**

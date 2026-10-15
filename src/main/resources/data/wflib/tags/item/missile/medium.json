@@ -5,6 +5,7 @@
     "wflib:missile_fragmentation",
     "wflib:missile_incendiary",
     "wflib:missile_chemical",
+    "wflib:missile_agent_orange",
     "wflib:missile_emp",
     "wflib:missile_stealth",
     "wflib:missile_interceptor_supersonic",

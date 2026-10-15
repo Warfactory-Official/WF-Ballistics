@@ -41,9 +41,11 @@ final class RoundBatch {
     boolean[] dark = new boolean[64];
     /** Ricochets so far; > 0 => tumbling. */
     byte[] ricochets = new byte[64];
+    /** Tick fraction already elapsed at launch; first step flies {@code 1 - lead}. */
+    float[] lead = new float[64];
 
     int add(long key, KineticPreset preset, double x, double y, double z, double vx, double vy, double vz,
-            int shooter, @Nullable UUID faction, float damageScale, int rewind, int seq) {
+            int shooter, @Nullable UUID faction, float damageScale, int rewind, int seq, float lead) {
         if (this.size == this.key.length) {
             int n = this.size * 2;
             this.key = Arrays.copyOf(this.key, n);
@@ -67,6 +69,7 @@ final class RoundBatch {
             this.viewers = Arrays.copyOf(this.viewers, n);
             this.dark = Arrays.copyOf(this.dark, n);
             this.ricochets = Arrays.copyOf(this.ricochets, n);
+            this.lead = Arrays.copyOf(this.lead, n);
         }
         int i = this.size++;
         this.key[i] = key;
@@ -90,6 +93,7 @@ final class RoundBatch {
         this.viewers[i] = NO_VIEWERS;
         this.dark[i] = false;
         this.ricochets[i] = 0;
+        this.lead[i] = lead;
         return i;
     }
 
@@ -117,6 +121,7 @@ final class RoundBatch {
             this.viewers[i] = this.viewers[last];
             this.dark[i] = this.dark[last];
             this.ricochets[i] = this.ricochets[last];
+            this.lead[i] = this.lead[last];
         }
         this.preset[last] = null;
         this.faction[last] = null;

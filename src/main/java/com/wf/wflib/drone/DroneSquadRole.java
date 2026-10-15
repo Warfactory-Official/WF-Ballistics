@@ -10,7 +10,7 @@ import org.jetbrains.annotations.Nullable;
 
 public final class DroneSquadRole {
 
-    private final DroneEntity drone;
+    private final ControllableDrone drone;
     private long squadId;
     private boolean leader;
     private ResourceLocation formationId = Formations.DEFAULT;
@@ -19,7 +19,7 @@ public final class DroneSquadRole {
     /** How many drones the mission ordered. */
     private int squadSize = 1;
 
-    DroneSquadRole(DroneEntity drone) {
+    public DroneSquadRole(ControllableDrone drone) {
         this.drone = drone;
     }
 
@@ -72,7 +72,7 @@ public final class DroneSquadRole {
         this.formationId = formationId != null ? formationId : Formations.DEFAULT;
     }
 
-    CompoundTag save() {
+    public CompoundTag save() {
         CompoundTag tag = new CompoundTag();
         tag.putLong("Id", this.squadId);
         tag.putBoolean("Leader", this.leader);
@@ -83,7 +83,7 @@ public final class DroneSquadRole {
         return tag;
     }
 
-    void load(CompoundTag tag) {
+    public void load(CompoundTag tag) {
         this.squadId = tag.getLong("Id");
         this.leader = tag.getBoolean("Leader");
         this.formationId = Formations.parse(tag.getString("Formation"));

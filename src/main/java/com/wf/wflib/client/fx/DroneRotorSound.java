@@ -42,7 +42,7 @@ public final class DroneRotorSound extends Emitter {
         if (!drone.flight().getDroneState().powered()) {
             return 0;
         }
-        return (float) drone.airframe().rotorScale(drone.flight().getThrottle(),
+        return (float) drone.airframe().rotorScale(drone.getThrottle(),
                 PowerProfile.DEFAULT.massFactor(drone.hold().isLoaded()));
     }
 

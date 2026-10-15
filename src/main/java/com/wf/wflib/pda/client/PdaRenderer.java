@@ -125,7 +125,8 @@ public final class PdaRenderer {
             return;
         }
         event.setCanceled(true);
-        if (event.getHand() != InteractionHand.MAIN_HAND || PdaClient.fullscreenFeed() != 0) {
+        if (event.getHand() != InteractionHand.MAIN_HAND || PdaClient.fullscreenFeed() != 0
+                || mc.getCameraEntity() != player) {
             return;
         }
         GemRenderGltfModel model = model();

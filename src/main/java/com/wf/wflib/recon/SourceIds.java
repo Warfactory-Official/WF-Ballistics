@@ -17,6 +17,10 @@ public final class SourceIds {
      */
     private static final long DECOY_SPACE = 0x6465_0000_0000_0000L;
 
+    /** {@code Interference} heat contacts. */
+    private static final long HEAT_SPACE = 0x6874_0000_0000_0000L;
+    private static final long SPACE_MASK = 0xFFFF_0000_0000_0000L;
+
     private SourceIds() {
     }
 
@@ -34,5 +38,13 @@ public final class SourceIds {
 
     public static long ofDecoy(int decoyId) {
         return DECOY_SPACE | (decoyId & 0xFFFF_FFFFL);
+    }
+
+    public static long ofHeat(int heatId) {
+        return HEAT_SPACE | (heatId & 0xFFFF_FFFFL);
+    }
+
+    public static boolean isHeat(long sourceId) {
+        return (sourceId & SPACE_MASK) == HEAT_SPACE;
     }
 }

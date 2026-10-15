@@ -121,6 +121,7 @@ public final class WarheadRegistry {
         register(RecursiveFrag.ID, RecursiveFrag::detonate);
         register(GasWarhead.ID, GasWarhead::detonate);
         register(FireWarhead.ID, FireWarhead::detonate);
+        register(AgentOrangeWarhead.ID, AgentOrangeWarhead::detonate);
         register(TorpedoWarhead.ID, TorpedoWarhead::detonate);
         register(FireCluster.ID, FireCluster::detonate);
         register(rl("interceptor"), INTERCEPTOR, INTERCEPTOR::detonate);
@@ -132,6 +133,7 @@ public final class WarheadRegistry {
 
         BLAST_SIZE.put(DEFAULT_ID, STANDARD_BLAST_SIZE);
         BLAST_SIZE.put(FireWarhead.ID, 8F);
+        BLAST_SIZE.put(AgentOrangeWarhead.ID, AgentOrangeWarhead.RADIUS);
         BLAST_SIZE.put(rl("shaped_charge"), SHAPED_CHARGE_SIZE);
     }
 

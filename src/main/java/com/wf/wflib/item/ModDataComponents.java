@@ -29,6 +29,13 @@ public final class ModDataComponents {
                     .networkSynchronized(CameraChannels.STREAM_CODEC)
                     .build());
 
+    /** Switched on: {@link PortableJammerItem}. */
+    public static final DeferredHolder<DataComponentType<?>, DataComponentType<Boolean>> ACTIVE =
+            COMPONENTS.register("active", () -> DataComponentType.<Boolean>builder()
+                    .persistent(com.mojang.serialization.Codec.BOOL)
+                    .networkSynchronized(ByteBufCodecs.BOOL)
+                    .build());
+
     /** The network a {@link GridKeyItem} is holding. */
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<UUID>> GRID_ID =
             COMPONENTS.register("grid_id", () -> DataComponentType.<UUID>builder()

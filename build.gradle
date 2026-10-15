@@ -108,7 +108,7 @@ repositories {
 
     // --- Repos for the compile-only integrations (kept from the Forge build; re-enable with the
     //     corresponding dependencies once their 1.21.1 coordinates are confirmed) ---
-    maven { name = 'GTCEu Maven'; url = 'https://maven.gtceu.com'; content { includeGroup 'com.gregtechceu.gtceu' } }
+    maven { name = 'GTCEu Maven'; url = 'https://maven.gtceu.com'; content { includeGroup 'com.gregtechceu.gtceu'; includeGroup 'brachy.modularui' } }
     maven { name = 'FirstDark Maven'; url = 'https://maven.firstdark.dev/snapshots'; content { includeGroupAndSubgroups 'com.lowdragmc' } }
     maven { name = 'tterrag Maven'; url = 'https://maven.tterrag.com/'; content { includeGroup 'com.tterrag.registrate' } }
     maven { name = 'toma Maven'; url = 'https://repo.repsy.io/mvn/toma/public/'; content { includeGroup 'dev.toma.configuration' } }
@@ -298,18 +298,11 @@ dependencies {
     // TODO(port): find the spark file id for NeoForge 1.21.1 on CurseForge, then:
     // localRuntime "curse.maven:spark-361579:<neo_1.21.1_file_id>"
 
-    // --- GregTechCEu Modern (compile-only optional integration): NeoForge 1.21.1 build via CurseMaven.
-    //     compileOnly (NOT implementation): the EMP-warhead integration compiles against GregTech but GregTech
-    //     is only loaded at runtime if the user installs it. transitive=false to avoid dragging GregTech's
-    //     whole dependency tree (AE2/LDLib/JEI/KubeJS) onto the classpath.
-    compileOnly("curse.maven:gregtechceu-modern-890405:6766269") { transitive = false }
-
-    // LDLib: GregTech's UI/syncdata library. Needed at COMPILE time because GregTech's public types
-    // (IMaintenanceMachine, MetaMachine, NotifiableEnergyContainer) extend LDLib interfaces (IUIHolder,
-    // IEnhancedManaged). compileOnly + transitive=false, same rationale as GregTech.
-    // Pinned to 1.0.35.a: the exact version GregTech 7.0.1 (file 6766269) was built against.
-    // Newer LDLib (1.0.41) dropped IEnhancedManaged, which GregTech's MetaMachine still implements.
-    compileOnly("com.lowdragmc.ldlib:ldlib-neoforge-1.21.1:1.0.35.a") { transitive = false }
+    // --- GregTechCEu Modern 8 (compile-only optional integration: EMP warhead) ---------------
+    // Pinned build = GT GitHub pre-release `latest-1.21`; ModularUI = the copy that build JiJs
+    // (GT 8 machine types implement MUI interfaces, javac needs them resolvable).
+    compileOnly("com.gregtechceu.gtceu:gtceu-1.21.1:${gtceu_build}") { transitive = false }
+    compileOnly("brachy.modularui:modularui-mc1.21.1:${mui_build}") { transitive = false }
     runtimeOnly("curse.maven:spark-361579:6225208")
 
     // --- JourneyMap (compile-only API, dev-runtime mod) ---------------------------------------
@@ -335,8 +328,6 @@ dependencies {
     if (!gradle.startParameter.taskNames.any { it.toLowerCase().contains('server') }) {
         localRuntime "maven.modrinth:journeymap:${journeymap_version}"
     }
-    // wfweight (optional): backpack weight bridge, compat.wfweight.BackpackWeight
-    compileOnly("warfactory.ultimateweight:wfweight-1.21.1-neoforge:1.0.0-SNAPSHOT") { transitive = false }
     // Internal `UIManager` (PDA map app opens the fullscreen map); no API for it.
     compileOnly("maven.modrinth:journeymap:${journeymap_version}") { transitive = false }
 
@@ -344,6 +335,8 @@ dependencies {
     compileOnly("maven.modrinth:xaeros-world-map:${xaero_worldmap_version}") { transitive = false }
     compileOnly("maven.modrinth:xaeros-minimap:${xaero_minimap_version}") { transitive = false }
     compileOnly fileTree('libs') { include 'xaerolib-*.jar' }
+    // wfweight (optional): backpack weight bridge, compat.wfweight.BackpackWeight
+    compileOnly("warfactory.ultimateweight:wfweight-1.21.1-neoforge:1.0.0-SNAPSHOT") { transitive = false }
     if (project.hasProperty('xaero')) {
         localRuntime("maven.modrinth:xaeros-world-map:${xaero_worldmap_version}") { transitive = false }
         localRuntime("maven.modrinth:xaeros-minimap:${xaero_minimap_version}") { transitive = false }

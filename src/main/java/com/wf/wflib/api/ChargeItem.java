@@ -6,4 +6,7 @@ import net.minecraft.world.item.ItemStack;
 public interface ChargeItem {
 
     ChargeSpec charge(ItemStack stack);
+
+    /** One charge, kg: drone payload mass. */
+    float massKg(ItemStack stack);
 }

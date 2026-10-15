@@ -46,12 +46,14 @@ public record Calibre(ResourceLocation id, String name, CalibreKind kind, float 
         return caseMaterial != CaseMaterial.NONE;
     }
 
-    public static Casing defaultCasing(CalibreKind kind, float bulletMm) {
+    /** Cased grenade (40x46 / 40x53 launcher) => LARGE; caseless (VOG-25, dischargers) => NONE. */
+    public static Casing defaultCasing(CalibreKind kind, float bulletMm, CaseMaterial material) {
         return switch (kind) {
             case SHOTSHELL -> Casing.SHOTSHELL;
             case PISTOL -> bulletMm >= 12 ? Casing.LARGE : Casing.PISTOL;
             case RIFLE -> bulletMm >= 12 ? Casing.LARGE : Casing.RIFLE;
-            case GRENADE, AUTOCANNON, TANK, ROCKET -> Casing.NONE;
+            case GRENADE -> material == CaseMaterial.NONE ? Casing.NONE : Casing.LARGE;
+            case AUTOCANNON, TANK, ROCKET -> Casing.NONE;
         };
     }
 

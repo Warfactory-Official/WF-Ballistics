@@ -74,7 +74,8 @@ public final class UiHud {
     }
 
     private static void render(GuiGraphics graphics, DeltaTracker delta, CopyOnWriteArrayList<Source> sources) {
-        if (sources.isEmpty() || Minecraft.getInstance().options.hideGui) {
+        // Overlay up => UiResources not yet published; quick-play joins during the fade-out.
+        if (sources.isEmpty() || Minecraft.getInstance().options.hideGui || Minecraft.getInstance().getOverlay() != null) {
             return;
         }
         UiStats.begin();

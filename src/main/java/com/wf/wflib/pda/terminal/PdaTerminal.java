@@ -1,6 +1,7 @@
 package com.wf.wflib.pda.terminal;
 
-import com.wf.wflib.drone.DroneEntity;
+import com.wf.wflib.drone.ControllableDrone;
+import com.wf.wflib.drone.DroneTracker;
 import com.wf.wflib.drone.cam.CameraChannels;
 import com.wf.wflib.drone.cam.FeedTarget;
 import com.wf.wflib.item.ModDataComponents;
@@ -47,7 +48,7 @@ public final class PdaTerminal {
         return switch (w[0].toLowerCase(Locale.ROOT)) {
             case "help", "" -> List.of(HELP);
             case "drones" -> list(drones(player), d -> d.callsign() + "  " + d.flight().getDroneState().name()
-                    + "  " + (int) player.distanceTo(d) + " m", "no linked drones in range");
+                    + "  " + (int) player.distanceTo(d.asEntity()) + " m", "no linked drones in range");
             case "nodes" -> {
                 List<GridNode> nodes = nodes(player);
                 yield nodes == null ? List.of("err: no uplink") : list(nodes, n -> String.format(Locale.ROOT,
@@ -72,7 +73,7 @@ public final class PdaTerminal {
         }
         switch (kind) {
             case "drone" -> {
-                DroneEntity drone = pick(drones(player), ref, DroneEntity::callsign);
+                ControllableDrone drone = pick(drones(player), ref, ControllableDrone::callsign);
                 if (drone == null) {
                     return "err: no linked drone '" + ref + "' in range";
                 }
@@ -144,13 +145,14 @@ public final class PdaTerminal {
     }
 
     /** Held PDA's channel drones, loaded, channel order. */
-    private static List<DroneEntity> drones(ServerPlayer player) {
+    private static List<ControllableDrone> drones(ServerPlayer player) {
         CameraChannels channels = Pda.heldStack(player).getOrDefault(ModDataComponents.CHANNELS.get(),
                 CameraChannels.EMPTY);
-        List<DroneEntity> out = new ArrayList<>();
+        List<ControllableDrone> out = new ArrayList<>();
         for (FeedTarget target : channels.targets()) {
             UUID id = target.drone().orElse(null);
-            if (id != null && player.serverLevel().getEntity(id) instanceof DroneEntity drone && drone.isAlive()) {
+            ControllableDrone drone = id == null ? null : DroneTracker.byId(player.serverLevel(), id);
+            if (drone != null && drone.carrierAlive()) {
                 out.add(drone);
             }
         }

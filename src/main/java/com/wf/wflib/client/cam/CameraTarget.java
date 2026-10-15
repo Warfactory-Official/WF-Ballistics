@@ -213,7 +213,9 @@ public final class CameraTarget implements AutoCloseable {
                 this.chain.process(partial);
             }
 
-            CameraOsd.draw(this, feed);
+            if (!DroneCamHud.covers(feed)) {
+                CameraOsd.draw(this, feed);
+            }
         } catch (Exception e) {
             this.broken = true;
             LOGGER.error("drone camera: offscreen pass failed for feed {}; showing a card instead",

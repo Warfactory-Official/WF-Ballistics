@@ -11,6 +11,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.gametest.framework.GameTestSequence;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.EntityType;
@@ -32,28 +33,31 @@ public class AirLaunchGameTest {
     private static final int LANE_SPACING = 48;
     private static final double ALTITUDE = 40.0;
 
-    @GameTest(template = TEMPLATE, timeoutTicks = 60)
+    @GameTest(template = TEMPLATE, timeoutTicks = 120)
     public static void aPylonRoundFallsBeforeItsMotorLights(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos lane = lane(helper, 0);
-        force(level, lane, true);
-        MissileEntity missile = launch(level, lane, new Vec3(1.0, 0.0, 0.0), null);
-        double launchY = missile.getY();
+        MissileEntity[] missile = new MissileEntity[1];
+        double[] launchY = new double[1];
         double[] dropSpeed = new double[1];
         double[] fell = new double[1];
         MissileEntity.Phase[] dropPhase = new MissileEntity.Phase[1];
-        helper.startSequence()
+        ticking(helper, level, lane)
+                .thenExecute(() -> {
+                    missile[0] = launch(level, lane, new Vec3(1.0, 0.0, 0.0), null);
+                    launchY[0] = missile[0].getY();
+                })
                 .thenIdle(5)
                 .thenExecute(() -> {
-                    dropSpeed[0] = missile.getDeltaMovement().length();
-                    dropPhase[0] = missile.flight().getPhase();
-                    fell[0] = launchY - missile.getY();
+                    dropSpeed[0] = missile[0].getDeltaMovement().length();
+                    dropPhase[0] = missile[0].flight().getPhase();
+                    fell[0] = launchY[0] - missile[0].getY();
                 })
                 .thenIdle(10)
                 .thenExecute(() -> {
                     force(level, lane, false);
-                    MissileEntity.Phase after = missile.flight().getPhase();
-                    missile.discard();
+                    MissileEntity.Phase after = missile[0].flight().getPhase();
+                    missile[0].discard();
                     if (dropPhase[0] != MissileEntity.Phase.ASCEND) {
                         helper.fail("5 ticks off the rail the round is already in " + dropPhase[0]);
                     } else if (Math.abs(dropSpeed[0] - 1.0) > 0.25) {
@@ -69,18 +73,18 @@ public class AirLaunchGameTest {
     }
 
     /** A parked launcher's round would drop onto the ground under the rail, so it lights at once. */
-    @GameTest(template = TEMPLATE, timeoutTicks = 20)
+    @GameTest(template = TEMPLATE, timeoutTicks = 80)
     public static void aParkedRoundLightsOnTheRail(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos lane = lane(helper, 1);
-        force(level, lane, true);
-        MissileEntity missile = launch(level, lane, Vec3.ZERO, null);
-        helper.startSequence()
+        MissileEntity[] missile = new MissileEntity[1];
+        ticking(helper, level, lane)
+                .thenExecute(() -> missile[0] = launch(level, lane, Vec3.ZERO, null))
                 .thenIdle(2)
                 .thenExecute(() -> {
                     force(level, lane, false);
-                    MissileEntity.Phase phase = missile.flight().getPhase();
-                    missile.discard();
+                    MissileEntity.Phase phase = missile[0].flight().getPhase();
+                    missile[0].discard();
                     if (phase != MissileEntity.Phase.ATTACK) {
                         helper.fail("a round fired from a standstill is in " + phase + ", not ATTACK");
                     }
@@ -89,23 +93,25 @@ public class AirLaunchGameTest {
     }
 
     /** Its launcher sits in the drop path past the arming distance; the round flies through it. */
-    @GameTest(template = TEMPLATE, timeoutTicks = 40)
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void aRoundDoesNotHitItsLauncherOnTheDrop(GameTestHelper helper) {
         ServerLevel level = helper.getLevel();
         BlockPos lane = lane(helper, 2);
-        force(level, lane, true);
         ArmorStand launcher = new ArmorStand(EntityType.ARMOR_STAND, level);
-        launcher.setNoGravity(true);
-        launcher.moveTo(lane.getX() + 8.5, lane.getY() + ALTITUDE - 1.5, lane.getZ() + 0.5);
-        level.addFreshEntity(launcher);
-        MissileEntity missile = launch(level, lane, new Vec3(1.0, 0.0, 0.0), launcher);
-        helper.startSequence()
+        MissileEntity[] missile = new MissileEntity[1];
+        ticking(helper, level, lane)
+                .thenExecute(() -> {
+                    launcher.setNoGravity(true);
+                    launcher.moveTo(lane.getX() + 8.5, lane.getY() + ALTITUDE - 1.5, lane.getZ() + 0.5);
+                    level.addFreshEntity(launcher);
+                    missile[0] = launch(level, lane, new Vec3(1.0, 0.0, 0.0), launcher);
+                })
                 .thenIdle(12)
                 .thenExecute(() -> {
                     force(level, lane, false);
-                    boolean detonated = missile.isRemoved();
-                    double x = missile.getX() - lane.getX();
-                    missile.discard();
+                    boolean detonated = missile[0].isRemoved();
+                    double x = missile[0].getX() - lane.getX();
+                    missile[0].discard();
                     launcher.discard();
                     if (detonated) {
                         helper.fail("the round detonated on its own launcher on the drop");
@@ -133,6 +139,14 @@ public class AirLaunchGameTest {
         }
         level.addFreshEntity(missile);
         return missile;
+    }
+
+    /** Forces the lane; forced chunks load async => entities spawned before they tick stand still. */
+    private static GameTestSequence ticking(GameTestHelper helper, ServerLevel level, BlockPos lane) {
+        force(level, lane, true);
+        BlockPos at = lane.above((int) ALTITUDE);
+        return helper.startSequence()
+                .thenWaitUntil(() -> helper.assertTrue(level.isPositionEntityTicking(at), "lane loading"));
     }
 
     private static BlockPos lane(GameTestHelper helper, int index) {

@@ -4,6 +4,7 @@ import com.wf.wflib.WFLib;
 import com.wf.wflib.client.cam.CameraFeedCache;
 import com.wf.wflib.client.cam.CameraLink;
 import com.wf.wflib.client.cam.CameraTarget;
+import com.wf.wflib.client.cam.DroneCamHud;
 import com.wf.wflib.ui.Signals;
 import com.wf.wflib.ui.Subject;
 import com.wf.wflib.ui.UiHud;
@@ -24,7 +25,7 @@ import static com.wf.wflib.ui.Ui.when;
 
 /**
  * A PDA feed on the whole game screen ({@link PdaClient#fullscreen}): letterboxed, mouse pans the linked gimbal,
- * wheel zooms; use / Esc returns to the PDA.
+ * wheel zooms; attack takes control of a connectable body; use / Esc returns to the PDA.
  */
 final class PdaFullscreen {
     static final Subject<PdaFullscreen> FULL = Subject.register("pda_full", PdaFullscreen.class, PdaFullscreen::active);
@@ -43,9 +44,11 @@ final class PdaFullscreen {
     }
 
     static void register() {
+        DroneCamHud.register();
         Signals.num(FULL, "feed", f -> PdaClient.fullscreenFeed());
         Signals.bool(FULL, "picture", f -> CameraFeedCache.drawable(PdaClient.fullscreenFeed()));
         Signals.num(FULL, "zoom", f -> CameraLink.zoom());
+        Signals.bool(FULL, "control", f -> DronesApp.controllable(PdaClient.fullscreenFeed()));
         double aspect = CameraTarget.ASPECT;
         String w = "min(ui.width, round(ui.height * " + aspect + "))";
         String h = "round(" + w + " / " + aspect + ")";
@@ -54,13 +57,16 @@ final class PdaFullscreen {
         UiLayout full = layout(LAYOUT, when("pda_full.present", stack(
                 rect("ui.width", "ui.height", "#ff000000"),
                 at(x, y, new Sized(w, h, Point.TOP_LEFT, false, new Feed("pda_full.feed", w, h))),
-                when("!pda_full.picture", place("ui.width / 2", "ui.height / 2 - 4", Point.TOP,
+                when("!pda_full.picture && !drone_cam.present", place("ui.width / 2", "ui.height / 2 - 4", Point.TOP,
                         shadowed("NO SIGNAL", PdaShell.DIM))),
-                place("ui.width / 2", "ui.height - 14", Point.TOP, shadowed(
-                        "x{pda_full.zoom|.1}  scroll zoom  [{key:key.use}] / Esc",
-                        PdaShell.TEXT)))));
+                place("ui.width / 2", "ui.height - 14", Point.TOP, when("pda_full.control", shadowed(
+                        "x{pda_full.zoom|.1}  scroll zoom  [{key:key.attack}] take control  [{key:key.use}] / Esc",
+                        PdaShell.TEXT), shadowed("x{pda_full.zoom|.1}  scroll zoom  [{key:key.use}] / Esc",
+                        PdaShell.TEXT))))));
         UiHud.addSource(UiHud.Layer.MAIN, out -> {
-            if (PdaClient.fullscreenFeed() == 0) {
+            int feed = PdaClient.fullscreenFeed();
+            DroneCamHud.watch(feed, feed == 0 ? null : DronesApp.name(feed));
+            if (feed == 0) {
                 return;
             }
             if (instance == null) {
@@ -68,6 +74,12 @@ final class PdaFullscreen {
             }
             out.add(instance);
         });
+        DroneCamHud.addToHud();
+    }
+
+    /** Attack in full screen: take manual control of the body behind the feed. */
+    static void control() {
+        DronesApp.control(PdaClient.fullscreenFeed());
     }
 
     static void steer(double yaw, double pitch) {

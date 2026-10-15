@@ -47,10 +47,6 @@ public class ModBlockEntities {
             BLOCK_ENTITIES.register("missile_dispenser", () -> BlockEntityType.Builder.of(
                     MissileDispenserBlockEntity::new, ModBlocks.MISSILE_DISPENSER.get()).build(null));
 
-    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<TurretCiwsBlockEntity>> TURRET_CIWS =
-            BLOCK_ENTITIES.register("turret_ciws", () -> BlockEntityType.Builder.of(
-                    TurretCiwsBlockEntity::new, ModBlocks.TURRET_CIWS.get()).build(null));
-
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<TurretInterceptorNormalBlockEntity>> TURRET_INTERCEPTOR =
             BLOCK_ENTITIES.register("turret_interceptor", () -> BlockEntityType.Builder.of(
                     TurretInterceptorNormalBlockEntity::new, ModBlocks.TURRET_INTERCEPTOR.get()).build(null));

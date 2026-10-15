@@ -89,6 +89,7 @@ public class RicochetGameTest {
         ServerLevel level = helper.getLevel();
         BlockPos o = helper.absolutePos(BlockPos.ZERO);
         Husk husk = new Husk(EntityType.HUSK, level);
+        husk.setPersistenceRequired();
         husk.setNoAi(true);
         husk.moveTo(o.getX() + 0.5, o.getY() + UP, o.getZ() + 0.5);
         level.addFreshEntity(husk);

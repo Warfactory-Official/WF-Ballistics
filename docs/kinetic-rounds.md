@@ -150,7 +150,7 @@ preset, from, direction, inaccuracy, carrier, shooter, faction, controlId)`.
 - Ground: needs an entity-ticking chunk (not merely loaded); chunk-loading preset tickets its own and the next chunk.
   `noSave`.
 - `InterceptTarget`: class `MISSILE` (recon `EntityTargetSource`, EMCON silent); `interceptDamage` past `durability` or
-  `interceptKill` => warhead functions where it is. `discard()` = no warhead (APS). CIWS/interceptor batteries resolve
+  `interceptKill` => warhead functions where it is. `discard()` = no warhead (APS). Interceptor batteries resolve
   any `InterceptTarget` entity, not only `MissileEntity`/`DroneEntity`.
 - Client: exhaust + launch hooks on the preset's `RoundRenderer`; none registered => not drawn.
 
@@ -304,8 +304,12 @@ Guns live in CombinedAssault (`com.wf.combinedassault.compat.wflib`; its `docs/v
 ```java
 long key = Rounds.fire(level, preset, muzzle, direction, inaccuracyDegrees, carrierVelocity, shooter, factionId);
 long key = Rounds.launch(level, preset, muzzle, velocity, shooter, factionId, damageScale, rewindTicks, shotSeq);
+long key = Rounds.launch(..., shotSeq, lead); // fired lead in [0,1) ticks into this tick: first step flies 1 - lead
 Rounds.position(level, key); Rounds.within(level, box); Rounds.destroy(level, key); // APS
 ```
+
+- `lead` > 0: first step = partial step (no decay / gravity, resync spawn). Several rounds per tick at `k / n` => strung
+  out `v / n` apart, not one clump.
 
 Debug (op): `/wflib round <preset>` fires from the command source position along its rotation, shooter = source
 entity (`execute anchored eyes positioned ^ ^ ^ run ...` for the eye).

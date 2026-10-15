@@ -47,6 +47,7 @@ import com.wf.wflib.drone.DroneMission;
 import com.wf.wflib.drone.DroneProgram;
 import com.wf.wflib.drone.DroneTask;
 import com.wf.wflib.drone.MineLoad;
+import com.wf.wflib.drone.ControllableDrone;
 import com.wf.wflib.drone.DroneEntity;
 import com.wf.wflib.block.entity.DronePadBlockEntity;
 import com.wf.wflib.drone.CrateEntity;
@@ -261,6 +262,8 @@ public final class WFServerEvents {
         com.wf.wflib.drone.DroneRecall.shutdown();
         HubIndex.shutdown();
         DecoyRegistry.shutdown();
+        com.wf.wflib.recon.env.Interference.shutdown();
+        com.wf.wflib.drone.cam.Datalink.shutdown();
         DroneAiScheduler.shutdown();
         IndustryClusters.clear();
         GlyphidBridges.clear();
@@ -1335,7 +1338,7 @@ public final class WFServerEvents {
                 spawned.drones().forEach(d -> d.flight().setState(DroneState.TRANSIT));
                 src.sendSuccess(() -> Component.literal(
                         "Launched 1 drone; it will be shot down in a few seconds"), false);
-                DOWNED_SCENARIO.add(spawned.drones().get(0).getUUID());
+                DOWNED_SCENARIO.add(spawned.drones().get(0).droneId());
                 return 1;
             }
             default -> {
@@ -1406,14 +1409,10 @@ public final class WFServerEvents {
         ServerLevel level = src.getLevel();
         Vec3 home = src.getPosition();
         int count = 0;
-        for (DroneEntity drone : DroneTracker.drones(level)) {
-            if (!drone.flight().getDroneState().powered()) {
-                continue;
+        for (ControllableDrone drone : DroneTracker.bodies(level)) {
+            if (drone.recall(home)) {
+                count++;
             }
-            drone.route().setExfil(home);
-            drone.route().setDestination(null);
-            drone.flight().setState(DroneState.EXFIL);
-            count++;
         }
         for (SimDrone sd : new ArrayList<>(SimDroneManager.tier(level).view())) {
             sd.exfil = home;

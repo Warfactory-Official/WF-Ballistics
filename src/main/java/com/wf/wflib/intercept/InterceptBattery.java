@@ -236,9 +236,10 @@ public final class InterceptBattery {
         return t.interceptEngageable() && hostile(t, this.mount.controlId(), this.mount.team());
     }
 
-    /** Not fired by {@code controlId}, not a friendly side's. */
+    /** Not {@code controlId}'s body (unmanned hosts are drones), not fired by it, not a friendly side's. */
     public static boolean hostile(InterceptTarget t, UUID controlId, @Nullable UUID team) {
-        return !controlId.equals(t.interceptControlId()) && !WarforgeCompat.areFactionsFriendly(team, t.interceptTeamId());
+        return !controlId.equals(t.interceptEntity().getUUID()) && !controlId.equals(t.interceptControlId())
+                && !WarforgeCompat.areFactionsFriendly(team, t.interceptTeamId());
     }
 
     /** Stamp an interceptor as fired by {@code controlId} for {@code team}, locked on {@code target}. */
