@@ -89,11 +89,11 @@ repositories {
     }
     mavenLocal { content { includeGroup 'com.flansmod.warforge' } }
 
-    // --- GemRender + AHF: Warfactory's self-hosted Maven, snapshots channel -------------------
+    // --- GemRender + AHF + wfweight: Warfactory's self-hosted Maven, snapshots channel --------
     maven {
         name = 'Warfactory Snapshots'
         url = 'https://repo.warfactory.co/snapshots'
-        content { includeGroup 'com.wf.gemrender'; includeGroup 'com.norwood' }
+        content { includeGroup 'com.wf.gemrender'; includeGroup 'com.norwood'; includeGroup 'warfactory.ultimateweight' }
         // Anonymous reads work on this server; only `publish` needs credentials. A present-but-null
         // credentials block makes Gradle refuse anonymous reads too, so omit it entirely when unset.
         def warfactoryUser = project.findProperty('warfactoryUser') ?: System.getenv('WARFACTORY_MAVEN_USER')
@@ -335,6 +335,8 @@ dependencies {
     if (!gradle.startParameter.taskNames.any { it.toLowerCase().contains('server') }) {
         localRuntime "maven.modrinth:journeymap:${journeymap_version}"
     }
+    // wfweight (optional): backpack weight bridge, compat.wfweight.BackpackWeight
+    compileOnly("warfactory.ultimateweight:wfweight-1.21.1-neoforge:1.0.0-SNAPSHOT") { transitive = false }
     // Internal `UIManager` (PDA map app opens the fullscreen map); no API for it.
     compileOnly("maven.modrinth:journeymap:${journeymap_version}") { transitive = false }
 

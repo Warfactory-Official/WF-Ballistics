@@ -28,6 +28,7 @@ the look-at probe, recon/sonar, and the UI widget system other mods build HUDs f
 | [pda](pda.md) | handheld PDA: focus/input, rendering, app API, shipped apps |
 | [nvg](nvg.md) | night vision goggles: helmet mount, flip, IR illuminator, intensifier optics JSON, sensor modes |
 | [grenades](grenades.md) | thrown charge entity, grenade warheads (frag rays, flashbang, smoke x16, thermite), smoke sight blocking, flash post chain, hearing loss |
+| [backpacks](backpacks.md) | worn backpack: player attachment + capability, inventory panel, lock, probe node, wfweight |
 
 Each doc keeps the detailed explanatory voice it was written in; this index is a reference layer on top,
 not a rewrite.

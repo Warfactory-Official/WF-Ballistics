@@ -1,11 +1,18 @@
 package com.wf.wflib.armor.client;
 
+import com.wf.wflib.WFLib;
+import com.wf.wflib.armor.ArmorPieceItem;
 import com.wf.wflib.armor.ArmorPreset;
+import net.minecraft.client.model.PlayerModel;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.client.event.RenderPlayerEvent;
 import net.neoforged.neoforge.client.extensions.common.IClientItemExtensions;
 
 import java.util.Map;
@@ -23,7 +30,12 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>GemRender missing from the client's mod list => a glTF piece draws nothing and says so once.
  */
+@EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class ArmorPieceClient {
+
+    /** Skin overlay part covered by a glTF piece's node; overlay (0.25 px out) pokes through suits hugging the limb. */
+    private static final int HAT = 1, JACKET = 2, LEFT_SLEEVE = 4, RIGHT_SLEEVE = 8, LEFT_PANTS = 16, RIGHT_PANTS = 32;
+    private static final String[] NODES = {"head", "body", "left_arm", "right_arm", "left_leg", "right_leg"};
 
     private static final IClientItemExtensions VANILLA = new IClientItemExtensions() {
     };
@@ -40,11 +52,32 @@ public final class ArmorPieceClient {
         return model == null ? VANILLA : BY_MODEL.computeIfAbsent(model, m -> new GemRenderArmor(m, preset.nvgMount()));
     }
 
+    /** After vanilla's skin-customisation visibility: overlays under worn glTF pieces hidden. */
+    @SubscribeEvent
+    public static void hideCovered(RenderPlayerEvent.Pre e) {
+        int covered = 0;
+        for (net.minecraft.world.item.ItemStack worn : e.getEntity().getArmorSlots()) {
+            if (worn.getItem() instanceof ArmorPieceItem piece && piece.preset().model() != null
+                    && of(piece.preset()) instanceof GemRenderArmor armor) {
+                covered |= armor.covers();
+            }
+        }
+        PlayerModel<?> m = e.getRenderer().getModel();
+        m.hat.visible &= (covered & HAT) == 0;
+        m.jacket.visible &= (covered & JACKET) == 0;
+        m.leftSleeve.visible &= (covered & LEFT_SLEEVE) == 0;
+        m.rightSleeve.visible &= (covered & RIGHT_SLEEVE) == 0;
+        m.leftPants.visible &= (covered & LEFT_PANTS) == 0;
+        m.rightPants.visible &= (covered & RIGHT_PANTS) == 0;
+    }
+
     private static final class GemRenderArmor implements IClientItemExtensions {
 
         private final com.wf.gemrender.asset.ModelCache.Handle<com.wf.gemrender.gltf.GemRenderGltfModel> model;
         private final boolean nvgMount;
         private com.wf.gemrender.direct.GemRenderArmorModel armorModel;
+        /** {@link #NODES} bits; -1 = model not loaded yet. */
+        private int covers = -1;
 
         private GemRenderArmor(ResourceLocation model, boolean nvgMount) {
             this.model = com.wf.gemrender.asset.GemRenderModels.armor(model);
@@ -56,6 +89,24 @@ public final class ArmorPieceClient {
                                                       EquipmentSlot slot, HumanoidModel<?> original) {
             com.wf.gemrender.direct.GemRenderArmorModel armor = armorModel();
             return armor == null ? original : armor.prepare(entity, stack, slot);
+        }
+
+        int covers() {
+            if (covers < 0) {
+                com.wf.gemrender.gltf.GemRenderGltfModel m = model.get();
+                if (m == null) {
+                    return 0;
+                }
+                com.wf.gemrender.gltf.NodeTable table = m.layout().nodeTable();
+                int bits = 0;
+                for (int i = 0; i < NODES.length; i++) {
+                    if (table.slotOfName(NODES[i]) >= 0) {
+                        bits |= 1 << i;
+                    }
+                }
+                covers = bits;
+            }
+            return covers;
         }
 
         private com.wf.gemrender.direct.GemRenderArmorModel armorModel() {

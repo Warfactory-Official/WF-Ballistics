@@ -6,6 +6,7 @@
   "plugin": "com.wf.wflib.mixin.WFMixinPlugin",
   "mixins": [
     "MixinEntity",
+    "MixinInventoryMenu",
     "MixinLevelChunk",
     "MixinLivingEntity",
     "MixinMob",

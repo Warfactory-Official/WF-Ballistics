@@ -43,6 +43,7 @@ public class WFLib {
         com.wf.wflib.WFCreativeTabs.register(modEventBus);
         com.wf.wflib.menu.ModMenus.register(modEventBus);
         com.wf.wflib.client.particle.WFParticles.register(modEventBus);
+        com.wf.wflib.backpack.Backpacks.register(modEventBus);
         com.wf.wflib.fluid.WFFluids.register(modEventBus);
         com.wf.wflib.WFSounds.register(modEventBus);
         com.wf.wflib.fire.WFFire.register(modEventBus);
