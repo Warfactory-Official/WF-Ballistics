@@ -245,6 +245,7 @@
   "wflib.pda.app.telemetry": "Telemetry",
   "wflib.pda.app.cameras": "Cameras",
   "wflib.pda.app.drones": "Drones",
+  "wflib.pda.app.radio": "Radio",
   "wflib.pda.app.terminal": "Terminal",
   "wflib.pda.app.radar": "Radar",
   "wflib.pda.app.map": "Map",
@@ -266,6 +267,7 @@
   "wflib.pda.marker.name": "Marker name",
   "item.wflib.missile_gmlrs": "GMLRS Rocket (Unitary)",
   "item.wflib.missile_gmlrs_aw": "GMLRS Rocket (Alternative Warhead)",
+  "item.wflib.missile_atacms": "ATACMS",
   "item.wflib.rocket_hydra_70": "Hydra 70 Rocket",
   "item.wflib.rocket_crv7": "CRV7 Rocket",
   "item.wflib.rocket_s8": "S-8 Rocket",
@@ -307,6 +309,9 @@
   "soundCategory.wflib.weapons": "Weapons",
   "soundCategory.wflib.explosions": "Explosions",
   "soundCategory.wflib.alerts": "Cockpit Alerts",
+  "soundCategory.wflib.radio": "Radio",
+  "wflib.radio.off": "Off",
+  "item.wflib.loudspeaker": "Loudspeaker",
   "options.wflib.cabinMuffle": "Cabin Muffle",
   "entity.wflib.thrown_charge": "Grenade",
   "subtitles.wflib.grenade.bounce": "Grenade clatters",
@@ -322,5 +327,11 @@
   "item.wflib.portable_jammer": "Portable Jammer",
   "item.wflib.portable_jammer.on": "Jamming: radar returns and drone links within 32 blocks",
   "item.wflib.portable_jammer.off": "Off (use to switch on)",
-  "block.wflib.drone_net": "Drone Net"
+  "block.wflib.drone_net": "Drone Net",
+  "item.wflib.ammo_can_7_62x51": "7.62mm Ammo Can",
+  "item.wflib.ammo_can_12_7x99": ".50 BMG Ammo Can",
+  "item.wflib.ammo_can_40x53": "40mm Grenade Can",
+  "item.wflib.drum_20x102": "20mm Linkless Drum",
+  "item.wflib.pod_gmlrs": "GMLRS Pod",
+  "item.wflib.pod_atacms": "ATACMS Pod"
 }

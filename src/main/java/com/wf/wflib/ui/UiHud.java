@@ -1,6 +1,7 @@
 package com.wf.wflib.ui;
 
 import com.wf.gemrender.ui.Canvas;
+import com.mojang.blaze3d.platform.Window;
 import com.wf.wflib.WFLib;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
@@ -19,6 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * Hosts every HUD {@link UiInstance} in two GUI layers: {@link Layer#BACK} under all vanilla layers
  * (full-screen sight overlays), {@link Layer#MAIN} under chat. Skipped while the GUI is hidden.
+ * Relative layouts zoomed by GUI scale / auto GUI scale.
  */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class UiHud {
@@ -83,6 +85,9 @@ public final class UiHud {
         DRAWER.width = graphics.guiWidth();
         DRAWER.height = graphics.guiHeight();
         DRAWER.partialTick = delta.getGameTimeDeltaPartialTick(true);
+        Window window = Minecraft.getInstance().getWindow();
+        DRAWER.zoom = (float) (window.getGuiScale()
+                / window.calculateScale(0, Minecraft.getInstance().isEnforceUnicode()));
         try {
             for (int i = 0; i < sources.size(); i++) {
                 sources.get(i).collect(DRAWER);
@@ -105,6 +110,7 @@ public final class UiHud {
         float width;
         float height;
         float partialTick;
+        float zoom;
 
         @Override
         public void add(UiInstance instance) {
@@ -113,7 +119,7 @@ public final class UiHud {
                 canvas = Canvas.shared().begin(graphics);
                 UiStats.mark(UiStats.BEGIN);
             }
-            instance.render(canvas, graphics, 0, 0, width, height, partialTick);
+            instance.render(canvas, graphics, 0, 0, width, height, partialTick, zoom);
         }
     }
 }

@@ -2,6 +2,8 @@ package com.wf.wflib.armor;
 
 import com.wf.wflib.WFLib;
 import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -13,9 +15,16 @@ import net.neoforged.neoforge.event.entity.living.LivingEquipmentChangeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
+import java.util.EnumSet;
+import java.util.Map;
+import java.util.WeakHashMap;
+
 /** Armour/game event glue. Reduction itself runs in {@code DamageEventHandler} at {@code HIGH} priority, so later listeners read the post-armour amount. */
 @EventBusSubscriber(modid = WFLib.MODID)
 public final class ArmorEvents {
+
+    /** Suit-breaking equips, ejected after the tick: a slot set inside the change event leaves vanilla's last-equipment map holding the ejected stack. */
+    private static final Map<LivingEntity, EnumSet<EquipmentSlot>> BLOCKED = new WeakHashMap<>();
 
     private ArmorEvents() {
     }
@@ -55,6 +64,20 @@ public final class ArmorEvents {
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         ArmorExposure.tick(event.getServer());
+        BLOCKED.forEach((entity, slots) -> {
+            for (EquipmentSlot slot : slots) {
+                ItemStack stack = entity.getItemBySlot(slot);
+                if (ArmorStacks.blocked(entity, slot, stack)) {
+                    entity.setItemSlot(slot, ItemStack.EMPTY);
+                    if (entity instanceof Player player) {
+                        player.getInventory().placeItemBackInInventory(stack);
+                    } else {
+                        entity.spawnAtLocation(stack);
+                    }
+                }
+            }
+        });
+        BLOCKED.clear();
     }
 
     /** Item-identity check matters: this event also fires on this system's own component writes (changed condition = changed stack), which must not be mistaken for the piece leaving. */
@@ -65,6 +88,10 @@ public final class ArmorEvents {
         }
         if (event.getFrom().getItem() != event.getTo().getItem()) {
             ArmorExposure.discard(event.getEntity(), event.getSlot());
+        }
+        LivingEntity entity = event.getEntity();
+        if (!entity.level().isClientSide && ArmorStacks.blocked(entity, event.getSlot(), event.getTo())) {
+            BLOCKED.computeIfAbsent(entity, e -> EnumSet.noneOf(EquipmentSlot.class)).add(event.getSlot());
         }
     }
 

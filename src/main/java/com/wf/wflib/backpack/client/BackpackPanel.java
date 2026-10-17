@@ -7,6 +7,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.client.gui.screens.inventory.CreativeModeInventoryScreen;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Player;
@@ -14,10 +16,11 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.client.event.ContainerScreenEvent;
 import net.neoforged.neoforge.client.event.ScreenEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Locale;
 
-/** Owner's worn backpack left of the survival inventory; hidden under the recipe book. */
+/** Owner's worn backpack left of the survival inventory (hidden under the recipe book) / creative inventory tab. */
 final class BackpackPanel {
     static final int PAD = 4;
     static final int HEAD = 14;
@@ -40,8 +43,22 @@ final class BackpackPanel {
 
     static boolean shown() {
         Minecraft mc = Minecraft.getInstance();
-        return mc.screen instanceof InventoryScreen s && !s.getRecipeBookComponent().isVisible() && mc.player != null
-                && Backpacks.worn(mc.player).getItem() instanceof BackpackItem;
+        return host(mc.screen) != null && mc.player != null && Backpacks.worn(mc.player).getItem() instanceof BackpackItem;
+    }
+
+    @Nullable
+    private static AbstractContainerScreen<?> host(@Nullable Screen screen) {
+        if (screen instanceof InventoryScreen s && !s.getRecipeBookComponent().isVisible()
+                || screen instanceof CreativeModeInventoryScreen c && c.isInventoryOpen()) {
+            return (AbstractContainerScreen<?>) screen;
+        }
+        return null;
+    }
+
+    /** Panel host while shown, else null. */
+    @Nullable
+    private static AbstractContainerScreen<?> shownOn(Screen screen) {
+        return screen == Minecraft.getInstance().screen && shown() ? (AbstractContainerScreen<?>) screen : null;
     }
 
     private static int x0() {
@@ -49,7 +66,8 @@ final class BackpackPanel {
     }
 
     static void background(ContainerScreenEvent.Render.Background e) {
-        if (!(e.getContainerScreen() instanceof InventoryScreen screen) || !shown()) {
+        AbstractContainerScreen<?> screen = shownOn(e.getContainerScreen());
+        if (screen == null) {
             return;
         }
         Player player = Minecraft.getInstance().player;
@@ -78,7 +96,8 @@ final class BackpackPanel {
     }
 
     static void foreground(ScreenEvent.Render.Post e) {
-        if (!(e.getScreen() instanceof InventoryScreen screen) || !shown() || !onLock(screen, e.getMouseX(), e.getMouseY())) {
+        AbstractContainerScreen<?> screen = shownOn(e.getScreen());
+        if (screen == null || !onLock(screen, e.getMouseX(), e.getMouseY())) {
             return;
         }
         boolean locked = Backpacks.locked(Backpacks.worn(Minecraft.getInstance().player));
@@ -91,21 +110,23 @@ final class BackpackPanel {
         return ox + x0() + WIDTH - PAD - LOCK;
     }
 
-    private static boolean onLock(InventoryScreen screen, double mx, double my) {
+    private static boolean onLock(AbstractContainerScreen<?> screen, double mx, double my) {
         int x = lockX(screen.getGuiLeft());
         int y = screen.getGuiTop() + 2;
         return mx >= x && mx < x + LOCK && my >= y && my < y + LOCK + 1;
     }
 
     static void scrolled(ScreenEvent.MouseScrolled.Pre e) {
-        if (e.getScreen() instanceof InventoryScreen s && shown() && GRID.scrolled(e.getMouseX() - s.getGuiLeft(),
+        AbstractContainerScreen<?> s = shownOn(e.getScreen());
+        if (s != null && GRID.scrolled(e.getMouseX() - s.getGuiLeft(),
                 e.getMouseY() - s.getGuiTop(), e.getScrollDeltaY(), Screen.hasShiftDown())) {
             e.setCanceled(true);
         }
     }
 
     static void pressed(ScreenEvent.MouseButtonPressed.Pre e) {
-        if (!(e.getScreen() instanceof InventoryScreen s) || !shown() || e.getButton() != 0) {
+        AbstractContainerScreen<?> s = shownOn(e.getScreen());
+        if (s == null || e.getButton() != 0) {
             return;
         }
         if (onLock(s, e.getMouseX(), e.getMouseY())) {
@@ -117,13 +138,13 @@ final class BackpackPanel {
     }
 
     static void dragged(ScreenEvent.MouseDragged.Pre e) {
-        if (e.getScreen() instanceof InventoryScreen s && GRID.dragged(e.getMouseY() - s.getGuiTop())) {
+        if (e.getScreen() instanceof AbstractContainerScreen<?> s && GRID.dragged(e.getMouseY() - s.getGuiTop())) {
             e.setCanceled(true);
         }
     }
 
     static void released(ScreenEvent.MouseButtonReleased.Pre e) {
-        if (e.getScreen() instanceof InventoryScreen && GRID.released()) {
+        if (e.getScreen() instanceof AbstractContainerScreen<?> && GRID.released()) {
             e.setCanceled(true);
         }
     }

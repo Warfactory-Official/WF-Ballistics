@@ -282,6 +282,15 @@ dependencies {
         localRuntime "com.wf.gemrender:gemrender-1.21.1:${gemrender_version}-SNAPSHOT"
     }
 
+    // --- Concentus (pure-Java Opus decoder): radio stations ------------------------------------
+    jarJar(implementation("io.github.jaredmdobson:concentus")) {
+        version {
+            strictly '[1.0.2,2)'
+            prefer '1.0.2'
+        }
+    }
+    additionalRuntimeClasspath "io.github.jaredmdobson:concentus:1.0.2"
+
     // --- AHF (humanoid hit parts, lag-comp history): required both sides ----------------------
     implementation "com.norwood:ahf-1.21.1-neoforge:${ahf_version}-SNAPSHOT"
 
@@ -456,6 +465,8 @@ idea {
     module {
         downloadSources = true
         downloadJavadoc = true
+        // Worlds/logs (~14 GB) => IDE heap exhaustion while indexing.
+        excludeDirs += projectDir.listFiles().findAll { it.directory && it.name.startsWith('run') }
     }
 }
 

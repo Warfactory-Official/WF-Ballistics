@@ -178,6 +178,52 @@ public class ArmorGameTest {
         helper.succeed();
     }
 
+    // ------------------------------------------------------------------ suits
+
+    @GameTest(template = TEMPLATE)
+    public static void aSuitProtectsTheSlotsItOccupies(GameTestHelper helper) {
+        LivingEntity suited = victim(helper, 1);
+        LivingEntity jacket = victim(helper, 3);
+        suited.setItemSlot(EquipmentSlot.CHEST, stack("mw_ghillie"));
+        jacket.setItemSlot(EquipmentSlot.CHEST, stack("mw_bearsuit"));
+        DamageSource blunt = source(helper, net.minecraft.world.damagesource.DamageTypes.FALLING_BLOCK);
+
+        double legs = ArmorSystem.resolveSlot(suited, EquipmentSlot.LEGS, blunt, 10.0F, false).through();
+        double feet = ArmorSystem.resolveSlot(suited, EquipmentSlot.FEET, blunt, 10.0F, false).through();
+        double suitWhole = ArmorSystem.resolveWhole(suited, blunt, 10.0F, false).through();
+        double jacketWhole = ArmorSystem.resolveWhole(jacket, blunt, 10.0F, false).through();
+        if (!(legs < 10.0D) || feet != 10.0D) {
+            helper.fail("suit occupying head + legs: legs " + legs + ", feet " + feet + " through of 10");
+            return;
+        }
+        // Same rows; coverage 0.85 (head + chest + legs) against 0.40.
+        if (!(suitWhole < jacketWhole)) {
+            helper.fail("suit whole-body " + suitWhole + " should beat a jacket's " + jacketWhole);
+            return;
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 60)
+    public static void aSuitEjectsWhatSitsInItsSlots(GameTestHelper helper) {
+        LivingEntity onSuit = victim(helper, 1);
+        LivingEntity onPants = victim(helper, 3);
+        onSuit.setItemSlot(EquipmentSlot.CHEST, stack("mw_ghillie"));
+        helper.runAfterDelay(2, () -> {
+            onSuit.setItemSlot(EquipmentSlot.LEGS, stack("mw_bearpants"));
+            onPants.setItemSlot(EquipmentSlot.LEGS, stack("mw_bearpants"));
+        });
+        helper.runAfterDelay(4, () -> onPants.setItemSlot(EquipmentSlot.CHEST, stack("mw_ghillie")));
+        helper.succeedWhen(() -> {
+            helper.assertTrue(onSuit.getItemBySlot(EquipmentSlot.LEGS).isEmpty(), "pants under a worn suit stay");
+            helper.assertTrue(!onSuit.getItemBySlot(EquipmentSlot.CHEST).isEmpty(), "worn suit ejected");
+            helper.assertTrue(onPants.getItemBySlot(EquipmentSlot.CHEST).isEmpty(), "suit over worn pants stays");
+            helper.assertTrue(!onPants.getItemBySlot(EquipmentSlot.LEGS).isEmpty(), "worn pants ejected");
+            helper.assertItemEntityCountIs(stack("mw_bearpants").getItem(), new BlockPos(1, 2, 1), 2.0D, 1);
+            helper.assertItemEntityCountIs(stack("mw_ghillie").getItem(), new BlockPos(3, 2, 1), 2.0D, 1);
+        });
+    }
+
     // ------------------------------------------------------------------ inserts
 
     @GameTest(template = TEMPLATE)

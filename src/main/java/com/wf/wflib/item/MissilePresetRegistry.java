@@ -153,6 +153,11 @@ public final class MissilePresetRegistry {
                 .accel(0.5, 0.6).fuel(MissileEntity.FuelType.SOLID, 1400)
                 .explosionOffset(8.0f).fragmentCount(48).build());
 
+        // Single-round pod (M142/M270): longer reach, larger unitary charge.
+        register(MissilePreset.builder(rl("atacms"), MissileModels.rl("neon"), WarheadRegistry.rl("standard"))
+                .highAltitude(300.0).cruiseSpeed(9.0).turnRate(0.25).health(40.0f)
+                .accel(0.6, 0.7).fuel(MissileEntity.FuelType.SOLID, 2400).build());
+
         register(MissilePreset.builder(rl("torpedo"), MissileModels.rl("micro"), TorpedoWarhead.ID)
                 .torpedo().highAltitude(8.0).clearance(4.0).cruiseSpeed(0.35).turnRate(0.1)
                 .health(20.0f).accel(0.05, 0.05).fuel(MissileEntity.FuelType.SOLID, 1400).build());

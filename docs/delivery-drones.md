@@ -1168,7 +1168,7 @@ An open-ended loiter (`0` seconds) runs until `PowerPolicy.canHoldStation` says 
 ## 14. Off-world simulation
 
 `SimDroneManager` decides when a drone stops being an entity:
-- Offload: `TRANSIT`/`EXFIL`, > ~128 blocks from current leg's waypoint, no player within `OFFLOAD_PLAYER_RANGE`.
+- Offload: `TRANSIT`/`EXFIL`, > ~128 blocks from current leg's waypoint, no player within `ViewRange.blocks`.
 - Onload: within `WAYPOINT_ONLOAD_RANGE` of waypoint, player near, or state no longer a travel leg (sim has no terrain => landing would descend forever).
 - Waypoint leg-aware: homeward = exfil, not remembered destination.
 - Crate discarded on offload, contents in `SimDrone`, rebuilt on onload.

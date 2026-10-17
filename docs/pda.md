@@ -22,7 +22,7 @@ Item `wflib:pda` (`pda/`, client `pda/client/`). Replaces `wflib:terminal`, `wfl
 - `PdaRenderer` (HAND pass): glTF `wflib:models/pda/pda.glb` (placeholder: MineAssault `tools/ma.py pda-placeholder`), nodes `grip_left` / `grip_right` = wrist goals for `client.view.PlayerArms` + `ArmViewPose` (shared with MineAssault).
 - Material `extras.textureSlot: "screen"` <- `UiSurfaces` texture of `PdaShell` (384x240 units, v0 = top; px/unit = integer nearest raised screen's window px, `SCREEN_WIDTH` must match model); `TextureSlots.emissive` => unlit.
 - Placeholder 0.232 x 0.148 m, screen 0.224 x 0.14. `VIEW_SCALE` 1.9 over the metric model: raised screen ~half the view wide; arms solve to the scaled grips.
-- Elsewhere (`GemRenderItemRenderer`): no slots => screen not drawn.
+- Elsewhere (`GemRenderItemRenderer`): `screen` slot = `textures/pda/screen_off.png`; 3P carried by top edge, screen out.
 - Surface redraw 20 fps at rest, every frame focused. Cursor / hit table 1 frame stale.
 
 ## 99. Apps
@@ -36,6 +36,7 @@ Item `wflib:pda` (`pda/`, client `pda/client/`). Replaces `wflib:terminal`, `wfl
 | Telemetry | event log: `TelemetryLog` (reporter `recordEvent` while `datalink()` non-null; DAMAGED / OFFLOAD / ONLOAD silent; ring 256, not saved) -> carriers per `TelemetryLink.receives`, pushed per server tick; history `TelemetryLogRequestPacket(after seq)` on open. Rows = ALL + reporters (live `TelemetryClient` fix or last event); classified drones => no datalink |
 | Cameras | held PDA `CHANNELS` -> `CameraPanelPacket` (`PdaCamerasRequestPacket` on open, `CameraControlPacket` refresh); owns `CameraLink` while open unless a TV round holds it; FULL => fullscreen |
 | Drones | held PDA `CHANNELS` drone targets, every mod's bodies -> `DroneStatusRequestPacket` per 10 ticks while open -> `DroneStatusPacket` (status, task, fuel, link, `RemoteBody` cells/ammo/refusal, offered kinds; unloaded => `DroneRecall` + `HostWakeup` record). `DroneActionPacket`: SELECT (unloaded => wake, feed subscribed), CONNECT (`RemoteBody.connect` after wake; PDA lowers), REMOVE. Feed via `CameraLink`, FULL. DISPATCH: selected body with offered kinds => `DroneTasking.assign`, else nearest dispatcher; kind + target (own position / side marker) -> `DroneDispatchPacket`; pad launches -> held PDA `CHANNELS`. Classified => NO LINK: no feed (`CameraNet.entitled` refuses), no connect, no orders |
+| Radio | Drones status rows with `radio`: station `<` / `>` (catalogue order, off between last and first), OFF -> `RadioTunePacket` |
 | Map | host's fullscreen map (`WFMaps.openFullscreen()`: JourneyMap `UIManager` internal, Xaero `GuiMap`) inside the app area via `EmbeddedScreen`; LMB / drag / wheel / RMB menu forwarded; map closes itself => home; hidden without a host |
 | Markers (`MarkerClient` map tool) | map menu add (name prompt) / remove; `MarkerStore` SavedData per side (faction, else player), cap 64, pushed to online side members; layer `wflib:markers`, current dimension |
 | Radar | `PdaRadarSubscribePacket(range)` while open -> `PdaRadarPacket` per 20 ticks: own net `TrackPicture` as a `ScopeFrame` about the player (not `ScopeCache`: frames keyed by net, hub frames would overwrite). Sonar = tracks with the SONAR band bit (rings) |

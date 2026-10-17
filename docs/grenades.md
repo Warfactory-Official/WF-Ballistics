@@ -6,7 +6,7 @@ Thrown body, warheads, client effects (`grenade/`). Item side (defs, hand state 
 | type | use |
 |---|---|
 | `api.ChargeSpec` / `api.ChargeItem` | read a carried charge without its owning mod (vehicle barrel insertion); `massKg` = drone payload mass |
-| `api.StrappedExplosive` | `#c:ammo/rockets/explosive` cartridge + explosive variant -> round's warhead; charges excluded; drone kamikaze payloads |
+| `api.StrappedExplosive` | `#wflib:drone_explosive` (rockets + mortar + VOG cartridges) + explosive variant -> round's warhead or `release` = unpowered `Rounds.launch`; mass = calibre - default projectile + variant's; charges excluded; drone kamikaze payloads |
 | `api.ThermalAttackEvent` | burning thermite near a `PreciseHitbox`; vehicles route heat to armour regions + systems |
 | `ThrownCharge.launch` / `cookOff` / `react` / `create` / `debris` / `holdAt` | throw; detonate in hand; reaction without flight (`quiet` = cosmetic); client-only look body; owner-pinned (gun barrel) |
 

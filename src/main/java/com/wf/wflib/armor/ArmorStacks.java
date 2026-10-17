@@ -146,6 +146,38 @@ public final class ArmorStacks {
                 && inserts(garment).size() < garmentSpec.insertSlots();
     }
 
+    // --- suits ----------------------------------------------------------------------------------
+
+    public static boolean occupies(ItemStack stack, EquipmentSlot slot) {
+        return stack.getItem() instanceof ArmorPieceItem piece && piece.preset().occupies().contains(slot);
+    }
+
+    /** Slot whose piece covers {@code slot}: itself unless empty and occupied by a worn suit. */
+    public static EquipmentSlot coveringSlot(LivingEntity entity, EquipmentSlot slot) {
+        if (entity.getItemBySlot(slot).isEmpty()) {
+            for (EquipmentSlot s : ArmorSystem.SLOTS) {
+                if (occupies(entity.getItemBySlot(s), slot)) {
+                    return s;
+                }
+            }
+        }
+        return slot;
+    }
+
+    /** {@code incoming} on {@code slot} => a suit's occupied slot holds something. */
+    public static boolean blocked(LivingEntity entity, EquipmentSlot slot, ItemStack incoming) {
+        if (incoming.isEmpty() || slot.getType() != EquipmentSlot.Type.HUMANOID_ARMOR) {
+            return false;
+        }
+        for (EquipmentSlot s : ArmorSystem.SLOTS) {
+            if (s != slot && (occupies(entity.getItemBySlot(s), slot)
+                    || occupies(incoming, s) && !entity.getItemBySlot(s).isEmpty())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // --- assembly -----------------------------------------------------------------------------
 
     /**

@@ -39,6 +39,7 @@ public final class WFCreativeTabs {
                         output.accept(ModItems.PDA.get());
                         output.accept(ModItems.DECOY_LAUNCHER.get());
                         output.accept(ModItems.PORTABLE_JAMMER.get());
+                        output.accept(ModItems.LOUDSPEAKER.get());
                         output.accept(ModBlocks.MINING_CHARGE_ITEM.get());
                         output.accept(ModBlocks.DEEP_MINING_CHARGE_ITEM.get());
                         output.accept(ModItems.DETONATOR.get());
@@ -61,6 +62,7 @@ public final class WFCreativeTabs {
                         com.wf.wflib.ammo.Ammo.variants().stream()
                                 .filter(v -> v.id().getNamespace().equals(WFLib.MODID))
                                 .forEach(v -> output.accept(com.wf.wflib.ammo.AmmoItems.stack(v, 1)));
+                        com.wf.wflib.magazine.MagazineItems.creativeStacks().forEach(output::accept);
                         output.accept(com.wf.wflib.countermeasure.Countermeasures.FLARE_CARTRIDGE.get());
                         output.accept(com.wf.wflib.countermeasure.Countermeasures.SMOKE_GRENADE_ITEM.get());
                         output.accept(com.wf.wflib.countermeasure.Countermeasures.APS_GRENADE_ITEM.get());

@@ -3,6 +3,7 @@ package com.wf.wflib.round;
 import com.mojang.logging.LogUtils;
 import com.norwood.ahf.config.AhfConfig;
 import com.norwood.ahf.hit.HitRegistration;
+import com.wf.wflib.config.ViewRange;
 import com.norwood.ahf.hit.HitboxApi;
 import com.norwood.ahf.hit.RayHit;
 import com.norwood.ahf.lagcomp.EntityHistory;
@@ -86,8 +87,6 @@ public final class Rounds implements SimKind<RoundBatch> {
     private static final float ENERGY_TO_DAMAGE = 0.1f;
     private static final ResourceLocation SHAPED_CHARGE = WarheadRegistry.rl("shaped_charge");
     private static final ResourceLocation INERT = WarheadRegistry.rl("inert");
-    /** Spawn/end packets go to players this close; chunk-loading rounds go to the whole level. */
-    private static final double AUDIENCE_RANGE = 1024.0;
     /** Head = eye height +- this, for {@link KineticPreset#headshot}. */
     private static final double HEAD_HALF_HEIGHT = 0.25;
     /** Pick slack on plain AABB targets, as vanilla's projectile sweep. */
@@ -926,7 +925,8 @@ public final class Rounds implements SimKind<RoundBatch> {
     private static boolean near(ServerPlayer player, double x, double z) {
         double dx = player.getX() - x;
         double dz = player.getZ() - z;
-        return dx * dx + dz * dz <= AUDIENCE_RANGE * AUDIENCE_RANGE;
+        double r = ViewRange.blocks;
+        return dx * dx + dz * dz <= r * r;
     }
 
     private static void defer(ServerLevel level, RoundBatch b, int i, boolean landed, Vec3 at, Vec3 velocity,

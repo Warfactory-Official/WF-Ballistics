@@ -22,7 +22,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.player.PlayerModelPart;
 import net.minecraft.world.item.ItemDisplayContext;
 import net.minecraft.world.item.ItemStack;
 import net.neoforged.api.distmarker.Dist;
@@ -30,12 +29,15 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RenderHandEvent;
 import org.jetbrains.annotations.Nullable;
+import com.mojang.math.Axis;
+import org.joml.Matrix3f;
 import org.joml.Matrix4f;
+import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 /**
  * First person: PDA two-handed in the HAND pass, rest pose low and tilted, raised = screen square to the eye;
- * {@code screen} texture slot = the {@link PdaShell} surface, emissive. Elsewhere: the model, screen not drawn.
+ * {@code screen} texture slot = the {@link PdaShell} surface, emissive. Elsewhere: screen off.
  */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class PdaRenderer {
@@ -58,6 +60,19 @@ public final class PdaRenderer {
     private static final float VIEW_SCALE = 1.9f;
     /** Item cell fit: longest side of the body, m. */
     private static final float BODY_SIZE = 0.232f;
+    /**
+     * Hand frame (+X wearer's right, +Y forward, +Z up) <- model (screen +Z, long side X): carried at the side by
+     * its top edge, screen out.
+     */
+    private static final Quaternionf CARRY = new Quaternionf().setFromNormalized(new Matrix3f(
+            0, 1, 0,
+            0, 0, 1,
+            1, 0, 0));
+    /** Centre below the grip, m. */
+    private static final float CARRY_DROP = -0.06f;
+    private static final ResourceLocation SCREEN_OFF_TEXTURE = ResourceLocation.fromNamespaceAndPath(WFLib.MODID,
+            "textures/pda/screen_off.png");
+    private static final TextureSlots SCREEN_OFF = slot -> SCREEN.equals(slot) ? SCREEN_OFF_TEXTURE : null;
 
     private static final Matrix4f VIEW = new Matrix4f();
     private static final Matrix4f LOCAL = new Matrix4f();
@@ -108,9 +123,23 @@ public final class PdaRenderer {
 
                 @Override
                 public void transform(ItemStack stack, ItemDisplayContext context, PoseStack pose) {
-                    float fit = 0.9f / BODY_SIZE;
-                    pose.translate(0.5f, 0.5f, 0.5f);
-                    pose.scale(fit, fit, fit);
+                    switch (context) {
+                        case GUI, FIXED -> pose.scale(0.9f / BODY_SIZE, 0.9f / BODY_SIZE, 0.9f / BODY_SIZE);
+                        case THIRD_PERSON_RIGHT_HAND, THIRD_PERSON_LEFT_HAND -> {
+                            if (context == ItemDisplayContext.THIRD_PERSON_LEFT_HAND) {
+                                pose.mulPose(Axis.ZP.rotationDegrees(180));
+                            }
+                            pose.mulPose(CARRY);
+                            pose.translate(0, CARRY_DROP, 0);
+                        }
+                        default -> {
+                        }
+                    }
+                }
+
+                @Override
+                public TextureSlots slots(ItemStack stack, ItemDisplayContext context) {
+                    return SCREEN_OFF;
                 }
             });
         }
@@ -189,7 +218,6 @@ public final class PdaRenderer {
                     arms.lengths, UPPER, LOWER, ELBOW);
             arms.pose(side, UPPER, LOWER);
         }
-        arms.submit(VIEW, light, player.getSkin(), player.isModelPartShown(PlayerModelPart.RIGHT_SLEEVE),
-                player.isModelPartShown(PlayerModelPart.LEFT_SLEEVE));
+        arms.submit(VIEW, light, player);
     }
 }

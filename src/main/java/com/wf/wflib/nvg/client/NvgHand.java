@@ -6,7 +6,6 @@ import com.wf.wflib.client.view.PlayerArms;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.entity.player.PlayerModelPart;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -67,7 +66,6 @@ public final class NvgHand {
         arms.pose(1, UPPER, LOWER);
         arms.pose(0, HIDDEN, HIDDEN);
         VIEW.set(event.getPoseStack().last().pose());
-        arms.submit(VIEW, event.getPackedLight(), player.getSkin(),
-                player.isModelPartShown(PlayerModelPart.RIGHT_SLEEVE), player.isModelPartShown(PlayerModelPart.LEFT_SLEEVE));
+        arms.submit(VIEW, event.getPackedLight(), player);
     }
 }

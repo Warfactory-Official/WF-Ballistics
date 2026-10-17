@@ -1,0 +1,7 @@
+{
+  "replace": false,
+  "values": [
+    "wflib:pod_gmlrs",
+    "wflib:pod_atacms"
+  ]
+}

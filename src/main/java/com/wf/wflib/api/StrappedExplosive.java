@@ -1,10 +1,14 @@
 package com.wf.wflib.api;
 
+import com.wf.wflib.ammo.Ammo;
 import com.wf.wflib.ammo.AmmoItems;
 import com.wf.wflib.ammo.AmmoPresets;
 import com.wf.wflib.ammo.AmmoVariant;
+import com.wf.wflib.ammo.Calibre;
 import com.wf.wflib.ammo.CartridgeItem;
 import com.wf.wflib.kinetic.KineticPreset;
+import com.wf.wflib.kinetic.KineticPresetRegistry;
+import com.wf.wflib.round.Rounds;
 import com.wf.wflib.warhead.WarheadCarrier;
 import com.wf.wflib.warhead.WarheadRegistry;
 import net.minecraft.core.registries.Registries;
@@ -20,19 +24,29 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.UUID;
 
-/** One explosive rocket cartridge strapped to a drone as a contact charge; warhead = its round's. */
+/** One explosive cartridge strapped to a drone as a contact charge; warhead = its round's. */
 public record StrappedExplosive(ItemStack stack, float massKg) {
 
     public static final TagKey<Item> TAG = TagKey.create(Registries.ITEM,
-            ResourceLocation.fromNamespaceAndPath("c", "ammo/rockets/explosive"));
+            ResourceLocation.fromNamespaceAndPath("wflib", "drone_explosive"));
 
     /** @return null unless tagged and its variant explosive */
     @Nullable
     public static StrappedExplosive of(ItemStack stack) {
         AmmoVariant variant = stack.is(TAG) ? AmmoItems.variantOf(stack) : null;
-        return variant != null && variant.explosive() != null
-                ? new StrappedExplosive(stack.copyWithCount(1), ((CartridgeItem) stack.getItem()).calibre().massKg())
-                : null;
+        if (variant == null || variant.explosive() == null) {
+            return null;
+        }
+        // Calibre mass = case/booster + default projectile; swap in this variant's.
+        Calibre calibre = ((CartridgeItem) stack.getItem()).calibre();
+        return new StrappedExplosive(stack.copyWithCount(1), calibre.massKg()
+                - Ammo.defaultVariant(calibre.id()).projectileMassKg() + variant.projectileMassKg());
+    }
+
+    /** Unpowered free fall from {@code at}: round's flight, warhead on impact along the velocity. */
+    public void release(ServerLevel level, Vec3 at, Vec3 velocity, @Nullable Entity shooter, @Nullable UUID faction) {
+        Rounds.launch(level, KineticPresetRegistry.get(AmmoItems.variantOf(this.stack).id()), at, velocity, shooter,
+                faction);
     }
 
     /** {@code direction}: jet axis for shaped charges. */

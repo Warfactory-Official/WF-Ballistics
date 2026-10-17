@@ -66,12 +66,16 @@ public final class AmmoClient {
             return v == null ? null : AmmoModels.cartridge(v.id());
         }
 
-        /** Nose up-right in the cell, centred, longest side {@link #FILL}. */
+        /** Nose up-right in the cell, centred, longest side {@link #FILL}; NONE: true size, nose +Z, centred. */
         @Override
         public void transform(ItemStack stack, ItemDisplayContext context, PoseStack pose) {
             AmmoVariant v = AmmoItems.variantOf(stack);
             Calibre c = Ammo.calibre(v.calibre());
             float l = length(c, Ammo.look(v.id()));
+            if (context == ItemDisplayContext.NONE) {
+                pose.translate(0, 0, -l / 2);
+                return;
+            }
             pose.mulPose(Axis.ZP.rotationDegrees(-45));
             pose.mulPose(Axis.XP.rotationDegrees(-90));
             pose.mulPose(Axis.ZP.rotationDegrees(30));

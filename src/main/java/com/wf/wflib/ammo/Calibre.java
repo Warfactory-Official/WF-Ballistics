@@ -53,7 +53,9 @@ public record Calibre(ResourceLocation id, String name, CalibreKind kind, float 
             case PISTOL -> bulletMm >= 12 ? Casing.LARGE : Casing.PISTOL;
             case RIFLE -> bulletMm >= 12 ? Casing.LARGE : Casing.RIFLE;
             case GRENADE -> material == CaseMaterial.NONE ? Casing.NONE : Casing.LARGE;
-            case AUTOCANNON, TANK, ROCKET -> Casing.NONE;
+            case AUTOCANNON, TANK -> material == CaseMaterial.NONE || material == CaseMaterial.COMBUSTIBLE
+                    ? Casing.NONE : Casing.CANNON;
+            case ROCKET -> Casing.NONE;
         };
     }
 

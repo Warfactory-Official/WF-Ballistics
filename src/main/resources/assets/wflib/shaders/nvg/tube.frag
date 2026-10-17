@@ -17,7 +17,6 @@ uniform float _nv_autogate;
 uniform float _nv_distortion;
 uniform float _nv_vignette;
 uniform float _nv_honeycomb;
-uniform int _nv_blemishes;
 uniform float _nv_persistence;
 uniform uint _nv_frame;
 
@@ -82,13 +81,6 @@ void main() {
     vec2 b = mod(gl_FragCoord.xy - 0.5 * cell, cell) - 0.5 * cell;
     float g = min(length(a), length(b)) / 5.0;
     y *= 1.0 - _nv_honeycomb * smoothstep(0.38, 0.5, g);
-
-    for (int i = 0; i < _nv_blemishes; i++) {
-        uvec3 s = uvec3(uint(tube) + 1u, uint(i) + 1u, 977u);
-        vec2 c = (vec2(_nv_rand(s), _nv_rand(s + uvec3(0u, 0u, 1u))) * 2.0 - 1.0) * 0.7;
-        float r = 0.008 + 0.02 * _nv_rand(s + uvec3(0u, 0u, 2u));
-        y *= smoothstep(r, r * 1.8, length(d - c));
-    }
 
     y *= 1.0 - _nv_vignette * rr * rr;
     y = clamp(y, 0.0, 1.5);

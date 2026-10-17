@@ -116,6 +116,7 @@ What the missile does on impact. Pick by registered id. Built-ins:
 | `recursive_frag`| splits into child missiles `splitDepth` times before the leaves detonate |
 | `gas`           | chemical cloud                                                    |
 | `fire`          | incendiary                                                        |
+| `thermobaric`   | STANDARD blast at size (default 6), entity reach x2, 5 s fireball |
 | `agent_orange` | defoliant spray, falls 1 block/tick over a disc (radius = blast size, default 12): `#wflib:defoliant_targets` (leaves, logs) -> air, column stops at any other solid or fluid. Claims respected; entities untouched |
 | `emp`           | drains/disables energy systems, no physical blast                 |
 | `interceptor`   | the neutralize-on-hit effect used by anti-missile interceptors    |
@@ -163,6 +164,7 @@ The climb speed off the pad. Defaults to `max(1.5, cruiseSpeed x 1.5)`, so a fas
 you setting anything. Override only when you want a climb rate decoupled from cruise (for example a slow-cruise
 drone that still needs a brisk launch). The ascent is a constant-speed gravity turn: it holds this speed while
 rotating from vertical toward the target, then hands to cruise.
+- Launch speed >= 0.5 x ascent speed => turn starts at the launch angle, never steeper. Flatter than 18° elevation => ATTACK at once.
 
 ### Acceleration and deceleration (`accel(acceleration, deceleration)`, blocks/tick^2)
 
@@ -224,7 +226,7 @@ Swap the behavior of a phase. Registered options:
 
 | phase  | id          | behavior                                                                 |
 |--------|-------------|--------------------------------------------------------------------------|
-| ASCEND | `ascent`    | default gravity-turn climb                                               |
+| ASCEND | `ascent`    | default gravity-turn climb; starts at launch-velocity angle               |
 | ASCEND | `intercept` | launch-clear along launch velocity (at rest => vertical), then homing (interceptors) |
 | ASCEND | `air_launch`| rail/pylon drop: 8 ticks motor cold on launch velocity, then ATTACK; launch < 0.3 b/t => ATTACK at once. Launcher sets velocity + owner; no owner hit during ASCEND |
 | CRUISE | `cruise`    | default: fly to target holding altitude, hand off at 30 blocks           |

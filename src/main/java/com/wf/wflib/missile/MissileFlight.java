@@ -41,6 +41,8 @@ public final class MissileFlight {
     private static final double BROACH_RECOVERY = 0.04;
     /** radians * model length per tick. */
     static final double TURN_AGILITY = 1.0;
+    /** Launch speed below this x ascent speed = carrier drift, not a launch heading. */
+    private static final double LEAN_MIN_SPEED_FRACTION = 0.5;
 
     private final MissileEntity missile;
 
@@ -77,6 +79,8 @@ public final class MissileFlight {
     double gRefSpeed = 1.0;
     @Nullable
     private Vec3 launchPos;
+    /** Radians from vertical of the launch velocity; 0 = none given (silo, pad) or drift below the cut. */
+    private double launchLean;
 
     public MissileFlight(MissileEntity missile) {
         this.missile = missile;
@@ -111,7 +115,16 @@ public final class MissileFlight {
     void noteLaunch() {
         if (this.launchPos == null) {
             this.launchPos = this.missile.position();
+            Vec3 v = this.missile.getDeltaMovement();
+            double speed = v.length();
+            this.launchLean = speed < this.getAscentSpeed() * LEAN_MIN_SPEED_FRACTION ? 0.0
+                    : Math.acos(Mth.clamp(v.y / speed, -1.0, 1.0));
         }
+    }
+
+    /** See {@link #launchLean}. */
+    public double getLaunchLean() {
+        return this.launchLean;
     }
 
     @Nullable
@@ -322,6 +335,10 @@ public final class MissileFlight {
         this.profile = FlightProfile.fromIds(this.ascentStageId, this.cruiseStageId, this.attackStageId);
     }
 
+    public FlightStage ascentStage() {
+        return this.profile.stage(Phase.ASCEND);
+    }
+
     public FlightStage attackStage() {
         return this.profile.stage(Phase.ATTACK);
     }
@@ -527,6 +544,7 @@ public final class MissileFlight {
             tag.putDouble("LaunchX", this.launchPos.x);
             tag.putDouble("LaunchY", this.launchPos.y);
             tag.putDouble("LaunchZ", this.launchPos.z);
+            tag.putDouble("LaunchLean", this.launchLean);
         }
         return tag;
     }
@@ -564,5 +582,6 @@ public final class MissileFlight {
         this.cruiseTargetY = tag.getDouble("CruiseTargetY");
         this.launchPos = tag.contains("LaunchX")
                 ? new Vec3(tag.getDouble("LaunchX"), tag.getDouble("LaunchY"), tag.getDouble("LaunchZ")) : null;
+        this.launchLean = tag.getDouble("LaunchLean");
     }
 }

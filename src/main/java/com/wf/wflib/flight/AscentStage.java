@@ -5,7 +5,11 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 
-/** Vertical boost that rotates toward the target as it nears cruise altitude: a constant-speed gravity turn. */
+/**
+ * Constant-speed gravity turn: leans toward the target as it nears cruise altitude, never steeper than the launch
+ * velocity (no launch velocity => vertical). Launched flatter than {@link #MAX_PITCHOVER_ANGLE} => straight to
+ * {@link MissileEntity.Phase#ATTACK}.
+ */
 public final class AscentStage implements FlightStage {
 
     public static final AscentStage INSTANCE = new AscentStage();
@@ -25,7 +29,7 @@ public final class AscentStage implements FlightStage {
         double band = Math.min(climbHeight, Math.max(MIN_PITCHOVER_BAND, climbHeight * PITCHOVER_FRACTION));
         double remaining = climbTo - missile.getY();
         double lean = 1.0 - Mth.clamp(remaining / band, 0.0, 1.0);
-        double theta = lean * MAX_PITCHOVER_ANGLE;
+        double theta = Math.max(lean * MAX_PITCHOVER_ANGLE, missile.flight().getLaunchLean());
         double horiz = speed * Math.sin(theta);
         return new Vec3(ctx.nx() * horiz, speed * Math.cos(theta), ctx.nz() * horiz);
     }
@@ -33,6 +37,9 @@ public final class AscentStage implements FlightStage {
     @Override
     @Nullable
     public MissileEntity.Phase next(MissileEntity missile, FlightContext ctx) {
+        if (missile.flight().getLaunchLean() >= MAX_PITCHOVER_ANGLE) {
+            return MissileEntity.Phase.ATTACK;
+        }
         return missile.getY() >= ctx.safeAltitude() ? MissileEntity.Phase.CRUISE : null;
     }
 

@@ -30,7 +30,7 @@ public abstract class Emitter extends AbstractTickableSoundInstance {
     private boolean ownVelocity;
     /** Read by the sound thread ({@link AudioMixer}). */
     volatile float vx, vy, vz;
-    volatile float low = 1, high = 1;
+    protected volatile float low = 1, high = 1;
 
     protected Emitter(SoundSpec spec, AudioCategory category, RandomSource random, boolean looping) {
         super(SoundEvent.createVariableRangeEvent(spec.event()), SoundSource.MASTER, random);
@@ -82,6 +82,11 @@ public abstract class Emitter extends AbstractTickableSoundInstance {
 
     public AudioCategory category() {
         return category;
+    }
+
+    /** Share of the cabin muffle applied, 0..1. */
+    protected float muffle() {
+        return category.muffle();
     }
 
     /** Owner gain on top of the spec's, 0..1. */

@@ -18,7 +18,7 @@ HUD, feed OSD, texture surfaces, probe and map painter draw on the GemRender `Ca
 | `UiSurfaces` | `request(key, layout, context, px, py, units, maxFps, clear)` per frame seen => texture id; redraw at frame start; freed 120 frames unrequested; premultiplied alpha |
 | `ScreenProjection` | world => GUI px of the last main view frame, no allocation |
 
-Scaling: `reference > 0` (default 270) => box = `reference` layout units tall at any resolution / GUI scale; 1 unit = 1 GUI px at 1080p auto scale. `0` / `absolute()` => host units (GUI px; surface units). Absolute inside relative: `Ui.absolute(child)` / JSON `absolute` subtree, `gu` / `px` units. Host coordinates (`ScreenProjection`, GUI-space aim points) => `ev.fromHost(..)`. Vanilla drawing under the canvas transform: `canvas.applyTo(pose)`.
+Scaling: `reference > 0` (default 270) => box = `reference / zoom` layout units tall at any resolution; 1 unit = 1 GUI px at 1080p auto scale. HUD zoom = GUI scale / auto GUI scale (scale 2 at 1080p => half size); surfaces zoom 1. `0` / `absolute()` => host units (GUI px; surface units). Absolute inside relative: `Ui.absolute(child)` / JSON `absolute` subtree, `gu` / `px` units. Host coordinates (`ScreenProjection`, GUI-space aim points) => `ev.fromHost(..)`. Vanilla drawing under the canvas transform: `canvas.applyTo(pose)`.
 
 Built-in subjects: `ui` (`width`, `height` (layout units), `scale` (host units per unit), `px` (framebuffer pixel in units), `partial`, `gui_scale`, `hide_gui`; `ui.time`, `ui.dt` = fixed slots, seconds), `player`, `camera`, `world` (`hour`, `minute`, `day_time`, `game_time`), `feed` (OSD), `tv`. Every subject: `<name>.present`. Inside `repeat`: item subject, `index`, `count`.
 

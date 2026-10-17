@@ -37,7 +37,7 @@ Unguided round (bullet, shell, bomb) with no entity: `round/Rounds`, one struct-
   weighted.
 - Wire (`rounds-6`; 1.4.0 `LOST` -> `DEFERRED`; 1.5.0 + pierces; 1.8.16 + ricochets): one `RoundPacket` per player
   per tick: spawns grouped by preset (+ shooter id, seq, both varint `+1`; ricochet count byte), ends (key, position as
-  doubles, `RoundEnd`), pierces (§29b), ricochets (§29e); audience 1024 blocks, whole level for chunk-loading rounds;
+  doubles, `RoundEnd`), pierces (§29b), ricochets (§29e); audience `ViewRange.blocks`, whole level for chunk-loading rounds;
   FakePlayers / connections without the channel skipped. Client (`round/client`) flies the same recurrence without
   collision; end before the round's first client tick => one replayed segment to the end point; landing re-sync
   updates the same `Round`. Tracer streaks (`TracerRenderer`), rigged models (`RoundsVisual`,
@@ -117,10 +117,10 @@ Non-chunk-loading round over unloaded ground (1.4.0; before: `LOST` at the first
   ungenerated ground evicted decoded terrain => later rounds waited on re-decodes, arrived late).
 - Below the build range by 64 (vanilla `checkBelowWorld`) and not rising => `EXPIRED` (>= 1.6.2; before: flew out its
   life, 2400 ticks for MineAssault rounds).
-- Unwatched fast-forward: segment over unloaded columns, no player within 1024 of the round and no viewer (player sent
+- Unwatched fast-forward: segment over unloaded columns, no player within `ViewRange.blocks` of the round and no viewer (player sent
   its spawn or a resync) => up to 16 steps/tick, each while the next segment stays over unloaded columns. Watched => 1
   step/tick (client copy flies 1/tick).
-- Resync/pierce/end packets: audience now + viewers still in the level (a round flown past 1024 still ends on the
+- Resync/pierce/end packets: audience now + viewers still in the level (a round flown past `ViewRange.blocks` still ends on the
   client that drew it). Queue full => lookup waits, no stat; region-file existence cached per region.
 - Block hit in an unloaded chunk: round ends `BLOCK` there; `DeferredImpact` stored (`DeferredImpacts`, saved with the
   level, 4096 max, overflow dropped + warned), applied at the first rounds resolve after the chunk loads (never in
@@ -347,12 +347,12 @@ Calibre + variant registry; startup only (code, mod construction), no datapack.
   component `wflib:ammo_variant` (RL; unknown id => decode error); default = calibre's first variant; variant of
   another calibre on a stack => item's default. Name `calibre.name + variant.name`. Stack by kind: pistol/rifle 64,
   shotshell 32, grenade/autocannon 16, tank/rocket 4.
-- Catalogue (`AmmoCatalogue`, source `wflib`, id `wflib:<calibre>/<role>`): 49 calibres. Small arms (30, 9x19 ..
+- Catalogue (`AmmoCatalogue`, source `wflib`, id `wflib:<calibre>/<role>`). Small arms (30, 9x19 ..
   14.5x114 metric ids, e.g. `.50 BMG` = `12.7x99`): `ball` (default) + `tracer` / `ap` / `subsonic` where fielded;
-  `12ga` buck (9 pellets) / slug; `40x46`, `40x53` he; `76mm_discharger` frag (vehicle discharger, gravity 28);
+  `12ga` buck (9 pellets) / slug; `40x46`, `40x53` he; `vog25`, `30x29` (VOG-17M) he; `76mm_discharger` frag (vehicle discharger, gravity 28);
   `20x102` he/ap/tracer, `23x115`, `23x152b`, `25x137`, `27x145b`, `30x165`, `30x150b`, `30x173` he/ap; `105mm`,
-  `120mm`, `125mm` apfsds/heat/he; `81mm` he, `127mm_naval` he, `406mm_naval` he/ap (kind `tank`, linear drag only:
-  CombinedAssault solver exact); `rpg7` heat/frag (`RocketEntity`).
+  `120mm`, `125mm` apfsds/heat/he; `88x571r` he/ap; `60mm`, `81mm` he, `127mm_naval` he, `406mm_naval` he/ap (kind `tank`, linear drag only:
+  CombinedAssault solver exact); `rpg7` heat/frag/thermobaric, `73mm_spg9` heat/frag (`RocketEntity`).
 - Tank `damagePerKJ`: apfsds 0.3, heat 0.06, he 0.03 (CombinedAssault hull balance: 125 APFSDS ~2100). Flight = MineAssault converter calibre table
   (`modular-archive-gltf/convert_mineassault.py`; its `wflib_ammo.py` mirrors this file, `tools/test_wflib_ammo.py`
   checks); `damagePerKJ` = median over converted packs; `blockPen` §29b anchors else `31.58 (E/mm)^0.8517`, AP x1.5,
@@ -412,6 +412,22 @@ Shared by WFLib, CombinedAssault, MineAssault. Reference: mcww3 `ww3/client/soun
 - Filter: one EFX low-pass object; params copied at `AL_DIRECT_FILTER` attach => reuse safe. Applied at channel start (`PlaySoundSourceEvent`, sound thread) and after `SoundEngine.tickNonPaused`; unity => `AL_FILTER_NULL`.
 - Volume: per-category config + Sound options sliders (`MixinSoundOptionsScreen`); vanilla category sliders do not reach wflib sounds.
 - Gap: no occlusion, no reverb, no `_in` interior assets (cabin = filtered exterior).
+
+### Radio (`radio/`)
+
+| piece | side | |
+|---|---|---|
+| `RadioCarrier` | both | entity with a set: `radioVoice()` (null = none), synced `radioStation()` ("" = off), `tuneRadio` |
+| `RadioTunePacket` | server | sender aboard (same root vehicle) or holding a PDA linked to it (not classified); id parses or "" |
+| `OggOpus` | both | Ogg Opus in memory: page index, seek (TOC durations, 80 ms preroll), Concentus decode, mono downmix |
+| `RadioCatalog` | client | reload: `assets/<ns>/radio/<station>/**.opus` -> station `<ns>:<station>`, tracks path order; name lang `radio.<ns>.<station>` else folder |
+| `RadioClient` / `RadioEmitter` | client | one streaming `Emitter` per carrier in range; `getStream` -> `StationStream` (tracks looped, next prefetched) |
+
+- Playhead = `gameTime x 2400 mod loop` (48 kHz): every listener hears the same moment; restart on station / voice / aboard / reload change.
+- `RadioVoice`: CABIN range 24, off board x0.35 + hull low-pass (LF 0.8, HF 0.2); SPEAKER range 96, x1. Aboard: stereo, muffle 0; off board: mono, category `RADIO` (muffle 1).
+- `wflib:radio` sounds.json event (stream, `sounds/radio/carrier.ogg` placeholder) only routes to `getStream`.
+- Concentus 1.0.2 jar-in-jar; dev runs `additionalRuntimeClasspath`.
+- Gap: drift vs game time under server lag (playhead read once per source start); no live input.
 
 ## 31b. Visible projectiles
 

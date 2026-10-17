@@ -18,6 +18,7 @@ import com.wf.wflib.drone.dispatch.DroneDispatcher;
 import com.wf.wflib.drone.dispatch.DroneDispatchers;
 import com.wf.wflib.item.ModDataComponents;
 import com.wf.wflib.pda.Pda;
+import com.wf.wflib.radio.RadioCarrier;
 import com.wf.wflib.stream.HostWakeup;
 import com.wf.wflib.stream.HostWakeupData;
 import net.minecraft.network.chat.Component;
@@ -153,12 +154,14 @@ public final class PdaDrones {
                 remote != null && remote.electric(),
                 spec == null ? 0.0f : Datalink.quality(level, spec, operator, e, e.position()),
                 remote == null ? List.of() : remote.cells(), remote == null ? List.of() : remote.ammo(),
-                (int) distance, refusal == null ? "" : refusal, offers);
+                (int) distance, refusal == null ? "" : refusal, offers,
+                e instanceof RadioCarrier rc && rc.radioVoice() != null,
+                e instanceof RadioCarrier rc ? rc.radioStation() : "");
     }
 
     private static DroneStatusPacket.Entry offline(UUID id, String name, String status, String refusal) {
         return new DroneStatusPacket.Entry(id, 0, name, status, "", 0.0f, false, 0.0f, List.of(), List.of(), -1, refusal,
-                List.of());
+                List.of(), false, "");
     }
 
     @Nullable

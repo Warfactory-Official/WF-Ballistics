@@ -2,8 +2,12 @@ package com.wf.wflib.armor;
 
 import com.wf.wflib.WFLib;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ArmorItem;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.EnumSet;
+import java.util.Set;
 
 /**
  * Authored piece (garment or insert); same preset shape as this mod's missile/mine presets.
@@ -13,14 +17,21 @@ import org.jetbrains.annotations.Nullable;
  * @param type  the slot this goes on, or null for an insert
  * @param model    a rigged glTF for GemRender to draw, or null to render as a vanilla armour texture
  * @param nvgMount accepts a {@link com.wf.wflib.nvg.NvgItem}; drawn at the model's {@code socket_nvg}
+ * @param occupies other armour slots a suit fills: kept empty while worn, protected by this piece
  */
 public record ArmorPreset(ResourceLocation id, @Nullable ArmorItem.Type type, int durability,
-                          ArmorSpec spec, @Nullable ResourceLocation model, boolean nvgMount) {
+                          ArmorSpec spec, @Nullable ResourceLocation model, boolean nvgMount,
+                          Set<EquipmentSlot> occupies) {
 
     public ArmorPreset {
         if (durability <= 0) {
             throw new IllegalArgumentException("an armour piece needs durability: " + id);
         }
+        if (!occupies.isEmpty() && (type == null || occupies.contains(type.getSlot())
+                || !occupies.stream().allMatch(s -> s.getType() == EquipmentSlot.Type.HUMANOID_ARMOR))) {
+            throw new IllegalArgumentException("occupies = other armour slots of a garment: " + id + " " + occupies);
+        }
+        occupies = occupies.isEmpty() ? Set.of() : java.util.Collections.unmodifiableSet(EnumSet.copyOf(occupies));
     }
 
     public boolean isInsert() {
@@ -50,6 +61,7 @@ public record ArmorPreset(ResourceLocation id, @Nullable ArmorItem.Type type, in
         private final ArmorSpec.Builder spec;
         private ResourceLocation model;
         private boolean nvgMount;
+        private final Set<EquipmentSlot> occupies = EnumSet.noneOf(EquipmentSlot.class);
 
         private Builder(String path, @Nullable ArmorItem.Type type, int durability) {
             this.id = rl(path);
@@ -84,8 +96,13 @@ public record ArmorPreset(ResourceLocation id, @Nullable ArmorItem.Type type, in
             return this;
         }
 
+        public Builder occupies(EquipmentSlot... slots) {
+            occupies.addAll(java.util.List.of(slots));
+            return this;
+        }
+
         public ArmorPreset build() {
-            return new ArmorPreset(id, type, durability, spec.build(), model, nvgMount);
+            return new ArmorPreset(id, type, durability, spec.build(), model, nvgMount, occupies);
         }
     }
 }

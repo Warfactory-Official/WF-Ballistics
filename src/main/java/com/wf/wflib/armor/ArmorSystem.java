@@ -112,7 +112,7 @@ public final class ArmorSystem {
             return ArmorResult.untouched(ProtectionType.IMPACT, amount);
         }
         List<WornArmor> worn = new ArrayList<>(1);
-        WornArmor piece = ArmorStacks.worn(entity, slot, 1.0D);
+        WornArmor piece = ArmorStacks.worn(entity, ArmorStacks.coveringSlot(entity, slot), 1.0D);
         if (piece != null) {
             worn.add(piece);
         }
@@ -136,7 +136,13 @@ public final class ArmorSystem {
                                            float amount, boolean applyWear) {
         List<WornArmor> worn = new ArrayList<>(SLOTS.length);
         for (int i = 0; i < SLOTS.length; i++) {
-            WornArmor piece = ArmorStacks.worn(entity, SLOTS[i], COVERAGE[i]);
+            double coverage = 0.0D;
+            for (int j = 0; j < SLOTS.length; j++) {
+                if (ArmorStacks.coveringSlot(entity, SLOTS[j]) == SLOTS[i]) {
+                    coverage += COVERAGE[j];
+                }
+            }
+            WornArmor piece = ArmorStacks.worn(entity, SLOTS[i], coverage);
             if (piece != null) {
                 worn.add(piece);
             }

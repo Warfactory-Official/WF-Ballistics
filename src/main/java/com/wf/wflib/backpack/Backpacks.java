@@ -81,7 +81,7 @@ public final class Backpacks {
 
     /** Unit mass of a stack (kg x count); wfweight bridge installs its own. */
     public static volatile ToDoubleFunction<ItemStack> weigher = s -> 0;
-    /** Client: inventory panel shown => owner's backpack slots active (creative tabs never). */
+    /** Client: inventory panel shown => owner's backpack slots active. */
     public static volatile BooleanSupplier panelShown = () -> false;
 
     private static final Map<Player, BackpackContainer> CONTAINERS = new WeakHashMap<>();

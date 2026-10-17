@@ -234,6 +234,11 @@ public final class DronesApp implements PdaApp {
         PacketDistributor.sendToServer(new DroneDispatchPacket(KINDS[kind].id(), x, y, z, drone));
     }
 
+    /** Linked bodies, last server status. */
+    static List<Row> rows() {
+        return ROWS;
+    }
+
     private static Row current() {
         return selected < ROWS.size() ? ROWS.get(selected) : null;
     }

@@ -1,6 +1,7 @@
 package com.wf.wflib.pda.drone;
 
 import com.wf.wflib.WFLib;
+import com.wf.wflib.radio.RadioTunePacket;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
@@ -39,10 +40,12 @@ public record DroneStatusPacket(List<Entry> drones, Optional<Pad> pad) implement
      * @param distance blocks from the player; -1 = not loaded (nothing below status)
      * @param refusal empty = CONNECT allowed, else why not
      * @param offers {@code DroneTask.Kind} ids this body flies on its own; empty = manual only
+     * @param radio carries a {@code RadioCarrier} set now
+     * @param station tuned station; "" = off
      */
     public record Entry(UUID id, int feedId, String name, String status, String task, float fuel, boolean electric,
                         float link, List<RemoteBody.Cell> cells, List<String> ammo, int distance, String refusal,
-                        List<String> offers) {
+                        List<String> offers, boolean radio, String station) {
         private static final StreamCodec<FriendlyByteBuf, RemoteBody.Cell> CELL = StreamCodec.composite(
                 ByteBufCodecs.stringUtf8(24), RemoteBody.Cell::label, ByteBufCodecs.FLOAT, RemoteBody.Cell::ratio,
                 RemoteBody.Cell::new);
@@ -60,10 +63,12 @@ public record DroneStatusPacket(List<Entry> drones, Optional<Pad> pad) implement
             buf.writeVarInt(e.distance);
             buf.writeUtf(e.refusal, 64);
             KINDS.encode(buf, e.offers);
+            buf.writeBoolean(e.radio);
+            buf.writeUtf(e.station, RadioTunePacket.MAX_STATION);
         }, buf -> new Entry(buf.readUUID(), buf.readVarInt(), buf.readUtf(64), buf.readUtf(24), buf.readUtf(96),
                 buf.readFloat(), buf.readBoolean(), buf.readFloat(), CELL.apply(ByteBufCodecs.list(24)).decode(buf),
                 ByteBufCodecs.stringUtf8(64).apply(ByteBufCodecs.list(8)).decode(buf), buf.readVarInt(),
-                buf.readUtf(64), KINDS.decode(buf)));
+                buf.readUtf(64), KINDS.decode(buf), buf.readBoolean(), buf.readUtf(RadioTunePacket.MAX_STATION)));
 
         public boolean loaded() {
             return distance >= 0;

@@ -21,7 +21,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * Worn backpack slots after the vanilla 46 ({@link Backpacks#FIRST_SLOT}). Shift-click: backpack -> inventory;
- * inventory -> backpack first unless armour / creative (creative slot packets stop at 45).
+ * inventory -> backpack first unless armour.
  */
 @Mixin(InventoryMenu.class)
 public abstract class MixinInventoryMenu extends AbstractContainerMenu {
@@ -44,7 +44,7 @@ public abstract class MixinInventoryMenu extends AbstractContainerMenu {
     @Inject(method = "quickMoveStack", at = @At("HEAD"), cancellable = true)
     private void wflib$backpackQuickMove(Player player, int index, CallbackInfoReturnable<ItemStack> cir) {
         Slot slot = slots.get(index);
-        if (!slot.hasItem() || player.isCreative()) {
+        if (!slot.hasItem()) {
             return;
         }
         ItemStack stack = slot.getItem();

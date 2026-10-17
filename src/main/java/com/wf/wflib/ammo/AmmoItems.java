@@ -1,7 +1,5 @@
 package com.wf.wflib.ammo;
 
-import com.mojang.serialization.Codec;
-import com.mojang.serialization.DataResult;
 import com.wf.wflib.WFLib;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
@@ -23,13 +21,10 @@ public final class AmmoItems {
     public static final DeferredRegister<DataComponentType<?>> COMPONENTS =
             DeferredRegister.create(Registries.DATA_COMPONENT_TYPE, WFLib.MODID);
 
-    /** Unknown variant id => decode error. */
-    public static final Codec<ResourceLocation> VARIANT_CODEC = ResourceLocation.CODEC.validate(id ->
-            Ammo.variant(id) != null ? DataResult.success(id) : DataResult.error(() -> "unknown ammo variant " + id));
 
     public static final DeferredHolder<DataComponentType<?>, DataComponentType<ResourceLocation>> VARIANT =
             COMPONENTS.register("ammo_variant", () -> DataComponentType.<ResourceLocation>builder()
-                    .persistent(VARIANT_CODEC)
+                    .persistent(AmmoCodecs.VARIANT)
                     .networkSynchronized(ResourceLocation.STREAM_CODEC)
                     .cacheEncoding()
                     .build());

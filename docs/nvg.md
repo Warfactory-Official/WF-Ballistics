@@ -44,7 +44,6 @@ Illuminators (`NvgIllumination`): every player with goggle down + `ir` (brow spo
 | `abc_rate` | brightness control easing, 1/s; target mean 0.45 |
 | `distortion`, `vignette` | edge warp `1 + d*r^2`, falloff `1 - v*r^4` |
 | `honeycomb` | MCP hex pattern strength |
-| `blemishes` | dark spots per tube (seeded) |
 | `phosphor` | rgb (P43 green, P45 white) |
 | `persistence` | `max(now, prev * p)` |
 | `spectral` | linear r, g, b, IR response |

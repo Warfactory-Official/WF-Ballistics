@@ -40,6 +40,7 @@ public class WFLib {
         com.wf.wflib.grenade.Grenades.register(modEventBus);
         com.wf.wflib.item.ModDataComponents.register(modEventBus);
         com.wf.wflib.ammo.AmmoItems.register(modEventBus);
+        com.wf.wflib.magazine.MagazineItems.register(modEventBus);
         com.wf.wflib.armor.ArmorComponents.register(modEventBus);
         com.wf.wflib.nvg.NvgRegistry.register(modEventBus);
         com.wf.wflib.armor.ArmorMaterials.register(modEventBus);

@@ -1,0 +1,6 @@
+{
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "wflib:item/ammo_can_12_7x99"
+  }
+}

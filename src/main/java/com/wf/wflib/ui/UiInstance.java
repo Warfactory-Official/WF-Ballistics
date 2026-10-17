@@ -60,8 +60,14 @@ public final class UiInstance {
 
     public void render(Canvas canvas, GuiGraphics graphics, float x, float y, float width, float height,
                        float partialTick) {
+        render(canvas, graphics, x, y, width, height, partialTick, 1);
+    }
+
+    /** {@code zoom}: multiplier on a relative layout's unit size; absolute layouts ignore it. */
+    public void render(Canvas canvas, GuiGraphics graphics, float x, float y, float width, float height,
+                       float partialTick, float zoom) {
         float reference = plan.layout.reference();
-        float scale = reference > 0 ? height / reference : 1;
+        float scale = reference > 0 ? height / reference * zoom : 1;
         if (!(scale > 0)) {
             return;
         }

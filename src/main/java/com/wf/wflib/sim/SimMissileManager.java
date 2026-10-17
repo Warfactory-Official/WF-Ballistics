@@ -259,7 +259,7 @@ public final class SimMissileManager implements SimKind<SimMissile> {
             }
         }
         for (ServerPlayer p : level.players()) {
-            double t = RayMath.segmentSphereEntry(p0, p1, p.position(), MissileSimConfig.PLAYER_LISTENER_RANGE);
+            double t = RayMath.segmentSphereEntry(p0, p1, p.position(), com.wf.wflib.config.ViewRange.blocks);
             if (!Double.isNaN(t) && t < bestT) {
                 bestT = t;
             }
@@ -287,7 +287,7 @@ public final class SimMissileManager implements SimKind<SimMissile> {
             }
         }
         for (ServerPlayer p : level.players()) {
-            double r = MissileSimConfig.PLAYER_LISTENER_RANGE + MissileSimConfig.LISTENER_SPAWN_MARGIN;
+            double r = com.wf.wflib.config.ViewRange.blocks + MissileSimConfig.LISTENER_SPAWN_MARGIN;
             if (p.position().distanceToSqr(pos) <= r * r) {
                 return true;
             }

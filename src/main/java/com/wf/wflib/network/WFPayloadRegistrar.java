@@ -55,6 +55,8 @@ public final class WFPayloadRegistrar {
         r.playToClient(SurveyOpenPacket.TYPE, SurveyOpenPacket.STREAM_CODEC,
                 (pkt, ctx) -> ctx.enqueueWork(() -> ClientPacketHandler.handleSurveyOpen(pkt)));
 
+        r.playToServer(com.wf.wflib.radio.RadioTunePacket.TYPE, com.wf.wflib.radio.RadioTunePacket.STREAM_CODEC,
+                (pkt, ctx) -> pkt.handle(ctx));
         r.playToServer(com.wf.wflib.nvg.NvgActionPacket.TYPE, com.wf.wflib.nvg.NvgActionPacket.STREAM_CODEC,
                 (pkt, ctx) -> pkt.handle(ctx));
         r.playToServer(SurveyRequestPacket.TYPE, SurveyRequestPacket.STREAM_CODEC,

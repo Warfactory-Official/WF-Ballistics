@@ -5,8 +5,10 @@
   "compatibilityLevel": "JAVA_21",
   "plugin": "com.wf.wflib.mixin.WFMixinPlugin",
   "mixins": [
+    "MixinArmorSlot",
     "MixinEntity",
     "MixinInventoryMenu",
+    "MixinServerGamePacketListenerImpl",
     "MixinLevelChunk",
     "MixinLivingEntity",
     "MixinMob",

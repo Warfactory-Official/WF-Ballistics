@@ -52,6 +52,13 @@ public final class ArmorPieceClient {
         return model == null ? VANILLA : BY_MODEL.computeIfAbsent(model, m -> new GemRenderArmor(m, preset.nvgMount()));
     }
 
+    /** Worn piece's glTF; null = no glTF piece or not loaded yet. */
+    @org.jetbrains.annotations.Nullable
+    public static com.wf.gemrender.gltf.GemRenderGltfModel model(ItemStack stack) {
+        return stack.getItem() instanceof ArmorPieceItem piece && piece.preset().model() != null
+                && of(piece.preset()) instanceof GemRenderArmor armor ? armor.model.get() : null;
+    }
+
     /** After vanilla's skin-customisation visibility: overlays under worn glTF pieces hidden. */
     @SubscribeEvent
     public static void hideCovered(RenderPlayerEvent.Pre e) {

@@ -1,6 +1,7 @@
 package com.wf.wflib.armor;
 
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ArmorItem;
 
 import java.util.Map;
@@ -21,13 +22,16 @@ final class MwTestArmor {
         add(presets, "mw_uniform", ArmorItem.Type.CHESTPLATE,
                 "armed_forces_of_the_russian_federation/armor/russianuniform");
         add(presets, "mw_exo", ArmorItem.Type.CHESTPLATE, "kanonarmor__kanonarmor/armor/exokarkas");
+        add(presets, "mw_ghillie", ArmorItem.Type.CHESTPLATE, "kanonarmor__kanonarmor/armor/ghillie",
+                EquipmentSlot.HEAD, EquipmentSlot.LEGS);
     }
 
     private static void add(Map<ResourceLocation, ArmorPreset> presets, String path, ArmorItem.Type type,
-                            String model) {
+                            String model, EquipmentSlot... occupies) {
         ArmorPreset preset = ArmorPreset.piece(path, type, 100)
                 .row(ProtectionType.IMPACT, 0.0D, 0.05D, 0.0D, 0.0D)
                 .model(ResourceLocation.fromNamespaceAndPath("mwarchive", "models/" + model + ".gltf"))
+                .occupies(occupies)
                 .build();
         presets.put(preset.id(), preset);
     }

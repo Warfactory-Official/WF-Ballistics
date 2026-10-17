@@ -28,7 +28,7 @@ import java.util.Map;
  */
 public record NvgOptics(List<Tube> tubes, float resolution, float gainMax, float snr, float ebi, float halo,
                         boolean autogate, float abcRate, float distortion, float vignette, float honeycomb,
-                        int blemishes, List<Float> phosphor, float persistence, List<Float> spectral) {
+                        List<Float> phosphor, float persistence, List<Float> spectral) {
 
     public record Tube(float x, float y, float r) {
         static final Codec<Tube> CODEC = RecordCodecBuilder.create(i -> i.group(
@@ -52,7 +52,6 @@ public record NvgOptics(List<Tube> tubes, float resolution, float gainMax, float
             Codec.floatRange(-1.0f, 1.0f).fieldOf("distortion").forGetter(NvgOptics::distortion),
             Codec.floatRange(0.0f, 1.0f).fieldOf("vignette").forGetter(NvgOptics::vignette),
             Codec.floatRange(0.0f, 1.0f).fieldOf("honeycomb").forGetter(NvgOptics::honeycomb),
-            Codec.intRange(0, 16).fieldOf("blemishes").forGetter(NvgOptics::blemishes),
             Codec.FLOAT.listOf(3, 3).fieldOf("phosphor").forGetter(NvgOptics::phosphor),
             Codec.floatRange(0.0f, 0.99f).fieldOf("persistence").forGetter(NvgOptics::persistence),
             Codec.FLOAT.listOf(4, 4).fieldOf("spectral").forGetter(NvgOptics::spectral)

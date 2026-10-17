@@ -1,8 +1,11 @@
 package com.wf.wflib.ammo;
 
-/** Spent case a gun ejects. */
+/**
+ * Spent case a gun ejects; model {@code wflib:models/casing/<key>.gltf} ({@code tools/casings.py}). {@code CANNON}:
+ * 88x571R shape, drawn scaled by case length.
+ */
 public enum Casing {
-    NONE("none"), PISTOL("pistol"), RIFLE("rifle"), LARGE("large"), SHOTSHELL("shotshell");
+    NONE("none"), PISTOL("pistol"), RIFLE("rifle"), LARGE("large"), SHOTSHELL("shotshell"), CANNON("cannon");
 
     public final String key;
 
@@ -16,6 +19,6 @@ public enum Casing {
                 return c;
             }
         }
-        throw new IllegalArgumentException("casing '" + key + "' not one of none, pistol, rifle, large, shotshell");
+        throw new IllegalArgumentException("casing '" + key + "' not one of none, pistol, rifle, large, shotshell, cannon");
     }
 }

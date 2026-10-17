@@ -28,6 +28,7 @@ public final class AmmoCatalogue {
     private static final ResourceLocation STANDARD = rl("standard");
     private static final ResourceLocation SHAPED = rl("shaped_charge");
     private static final ResourceLocation FRAG = rl("fragmentation");
+    private static final ResourceLocation THERMOBARIC = rl("thermobaric");
 
     private AmmoCatalogue() {
     }
@@ -192,6 +193,9 @@ public final class AmmoCatalogue {
         Cal vog = cal("vog25", "VOG-25 grenade", CalibreKind.GRENADE, 40f, 1f, 40f, 40f, 40f, 102f, 102f,
                 CaseMaterial.NONE, 250f, 7.37f);
         add(vog.variant("he", "VOG-25", 250, 76.5f, 0.40f).explosive(FRAG, 2f));
+        Cal vog17 = cal("30x29", "30x29mm grenade", CalibreKind.GRENADE, 30f, 29f, 30f, 30f, 30f, 132f, 113f,
+                CaseMaterial.STEEL, 350f, 7.37f);
+        add(vog17.variant("he", "VOG-17M", 280, 185, 0.40f).explosive(FRAG, 2f));
 
         autocannon(cal("20x102", "20x102mm", CalibreKind.AUTOCANNON, 20f, 102f, 29.95f, 21.7f, 29.95f, 166f, 75f,
                 br, 258f, 0.5f), "M56 HEI", 102, 1030, 0.8f, "M53 API", 100, 1030, 25, "M220 TP-T");
@@ -225,6 +229,15 @@ public final class AmmoCatalogue {
         Cal m81 = cal("81mm", "81mm mortar", CalibreKind.TANK, 81f, 1f, 81f, 81f, 81f, 500f, 500f,
                 CaseMaterial.NONE, 4100f, 5.4f);
         add(m81.variant("he", "M821 HE", 4100, 120, 0f).drag(0.01f).explosive(STANDARD, 5f).tip(TIP_YELLOW));
+        Cal m60 = cal("60mm", "60mm mortar", CalibreKind.TANK, 60f, 1f, 60f, 60f, 60f, 350f, 350f,
+                CaseMaterial.NONE, 1720f, 3.3f);
+        add(m60.variant("he", "M720 HE", 1720, 237, 0f).drag(0.01f).explosive(STANDARD, 4f).tip(TIP_YELLOW));
+        // Flak 18/36/37: Sprgr.Patr. L/4.5 (time fuze not modelled: contact HE), PzGr.Patr. 39 APCBC.
+        Cal f88 = cal("88x571r", "8.8 cm Flak", CalibreKind.TANK, 88f, 571f, 107f, 90f, 112f, 931f, 380f, br, 14700f,
+                0.3f);
+        add(f88.variant("he", "Sprgr.Patr. L/4.5", 9400, 820, 0.30f).damagePerKJ(0.03f).explosive(STANDARD, 4f)
+                .tip(TIP_YELLOW));
+        add(f88.variant("ap", "PzGr.Patr. 39", 10200, 773, 0.28f).armorPen(160).blockPen(160).tip(TIP_BLACK));
         Cal n127 = cal("127mm_naval", "5-inch/54 naval", CalibreKind.TANK, 127f, 835f, 150f, 128f, 160f, 1500f,
                 660f, br, 47000f, 0.105f);
         add(n127.variant("he", "Mk 64 HE-PD", 31750, 600, 0f).drag(0.005f).explosive(STANDARD, 5f).tip(TIP_YELLOW));
@@ -244,10 +257,23 @@ public final class AmmoCatalogue {
         add(AmmoVariant.builder(rl("rpg7/frag"), rpg.c().id(), "OG-7V").flight(152, 1.35f, quadDrag(40f, 1350, 0.30f))
                 .damagePerKJ(rpg.dpk()).explosive(FRAG, 3f)
                 .look(ProjectileLook.Override.NONE.withShape(ProjectileLook.Shape.ROCKET, 590f, 40f)));
+        // 4.5 kg complete round; motor = PG-7V thrust / 4.1 kg; Cd estimated.
+        add(AmmoVariant.builder(rl("rpg7/thermobaric"), rpg.c().id(), "TBG-7V")
+                .flight(110, 4.1f, quadDrag(105f, 4100, 0.50f)).damagePerKJ(rpg.dpk()).explosive(THERMOBARIC, 5f)
+                .motor(230, 0.45f)
+                .look(ProjectileLook.Override.NONE.withShape(ProjectileLook.Shape.ROCKET, 1100f, 105f)));
         Cal pzf = cal("pzf3", "Panzerfaust 3 rocket", CalibreKind.ROCKET, 110f, 1f, 60f, 60f, 60f, 1200f, 1200f,
                 CaseMaterial.NONE, 3900f, 0.3f);
         // 160 m/s launch, 243 peak; burn not published (0.3 s).
         add(pzf.variant("heat", "PzF3 HEAT", 3900, 160, 0.40f).explosive(SHAPED, 3f).armorPen(700).motor(300, 0.3f));
+        // SPG-9 recoilless: booster charge in a combustible case; 435 m/s launch, sustainer to ~700 (PG-9V).
+        Cal spg9 = cal("73mm_spg9", "SPG-9 73 mm", CalibreKind.ROCKET, 73f, 1f, 73f, 73f, 73f, 1120f, 650f,
+                CaseMaterial.COMBUSTIBLE, 4400f, 0.315f);
+        add(spg9.variant("heat", "PG-9V", 2600, 435, 0.30f).explosive(SHAPED, 2.5f).armorPen(300).motor(600, 0.45f));
+        // No sustainer; 316 m/s, 4.5 km max.
+        add(AmmoVariant.builder(rl("73mm_spg9/frag"), spg9.c().id(), "OG-9V")
+                .flight(316, 3.7f, quadDrag(73f, 3700, 0.30f)).damagePerKJ(spg9.dpk()).explosive(FRAG, 4f)
+                .look(ProjectileLook.Override.NONE.withShape(ProjectileLook.Shape.ROCKET, 700f, 73f)));
     }
 
     private static void autocannon(Cal c, String he, float heG, float heMs, float blast, String ap, float apG,

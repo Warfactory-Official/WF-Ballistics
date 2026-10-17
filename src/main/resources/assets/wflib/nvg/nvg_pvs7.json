@@ -21,7 +21,6 @@
   "distortion": 0.08,
   "vignette": 0.45,
   "honeycomb": 0.25,
-  "blemishes": 3,
   "phosphor": [
     0.35,
     1.0,

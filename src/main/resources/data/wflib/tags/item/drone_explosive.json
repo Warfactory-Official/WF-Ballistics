@@ -1,0 +1,9 @@
+{
+  "values": [
+    "#c:ammo/rockets/explosive",
+    "wflib:cartridge_60mm",
+    "wflib:cartridge_81mm",
+    "wflib:cartridge_vog25",
+    "wflib:cartridge_30x29"
+  ]
+}

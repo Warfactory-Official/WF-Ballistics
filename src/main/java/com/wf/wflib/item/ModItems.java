@@ -68,6 +68,10 @@ public final class ModItems {
     public static final DeferredHolder<Item, Item> DECOY_LAUNCHER =
             ITEMS.register("decoy_launcher", () -> new DecoyLauncherItem(new Item.Properties().stacksTo(1)));
 
+    /** Strapped to a carrier: its radio plays as {@link com.wf.wflib.radio.RadioVoice#SPEAKER}. */
+    public static final DeferredHolder<Item, Item> LOUDSPEAKER =
+            ITEMS.register("loudspeaker", () -> new Item(new Item.Properties().stacksTo(1)));
+
     /** Links and fires mining charges. See {@link com.wf.wflib.demolition.DetonatorItem}. */
     public static final DeferredHolder<Item, Item> DETONATOR =
             ITEMS.register("detonator", () -> new com.wf.wflib.demolition.DetonatorItem(

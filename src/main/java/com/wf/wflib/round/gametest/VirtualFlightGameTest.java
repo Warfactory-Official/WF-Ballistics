@@ -374,7 +374,7 @@ public class VirtualFlightGameTest {
                     RoundNetwork.End end = packets.stream().flatMap(p -> p.ends().stream())
                             .filter(e -> e.key() == key[0]).findFirst().orElse(null);
                     double gone = end == null ? Double.NaN : Math.abs(end.x() - watcher.getX());
-                    helper.assertTrue(spawned && end != null && end.reason() == RoundEnd.EXPIRED && gone > 1024.0,
+                    helper.assertTrue(spawned && end != null && end.reason() == RoundEnd.EXPIRED && gone > com.wf.wflib.config.ViewRange.blocks,
                             "watcher: spawn " + spawned + ", end " + end + " at " + gone + " blocks");
                 })
                 .thenSucceed();

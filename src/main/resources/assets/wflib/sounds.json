@@ -1,4 +1,12 @@
 {
+  "radio": {
+    "sounds": [
+      {
+        "name": "wflib:radio/carrier",
+        "stream": true
+      }
+    ]
+  },
   "weapon.nuclear_explosion": {
     "sounds": [
       {

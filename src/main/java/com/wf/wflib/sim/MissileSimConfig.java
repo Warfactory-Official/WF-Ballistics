@@ -38,11 +38,6 @@ public final class MissileSimConfig {
 
     // --- Listeners ---
     /**
-     * Radius around each online player within which a missile stays a real, tracked, rendered entity (a passing
-     * simulated missile rematerializes here).
-     */
-    public static double PLAYER_LISTENER_RANGE = 512.0;
-    /**
      * Default range of the debug listener block.
      */
     public static final double DEBUG_LISTENER_RANGE = 512.0;

@@ -5,9 +5,9 @@ import net.minecraft.resources.ResourceLocation;
 /**
  * A composed screen: {@code root} is drawn into the host's box (the whole GUI for the HUD).
  *
- * <p>Scaling: {@code reference > 0} => the box is {@code reference} layout units tall whatever its size in
- * host units (GUI pixels for the HUD), so the layout keeps its proportion of the screen at any
- * resolution and GUI scale; {@code ui.width} / {@code ui.height} read layout units. {@code reference = 0}
+ * <p>Scaling: {@code reference > 0} => the box is {@code reference / zoom} layout units tall whatever its size in
+ * host units (GUI pixels for the HUD), so the layout keeps its proportion of the screen at any resolution;
+ * HUD zoom = GUI scale / auto GUI scale. {@code ui.width} / {@code ui.height} read layout units. {@code reference = 0}
  * (absolute) => layout units = host units. Host-unit or pixel-exact values inside a relative layout:
  * expression suffixes {@code gu} / {@code px}.
  */

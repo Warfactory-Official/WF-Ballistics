@@ -3,6 +3,7 @@ package com.wf.wflib.drone.sim;
 import com.mojang.logging.LogUtils;
 import com.wf.wflib.WFLib;
 import com.wf.wflib.api.WFEventType;
+import com.wf.wflib.config.ViewRange;
 import com.wf.wflib.sim.SimKind;
 import com.wf.wflib.sim.SimTier;
 import com.wf.wflib.sim.SimWorld;
@@ -31,8 +32,6 @@ public final class SimDroneManager implements SimKind<SimDrone> {
 
     public static final SimDroneManager KIND = new SimDroneManager();
 
-    /** A drone further than this from any player offloads. */
-    public static final double OFFLOAD_PLAYER_RANGE = 192.0;
     /**
      * Slack between the offload and onload ranges so a drone near the boundary doesn't flicker.
      */
@@ -130,7 +129,7 @@ public final class SimDroneManager implements SimKind<SimDrone> {
         if (horizontalDistance(pos, waypoint(drone)) <= WAYPOINT_ONLOAD_RANGE + ONLOAD_MARGIN) {
             return false;
         }
-        return !nearWatcher(level, pos, OFFLOAD_PLAYER_RANGE);
+        return !nearWatcher(level, pos, ViewRange.blocks);
     }
 
     private static void onloadEligible(ServerLevel level) {
@@ -139,7 +138,7 @@ public final class SimDroneManager implements SimKind<SimDrone> {
         for (SimDrone sd : all) {
             boolean travelling = sd.state == DroneState.TRANSIT || sd.state == DroneState.EXFIL;
             boolean nearWaypoint = horizontalDistance(sd.pos, waypoint(sd)) <= WAYPOINT_ONLOAD_RANGE;
-            boolean watched = nearWatcher(level, sd.pos, OFFLOAD_PLAYER_RANGE - ONLOAD_MARGIN);
+            boolean watched = nearWatcher(level, sd.pos, ViewRange.blocks - ONLOAD_MARGIN);
             if (travelling && !nearWaypoint && !watched) {
                 continue;
             }

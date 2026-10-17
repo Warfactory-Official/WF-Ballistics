@@ -16,8 +16,9 @@ Subclass `backpack.BackpackItem`: `spec()` (`BackpackSpec`), `model()` (armour-f
 
 ## UI
 - Key `key.wflib.backpack` (B): held -> worn; worn -> inventory (full => refused).
-- Survival inventory: panel left of `InventoryScreen` (hidden under recipe book, never in creative). Slots = `InventoryMenu` slots `46..109` (mixin), moved by scroll (Slot x/y AT), inactive while hidden.
-- Shift-click: pack -> inventory; inventory -> pack first unless armour / creative (creative slot packets stop at 45).
+- Panel left of `InventoryScreen` (hidden under recipe book) / creative inventory tab (`SlotWrapper` targets same slots). Slots = `InventoryMenu` slots `46..109` (mixin), moved by scroll (Slot x/y AT), inactive while hidden.
+- Shift-click: pack -> inventory; inventory -> pack first unless armour.
+- Creative: vanilla `SetCreativeModeSlot` accepts 1..45 => `MixinServerGamePacketListenerImpl` takes `46..109` (active, `mayPlace`, room); rejected => full resync.
 - Lock button => `Action(TOGGLE_LOCK)`.
 - Others: probe node on the drawn pack (last render layer pose, <= 2 ticks old) -> `Backpacks.OPEN` -> `BackpackMenu`; locked or > `VIEW_RANGE` (4) => refused / closed.
 - Op: `/wflib backpack wear|lock <players>`.

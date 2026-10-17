@@ -35,6 +35,10 @@ public final class ArmorTooltip {
         tooltip.add(Component.literal("Condition ").withStyle(ChatFormatting.GRAY)
                 .append(bar(fraction, 10))
                 .append(Component.literal(" " + percent(fraction)).withStyle(conditionColor(fraction))));
+        if (stack.getItem() instanceof ArmorPieceItem piece && !piece.preset().occupies().isEmpty()) {
+            tooltip.add(Component.literal("Suit: also covers " + String.join(", ", piece.preset().occupies().stream()
+                    .map(net.minecraft.world.entity.EquipmentSlot::getName).toList())).withStyle(ChatFormatting.GRAY));
+        }
 
         boolean dt = false;
         boolean dr = false;

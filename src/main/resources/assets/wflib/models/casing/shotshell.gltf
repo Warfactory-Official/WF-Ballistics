@@ -1,0 +1,132 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "wflib tools/casings.py"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "shotshell",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "indices": 3,
+     "material": 0
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "shotshell",
+   "pbrMetallicRoughness": {
+    "baseColorTexture": {
+     "index": 0
+    },
+    "metallicFactor": 0.0
+   },
+   "alphaMode": "OPAQUE"
+  }
+ ],
+ "textures": [
+  {
+   "source": 0
+  }
+ ],
+ "images": [
+  {
+   "mimeType": "image/png",
+   "uri": "shotshell.png",
+   "extras": {
+    "resourceLocation": "wflib:models/casing/shotshell.png"
+   }
+  }
+ ],
+ "buffers": [
+  {
+   "byteLength": 5920,
+   "uri": "shotshell.bin",
+   "extras": {
+    "resourceLocation": "wflib:models/casing/shotshell.bin"
+   }
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 1896,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1896,
+   "byteLength": 1896,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 3792,
+   "byteLength": 1264,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 5056,
+   "byteLength": 864,
+   "target": 34963
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 158,
+   "type": "VEC3",
+   "min": [
+    -0.0111,
+    -0.03495,
+    -0.0111
+   ],
+   "max": [
+    0.0111,
+    0.03495,
+    0.0111
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 158,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 158,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5123,
+   "count": 432,
+   "type": "SCALAR"
+  }
+ ]
+}

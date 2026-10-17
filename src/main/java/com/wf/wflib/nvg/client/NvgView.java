@@ -27,7 +27,7 @@ import static org.lwjgl.opengl.GL33C.*;
 /**
  * Image intensifier over the main view, after the hand (gun seen through the tubes), before the GUI:
  * scene + {@link IrTarget} -> flux (tube resolution, mips) -> ABC adapt (1x1) -> tube image (noise, halo,
- * MCP, blemishes, persistence; history ping-pong) -> composite over the naked-eye view.
+ * MCP, persistence; history ping-pong) -> composite over the naked-eye view.
  */
 @EventBusSubscriber(modid = WFLib.MODID, value = Dist.CLIENT)
 public final class NvgView {
@@ -143,7 +143,6 @@ public final class NvgView {
             glUniform1f(tube.loc("_nv_distortion"), optics.distortion());
             glUniform1f(tube.loc("_nv_vignette"), optics.vignette());
             glUniform1f(tube.loc("_nv_honeycomb"), optics.honeycomb());
-            glUniform1i(tube.loc("_nv_blemishes"), optics.blemishes());
             glUniform1f(tube.loc("_nv_persistence"), optics.persistence());
             glUniform1ui(tube.loc("_nv_frame"), frame++);
             glDrawArrays(GL_TRIANGLES, 0, 3);

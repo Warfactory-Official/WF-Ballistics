@@ -38,6 +38,7 @@ public final class PdaApps {
         TelemetryApp.register();
         CamerasApp.register();
         DronesApp.register();
+        RadioApp.register();
         RadarApp.register();
         SatellitesApp.register();
         AlertsApp.register();

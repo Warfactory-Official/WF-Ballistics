@@ -1,0 +1,132 @@
+{
+ "asset": {
+  "version": "2.0",
+  "generator": "wflib tools/casings.py"
+ },
+ "scene": 0,
+ "scenes": [
+  {
+   "nodes": [
+    0
+   ]
+  }
+ ],
+ "nodes": [
+  {
+   "name": "pistol",
+   "mesh": 0
+  }
+ ],
+ "meshes": [
+  {
+   "primitives": [
+    {
+     "attributes": {
+      "POSITION": 0,
+      "NORMAL": 1,
+      "TEXCOORD_0": 2
+     },
+     "indices": 3,
+     "material": 0
+    }
+   ]
+  }
+ ],
+ "materials": [
+  {
+   "name": "pistol",
+   "pbrMetallicRoughness": {
+    "baseColorTexture": {
+     "index": 0
+    },
+    "metallicFactor": 0.0
+   },
+   "alphaMode": "OPAQUE"
+  }
+ ],
+ "textures": [
+  {
+   "source": 0
+  }
+ ],
+ "images": [
+  {
+   "mimeType": "image/png",
+   "uri": "pistol.png",
+   "extras": {
+    "resourceLocation": "wflib:models/casing/pistol.png"
+   }
+  }
+ ],
+ "buffers": [
+  {
+   "byteLength": 4944,
+   "uri": "pistol.bin",
+   "extras": {
+    "resourceLocation": "wflib:models/casing/pistol.bin"
+   }
+  }
+ ],
+ "bufferViews": [
+  {
+   "buffer": 0,
+   "byteOffset": 0,
+   "byteLength": 1584,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 1584,
+   "byteLength": 1584,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 3168,
+   "byteLength": 1056,
+   "target": 34962
+  },
+  {
+   "buffer": 0,
+   "byteOffset": 4224,
+   "byteLength": 720,
+   "target": 34963
+  }
+ ],
+ "accessors": [
+  {
+   "bufferView": 0,
+   "componentType": 5126,
+   "count": 132,
+   "type": "VEC3",
+   "min": [
+    -0.00495,
+    -0.0096,
+    -0.00495
+   ],
+   "max": [
+    0.00495,
+    0.0096,
+    0.00495
+   ]
+  },
+  {
+   "bufferView": 1,
+   "componentType": 5126,
+   "count": 132,
+   "type": "VEC3"
+  },
+  {
+   "bufferView": 2,
+   "componentType": 5126,
+   "count": 132,
+   "type": "VEC2"
+  },
+  {
+   "bufferView": 3,
+   "componentType": 5123,
+   "count": 360,
+   "type": "SCALAR"
+  }
+ ]
+}

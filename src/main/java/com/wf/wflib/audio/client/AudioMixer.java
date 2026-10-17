@@ -113,7 +113,7 @@ public final class AudioMixer {
 
     private static Params params(SoundInstance s, float m, float h) {
         if (s instanceof Emitter e) {
-            float share = m * e.category().muffle();
+            float share = m * e.muffle();
             return new Params(e.low * (1 - 0.65F * share) * (1 - 0.9F * h),
                     e.high * (1 - 0.85F * share) * (1 - 0.98F * h), true, e.vx - lvx, e.vy - lvy, e.vz - lvz);
         }
