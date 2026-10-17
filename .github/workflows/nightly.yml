@@ -16,6 +16,27 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Await upstream snapshots
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # repo:workflow:branch. Upstream head run must pass before -SNAPSHOT deps resolve; 3 min grace for it to appear.
+          for up in GemRender:nightly.yml:main Advanced-Hitbox-Framework:nightly.yml:main; do
+            IFS=: read -r repo wf branch <<<"$up"
+            head=$(gh api "repos/Warfactory-Official/$repo/commits/$branch" -q .sha)
+            status=; conclusion=; sha=; url=
+            for i in $(seq 1 160); do
+              IFS=$'\t' read -r sha status conclusion url < <(gh run list -R "Warfactory-Official/$repo" -w "$wf" -b "$branch" -L 1 \
+                --json headSha,status,conclusion,url -q '.[0] | [.headSha, .status, .conclusion, .url] | @tsv') || true
+              if [ "$status" = completed ] && { [ "$sha" = "$head" ] || [ "$i" -gt 12 ]; }; then break; fi
+              sleep 15
+            done
+            [ "$status" = completed ] || { echo "::error::$repo $wf not finished after 40 min: $url"; exit 1; }
+            [ "$conclusion" = success ] || { echo "::error::$repo $wf $conclusion at ${sha::7}: $url"; exit 1; }
+            echo "$repo $wf ok at ${sha::7}"
+          done
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -41,16 +62,20 @@ jobs:
           chmod +x ./gradlew
           ./gradlew build --no-daemon --stacktrace
 
-      - name: Upload nightly artifact
-        uses: actions/upload-artifact@v4
-        continue-on-error: true  # org artifact quota full => still publish
-        with:
-          name: wflib-nightly-${{ github.sha }}
-          path: build/libs/*.jar
-          retention-days: 14
-
       - name: Publish snapshot
         env:
           WARFACTORY_MAVEN_USER: ${{ secrets.WARFACTORY_MAVEN_USER }}
           WARFACTORY_MAVEN_TOKEN: ${{ secrets.WARFACTORY_MAVEN_TOKEN }}
         run: ./gradlew publish --no-daemon --stacktrace
+
+      - name: Rebuild dependents
+        if: github.event_name != 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.WF_DISPATCH_TOKEN }}
+        run: |
+          set -euo pipefail
+          [ -n "$GH_TOKEN" ] || { echo "::warning::WF_DISPATCH_TOKEN unset: dependents not rebuilt"; exit 0; }
+          for down in CombinedAssault:nightly.yml:main MineAssault:nightly.yml:master WFMedical:nightly.yml:neoforge-1.21.1; do
+            IFS=: read -r repo wf branch <<<"$down"
+            gh workflow run "$wf" -R "Warfactory-Official/$repo" --ref "$branch"
+          done
